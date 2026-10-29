@@ -8,7 +8,9 @@ import type { BookmarkUrlRefusal } from "./url.ts";
 // links, the workspace's `bookmark_count` and the one audit event commit or roll back together. Only the caller's own bookmarks change;
 // every other identifier (another member's, another workspace's, one that is gone, and for every action but a delete one that is
 // plan-archived) is skipped as `not_found`, which no answer tells apart from another. The folder a filing acts with and the tags a tagging
-// acts with are the caller's own too: one that is not is `target_not_found` and nothing is written. The answer is counts only.
+// acts with are the caller's own too: one that is not is `target_not_found` and nothing is written. A selection that holds a bookmark the caller can read because it is
+// shared with them is one they cannot act on (doc 02 sections 5.8 and 8.2, Q22): the whole request is `forbidden` and nothing is written, whichever action it asks for.
+// The answer is counts only.
 
 /** The most identifiers a bulk request names (doc 04 section 6.2). */
 export const BOOKMARK_BULK_IDS_MAX = 1000;
@@ -48,8 +50,10 @@ export type BookmarkTagPreviewResult =
   | { readonly kind: "target_not_found" };
 
 export interface BookmarkBulkStore {
-  /** The identifiers of the bookmarks `filter.ownerId` owns in the workspace of the transaction that match `filter` and are not plan-archived, newest first, at most `limit`. */
+  /** The identifiers of the bookmarks of the scope of `filter` (`filter.ownerId`'s own unless the filter says more) in the workspace of the transaction that match `filter` and are not plan-archived, newest first, at most `limit`. */
   ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+  /** Those of `bookmarkIds` that are shared with `accountId` (the account of the transaction): readable by it through a share, owned by someone else, not plan-archived. */
+  sharedAmong(request: { readonly bookmarkIds: readonly string[]; readonly accountId: string }): Promise<readonly string[]>;
   /**
    * Deletes the bookmarks of `bookmarkIds` that the account of the transaction owns in its workspace, a plan-archived one included, lowers the
    * workspace's `bookmark_count` once by those that were not plan-archived, and answers how many were deleted; undefined, writing nothing, when
@@ -140,7 +144,7 @@ export type BookmarkBulkOutcome =
       readonly kind: "done";
       readonly requested: number;
       readonly affected: number;
-      /** Always `requested - affected`, so the two reasons add up to it; `not_owner` stays 0 until bookmarks can be shared with a member. */
+      /** Always `requested - affected`, so the two reasons add up to it; `not_owner` stays 0, since a selection that holds a bookmark shared with the caller is refused as a whole. */
       readonly skipped: { readonly not_owner: number; readonly not_found: number };
     }
   /** The request names more identifiers than `BOOKMARK_BULK_IDS_MAX` or its filter matches more than `BOOKMARK_SELECT_ALL_CAP`; nothing was written. */
@@ -149,6 +153,8 @@ export type BookmarkBulkOutcome =
   | { readonly kind: "url_refused"; readonly reason: BookmarkUrlRefusal }
   /** The workspace of the transaction cannot be reached (it is being deleted); nothing was written. */
   | { readonly kind: "unavailable" }
+  /** The selection holds a bookmark that is shared with the caller, whom a share gives read access only; nothing was written. */
+  | { readonly kind: "forbidden" }
   /** The folder of a folder action or a tag of a tag action is not one the caller has (another member's, another workspace's or unknown); nothing was written. */
   | { readonly kind: "target_not_found" };
 
@@ -165,7 +171,7 @@ async function namedBookmarks(store: Pick<BookmarkBulkStore, "ids">, accountId: 
     const named = [...new Set(target.ids.map((id) => id.toLowerCase()))];
     return named.length > BOOKMARK_BULK_IDS_MAX ? { kind: "too_many", limit: BOOKMARK_BULK_IDS_MAX } : { kind: "named", named };
   }
-  const parsed = bookmarkListFilter({ accountId, pinned: target.pinned, hasSlug: target.hasSlug, forwarding: target.forwarding, url: target.url, folderId: target.folderId, tagIds: target.tagIds, q: target.q });
+  const parsed = bookmarkListFilter({ accountId, scope: target.scope, pinned: target.pinned, hasSlug: target.hasSlug, forwarding: target.forwarding, url: target.url, folderId: target.folderId, tagIds: target.tagIds, q: target.q });
   if (!parsed.ok) {
     return { kind: "url_refused", reason: parsed.reason };
   }
@@ -206,6 +212,9 @@ export async function bulkBookmarks({ store, audit }: BookmarkBulkDependencies, 
   }
   const requested = target.named.length;
   const bookmarkIds = target.named.filter((id) => UUID.test(id));
+  if (bookmarkIds.length > 0 && (await store.sharedAmong({ bookmarkIds, accountId })).length > 0) {
+    return { kind: "forbidden" };
+  }
 
   let affected = 0;
   if (ask.action === "delete") {
@@ -246,7 +255,7 @@ export async function bulkBookmarks({ store, audit }: BookmarkBulkDependencies, 
 }
 
 export interface BookmarkBulkPreviewDependencies {
-  readonly store: Pick<BookmarkBulkStore, "ids" | "previewTags">;
+  readonly store: Pick<BookmarkBulkStore, "ids" | "previewTags" | "sharedAmong">;
 }
 
 export interface BookmarkBulkPreviewAsk {
@@ -269,6 +278,8 @@ export type BookmarkBulkPreviewOutcome =
   | { readonly kind: "too_many"; readonly limit: number }
   /** The `url` filter is not a URL a bookmark can have. */
   | { readonly kind: "url_refused"; readonly reason: BookmarkUrlRefusal }
+  /** The selection holds a bookmark that is shared with the caller, who may not tag it. */
+  | { readonly kind: "forbidden" }
   /** A tag is not one the caller has (another member's, another workspace's or unknown). */
   | { readonly kind: "target_not_found" };
 
@@ -280,7 +291,11 @@ export async function previewBulkTags({ store }: BookmarkBulkPreviewDependencies
     return target;
   }
   const requested = target.named.length;
-  const previewed = await store.previewTags({ bookmarkIds: target.named.filter((id) => UUID.test(id)), ownerId: accountId, tagIds: requiredTags(ask.tagIds) });
+  const bookmarkIds = target.named.filter((id) => UUID.test(id));
+  if (bookmarkIds.length > 0 && (await store.sharedAmong({ bookmarkIds, accountId })).length > 0) {
+    return { kind: "forbidden" };
+  }
+  const previewed = await store.previewTags({ bookmarkIds, ownerId: accountId, tagIds: requiredTags(ask.tagIds) });
   if (previewed.kind === "target_not_found") {
     return previewed;
   }

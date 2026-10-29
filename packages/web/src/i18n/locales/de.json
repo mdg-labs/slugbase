@@ -211,6 +211,7 @@
       "opens": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
       "usage": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {when}",
       "edit": "Bearbeiten",
+      "share": "Teilen",
       "unpin": "Anheftung lösen",
       "pin": {
         "action": "Anheften",
@@ -501,6 +502,7 @@
       "open": "In Lesezeichen öffnen",
       "rename": "Umbenennen",
       "restyle": "Symbol und Farbe ändern",
+      "share": "Freigabe-Einstellungen",
       "delete": "Löschen"
     },
     "delete": {
@@ -1334,7 +1336,8 @@
       "tokens": "API-Tokens",
       "workspace": "Workspace",
       "general": "Allgemein",
-      "members": "Mitglieder"
+      "members": "Mitglieder",
+      "teams": "Teams"
     },
     "account": {
       "title": "Profil",
@@ -1900,6 +1903,7 @@
         "name": "Name",
         "email": "E-Mail",
         "role": "Rolle",
+        "teams": "Teams",
         "joined": "Beigetreten",
         "lastActive": "Zuletzt aktiv",
         "actions": "Aktionen"
@@ -1917,6 +1921,7 @@
         "makeOwner": "Zum Eigentümer machen",
         "makeAdmin": "Zum Admin machen",
         "makeMember": "Zum Mitglied machen",
+        "manageTeams": "Teams verwalten",
         "transfer": "Eigentum übertragen",
         "remove": "Aus dem Workspace entfernen"
       },
@@ -2055,12 +2060,44 @@
           "created": "Die Einladung wurde erstellt. Kopiere ihren Link aus den ausstehenden Einladungen.",
           "alreadyMember": "Bereits Mitglied dieses Workspace.",
           "invalid": "Keine gültige E-Mail-Adresse.",
+          "unknownTeam": "Ein Team, das du gewählt hast, gibt es nicht mehr. Gehe zurück, entferne es und versuche es erneut.",
           "rateLimited": "Zu viele Anfragen. Versuche es in einer Weile erneut.",
           "unavailable": "Der Server ist ausgelastet. Versuche es erneut.",
           "failed": "Die Einladung konnte nicht erstellt werden.",
           "requestId": "Anfrage-ID: {requestId}",
           "tryAgain": "Fehlgeschlagene erneut versuchen",
           "done": "Fertig"
+        },
+        "teams": {
+          "label": "Teams",
+          "description": "Die eingeladenen Personen treten diesen Teams bei, sobald sie die Einladung annehmen. Optional.",
+          "placeholder": "Teams suchen",
+          "empty": "Kein Team passt.",
+          "loading": "Teams werden geladen",
+          "unavailable": "Die Teams konnten nicht geladen werden.",
+          "remove": "{name} entfernen"
+        }
+      },
+      "teams": {
+        "none": "Keine Teams",
+        "of": "Teams von {name}",
+        "title": "Teams von {name}",
+        "description": "Wähle die Teams, zu denen dieses Mitglied gehört.",
+        "close": "Teams-Formular schließen",
+        "label": "Teams",
+        "placeholder": "Teams suchen",
+        "empty": "Kein Team passt. Admins können Teams auf der Seite „Teams“ anlegen.",
+        "loading": "Teams werden geladen",
+        "unavailable": "Die Teams konnten nicht geladen werden.",
+        "remove": "{name} entfernen",
+        "cancel": "Abbrechen",
+        "submit": "Teams speichern",
+        "saved": "Teams von {name} gespeichert.",
+        "error": {
+          "teamGone": "Ein Team, das du gewählt hast, gibt es nicht mehr. Entferne es und versuche es erneut.",
+          "memberGone": "Diese Person ist kein Mitglied dieses Workspace mehr.",
+          "unavailable": "Die Teams konnten gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
+          "partlySaved": "Ein Teil deiner Änderungen wurde gespeichert, aber nicht alle. Speichere erneut, um den Rest zu senden."
         }
       }
     }
@@ -2569,6 +2606,153 @@
         "forbidden": "Das darfst du nicht.",
         "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen.",
         "recipientGone": "Die Person, die die Inhalte übernehmen sollte, ist kein Mitglied des Workspace mehr. Wähle jemand anderen."
+      }
+    }
+  },
+  "teams": {
+    "title": "Teams",
+    "description": "Fasse Mitglieder zu Teams zusammen und teile mit einem Team statt mit jeder Person einzeln.",
+    "descriptionReadOnly": "Die Teams dieses Workspace und wer darin ist. Admins und Eigentümer ändern sie.",
+    "create": "Team erstellen",
+    "loading": "Teams werden geladen",
+    "loadFailed": "Die Teams konnten nicht geladen werden",
+    "loadMore": "Mehr anzeigen",
+    "actionsFor": "Aktionen für das Team {name}",
+    "column": {
+      "name": "Name",
+      "description": "Beschreibung",
+      "members": "Mitglieder",
+      "actions": "Aktionen"
+    },
+    "action": {
+      "edit": "Bearbeiten",
+      "delete": "Löschen"
+    },
+    "members": {
+      "stack": "Mitglieder: {names}"
+    },
+    "empty": {
+      "title": "Noch keine Teams",
+      "description": "Erstelle eines, um Mitglieder zu gruppieren und Zugriff zu teilen.",
+      "descriptionReadOnly": "Ein Admin oder Eigentümer kann eines erstellen, um Mitglieder zu gruppieren und Zugriff zu teilen."
+    },
+    "form": {
+      "close": "Teamformular schließen",
+      "intro": "Ein Team gehört dem ganzen Workspace.",
+      "description": {
+        "label": "Beschreibung",
+        "counter": "{count, number} / {max, number}"
+      },
+      "title": {
+        "create": "Team erstellen",
+        "update": "{name} bearbeiten"
+      },
+      "loading": "Team wird geladen",
+      "loadFailed": "Das Team konnte nicht geladen werden.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Gib dem Team einen Namen.",
+          "taken": "Der Workspace hat bereits ein Team mit diesem Namen.",
+          "invalid": "Verwende einen Namen mit 1 bis {max, number} Zeichen."
+        }
+      },
+      "members": {
+        "label": "Mitglieder",
+        "placeholder": "Mitglieder suchen",
+        "empty": "Kein Mitglied passt.",
+        "loading": "Mitglieder werden geladen",
+        "unavailable": "Die Mitglieder konnten nicht geladen werden.",
+        "remove": "{name} entfernen"
+      },
+      "cancel": "Abbrechen",
+      "submit": {
+        "create": "Team erstellen",
+        "update": "Änderungen speichern"
+      },
+      "saved": {
+        "created": "Team erstellt.",
+        "updated": "Team gespeichert."
+      },
+      "error": {
+        "memberGone": "Jemand, den du gewählt hast, ist kein Mitglied dieses Workspace mehr. Entferne die Person und versuche es erneut.",
+        "changedElsewhere": "Dieses Team wurde woanders geändert. Schließe dieses Formular und öffne es erneut, um die neueste Version zu sehen.",
+        "notFound": "Dieses Team gibt es nicht mehr.",
+        "unavailable": "Das Team konnte gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
+        "partlySaved": "Ein Teil deiner Änderungen wurde gespeichert, aber nicht alle. Speichere erneut, um den Rest zu senden."
+      }
+    },
+    "delete": {
+      "title": "„{name}“ löschen?",
+      "description": "Alles, was über das Team „{name}“ geteilt wurde, wird nicht mehr mit seinen Mitgliedern geteilt. Die Mitglieder bleiben im Workspace.",
+      "confirm": "Team löschen",
+      "cancel": "Abbrechen",
+      "done": "Team „{name}“ gelöscht.",
+      "gone": "Dieses Team wurde bereits gelöscht."
+    }
+  },
+  "sharing": {
+    "summary": {
+      "label": "Teilen",
+      "private": "Privat",
+      "shared": "Geteilt mit {with}",
+      "team": "Team {name}",
+      "members": "{count, plural, one {# Mitglied} other {# Mitgliedern}}",
+      "manage": "Verwalten",
+      "loading": "Es wird geladen, mit wem dieses Lesezeichen geteilt ist",
+      "loadFailed": "Die Freigaben konnten nicht geladen werden.",
+      "retry": "Erneut versuchen"
+    },
+    "dialog": {
+      "close": "Teilen-Dialog schließen",
+      "done": "Fertig",
+      "retry": "Erneut versuchen",
+      "title": {
+        "bookmark": "„{name}“ teilen",
+        "folder": "Ordner „{name}“ teilen"
+      },
+      "description": {
+        "bookmark": "Wähle die Mitglieder und Teams, die dieses Lesezeichen lesen können.",
+        "folder": "Wähle die Mitglieder und Teams, die diesen Ordner und alle Lesezeichen darin lesen können, jetzt und später."
+      },
+      "picker": {
+        "label": "Teilen mit",
+        "placeholder": "Mitglieder und Teams suchen",
+        "empty": "Kein Mitglied und kein Team passt.",
+        "loading": "Mitglieder und Teams werden geladen",
+        "unavailable": "Mitglieder und Teams konnten nicht geladen werden.",
+        "members": "Mitglieder",
+        "teams": "Teams"
+      },
+      "list": {
+        "label": "Aktuelle Freigaben",
+        "loading": "Freigaben werden geladen",
+        "loadFailed": "Die Freigaben konnten nicht geladen werden.",
+        "empty": "Noch mit niemandem geteilt."
+      },
+      "row": {
+        "member": "Mitglied",
+        "team": "Team",
+        "remove": "Nicht mehr mit {name} teilen"
+      },
+      "note": {
+        "bookmark": "Teilen ist nur lesend. Mitglieder können dieses Lesezeichen und seinen Slug öffnen, aber nur du kannst es ändern oder löschen.",
+        "folder": "Teilen ist nur lesend. Mitglieder sehen diesen Ordner und die Lesezeichen darin, aber nur du kannst sie ändern oder löschen."
+      },
+      "audience": {
+        "none": "Mit niemandem geteilt",
+        "some": "Sichtbar für {count, plural, one {# Mitglied} other {# Mitglieder}}",
+        "stack": "Mitglieder mit Lesezugriff: {names}"
+      },
+      "toast": {
+        "added": "Mit {name} geteilt",
+        "removed": "Nicht mehr mit {name} geteilt",
+        "removeGone": "{name} hatte keinen Zugriff mehr.",
+        "targetGone": "{name} gehört nicht mehr zum Workspace. Die Liste ist jetzt aktuell.",
+        "gone": {
+          "bookmark": "Dieses Lesezeichen gibt es nicht mehr.",
+          "folder": "Diesen Ordner gibt es nicht mehr."
+        }
       }
     }
   },

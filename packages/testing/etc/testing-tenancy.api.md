@@ -137,7 +137,7 @@ export interface FixtureToken extends FixturePrincipal {
 export function formatFailures(failures: readonly MatrixFailure[]): string;
 
 // @public
-export const IDENTIFIER_KINDS: readonly ["workspace", "member", "team", "bookmark", "folder", "tag", "slug", "host", "invitation", "token"];
+export const IDENTIFIER_KINDS: readonly ["workspace", "member", "team", "bookmark", "folder", "tag", "slug", "host", "invitation", "share", "token"];
 
 // @public
 export interface IdentifierInput {

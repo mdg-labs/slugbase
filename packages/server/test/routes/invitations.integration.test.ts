@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { hashCredentialToken, type MailPort } from "@slugbase/core";
 import { InMemoryMail } from "@slugbase/testing";
@@ -206,10 +206,77 @@ describe("POST /api/v1/invitations", { timeout: TEST_TIMEOUT_MS }, () => {
       expect(response.status).toBe(422);
     }
     expect((await problemOf(owner)).errors).toEqual([{ path: "role", code: "invalid_value" }]);
-    expect(await problemOf(teams)).toMatchObject({ code: "validation_failed", errors: [{ path: "teamIds", code: "teams_unavailable" }] });
+    expect(await problemOf(teams)).toMatchObject({ code: "validation_failed", errors: [{ path: "teamIds", code: "unknown_team" }] });
     expect(await rowsOf(workspaceId)).toEqual([]);
     expect(await jobsOf(workspaceId)).toEqual([]);
     expect(await checksum(workspaceId)).toBe(before);
+  });
+
+  async function seedTeam(workspaceId: string, name: string): Promise<string> {
+    const id = randomUUID();
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${id}, ${workspaceId}, ${name})`;
+    });
+    return id;
+  }
+
+  it("stores the teams of the workspace on the invitation once each, and a resend replaces them", async () => {
+    const world = harness.serve({ entitlements: GRANTED, mail });
+    const { workspaceId, o } = await workspace(world);
+    const design = await seedTeam(workspaceId, "Design");
+    const support = await seedTeam(workspaceId, "Support");
+
+    const created = await invite(world, o, { email: "teams@example.test", role: "member", teamIds: [design, support, design.toUpperCase()] });
+    const resent = await invite(world, o, { email: "teams@example.test", role: "member", teamIds: [support] });
+
+    expect(created.status).toBe(201);
+    expect(((await created.json()) as { teamIds: string[] }).teamIds.sort()).toEqual([design, support].sort());
+    expect(resent.status).toBe(201);
+    expect(((await resent.json()) as { teamIds: string[] }).teamIds).toEqual([support]);
+    const [row] = await rowsOf(workspaceId);
+    expect(row?.team_ids).toEqual([support]);
+  });
+
+  it("answers the same 422 for a team of another workspace as for one that does not exist, names no identifier, and writes and queues nothing", async () => {
+    const world = harness.serve({ entitlements: GRANTED, mail });
+    const { workspaceId, o } = await workspace(world);
+    const other = await workspace(world);
+    const foreign = await seedTeam(other.workspaceId, "Foreign");
+    const mine = await seedTeam(workspaceId, "Mine");
+    const before = await checksum(workspaceId);
+    const otherBefore = await checksum(other.workspaceId);
+
+    const answers = await Promise.all(
+      [[foreign], [randomUUID()], [mine, foreign]].map(async (teamIds) => {
+        const response = await invite(world, o, { email: "teams@example.test", role: "member", teamIds });
+        expect(response.status).toBe(422);
+        // The request identifier differs between two requests; everything else of the answer must not.
+        return { ...((await response.json()) as Record<string, unknown>), requestId: undefined };
+      }),
+    );
+
+    for (const answer of answers) {
+      expect(answer).toEqual(answers[0]);
+      expect(answer).toMatchObject({ code: "validation_failed", errors: [{ path: "teamIds", code: "unknown_team" }] });
+      expect(JSON.stringify(answer)).not.toContain(foreign);
+    }
+    expect(await rowsOf(workspaceId)).toEqual([]);
+    expect(await jobsOf(workspaceId)).toEqual([]);
+    expect(await checksum(workspaceId)).toBe(before);
+    expect(await checksum(other.workspaceId)).toBe(otherBefore);
+  });
+
+  it("judges the role of the caller before it looks at the teams: a member gets 403 forbidden for any team", async () => {
+    const world = harness.serve({ entitlements: GRANTED, mail });
+    const { workspaceId, m } = await workspace(world);
+    const mine = await seedTeam(workspaceId, "Mine");
+
+    const withTeam = await invite(world, m, { email: "teams@example.test", role: "member", teamIds: [mine] });
+    const unknown = await invite(world, m, { email: "teams@example.test", role: "member", teamIds: [randomUUID()] });
+
+    expect(withTeam.status).toBe(403);
+    expect(unknown.status).toBe(403);
   });
 
   it("refuses a member, a credential that is an API token, an account outside the workspace and a request without a session, and writes nothing", async () => {

@@ -23,6 +23,8 @@ const STORED: BookmarkRecord = {
   pinned: false,
   openCount: 0,
   lastOpenedAt: null,
+  owner: null,
+  sharedVia: null,
   folders: [],
   tags: [],
   version: 1,
@@ -30,17 +32,23 @@ const STORED: BookmarkRecord = {
   updatedAt: new Date("2026-10-23T05:00:00.000Z"),
 };
 
-function updating(answer: BookmarkUpdateResult = { kind: "updated", bookmark: STORED }) {
+function updating(answer: BookmarkUpdateResult = { kind: "updated", bookmark: STORED }, shared = false) {
   const requests: BookmarkUpdateRequest[] = [];
+  const asked: { bookmarkId: string; accountId: string }[] = [];
   let issued = 0;
   return {
     requests,
+    asked,
     dependencies: {
       newId: () => `0192f3a0-eeee-7000-8000-${String((issued += 1)).padStart(12, "0")}`,
       store: {
         update(request: BookmarkUpdateRequest) {
           requests.push(request);
           return Promise.resolve(answer);
+        },
+        sharedWith(request: { bookmarkId: string; accountId: string }) {
+          asked.push(request);
+          return Promise.resolve(shared);
         },
       },
     },
@@ -171,23 +179,55 @@ describe("updateBookmark", () => {
 
     expect(await updateBookmark(dependencies, { ...ASKING, patch: { title: "X" } })).toEqual(answer);
   });
+
+  it("answers forbidden when the account owns no such bookmark but it is shared with them, and not found when it is not", async () => {
+    const shared = updating({ kind: "not_found" }, true);
+    const unseen = updating({ kind: "not_found" }, false);
+
+    expect(await updateBookmark(shared.dependencies, { ...ASKING, patch: { title: "X" } })).toEqual({ kind: "forbidden" });
+    expect(await updateBookmark(unseen.dependencies, { ...ASKING, patch: { title: "X" } })).toEqual({ kind: "not_found" });
+    expect(shared.asked).toEqual([{ bookmarkId: BOOKMARK, accountId: ACCOUNT.toLowerCase() }]);
+  });
+
+  it("asks whether the bookmark is shared only when the store found none the account owns", async () => {
+    const { asked, dependencies } = updating({ kind: "updated", bookmark: STORED }, true);
+
+    expect(await updateBookmark(dependencies, { ...ASKING, patch: { title: "X" } })).toMatchObject({ kind: "updated" });
+    expect(asked).toEqual([]);
+  });
 });
 
 describe("deleteBookmark", () => {
-  it("asks the store to delete the bookmark of the account in lower case, and answers what it answers", async () => {
+  function deleting(removed: boolean, shared: boolean) {
     const asked: { bookmarkId: string; ownerId: string }[] = [];
+    const sharedAsked: { bookmarkId: string; accountId: string }[] = [];
     const store = {
       remove(request: { bookmarkId: string; ownerId: string }) {
         asked.push(request);
-        return Promise.resolve(asked.length === 1);
+        return Promise.resolve(removed);
+      },
+      sharedWith(request: { bookmarkId: string; accountId: string }) {
+        sharedAsked.push(request);
+        return Promise.resolve(shared);
       },
     };
+    return { asked, sharedAsked, store };
+  }
 
-    expect(await deleteBookmark({ store }, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toBe(true);
-    expect(await deleteBookmark({ store }, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toBe(false);
-    expect(asked).toEqual([
-      { bookmarkId: BOOKMARK, ownerId: ACCOUNT.toLowerCase() },
-      { bookmarkId: BOOKMARK, ownerId: ACCOUNT.toLowerCase() },
-    ]);
+  it("asks the store to delete the bookmark of the account in lower case, and answers deleted when it did", async () => {
+    const { asked, sharedAsked, store } = deleting(true, true);
+
+    expect(await deleteBookmark({ store }, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toEqual({ kind: "deleted" });
+    expect(asked).toEqual([{ bookmarkId: BOOKMARK, ownerId: ACCOUNT.toLowerCase() }]);
+    expect(sharedAsked).toEqual([]);
+  });
+
+  it("answers forbidden for a bookmark that is shared with the account and not found for any other the account does not own", async () => {
+    const shared = deleting(false, true);
+    const unseen = deleting(false, false);
+
+    expect(await deleteBookmark({ store: shared.store }, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toEqual({ kind: "forbidden" });
+    expect(await deleteBookmark({ store: unseen.store }, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toEqual({ kind: "not_found" });
+    expect(shared.sharedAsked).toEqual([{ bookmarkId: BOOKMARK, accountId: ACCOUNT.toLowerCase() }]);
   });
 });

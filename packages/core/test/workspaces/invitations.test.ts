@@ -33,13 +33,15 @@ interface WorldOptions {
   /** `none` stands for an account that is no member of the workspace. */
   actorRole?: WorkspaceRole | "none";
   memberHoldsEmail?: boolean;
+  /** Whether the workspace holds every team the request names. */
+  teamsExist?: boolean;
   resent?: boolean;
   inviteeLocale?: string | undefined;
   auditFails?: boolean;
 }
 
 /** The stores of one transaction: what they were asked for, in order, and the rows that stay when it ends. */
-function world({ actorRole = "admin", memberHoldsEmail = false, resent = false, inviteeLocale, auditFails = false }: WorldOptions = {}) {
+function world({ actorRole = "admin", memberHoldsEmail = false, teamsExist = true, resent = false, inviteeLocale, auditFails = false }: WorldOptions = {}) {
   const log: string[] = [];
   const written: NewInvitation[] = [];
   const audits: AuditRecord[] = [];
@@ -51,6 +53,10 @@ function world({ actorRole = "admin", memberHoldsEmail = false, resent = false, 
     memberHoldsEmail(email) {
       log.push(`memberHoldsEmail ${email}`);
       return Promise.resolve(memberHoldsEmail);
+    },
+    teamsExist(teamIds) {
+      log.push(`teamsExist ${teamIds.join(",")}`);
+      return Promise.resolve(teamsExist);
     },
     writePending(invitation) {
       log.push("writePending");
@@ -107,14 +113,35 @@ describe("inviteMember", () => {
     }
   });
 
-  it("refuses teams, which have no members to join yet, and writes nothing", async () => {
-    const { dependencies, log, written, audits } = world();
+  it("refuses a team the workspace does not hold, after the role of the account is judged, and writes nothing", async () => {
+    const { dependencies, log, written, audits } = world({ teamsExist: false });
 
-    expect(await inviteMember(dependencies, ask({ teamIds: ["0192f3a0-dddd-7000-8000-000000000001"] }))).toEqual({ kind: "teams_unavailable" });
+    expect(await inviteMember(dependencies, ask({ teamIds: ["0192f3a0-dddd-7000-8000-000000000001"] }))).toEqual({ kind: "unknown_team" });
 
-    expect(log).toEqual([]);
+    expect(log).toEqual(["actorRole", "teamsExist 0192f3a0-dddd-7000-8000-000000000001"]);
     expect(written).toEqual([]);
     expect(audits).toEqual([]);
+  });
+
+  it("does not look at the teams of an account that may not invite", async () => {
+    const { dependencies, log } = world({ actorRole: "member", teamsExist: false });
+
+    expect(await inviteMember(dependencies, ask({ teamIds: ["0192f3a0-dddd-7000-8000-000000000001"] }))).toEqual({ kind: "forbidden" });
+
+    expect(log).toEqual(["actorRole"]);
+  });
+
+  it("writes the teams of the workspace once each, in lower case, and asks for each only once", async () => {
+    const { dependencies, log, written } = world();
+
+    const outcome = await inviteMember(
+      dependencies,
+      ask({ teamIds: ["0192F3A0-DDDD-7000-8000-000000000001", "0192f3a0-dddd-7000-8000-000000000001", "0192f3a0-dddd-7000-8000-000000000002"] }),
+    );
+
+    expect(outcome.kind).toBe("invited");
+    expect(log[1]).toBe("teamsExist 0192f3a0-dddd-7000-8000-000000000001,0192f3a0-dddd-7000-8000-000000000002");
+    expect(written[0]?.teamIds).toEqual(["0192f3a0-dddd-7000-8000-000000000001", "0192f3a0-dddd-7000-8000-000000000002"]);
   });
 
   it.each<[WorkspaceRole | "none"]>([["member"], ["none"]])("refuses an account whose role in the workspace is %s, and writes nothing", async (actorRole) => {

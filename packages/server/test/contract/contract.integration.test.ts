@@ -1,3 +1,4 @@
+import { BOOKMARK_SCOPES } from "@slugbase/contracts";
 import { LimitedEntitlementSource } from "@slugbase/testing";
 import { classifyOperations, createProbe, loadOpenApiDocument, PROBE_INSTANCE_ADMIN, runApiMatrix, runTokenMatrix, type ApiCall, type ApiResponse, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
@@ -15,7 +16,7 @@ import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations, type ContractFailure } from "./document.ts";
 import { seedAccount, seedApiToken, seedMembership, seedWorkspace } from "../auth/support.ts";
-import { B_HOSTS, B_INVITATION_ID, B_SLUGS, FIXTURES, UNKNOWN_TAG_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
+import { B_HOSTS, B_INVITATION_ID, B_SLUGS, FIXTURES, UNKNOWN_BOOKMARK_ID, UNKNOWN_FOLDER_ID, UNKNOWN_TAG_ID, UNKNOWN_TEAM_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
 import { matrixRequest, tokenMatrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
@@ -100,7 +101,7 @@ beforeAll(async () => {
 function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
   // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
   // more often than the default limits of one address allow; the matrix makes a write call for each of its principals on every operation that writes.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_WRITE_IP: "1000/min", RATE_LIMIT_WRITE_ACCOUNT: "1000/min", RATE_LIMIT_LOGIN_IP: "200/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_BULK_IP: "1000/hour", RATE_LIMIT_BULK_ACCOUNT: "1000/hour" });
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_WRITE_IP: "1000/min", RATE_LIMIT_WRITE_ACCOUNT: "1000/min", RATE_LIMIT_LOGIN_IP: "1000/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_BULK_IP: "1000/hour", RATE_LIMIT_BULK_ACCOUNT: "1000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -121,12 +122,15 @@ function serve(modules: readonly ServerModule[], document?: TestDocument, option
   });
 }
 
-/** The entitlements the committed document declares on its operations. */
+/** The entitlements the committed document declares on its operations, which stage 9 decides. */
 const DECLARED_ENTITLEMENTS: ReadonlySet<string> = new Set(["members.invite", "teams.manage"]);
 
-/** The entitlement source of the walks and the matrix: it holds the entitlements the committed document declares, for every account but the ones named. */
+/** The entitlements the handlers of the sharing operations decide themselves, by the kind of target (the document declares none on them). */
+const SHARING_ENTITLEMENTS: ReadonlySet<string> = new Set(["sharing.members", "sharing.teams"]);
+
+/** The entitlement source of the walks and the matrix: it holds the entitlements the committed document declares and the two of sharing, for every account but the ones named. */
 function entitlementsExcept(accounts: ReadonlySet<string>): EntitlementCheck {
-  return (entitlement, subject) => DECLARED_ENTITLEMENTS.has(entitlement) && !accounts.has(subject.accountId);
+  return (entitlement, subject) => (DECLARED_ENTITLEMENTS.has(entitlement) || SHARING_ENTITLEMENTS.has(entitlement)) && !accounts.has(subject.accountId);
 }
 
 /** The constructed Critical of doc 10 section 6: the handler looks the row up as the table owner, in every workspace. */
@@ -310,7 +314,7 @@ describe("the walker over the committed document", () => {
     const hooks = await sessionHooks(server, unentitled);
     const report = await walkContract({ document: committed, send: (request) => server.fetch(request), origin, fixtures: FIXTURES, hooks });
     // The walker holds the team it names for workspace B to the 404 it expects for an identifier of another workspace. A team is refused with 422
-    // whichever workspace holds it, because no team can be invited into yet and none can be told from another, which discloses nothing. That answer
+    // whichever workspace holds it, because a team of workspace B is no team of the workspace of the request and is told from an unknown one by nothing, which discloses nothing. That answer
     // is the one difference of the walk, and the exception names exactly it (the status and the code that come with it).
     // The boolean filter `hasSlug` of the bookmark list is picked as an input that can carry an identifier by its name, and the identifier the walk
     // puts in it is refused as a malformed value (422) before any bookmark is looked at, which is the other difference.
@@ -329,12 +333,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the ninety-three that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the sixty-nine whose policy has a role below it (the thirty-eight of a member, the fourteen
+    // One valid request for each operation. Each of the ninety-seven that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the seventy-six whose policy has a role below it (the forty-five of a member, the fourteen
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
-    // Each of the nineteen that declare the write scope answers 403 token_scope to a token that may only read, each of the eight that declare an entitlement answers
-    // 403 to an account without it, and each of the thirty-four that name a member, a recipient, a team, an invitation, a bookmark, a slug, a host, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 93 + 17 + 69 + 19 + 8 + 34);
+    // Each of the twenty-three that declare the write scope answers 403 token_scope to a token that may only read, each of the eight that declare an entitlement answers
+    // 403 to an account without it (the seven of sharing declare none: their handlers decide the entitlement by the kind of target), and each of the forty that name a member, a recipient, a team, an invitation, a bookmark, a share, a slug, a host, a tag or a folder, or an input that can carry one, answers for one of workspace B.
+    expect(report.calls).toBe(operations.length + 100 + 17 + 76 + 23 + 8 + 40);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -471,7 +475,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
           coalesce((SELECT string_agg(g::text, '|' ORDER BY g.folder_id, g.bookmark_id) FROM folder_bookmarks g WHERE g.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(q::text, '|' ORDER BY q.account_id, q.slug) FROM slug_preferences q WHERE q.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(y::text, '|' ORDER BY y.id) FROM teams y WHERE y.workspace_id = ${probe.fixture.b.id}), '') ||
-          coalesce((SELECT string_agg(z::text, '|' ORDER BY z.team_id, z.account_id) FROM team_members z WHERE z.workspace_id = ${probe.fixture.b.id}), '')
+          coalesce((SELECT string_agg(z::text, '|' ORDER BY z.team_id, z.account_id) FROM team_members z WHERE z.workspace_id = ${probe.fixture.b.id}), '') ||
+          coalesce((SELECT string_agg(h::text, '|' ORDER BY h.id) FROM bookmark_shares h WHERE h.workspace_id = ${probe.fixture.b.id}), '') ||
+          coalesce((SELECT string_agg(x::text, '|' ORDER BY x.id) FROM folder_shares x WHERE x.workspace_id = ${probe.fixture.b.id}), '')
         ) AS digest`;
     });
     return rows[0]?.digest ?? "";
@@ -531,10 +537,27 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${id}, ${probe.fixture.b.id}, 'matrix-team-of-b')`;
         await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${probe.fixture.b.id}, ${id}, ${probe.fixture.b.owner.accountId})`;
       }
+      // The share of workspace B the fixture names: the first bookmark of B, which its owner owns, shared with the team of B by the owner, and the folder of B shared with that team under the same identifier. The matrix puts its identifier, and the bookmarks, the members
+      // and the team of B, in the path and the body of the list, the grant and the revocation of shares.
+      const teamOfB = probe.fixture.b.identifiers.find((identifier) => identifier.kind === "team");
+      const folderOfB = probe.fixture.b.identifiers.find((identifier) => identifier.kind === "folder");
+      for (const { id } of probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "share")) {
+        if (firstBookmark !== undefined && teamOfB !== undefined) {
+          await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_team_id, granted_by) VALUES (${id}, ${probe.fixture.b.id}, ${firstBookmark}, ${teamOfB.id}, ${probe.fixture.b.owner.accountId})`;
+        }
+        // The second bookmark of B is shared directly with the admin of B, so that the shared lists and the shared reads have a grant of each route (direct, team, folder) in B to leak.
+        if (bookmarkIds[1] !== undefined) {
+          await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (gen_random_uuid(), ${probe.fixture.b.id}, ${bookmarkIds[1].id}, ${probe.fixture.b.admin.accountId}, ${probe.fixture.b.member.accountId})`;
+        }
+        // The folder of B is shared with the team of B under the same identifier, a share of a folder that the revocation of a folder's share names.
+        if (folderOfB !== undefined && teamOfB !== undefined) {
+          await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_team_id, granted_by) VALUES (${id}, ${probe.fixture.b.id}, ${folderOfB.id}, ${teamOfB.id}, ${probe.fixture.b.owner.accountId})`;
+        }
+      }
     });
   }
 
-  it("passes for the fifty-four tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
+  it("passes for the sixty-one tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its shares of bookmarks and folders, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -567,7 +590,28 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       previewBulkBookmarks: { body: { action: "add_tags", filter: {}, tagIds: [UNKNOWN_TAG_ID] }, status: 404, foreign: { body: { action: "add_tags", filter: {}, tagIds: [UNKNOWN_TAG_ID] } } },
     };
     const byTextFixtures: ContractFixtures = { ...FIXTURES, listBookmarks: { query: { q: "matrix" } }, listBookmarkIds: { query: { q: "matrix" } } };
+    // The grant takes one target, and the matrix puts a member of B in `accountId` and a team of B in `teamId` of one call; the call is sent as the two requests that carry them apart. The
+    // fixture of the team request names a team in place of the member the other names, so that the overlay of the call does not put both in one body.
+    const byTeamFixtures: ContractFixtures = {
+      ...FIXTURES,
+      createBookmarkShare: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { teamId: UNKNOWN_TEAM_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { teamId: UNKNOWN_TEAM_ID } } },
+      createFolderShare: { path: { id: UNKNOWN_FOLDER_ID }, body: { teamId: UNKNOWN_TEAM_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { teamId: UNKNOWN_TEAM_ID } } },
+    };
+    const sendByTeam = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byTeamFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
+    const grants: { readonly byMember: number; readonly byTeam: number }[] = [];
+    const folderGrants: { readonly byMember: number; readonly byTeam: number }[] = [];
     const sendByText = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byTextFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
+    // The lists of every scope, which the shares of B reach if a list of the shared bookmarks reads across workspaces: one request for each scope, with no text, so that the statements that read the shares
+    // are the ones that run (the text query reads the matches of the search).
+    const sendByScope = BOOKMARK_SCOPES.map((scope) => ({
+      scope,
+      send: matrixRequest({
+        send: (request) => server.fetch(request),
+        origin,
+        fixtures: { ...FIXTURES, listBookmarks: { query: { scope, limit: "100" } }, listBookmarkIds: { query: { scope } } },
+        credentialsOf: (principal) => world.credentialsOf(principal),
+      }),
+    }));
     const sendByFilter = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byFilterFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
     const variants: VariantStatuses[] = [];
     const instanceAdminStatuses: number[] = [];
@@ -577,8 +621,19 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const dashboards: unknown[] = [];
     const listings: unknown[] = [];
     const selections: unknown[] = [];
-    const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
+    const scoped: { readonly operation: string; readonly scope: string; readonly body: unknown }[] = [];
+    const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
     const request = async (call: ApiCall): Promise<ApiResponse> => {
+      if (call.operation.operationId === "createBookmarkShare" || call.operation.operationId === "createFolderShare") {
+        const fields = isRecord(call.body) ? call.body : {};
+        const [byMember, byTeam] = await Promise.all([send({ ...call, body: { accountId: fields.accountId } }), sendByTeam({ ...call, body: { teamId: fields.teamId } })]);
+        (call.operation.operationId === "createFolderShare" ? folderGrants : grants).push({ byMember: byMember.status, byTeam: byTeam.status });
+        if ("instanceAdmin" in call.principal) {
+          instanceAdminStatuses.push(byMember.status);
+        }
+        // Both requests are judged: the one the matrix sees is the member's unless the team's differs from it.
+        return byTeam.status === byMember.status ? byMember : byTeam;
+      }
       // The bulk request and the preview name the identifiers of B in several inputs, and one request cannot carry them all: `ids` and `filter` together are malformed, the
       // `hasSlug` of the filter is a boolean, and the folder and the tag go with different actions. Each call is therefore sent as the requests below, which reach the
       // handler with the identifiers of B in turn, and the one that names the folder (the preview: the tags) of B is the answer the matrix judges. The others are held to what the
@@ -608,6 +663,12 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         if (asked.status === 200) {
           (operationId === "listBookmarks" ? listings : selections).push(asked.body);
         }
+        for (const { scope, send: sendScope } of sendByScope) {
+          const inScope = await sendScope({ ...call, url: call.operation.path, query: {}, body: undefined });
+          if (inScope.status === 200) {
+            scoped.push({ operation: operationId, scope, body: inScope.body });
+          }
+        }
       }
       return response;
     };
@@ -629,7 +690,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       failures: [...classification.problems.map((problem) => ({ mode: "api" as const, subject: problem.subject, kind: "unclassified_operation", detail: problem.detail })), ...runs.flatMap((run) => run.failures)],
     };
 
-    // A team is refused with 422 whichever workspace holds it, because no team can be invited into yet and none can be told from another, which
+    // A team is refused with 422 whichever workspace holds it, because a team of workspace B is no team of the workspace of the request and is told from an unknown one by nothing, which
     // discloses nothing; the matrix expects 404 for an identifier of workspace B. The exception names exactly that answer, for the two sessions of A
     // that reach the handler (the member and the tokens are refused with 403 before it, as the matrix expects).
     const refusedAs422 = (failure: MatrixFailure): boolean => failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -643,8 +704,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.tenantScoped).toBe(54);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(54);
+    expect(report.tenantScoped).toBe(61);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(61);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
     // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
     // 200 that reports nothing affected, a filter on the folder and the tags of B matches nothing, and a folder or a tag of B is the declared 404 whichever action names it. Where it is not (a token that
@@ -680,7 +741,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The favicon names each of the two hosts of B once: no bookmark of A is on either, so every principal that reaches the handler is answered the placeholder, 202, and no fetch is queued for it.
     // The list of remembered choices names none (one of the seventeen calls that name nothing), and forgetting one names each of the two slugs of B once, the first of which the owner of B has a choice for, which is the declared 404 not_found and leaves it.
     // The creation and the list of teams name none, and the read, the change and the deletion of a team name the one team of B once each, and the replacement of its members names the team and each of the three members of B once.
-    const calls = 22 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3;
+    // The search for share targets names none, the list of the shares of a bookmark names each of the two bookmarks of B once, the grant each of the two bookmarks with each of the three members of B and the team of B once (as the two requests that carry the member and the team apart), and the revocation each of the two bookmarks with the share of B once. The list of the shares of a folder names the one folder of B once, the grant the folder with each of the three members of B and the team of B once, and the revocation the folder with the share of B once.
+    const calls = 23 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);
@@ -707,6 +769,18 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // bookmarks of B the matrix names: no bookmark of B comes back, and the matrix of A holds nothing that matches.
     expect(listings).toEqual(Array.from({ length: 9 * 2 }, () => ({ items: [], nextCursor: null, total: 0 })));
     expect(selections).toEqual(Array.from({ length: 9 * 2 }, () => ({ ids: [], truncated: false })));
+    // The same principals asked the list and the select-all for every scope, with no text: the shared lists (`shared_with_me`, `shared_by_me`) hold nothing at all, since no share of A names a
+    // member of A, and none of the lists of any scope names a bookmark, a member, a title, an owner or a tag of B, though B holds bookmarks shared with its members directly, through its team and
+    // through its folder. Each of the nine principals asks once for each of the two bookmarks of B the matrix names, for each of the four scopes.
+    const namesOfB = [...probe.fixture.b.identifiers.map((identifier) => identifier.id), ...probe.fixture.b.markers, "matrix-bookmark-of-b", "matrix-tag-of-b", "matrix-folder-of-b", "Matrix b "];
+    expect(scoped).toHaveLength(9 * 2 * BOOKMARK_SCOPES.length * 2);
+    for (const { operation, scope, body } of scoped) {
+      const text = JSON.stringify(body);
+      expect(namesOfB.filter((name) => text.includes(name)), `${operation} ${scope}`).toEqual([]);
+      if (scope === "shared_with_me" || scope === "shared_by_me") {
+        expect(body, `${operation} ${scope}`).toEqual(operation === "listBookmarks" ? { items: [], nextCursor: null, total: 0 } : { ids: [], truncated: false });
+      }
+    }
     expect(await contentOfB()).toBe(before);
     // The favicon operation was not made a fetch proxy for the hosts of B: nothing was queued and nothing stored.
     expect(await database().owner`SELECT 1 FROM pgboss.job WHERE name = 'favicon.fetch'`).toHaveLength(0);
@@ -765,6 +839,22 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       return tx<{ action: string }[]>`SELECT action FROM audit_events WHERE workspace_id = ${probe.fixture.a.id} AND action LIKE 'team.%'`;
     });
     expect(teamEventsOfA.map((row) => row.action).filter((action) => action === "team.created")).toEqual(["team.created"]);
+    // The grant of a share reached its handler for the three sessions and the three read-write tokens of A, once for each pair of a bookmark of B and a member of B and once for each bookmark of B and the team of B
+    // (the other principals are refused before it), and both requests of a call were answered alike: no bookmark of B is the caller's, so every grant is the declared 404, whichever target it names.
+    // Nothing was written: A holds no share, its audit log no share event, and the share of B is part of the digest of B.
+    expect(grants).toHaveLength(10 * 2 * 3);
+    expect(grants.filter((grant) => grant.byMember !== grant.byTeam)).toEqual([]);
+    expect(folderGrants).toHaveLength(10 * 1 * 3);
+    expect(folderGrants.filter((grant) => grant.byMember !== grant.byTeam)).toEqual([]);
+    const sharesOfA = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return {
+        shares: await tx<{ id: string }[]>`SELECT id FROM bookmark_shares WHERE workspace_id = ${probe.fixture.a.id}`,
+        folderShares: await tx<{ id: string }[]>`SELECT id FROM folder_shares WHERE workspace_id = ${probe.fixture.a.id}`,
+        events: await tx<{ action: string }[]>`SELECT action FROM audit_events WHERE workspace_id = ${probe.fixture.a.id} AND action LIKE 'share.%'`,
+      };
+    });
+    expect(sharesOfA).toEqual({ shares: [], folderShares: [], events: [] });
   });
 });
 

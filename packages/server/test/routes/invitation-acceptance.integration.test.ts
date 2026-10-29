@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { hashCredentialToken } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -80,8 +81,8 @@ interface Issued {
 }
 
 /** Invites `email` and asks for the link of the invitation, which is where a deployment without mail gets the token. */
-async function invite(world: World, admin: Person, email: string, role: "admin" | "member" = "member"): Promise<Issued> {
-  const created = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email, role });
+async function invite(world: World, admin: Person, email: string, role: "admin" | "member" = "member", teamIds: readonly string[] = []): Promise<Issued> {
+  const created = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email, role, teamIds });
   expect(created.status).toBe(201);
   const { id } = (await created.json()) as { id: string };
   return { id, token: await linkOf(world, admin, id) };
@@ -135,6 +136,31 @@ async function invitationOf(id: string): Promise<InvitationRow> {
     throw new Error("no such invitation");
   }
   return row;
+}
+
+async function seedTeam(workspaceId: string, name: string): Promise<string> {
+  const id = randomUUID();
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${id}, ${workspaceId}, ${name})`;
+  });
+  return id;
+}
+
+async function teamsOf(accountId: string): Promise<string[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ team_id: string }[]>`SELECT team_id FROM team_members WHERE account_id = ${accountId} ORDER BY team_id`;
+  });
+  return rows.map((row) => row.team_id);
+}
+
+async function membersOfTeam(teamId: string): Promise<string[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ account_id: string }[]>`SELECT account_id FROM team_members WHERE team_id = ${teamId}`;
+  });
+  return rows.map((row) => row.account_id);
 }
 
 async function activeWorkspaceOf(person: Person): Promise<string | null> {
@@ -209,6 +235,51 @@ describe("POST /api/v1/invitations/inspect and /accept", { timeout: TEST_TIMEOUT
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.data).toEqual({ eventId: jobs[0]?.id, workspaceId, accountId: invitee.account.id, role: "admin" });
     expect(JSON.stringify(jobs[0]?.data)).not.toContain(token);
+  });
+
+  it("joins the teams the invitation names with the membership, and a team deleted since the invitation is skipped without failing the acceptance", async () => {
+    const world = serve();
+    const { workspaceId, a } = await workspace(world);
+    const kept = await seedTeam(workspaceId, "Kept");
+    const lost = await seedTeam(workspaceId, "Lost");
+    const invitee = await harness.person(world);
+    const { id, token } = await invite(world, a, invitee.account.email, "member", [kept, lost]);
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`DELETE FROM teams WHERE id = ${lost}`;
+    });
+
+    const accepted = await accept(world, invitee, token);
+
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual({ workspaceId, role: "member" });
+    expect((await invitationOf(id)).status).toBe("accepted");
+    expect(await teamsOf(invitee.account.id)).toEqual([kept]);
+  });
+
+  it("joins no team and tells nothing about a team of another workspace: the invitation is refused before it is written, and a stored one is skipped on accept", async () => {
+    const world = serve();
+    const { workspaceId, a } = await workspace(world);
+    const other = await workspace(world);
+    const foreign = await seedTeam(other.workspaceId, "Foreign");
+    const invitee = await harness.person(world);
+
+    const refused = await send(world, "POST", INVITATIONS, { cookie: a.cookie }, { email: invitee.account.email, role: "member", teamIds: [foreign] });
+    expect(refused.status).toBe(422);
+
+    // An invitation that holds the identifier anyway, as one written before the check was made or by other means, still joins nothing of the other workspace.
+    const { id, token } = await invite(world, a, invitee.account.email);
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`UPDATE workspace_invitations SET team_ids = ${`{${foreign}}`}::uuid[] WHERE id = ${id}`;
+    });
+    const accepted = await accept(world, invitee, token);
+
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual({ workspaceId, role: "member" });
+    expect(await teamsOf(invitee.account.id)).toEqual([]);
+    expect(await membersOfTeam(foreign)).toEqual([]);
+    expect(Object.keys(await rolesOf(other.workspaceId))).not.toContain(invitee.account.id);
   });
 
   it("accepts a token at most once under parallel requests, and answers token_expired to the rest", async () => {

@@ -21,7 +21,7 @@ export const CreateInvitationRequestSchema = z
       .array(z.uuid())
       .max(100)
       .optional()
-      .describe("The teams the invited person joins on accepting. Until team membership exists a list with an entry is refused with 422 validation_failed"),
+      .describe("The teams the invited person joins on accepting; each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped"),
   })
   .meta({ id: "CreateInvitationRequest" });
 
@@ -63,7 +63,7 @@ export const createInvitation = defineOperation({
     409: problemResponse(
       "The address belongs to a member of the workspace (already_member), or the Idempotency-Key was used before for another request (idempotency_conflict); nothing is written",
     ),
-    422: problemResponse("The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry, which cannot be invited into yet"),
+    422: problemResponse("The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry that is no team of the workspace (unknown_team, whether no team has the identifier or another workspace's does)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable, or an earlier request with the same Idempotency-Key is still running"),
   },

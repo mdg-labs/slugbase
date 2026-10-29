@@ -18,7 +18,7 @@ import { endMembershipOf } from "./departure.ts";
 // session or the token, and name a member by account identifier only: an account outside that workspace is
 // answered like one that does not exist (404), whatever workspace it belongs to. The list is open to a member
 // and a read-scope token and shows the co-member projection of each account (display name and email) and
-// nothing else of it. The role change is an admin's and declares no token scope, so a token never reaches it.
+// nothing else of it, with the teams of the workspace the member belongs to. The role change is an admin's and declares no token scope, so a token never reaches it.
 // Which role changes the caller may make is judged by the member service under the lock of the workspace; that
 // the workspace keeps an owner is the database's rule, a deferred constraint trigger that refuses the commit of
 // a transaction that would leave none, which is answered 409 last_owner with nothing written. The change, its
@@ -58,8 +58,16 @@ function tenantOf(context: ChainContext): RequestTenant {
 
 /** The member as the contract's `Member` schema has it. */
 export function memberBody(member: WorkspaceMember): z.input<typeof MemberSchema> {
-  const { accountId, displayName, email, role, joinedAt, lastActiveAt } = member;
-  return { accountId, displayName, email, role, joinedAt: joinedAt.toISOString(), lastActiveAt: lastActiveAt === null ? null : lastActiveAt.toISOString() };
+  const { accountId, displayName, email, role, joinedAt, lastActiveAt, teams } = member;
+  return {
+    accountId,
+    displayName,
+    email,
+    role,
+    joinedAt: joinedAt.toISOString(),
+    lastActiveAt: lastActiveAt === null ? null : lastActiveAt.toISOString(),
+    teams: teams.map(({ id, name }) => ({ id, name })),
+  };
 }
 
 export function memberRoutes({ cursorSecret, cookie }: MemberRoutesOptions): RouteBinding[] {

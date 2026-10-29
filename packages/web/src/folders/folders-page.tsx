@@ -5,6 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
+import { ShareDialog, type ShareSubject } from "../sharing/index.ts";
 import { FolderForm, type FolderFormIntent } from "./folder-form.tsx";
 import { FOLDER_SORTS, folderFailureOf, folderListQuery, type Folder, type FolderSort } from "./folders.ts";
 import { useCreateFolderForm, useFolderSort } from "./folders-search.ts";
@@ -30,7 +31,7 @@ interface Editing {
 /**
  * `/folders` (doc 03 section 6): the member's folders under the sort the address holds, each with its icon, colour, name
  * and bookmark count, and the forms that create, rename and restyle a folder and the confirmation that deletes one. `N`
- * opens the form for a new folder, as `?create=1` does. Sharing does not exist yet, so the Mine and Shared with me scopes are not offered.
+ * opens the form for a new folder, as `?create=1` does. The Mine and Shared with me scopes are not offered yet. The row action Share settings opens the share dialog of an own folder.
  */
 export function FoldersPage(): ReactElement {
   const { t } = useTranslation();
@@ -41,6 +42,7 @@ export function FoldersPage(): ReactElement {
   const createForm = useCreateFolderForm();
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [deleting, setDeleting] = useState<Folder | undefined>(undefined);
+  const [sharing, setSharing] = useState<ShareSubject | undefined>(undefined);
   const remove = useDeleteFolder(() => {
     setDeleting(undefined);
   });
@@ -51,6 +53,9 @@ export function FoldersPage(): ReactElement {
   };
   const startRestyle = (folder: Folder): void => {
     setEditing({ intent: "style", folder });
+  };
+  const startShare = (folder: Folder): void => {
+    setSharing({ kind: "folder", id: folder.id, name: folder.name });
   };
   const startDelete = (folder: Folder): void => {
     remove.reset();
@@ -121,6 +126,7 @@ export function FoldersPage(): ReactElement {
           onDelete={startDelete}
           onRename={startRename}
           onRestyle={startRestyle}
+          onShare={startShare}
         />
         <LoadMore
           count={
@@ -202,6 +208,14 @@ export function FoldersPage(): ReactElement {
         open={deleting !== undefined}
         title={t("folders.delete.title", { name: deleting?.name ?? "" })}
       />
+      {sharing === undefined ? null : (
+        <ShareDialog
+          onClose={() => {
+            setSharing(undefined);
+          }}
+          subject={sharing}
+        />
+      )}
     </div>
   );
 }

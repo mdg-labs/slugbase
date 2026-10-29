@@ -71,6 +71,8 @@ import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } fro
 // the link of an earlier send. A deployment that cannot send mail queues no job and still has the invitation;
 // inviting an address that has a pending one there changes its role, teams and expiry and keeps the stored token
 // hash, so the link an admin copied for it keeps working.
+// A `teamIds` entry that is no team of the workspace, an unknown one and another workspace's alike, is 422 validation_failed on
+// `teamIds` (code `unknown_team`) and names no identifier.
 // The operations declare `members.invite` (revoking does not); the authorization stage refuses it while no
 // entitlement source of the composition holds that entitlement, and they declare no token scope, so an API
 // token never reaches them.
@@ -92,13 +94,14 @@ import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } fro
 // and takes one of two forms, told by the body. With the token alone it is the signed-in account's: in an
 // account-level transaction, `sys_invitation_accept` locks the workspace, the account and the invitation, checks
 // that the account's verified address is the invited one and that it is no member yet, and inserts the membership
-// with exactly the invited role; the `member.joined` event job, its audit event and the move of the session to the
+// with exactly the invited role and the memberships of the invitation's teams that are teams of the workspace now (a deleted team
+// is skipped); the `member.joined` event job, its audit event and the move of the session to the
 // workspace are in the same transaction, and a failure of any rolls all of it back. The handler requires the
 // session the stages would have required of an account operation, and takes the per-account limit of the bucket,
 // which the rate-limit stage takes for no anonymous operation. With a display name and a password it is the
 // invited person's who has no account: the registration policy is asked first with the invited address and the path
 // `invitation`, then the password policy, and `sys_invitation_accept_new_account` creates the verified account of
-// the invited address, its membership, the accepted invitation and a full session in one transaction with the
+// the invited address, its membership and team memberships, the accepted invitation and a full session in one transaction with the
 // `account.created` and `member.joined` events and the `member.joined` audit event; a session cookie the request
 // carried is replaced. An address that has an account is 409 email_taken and nothing is written. Both forms count
 // against the `token_redeem` bucket of the client address.
@@ -122,7 +125,7 @@ const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
 const NOT_ALLOWED = "Your role does not allow this.";
 const ALREADY_MEMBER = "This address already belongs to a member of the workspace.";
-const TEAMS_UNAVAILABLE = "Teams cannot be invited into yet.";
+const UNKNOWN_TEAM = "A team of the invitation does not exist in this workspace.";
 const INVALID_ROLE = "An invitation can grant the admin or the member role.";
 const NO_SUCH_INVITATION = "No such resource.";
 const BAD_CURSOR = "The cursor is not valid.";
@@ -484,8 +487,8 @@ export function invitationRoutes({
           throw new ProblemError("forbidden", NOT_ALLOWED);
         case "already_member":
           throw new ProblemError("already_member", ALREADY_MEMBER);
-        case "teams_unavailable":
-          throw new ProblemError("validation_failed", TEAMS_UNAVAILABLE, { errors: [{ path: "teamIds", code: "teams_unavailable" }] });
+        case "unknown_team":
+          throw new ProblemError("validation_failed", UNKNOWN_TEAM, { errors: [{ path: "teamIds", code: "unknown_team" }] });
         case "invalid_role":
           throw new ProblemError("validation_failed", INVALID_ROLE, { errors: [{ path: "role", code: "invalid_role" }] });
       }

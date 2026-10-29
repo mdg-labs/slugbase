@@ -26,6 +26,9 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- account (sys_delete_account) takes the same order: it locks the workspaces the account is a member of or created
 -- before the account row, so an insert that waits for a deleted row with the invited address never waits on a
 -- transaction that waits for the workspace this one holds.
+-- The account joins the teams the invitation names that are teams of its workspace now, in the same transaction, as
+-- sys_invitation_accept does it: a deleted team and a team of another workspace are skipped, and the teams are locked
+-- FOR KEY SHARE after the invitation so a concurrent deletion of one cannot fail the acceptance.
 -- The operation is the anonymous caller's: it refuses ('gone') inside a transaction that acts for an account, and
 -- needs no account to exist.
 CREATE OR REPLACE FUNCTION public.sys_invitation_accept_new_account(
@@ -49,6 +52,7 @@ DECLARE
   v_invitation uuid;
   v_invited_email citext;
   v_role member_role;
+  v_team_ids uuid[];
 BEGIN
   IF NOT coalesce(
     p_token_hash IS NOT NULL AND octet_length(p_token_hash) = 32
@@ -83,7 +87,7 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT i.id, i.email, i.role INTO v_invitation, v_invited_email, v_role
+  SELECT i.id, i.email, i.role, i.team_ids INTO v_invitation, v_invited_email, v_role, v_team_ids
   FROM public.workspace_invitations i
   WHERE i.token_hash = p_token_hash AND i.workspace_id = v_workspace AND i.status = 'pending' AND i.expires_at > clock_timestamp()
   FOR UPDATE;
@@ -106,6 +110,11 @@ BEGIN
   END IF;
 
   INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (v_workspace, p_account_id, v_role);
+  INSERT INTO public.team_members (workspace_id, team_id, account_id)
+  SELECT v_workspace, t.id, p_account_id
+  FROM (
+    SELECT x.id FROM public.teams x WHERE x.workspace_id = v_workspace AND x.id = ANY (v_team_ids) ORDER BY x.id FOR KEY SHARE
+  ) t;
   UPDATE public.workspace_invitations
   SET status = 'accepted', accepted_by = p_account_id, closed_at = clock_timestamp()
   WHERE id = v_invitation;

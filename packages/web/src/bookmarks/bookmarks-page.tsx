@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useAllFolders } from "../folders/use-all-folders.ts";
 import { useFormat } from "../i18n/use-format.ts";
+import { ShareDialog, type ShareSubject } from "../sharing/index.ts";
 import { useAllTags } from "../tags/use-all-tags.ts";
 import { BookmarkCard } from "./bookmark-card.tsx";
 import { BookmarksBulkBar } from "./bookmarks-bulk-bar.tsx";
@@ -97,6 +98,7 @@ export function BookmarksPage(): ReactElement {
   const pin = usePinBookmark();
   const pendingPins = usePendingPins();
   const [deleting, setDeleting] = useState<Bookmark | undefined>(undefined);
+  const [sharing, setSharing] = useState<ShareSubject | undefined>(undefined);
   const filters = filterParamsOf(search);
   // The selection belongs to the filters it was made under, the folder and the tags included; the sort, the view and the size do not change which bookmarks match.
   const selection = useBookmarkSelection(JSON.stringify(filters));
@@ -117,6 +119,9 @@ export function BookmarksPage(): ReactElement {
   };
   const editBookmark = (target: Bookmark): void => {
     modal.edit(target.id);
+  };
+  const shareBookmark = (target: Bookmark): void => {
+    setSharing({ kind: "bookmark", id: target.id, name: target.title });
   };
 
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
@@ -219,6 +224,7 @@ export function BookmarksPage(): ReactElement {
               onDelete={startDelete}
               onEdit={editBookmark}
               onPin={pin.pin}
+              onShare={shareBookmark}
               onSelectedChange={selectBookmark}
               onSort={(sort) => {
                 controls.update({ sort: sort === DEFAULT_SORT ? undefined : sort });
@@ -238,6 +244,7 @@ export function BookmarksPage(): ReactElement {
                   onDelete={startDelete}
                   onEdit={editBookmark}
                   onPin={pin.pin}
+                  onShare={shareBookmark}
                   onSelectedChange={selectBookmark}
                   pinPending={pendingPins.has(bookmark.id)}
                   selected={selection.has(bookmark.id)}
@@ -330,6 +337,14 @@ export function BookmarksPage(): ReactElement {
         open={deleting !== undefined}
         title={t("bookmarks.list.delete.title")}
       />
+      {sharing === undefined ? null : (
+        <ShareDialog
+          onClose={() => {
+            setSharing(undefined);
+          }}
+          subject={sharing}
+        />
+      )}
     </div>
   );
 }

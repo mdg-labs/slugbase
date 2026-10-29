@@ -12,6 +12,7 @@ export * from "./go/navigate.ts";
 export * from "./instance/index.ts";
 export * from "./ports/index.ts";
 export * from "./search/index.ts";
+export * from "./sharing/index.ts";
 export * from "./tags/index.ts";
 export * from "./teams/index.ts";
 export * from "./workspaces/index.ts";

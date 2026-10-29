@@ -3,6 +3,7 @@ export { AccountAvatar, type AccountAvatarProps } from "./account-avatar.tsx";
 export { AccountMenu, type AccountMenuItem, type AccountMenuProps } from "./account-menu.tsx";
 export { AppShell, MAIN_CONTENT_ID, type AppShellLabels, type AppShellProps } from "./app-shell.tsx";
 export { AuthCard, AuthLayout, type AuthCardProps, type AuthLayoutProps } from "./auth-card.tsx";
+export { AvatarStack, type AvatarStackPerson, type AvatarStackProps } from "./avatar-stack.tsx";
 export { Banner, type BannerProps, type BannerVariant } from "./banner.tsx";
 export { BulkBar, BulkBarButton, type BulkBarAction, type BulkBarButtonProps, type BulkBarProps } from "./bulk-bar.tsx";
 export { CardGrid, CardGridItem, type CardGridItemProps, type CardGridProps } from "./card-grid.tsx";
@@ -90,11 +91,13 @@ export {
   PowerOffIcon,
   SearchIcon,
   SettingsIcon,
+  Share2Icon,
   ShieldCheckIcon,
   SunMoonIcon,
   TableIcon,
   TagIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  UsersIcon,
   XIcon,
 } from "lucide-react";

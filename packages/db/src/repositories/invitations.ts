@@ -55,6 +55,10 @@ interface PresentRow extends Record<string, unknown> {
   present: boolean;
 }
 
+interface CountRow extends Record<string, unknown> {
+  present: number;
+}
+
 interface LocaleRow extends Record<string, unknown> {
   locale: string | null;
 }
@@ -179,6 +183,18 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
           JOIN public.accounts a ON a.id = m.account_id
           WHERE m.workspace_id = ${workspaceId}::uuid AND a.email = ${email}::citext) AS present`);
       return rows[0]?.present === true;
+    },
+
+    async teamsExist(teamIds) {
+      const workspaceId = workspaceOf(tx, "looking for the teams of an invitation");
+      const wanted = [...new Set(teamIds.map((teamId) => teamId.toLowerCase()))];
+      if (wanted.length === 0) {
+        return true;
+      }
+      const rows = await tenantHandle(tx).execute<CountRow>(sql`
+        SELECT count(*)::int AS present FROM public.teams
+        WHERE workspace_id = ${workspaceId}::uuid AND id = ANY (${uuidArray(wanted)}::uuid[])`);
+      return rows[0]?.present === wanted.length;
     },
 
     async writePending(invitation: NewInvitation) {

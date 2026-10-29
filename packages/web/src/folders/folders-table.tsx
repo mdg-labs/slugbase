@@ -1,8 +1,9 @@
-import { DataTable, ExternalLinkIcon, PaletteIcon, PencilIcon, RowActions, Trash2Icon, type DataTableColumn } from "@slugbase/ui/patterns";
+import { DataTable, ExternalLinkIcon, PaletteIcon, PencilIcon, RowActions, Share2Icon, Trash2Icon, type DataTableColumn } from "@slugbase/ui/patterns";
 import { useRouter } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
+import { useIsOwner, useSharingGranted } from "../sharing/index.ts";
 import { FolderGlyph } from "./folder-glyph.tsx";
 import type { Folder } from "./folders.ts";
 
@@ -10,14 +11,18 @@ export interface FoldersTableProps {
   readonly folders: readonly Folder[];
   readonly onRename: (folder: Folder) => void;
   readonly onRestyle: (folder: Folder) => void;
+  readonly onShare: (folder: Folder) => void;
   readonly onDelete: (folder: Folder) => void;
 }
 
-type FolderActionHandlers = Pick<FoldersTableProps, "onRename" | "onRestyle" | "onDelete"> & { readonly folder: Folder };
+type FolderActionHandlers = Pick<FoldersTableProps, "onRename" | "onRestyle" | "onShare" | "onDelete"> & { readonly folder: Folder };
 
-function ActionsCell({ folder, onRename, onRestyle, onDelete }: FolderActionHandlers): ReactElement {
+function ActionsCell({ folder, onRename, onRestyle, onShare, onDelete }: FolderActionHandlers): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
+  // Only the owner shares a folder, and only a workspace that may share offers the action.
+  const sharingGranted = useSharingGranted();
+  const owned = useIsOwner(folder.ownerId);
   const actions = [
     {
       id: "open",
@@ -43,6 +48,18 @@ function ActionsCell({ folder, onRename, onRestyle, onDelete }: FolderActionHand
         onRestyle(folder);
       },
     },
+    ...(sharingGranted && owned
+      ? [
+          {
+            id: "share",
+            label: t("folders.actions.share"),
+            icon: <Share2Icon aria-hidden="true" />,
+            onSelect: () => {
+              onShare(folder);
+            },
+          },
+        ]
+      : []),
     {
       id: "delete",
       label: t("folders.actions.delete"),
@@ -60,7 +77,7 @@ function ActionsCell({ folder, onRename, onRestyle, onDelete }: FolderActionHand
  * The folders as a table (doc 03 section 6): the icon in its colour with the name, how many bookmarks are filed in the
  * folder, when it last changed, and the actions of the row. The order is the page's; below `md` each row is a card.
  */
-export function FoldersTable({ folders, onRename, onRestyle, onDelete }: FoldersTableProps): ReactElement {
+export function FoldersTable({ folders, onRename, onRestyle, onShare, onDelete }: FoldersTableProps): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const columns: readonly DataTableColumn<Folder>[] = [
@@ -90,7 +107,7 @@ export function FoldersTable({ folders, onRename, onRestyle, onDelete }: Folders
       header: t("folders.list.table.actions"),
       hideHeader: true,
       cardSlot: "trailing",
-      cell: (folder) => <ActionsCell folder={folder} onDelete={onDelete} onRename={onRename} onRestyle={onRestyle} />,
+      cell: (folder) => <ActionsCell folder={folder} onDelete={onDelete} onRename={onRename} onRestyle={onRestyle} onShare={onShare} />,
     },
   ];
   return <DataTable columns={columns} label={t("folders.list.label")} rowKey={(folder) => folder.id} rows={folders} />;

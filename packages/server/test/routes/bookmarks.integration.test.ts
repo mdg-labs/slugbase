@@ -117,6 +117,8 @@ describe("createBookmark", () => {
         pinned: true,
         openCount: 0,
         lastOpenedAt: null,
+        owner: null,
+        sharedVia: null,
         folders: [],
         tags: [],
         version: 1,

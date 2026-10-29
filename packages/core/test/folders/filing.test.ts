@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileBookmarks, unfileBookmarks, type FolderFilingRequest, type FolderFilingResult, type FolderFilingStore, type FolderRecord } from "../../src/index.ts";
+import { fileBookmarks, unfileBookmarks, type FolderFilingRequest, type FolderFilingStore, type FolderFilingStoreResult, type FolderRecord } from "../../src/index.ts";
 
 const ACCOUNT = "0192F3A0-BBBB-7000-8000-000000000001";
 const FOLDER = "0192F3A0-AAAA-7000-8000-000000000001";
@@ -9,8 +9,9 @@ const NOW = new Date("2026-10-24T05:00:00.000Z");
 
 const FOLDER_RECORD: FolderRecord = { id: FOLDER.toLowerCase(), ownerId: ACCOUNT.toLowerCase(), name: "Reading", icon: "folder", color: 1, bookmarkCount: 2, version: 1, createdAt: NOW, updatedAt: NOW };
 
-function filing(answer: FolderFilingResult = { kind: "done", folder: FOLDER_RECORD, changed: 2 }) {
+function filing(answer: FolderFilingStoreResult = { kind: "done", folder: FOLDER_RECORD, changed: 2 }, shared: readonly string[] = []) {
   const calls: { method: "file" | "unfile"; request: FolderFilingRequest }[] = [];
+  const asked: { bookmarkIds: readonly string[]; accountId: string }[] = [];
   const store: FolderFilingStore = {
     file(request) {
       calls.push({ method: "file", request });
@@ -20,8 +21,12 @@ function filing(answer: FolderFilingResult = { kind: "done", folder: FOLDER_RECO
       calls.push({ method: "unfile", request });
       return Promise.resolve(answer);
     },
+    sharedAmong(request) {
+      asked.push(request);
+      return Promise.resolve(shared);
+    },
   };
-  return { calls, dependencies: { store } };
+  return { calls, asked, dependencies: { store } };
 }
 
 describe("fileBookmarks and unfileBookmarks", () => {
@@ -49,10 +54,34 @@ describe("fileBookmarks and unfileBookmarks", () => {
     expect(await unfileBookmarks(refused.dependencies, ask)).toEqual({ kind: "not_found" });
   });
 
+  it("answer forbidden, not not_found, when the store refuses and a bookmark named is shared with the caller", async () => {
+    const { asked, dependencies } = filing({ kind: "not_found" }, [BOOKMARK_A.toLowerCase()]);
+    const ask = { folderId: FOLDER, accountId: ACCOUNT, bookmarkIds: [BOOKMARK_A, BOOKMARK_B] };
+
+    expect(await fileBookmarks(dependencies, ask)).toEqual({ kind: "forbidden" });
+    expect(await unfileBookmarks(dependencies, ask)).toEqual({ kind: "forbidden" });
+    expect(asked).toEqual([
+      { bookmarkIds: [BOOKMARK_A.toLowerCase(), BOOKMARK_B], accountId: ACCOUNT.toLowerCase() },
+      { bookmarkIds: [BOOKMARK_A.toLowerCase(), BOOKMARK_B], accountId: ACCOUNT.toLowerCase() },
+    ]);
+  });
+
+  it("keep not_found when no bookmark named is shared with the caller, and ask nothing when the store filed", async () => {
+    const refused = filing({ kind: "not_found" });
+    const done = filing();
+    const ask = { folderId: FOLDER, accountId: ACCOUNT, bookmarkIds: [BOOKMARK_A] };
+
+    expect(await fileBookmarks(refused.dependencies, ask)).toEqual({ kind: "not_found" });
+    expect(await unfileBookmarks(refused.dependencies, ask)).toEqual({ kind: "not_found" });
+    await fileBookmarks(done.dependencies, ask);
+    expect(done.asked).toEqual([]);
+  });
+
   it("let the failure of the store reject, so the caller's transaction does not commit", async () => {
     const store: FolderFilingStore = {
       file: () => Promise.reject(new Error("the database refused")),
       unfile: () => Promise.reject(new Error("the database refused")),
+      sharedAmong: () => Promise.resolve([]),
     };
     const ask = { folderId: FOLDER, accountId: ACCOUNT, bookmarkIds: [BOOKMARK_A] };
 

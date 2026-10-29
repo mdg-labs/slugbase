@@ -44,22 +44,22 @@ export function newIdempotencyKey(): string {
 }
 
 /** Why one address was not invited, as far as the member is told. */
-export type InviteRefusal = "alreadyMember" | "invalid" | "rateLimited" | "unavailable" | "failed";
+export type InviteRefusal = "alreadyMember" | "invalid" | "unknownTeam" | "rateLimited" | "unavailable" | "failed";
 
 export type InviteOutcome =
   | { readonly status: "invited"; readonly invitation: Invitation }
   | { readonly status: "refused"; readonly refusal: InviteRefusal; readonly requestId: string | undefined };
 
 /**
- * Invites one address with the role, under the idempotency key, so a send that is repeated after a lost answer does
+ * Invites one address with the role, who joins `teamIds` on accepting, under the idempotency key, so a send that is repeated after a lost answer does
  * not invite twice. Every failure of this one address is an answer for the caller to list beside the others'; only
  * an ended session, which the app answers as a whole, is thrown.
  */
-export async function inviteByEmail(api: ApiClient, email: string, role: InvitationRole, idempotencyKey: string): Promise<InviteOutcome> {
+export async function inviteByEmail(api: ApiClient, email: string, role: InvitationRole, teamIds: readonly string[], idempotencyKey: string): Promise<InviteOutcome> {
   try {
     const { data, error } = await api.POST("/api/v1/invitations", {
       params: { header: { "Idempotency-Key": idempotencyKey } },
-      body: { email, role },
+      body: { email, role, teamIds: [...teamIds] },
     });
     if (data === undefined) {
       throw new Error("The invitation did not answer with a document", { cause: error });
@@ -74,7 +74,8 @@ export async function inviteByEmail(api: ApiClient, email: string, role: Invitat
         return { status: "refused", refusal: "alreadyMember", requestId: caught.requestId };
       }
       if (caught.status === 422) {
-        return { status: "refused", refusal: "invalid", requestId: caught.requestId };
+        const team = caught.errors.some(({ path }) => path.startsWith("teamIds"));
+        return { status: "refused", refusal: team ? "unknownTeam" : "invalid", requestId: caught.requestId };
       }
       if (caught.status === 429) {
         return { status: "refused", refusal: "rateLimited", requestId: caught.requestId };

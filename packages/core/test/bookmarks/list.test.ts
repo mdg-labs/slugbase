@@ -7,7 +7,7 @@ const ALICE = "0192f3a0-bbbb-7000-8000-00000000000B";
 function record(id: string): BookmarkRecord {
   return {
     id, ownerId: ALICE.toLowerCase(), url: "https://example.com/", host: "example.com", title: id, description: null, slug: null, forwarding: false, pinned: false,
-    openCount: 0, lastOpenedAt: null, folders: [], tags: [], version: 1, createdAt: new Date(0), updatedAt: new Date(0),
+    openCount: 0, lastOpenedAt: null, owner: null, sharedVia: null, folders: [], tags: [], version: 1, createdAt: new Date(0), updatedAt: new Date(0),
   };
 }
 
@@ -100,7 +100,7 @@ describe("listBookmarks", () => {
     const outcome = await listBookmarks({ store: port, cursors: codec }, ask());
 
     expect(outcome).toEqual({ kind: "listed", items: [record("a"), record("b")], nextCursor: "cursor-0", total: 3 });
-    expect(lists).toEqual([{ filter: { ownerId: ALICE, pinned: undefined, hasSlug: undefined, forwarding: undefined, urlCanonical: undefined }, sort: "recent", after: undefined, limit: 3 }]);
+    expect(lists).toEqual([{ filter: { ownerId: ALICE, scope: "all", pinned: undefined, hasSlug: undefined, forwarding: undefined, urlCanonical: undefined }, sort: "recent", after: undefined, limit: 3 }]);
     expect(sealed[0]?.position).toEqual({ key: "key-b", id: "b" });
   });
 
@@ -211,7 +211,7 @@ describe("listBookmarks", () => {
 
     await listBookmarks({ store: port, cursors: cursors().codec }, ask({ url: "  HTTPS://Example.COM:443/a/?utm_source=x#frag ", pinned: false, hasSlug: true, forwarding: true }));
 
-    const filter = { ownerId: ALICE, pinned: false, hasSlug: true, forwarding: true, urlCanonical: "https://example.com/a" };
+    const filter = { ownerId: ALICE, scope: "all", pinned: false, hasSlug: true, forwarding: true, urlCanonical: "https://example.com/a" };
     expect(lists[0]?.filter).toEqual(filter);
     expect(counts[0]?.filter).toEqual(filter);
   });

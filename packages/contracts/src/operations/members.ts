@@ -8,6 +8,13 @@ import { WORKSPACE_ROLES } from "./me.ts";
 // Removing a member and leaving the workspace (`leaveWorkspace`, in workspaces.ts) end a membership with the
 // content choice of doc 02 section 3.6.
 
+export const MemberTeamSchema = z
+  .strictObject({
+    id: z.uuid().describe("The team's identifier"),
+    name: z.string().describe("The team's name"),
+  })
+  .meta({ id: "MemberTeam" });
+
 export const MemberSchema = z
   .strictObject({
     accountId: z.uuid().describe("The member's account identifier"),
@@ -16,6 +23,7 @@ export const MemberSchema = z
     role: z.enum(WORKSPACE_ROLES).describe("The member's role in the workspace"),
     joinedAt: z.iso.datetime().describe("When the account became a member of the workspace, RFC 3339 UTC"),
     lastActiveAt: z.iso.datetime().nullable().describe("When the member last acted in the workspace, RFC 3339 UTC; refreshed at most once a minute; null when it never has"),
+    teams: z.array(MemberTeamSchema).describe("The teams of the workspace the member belongs to, ordered by name (ignoring case) and then identifier"),
   })
   .meta({ id: "Member" });
 
@@ -73,7 +81,7 @@ export const listMembers = defineOperation({
   scope: "read",
   request: { query: MemberListQuerySchema },
   responses: {
-    200: jsonResponse("One page of the workspace's members, each with the account's display name and email address and nothing else of the account", MemberListSchema),
+    200: jsonResponse("One page of the workspace's members, each with the account's display name and email address and nothing else of the account, and the teams of the workspace it belongs to", MemberListSchema),
     400: problemResponse("The request was malformed, or the cursor is not one this workspace issued"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),

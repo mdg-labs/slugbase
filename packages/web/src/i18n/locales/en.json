@@ -211,6 +211,7 @@
       "opens": "{count, plural, one {# open} other {# opens}}",
       "usage": "{count, plural, one {# open} other {# opens}} · {when}",
       "edit": "Edit",
+      "share": "Share",
       "unpin": "Unpin",
       "pin": {
         "action": "Pin",
@@ -501,6 +502,7 @@
       "open": "Open in Bookmarks",
       "rename": "Rename",
       "restyle": "Change icon and colour",
+      "share": "Share settings",
       "delete": "Delete"
     },
     "delete": {
@@ -1334,7 +1336,8 @@
       "tokens": "API tokens",
       "workspace": "Workspace",
       "general": "General",
-      "members": "Members"
+      "members": "Members",
+      "teams": "Teams"
     },
     "account": {
       "title": "Profile",
@@ -1900,6 +1903,7 @@
         "name": "Name",
         "email": "Email",
         "role": "Role",
+        "teams": "Teams",
         "joined": "Joined",
         "lastActive": "Last active",
         "actions": "Actions"
@@ -1917,6 +1921,7 @@
         "makeOwner": "Make owner",
         "makeAdmin": "Make admin",
         "makeMember": "Make member",
+        "manageTeams": "Manage teams",
         "transfer": "Transfer ownership",
         "remove": "Remove from workspace"
       },
@@ -2055,12 +2060,44 @@
           "created": "The invitation was created. Copy its link from the pending invitations.",
           "alreadyMember": "Already a member of this workspace.",
           "invalid": "Not a valid email address.",
+          "unknownTeam": "A team you chose no longer exists. Go back, remove it and try again.",
           "rateLimited": "Too many requests. Try again in a while.",
           "unavailable": "The server is busy. Try again.",
           "failed": "The invitation could not be created.",
           "requestId": "Request ID: {requestId}",
           "tryAgain": "Try the failed ones again",
           "done": "Done"
+        },
+        "teams": {
+          "label": "Teams",
+          "description": "The people you invite join these teams when they accept. Optional.",
+          "placeholder": "Search teams",
+          "empty": "No team matches.",
+          "loading": "Loading teams",
+          "unavailable": "The teams could not be loaded.",
+          "remove": "Remove {name}"
+        }
+      },
+      "teams": {
+        "none": "No teams",
+        "of": "Teams of {name}",
+        "title": "Teams of {name}",
+        "description": "Choose the teams this member belongs to.",
+        "close": "Close the teams form",
+        "label": "Teams",
+        "placeholder": "Search teams",
+        "empty": "No team matches. An admin can create teams on the Teams page.",
+        "loading": "Loading teams",
+        "unavailable": "The teams could not be loaded.",
+        "remove": "Remove {name}",
+        "cancel": "Cancel",
+        "submit": "Save teams",
+        "saved": "Teams of {name} saved.",
+        "error": {
+          "teamGone": "A team you chose no longer exists. Remove it and try again.",
+          "memberGone": "This person is no longer a member of this workspace.",
+          "unavailable": "The teams could not be saved right now. Try again in a moment.",
+          "partlySaved": "Some of your changes were saved, but not all of them. Save again to send the rest."
         }
       }
     }
@@ -2569,6 +2606,153 @@
         "forbidden": "You are not allowed to do that.",
         "notAMember": "This person is no longer a member of the workspace. The list has been reloaded.",
         "recipientGone": "The person chosen to receive the content is no longer a member of the workspace. Choose someone else."
+      }
+    }
+  },
+  "teams": {
+    "title": "Teams",
+    "description": "Group members into teams, then share with a team instead of with each person.",
+    "descriptionReadOnly": "The teams of this workspace and who is in them. Admins and owners change them.",
+    "create": "Create team",
+    "loading": "Loading teams",
+    "loadFailed": "The teams could not be loaded",
+    "loadMore": "Load more",
+    "actionsFor": "Actions for the team {name}",
+    "column": {
+      "name": "Name",
+      "description": "Description",
+      "members": "Members",
+      "actions": "Actions"
+    },
+    "action": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "members": {
+      "stack": "Members: {names}"
+    },
+    "empty": {
+      "title": "No teams yet",
+      "description": "Create one to group members and share access.",
+      "descriptionReadOnly": "An admin or owner can create one to group members and share access."
+    },
+    "form": {
+      "close": "Close the team form",
+      "intro": "A team is shared by the whole workspace.",
+      "description": {
+        "label": "Description",
+        "counter": "{count, number} / {max, number}"
+      },
+      "title": {
+        "create": "Create team",
+        "update": "Edit {name}"
+      },
+      "loading": "Loading the team",
+      "loadFailed": "The team could not be loaded.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Enter a name for the team.",
+          "taken": "The workspace already has a team with this name.",
+          "invalid": "Use a name of 1 to {max, number} characters."
+        }
+      },
+      "members": {
+        "label": "Members",
+        "placeholder": "Search members",
+        "empty": "No member matches.",
+        "loading": "Loading members",
+        "unavailable": "The members could not be loaded.",
+        "remove": "Remove {name}"
+      },
+      "cancel": "Cancel",
+      "submit": {
+        "create": "Create team",
+        "update": "Save changes"
+      },
+      "saved": {
+        "created": "Team created.",
+        "updated": "Team saved."
+      },
+      "error": {
+        "memberGone": "Someone you chose is no longer a member of this workspace. Remove them and try again.",
+        "changedElsewhere": "This team was changed somewhere else. Close this form and open it again to see the latest version.",
+        "notFound": "This team no longer exists.",
+        "unavailable": "The team could not be saved right now. Try again in a moment.",
+        "partlySaved": "Some of your changes were saved, but not all of them. Save again to send the rest."
+      }
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "description": "Everything shared through the team “{name}” stops being shared with its members. The members stay in the workspace.",
+      "confirm": "Delete team",
+      "cancel": "Cancel",
+      "done": "Team “{name}” deleted.",
+      "gone": "This team was already deleted."
+    }
+  },
+  "sharing": {
+    "summary": {
+      "label": "Sharing",
+      "private": "Private",
+      "shared": "Shared with {with}",
+      "team": "{name} team",
+      "members": "{count, plural, one {# member} other {# members}}",
+      "manage": "Manage",
+      "loading": "Loading who this bookmark is shared with",
+      "loadFailed": "Sharing could not be loaded.",
+      "retry": "Try again"
+    },
+    "dialog": {
+      "close": "Close the share dialog",
+      "done": "Done",
+      "retry": "Try again",
+      "title": {
+        "bookmark": "Share “{name}”",
+        "folder": "Share the folder “{name}”"
+      },
+      "description": {
+        "bookmark": "Choose the members and teams who can read this bookmark.",
+        "folder": "Choose the members and teams who can read this folder and every bookmark filed in it, now and later."
+      },
+      "picker": {
+        "label": "Share with",
+        "placeholder": "Search members and teams",
+        "empty": "No member or team matches.",
+        "loading": "Loading members and teams",
+        "unavailable": "Members and teams could not be loaded.",
+        "members": "Members",
+        "teams": "Teams"
+      },
+      "list": {
+        "label": "Current shares",
+        "loading": "Loading shares",
+        "loadFailed": "The shares could not be loaded.",
+        "empty": "Not shared with anyone yet."
+      },
+      "row": {
+        "member": "Member",
+        "team": "Team",
+        "remove": "Stop sharing with {name}"
+      },
+      "note": {
+        "bookmark": "Sharing is read-only. Members can open this bookmark and its slug, but only you can change or delete it.",
+        "folder": "Sharing is read-only. Members can see this folder and the bookmarks in it, but only you can change or delete them."
+      },
+      "audience": {
+        "none": "Not shared with anyone",
+        "some": "Visible to {count, plural, one {# member} other {# members}}",
+        "stack": "Members who can read it: {names}"
+      },
+      "toast": {
+        "added": "Shared with {name}",
+        "removed": "Stopped sharing with {name}",
+        "removeGone": "{name} did not have access any more.",
+        "targetGone": "{name} is no longer in the workspace. The list is up to date now.",
+        "gone": {
+          "bookmark": "This bookmark no longer exists.",
+          "folder": "This folder no longer exists."
+        }
       }
     }
   },

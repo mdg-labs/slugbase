@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type Reac
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Slot } from "../extensions/index.ts";
+import { ShareDialog, SharingSummary, useIsOwner, type ShareSubject } from "../sharing/index.ts";
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
 import { TAGS_QUERY_KEY, TAG_NAME_MAX_LENGTH } from "../tags/tags.ts";
@@ -231,6 +232,8 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   });
   const [discard, setDiscard] = useState<{ readonly run: () => void } | undefined>(undefined);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const owned = useIsOwner(bookmark?.ownerId ?? null);
   const [deleteFailure, setDeleteFailure] = useState<BookmarkFailure | undefined>(undefined);
   const pasted = useRef(false);
   const metadata = usePageMetadata(api);
@@ -432,6 +435,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   const descriptionError = fieldMessage("description", problems.description);
   const tagsError = fieldMessage("tagNames", problems.tagNames);
   const slugError = fieldMessage("slug", problems.slug);
+  const shareSubject: ShareSubject | undefined = bookmark === undefined ? undefined : { kind: "bookmark", id: bookmark.id, name: bookmark.title };
   const slugged = bookmark?.slug !== null && bookmark?.slug !== undefined;
   return (
     <>
@@ -582,6 +586,14 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               change({ pinned });
             }}
           />
+          {bookmark !== undefined && owned ? (
+            <SharingSummary
+              bookmarkId={bookmark.id}
+              onManage={() => {
+                setSharing(true);
+              }}
+            />
+          ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
             {editing ? (
               <Button
@@ -610,6 +622,14 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
             </Button>
           </div>
         </form>
+        {sharing && shareSubject !== undefined ? (
+          <ShareDialog
+            onClose={() => {
+              setSharing(false);
+            }}
+            subject={shareSubject}
+          />
+        ) : null}
       </FormOverlay>
       <UnsavedGuard
         description={t("bookmarks.modal.unsaved.description")}

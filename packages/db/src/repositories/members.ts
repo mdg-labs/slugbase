@@ -1,6 +1,7 @@
 import type { MemberRoleStore, MemberRoles, WorkspaceRole } from "@slugbase/core";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
+import { teamMembers, teams } from "../schema/teams.ts";
 import { workspaceMembers, type MemberRole } from "../schema/workspaces.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -19,6 +20,15 @@ import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 // `isLastOwnerViolation` tells that refusal from any other error. Removing a member deletes the membership
 // row in the active workspace on the same policies, and the API tokens bound to it go with it through the
 // composite foreign key of `api_tokens`; the jobs announcing it are queued in the same transaction.
+//
+// Each member carries the teams of the workspace it belongs to (`id` and `name`, by name), read in one statement keyed
+// by the members of the page, on the policies of `team_members` and `teams`, which name the workspace.
+
+/** A team of the workspace a member belongs to. */
+export interface MemberTeam {
+  readonly id: string;
+  readonly name: string;
+}
 
 /** One member of the workspace, with the co-member projection of the member's account. */
 export interface WorkspaceMember {
@@ -29,6 +39,8 @@ export interface WorkspaceMember {
   readonly joinedAt: Date;
   /** Null when the member never acted in the workspace. */
   readonly lastActiveAt: Date | null;
+  /** The teams of the workspace the member belongs to, by name and then identifier. */
+  readonly teams: readonly MemberTeam[];
 }
 
 export interface MemberRepository extends MemberRoleStore {
@@ -126,16 +138,42 @@ const shown = {
 };
 
 export function memberRepository(tx: TenantTx): MemberRepository {
+  /** The rows of `members` with their teams, read in one statement for all of them. */
+  async function withTeams(workspaceId: string, members: readonly Omit<WorkspaceMember, "teams">[]): Promise<WorkspaceMember[]> {
+    if (members.length === 0) {
+      return [];
+    }
+    const memberships = await tenantHandle(tx)
+      .select({ accountId: teamMembers.accountId, id: teams.id, name: teams.name })
+      .from(teamMembers)
+      .innerJoin(teams, and(eq(teams.workspaceId, teamMembers.workspaceId), eq(teams.id, teamMembers.teamId)))
+      .where(
+        and(
+          eq(teamMembers.workspaceId, workspaceId),
+          inArray(
+            teamMembers.accountId,
+            members.map(({ accountId }) => accountId),
+          ),
+        ),
+      )
+      .orderBy(asc(teams.name), asc(teams.id));
+    return members.map((member) => ({
+      ...member,
+      teams: memberships.filter(({ accountId }) => accountId === member.accountId).map(({ id, name }) => ({ id, name })),
+    }));
+  }
+
   return {
     async list(afterAccountId, limit) {
       const workspaceId = workspaceOf(tx, "listing the members");
-      return tenantHandle(tx)
+      const rows = await tenantHandle(tx)
         .select(shown)
         .from(workspaceMembers)
         .innerJoin(accounts, eq(accounts.id, workspaceMembers.accountId))
         .where(and(eq(workspaceMembers.workspaceId, workspaceId), afterAccountId === null ? undefined : gt(workspaceMembers.accountId, afterAccountId)))
         .orderBy(asc(workspaceMembers.accountId))
         .limit(limit);
+      return withTeams(workspaceId, rows);
     },
 
     async member(accountId) {
@@ -145,7 +183,7 @@ export function memberRepository(tx: TenantTx): MemberRepository {
         .from(workspaceMembers)
         .innerJoin(accounts, eq(accounts.id, workspaceMembers.accountId))
         .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.accountId, accountId)));
-      return row;
+      return row === undefined ? undefined : (await withTeams(workspaceId, [row]))[0];
     },
 
     async roles(targetAccountId): Promise<MemberRoles | undefined> {

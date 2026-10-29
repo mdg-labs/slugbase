@@ -425,7 +425,7 @@
             ]
           },
           "folders": {
-            "description": "The owner's folders the bookmark is filed in, in the order of their names; empty when it is filed in none",
+            "description": "The caller's folders the bookmark is filed in, in the order of their names; empty when it is filed in none, and always for a bookmark that is shared with the caller",
             "items": {
               "$ref": "#/components/schemas/BookmarkFolder"
             },
@@ -459,10 +459,38 @@
             "description": "When the bookmark was last opened, RFC 3339 UTC, null when it never was"
           },
           "openCount": {
-            "description": "How many times the bookmark was opened",
+            "description": "How many times the bookmark was opened, by everyone it is shared with included",
             "maximum": 9007199254740991,
             "minimum": 0,
             "type": "integer"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "description": "The owner's account",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "description": "The owner's display name, as a member of the workspace sees it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null"
           },
           "ownerId": {
             "anyOf": [
@@ -478,8 +506,24 @@
             "description": "The account of the member who owns the bookmark; null once that member has left the workspace"
           },
           "pinned": {
-            "description": "Whether the bookmark is pinned",
+            "description": "Whether the caller pinned the bookmark; always false for a bookmark that is shared with the caller, since a pin is the owner's",
             "type": "boolean"
+          },
+          "sharedVia": {
+            "anyOf": [
+              {
+                "enum": [
+                  "direct",
+                  "team",
+                  "folder"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark. The server always sends it; a client reads an absent value as null"
           },
           "slug": {
             "description": "The bookmark's slug, null when it has none",
@@ -489,7 +533,7 @@
             ]
           },
           "tags": {
-            "description": "The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, and empty when the caller put none on it",
+            "description": "The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, the owner's among them, and empty when the caller put none on it",
             "items": {
               "$ref": "#/components/schemas/BookmarkTag"
             },
@@ -564,10 +608,12 @@
             "type": "string"
           },
           "scope": {
-            "description": "Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out",
+            "description": "Whose bookmarks are matched, as the list's scope says; mine when left out. A selection that holds a bookmark shared with the caller is refused by a bulk request with 403, whatever the action",
             "enum": [
               "all",
-              "mine"
+              "mine",
+              "shared_with_me",
+              "shared_by_me"
             ],
             "type": "string"
           },
@@ -635,7 +681,7 @@
         "additionalProperties": false,
         "properties": {
           "ids": {
-            "description": "The identifiers of the caller's bookmarks that match the filters, newest first, at most 5 000",
+            "description": "The identifiers of the bookmarks the scope covers that match the filters, newest first, at most 5 000",
             "items": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -659,7 +705,7 @@
         "additionalProperties": false,
         "properties": {
           "items": {
-            "description": "One page of the caller's bookmarks, in the order asked for; plan-archived bookmarks are never listed",
+            "description": "One page of the bookmarks the scope covers, in the order asked for; plan-archived bookmarks are never listed",
             "items": {
               "$ref": "#/components/schemas/Bookmark"
             },
@@ -779,6 +825,101 @@
         ],
         "type": "object"
       },
+      "BookmarkShare": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account identifier of the member the bookmark is shared with; null for a team"
+          },
+          "createdAt": {
+            "description": "When the bookmark was shared with the target, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "email": {
+            "description": "The member's email address, which every co-member of the workspace sees; null for a team",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "The share's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What the target is: a member of the workspace, or one of its teams",
+            "enum": [
+              "member",
+              "team"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The display name of the member, the name of the team",
+            "type": "string"
+          },
+          "teamId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The identifier of the team the bookmark is shared with; null for a member"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "accountId",
+          "teamId",
+          "name",
+          "email",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "BookmarkShareList": {
+        "additionalProperties": false,
+        "properties": {
+          "audienceSize": {
+            "description": "How many distinct members other than the owner can read the bookmark through its shares: the members it is shared with and the members of the teams it is shared with",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "description": "The shares of the bookmark, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/BookmarkShare"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "audienceSize"
+        ],
+        "type": "object"
+      },
       "BookmarkTag": {
         "additionalProperties": false,
         "properties": {
@@ -831,7 +972,7 @@
                 "type": "integer"
               },
               "not_owner": {
-                "description": "Bookmarks the caller can read and does not own; none exist until sharing arrives",
+                "description": "Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403",
                 "maximum": 9007199254740991,
                 "minimum": 0,
                 "type": "integer"
@@ -988,7 +1129,7 @@
                 "type": "integer"
               },
               "not_owner": {
-                "description": "Bookmarks the caller can read and does not own; none exist until sharing arrives",
+                "description": "Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403",
                 "maximum": 9007199254740991,
                 "minimum": 0,
                 "type": "integer"
@@ -1223,6 +1364,40 @@
         ],
         "type": "object"
       },
+      "CreateBookmarkShareRequest": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "accountId": {
+                "description": "The account identifier of the member to share the bookmark with; it must be a current member of the workspace other than the caller",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "accountId"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "teamId": {
+                "description": "The identifier of the team to share the bookmark with; it must be a team of the workspace",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "teamId"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "CreateFolderRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1310,6 +1485,40 @@
         ],
         "type": "object"
       },
+      "CreateFolderShareRequest": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "accountId": {
+                "description": "The account identifier of the member to share the folder with; it must be a current member of the workspace other than the caller",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "accountId"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "teamId": {
+                "description": "The identifier of the team to share the folder with; it must be a team of the workspace",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "teamId"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "CreateInstanceWorkspaceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1357,7 +1566,7 @@
             "type": "string"
           },
           "teamIds": {
-            "description": "The teams the invited person joins on accepting. Until team membership exists a list with an entry is refused with 422 validation_failed",
+            "description": "The teams the invited person joins on accepting; each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped",
             "items": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -2097,6 +2306,101 @@
           "items",
           "nextCursor",
           "total"
+        ],
+        "type": "object"
+      },
+      "FolderShare": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account identifier of the member the folder is shared with; null for a team"
+          },
+          "createdAt": {
+            "description": "When the folder was shared with the target, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "email": {
+            "description": "The member's email address, which every co-member of the workspace sees; null for a team",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "The share's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What the target is: a member of the workspace, or one of its teams",
+            "enum": [
+              "member",
+              "team"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The display name of the member, the name of the team",
+            "type": "string"
+          },
+          "teamId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The identifier of the team the folder is shared with; null for a member"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "accountId",
+          "teamId",
+          "name",
+          "email",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "FolderShareList": {
+        "additionalProperties": false,
+        "properties": {
+          "audienceSize": {
+            "description": "How many distinct members other than the owner can read the folder, and the bookmarks in it, through its shares: the members it is shared with and the members of the teams it is shared with",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "description": "The shares of the folder, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/FolderShare"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "audienceSize"
         ],
         "type": "object"
       },
@@ -3464,6 +3768,13 @@
               "member"
             ],
             "type": "string"
+          },
+          "teams": {
+            "description": "The teams of the workspace the member belongs to, ordered by name (ignoring case) and then identifier",
+            "items": {
+              "$ref": "#/components/schemas/MemberTeam"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -3472,7 +3783,8 @@
           "email",
           "role",
           "joinedAt",
-          "lastActiveAt"
+          "lastActiveAt",
+          "teams"
         ],
         "type": "object"
       },
@@ -3497,6 +3809,26 @@
         "required": [
           "items",
           "nextCursor"
+        ],
+        "type": "object"
+      },
+      "MemberTeam": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The team's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "name": {
+            "description": "The team's name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -4318,6 +4650,59 @@
         "required": [
           "setupRequired",
           "setupTokenRequired"
+        ],
+        "type": "object"
+      },
+      "ShareTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "The member's email address, which every co-member of the workspace sees; null for a team",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "The account identifier of a member, the team identifier of a team",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What the target is: a member of the workspace, or one of its teams",
+            "enum": [
+              "member",
+              "team"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The display name of a member, the name of a team",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name",
+          "email"
+        ],
+        "type": "object"
+      },
+      "ShareTargetList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The members of the workspace other than the caller and the teams of the workspace that match, ordered by name (ignoring case) and then identifier. A kind the workspace has no sharing entitlement for is left out",
+            "items": {
+              "$ref": "#/components/schemas/ShareTarget"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -6309,10 +6694,12 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose bookmarks are listed. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today",
+              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
               "enum": [
                 "all",
-                "mine"
+                "mine",
+                "shared_with_me",
+                "shared_by_me"
               ],
               "type": "string"
             }
@@ -6464,7 +6851,7 @@
                 }
               }
             },
-            "description": "One page of the caller's bookmarks in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks, those of another workspace and plan-archived ones are never listed"
+            "description": "One page of the bookmarks the scope covers in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks that are not shared with the caller, those of another workspace and plan-archived ones are never listed. A bookmark of another member carries its owner and how it is shared with the caller, and none of the owner's folders, tags or pin"
           },
           "400": {
             "content": {
@@ -6705,7 +7092,7 @@
                 }
               }
             },
-            "description": "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone"
+            "description": "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone"
           },
           "400": {
             "content": {
@@ -6735,7 +7122,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden); nothing is changed"
           },
           "404": {
             "content": {
@@ -6850,7 +7237,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not tag it (forbidden)"
           },
           "404": {
             "content": {
@@ -6923,10 +7310,12 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose bookmarks are listed. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today",
+              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
               "enum": [
                 "all",
-                "mine"
+                "mine",
+                "shared_with_me",
+                "shared_by_me"
               ],
               "type": "string"
             }
@@ -7037,7 +7426,7 @@
                 }
               }
             },
-            "description": "The identifiers of the caller's bookmarks that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks, those of another workspace and plan-archived ones are never returned"
+            "description": "The identifiers of the bookmarks the scope covers that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks that are not shared with the caller, those of another workspace and plan-archived ones are never returned"
           },
           "400": {
             "content": {
@@ -7293,7 +7682,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted"
           },
           "404": {
             "content": {
@@ -7303,7 +7692,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
+            "description": "The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
           },
           "422": {
             "content": {
@@ -7379,7 +7768,7 @@
                 }
               }
             },
-            "description": "The caller's bookmark",
+            "description": "The caller's bookmark, or a bookmark of another member that is shared with the caller, directly, through a team or through a folder. The latter carries its owner (the display name, null once the owner has left the workspace) and how it is shared with the caller, and nothing of the owner's tags, folders or pin and no list of the others it is shared with",
             "headers": {
               "ETag": {
                 "description": "The bookmark's version as an entity tag, for example \"3\"; the If-Match of the next change",
@@ -7418,7 +7807,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike"
+            "description": "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a plan-archived one, a bookmark of another workspace and one that never existed are answered alike"
           },
           "422": {
             "content": {
@@ -7552,7 +7941,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not change it, tag it or file it (forbidden); nothing is changed"
           },
           "404": {
             "content": {
@@ -7562,7 +7951,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed"
+            "description": "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed and none shared with the caller: another member's bookmark that is not shared with them, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed"
           },
           "409": {
             "content": {
@@ -7660,7 +8049,7 @@
                 }
               }
             },
-            "description": "The destination of the bookmark. The open is counted asynchronously: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address"
+            "description": "The destination of the bookmark, which is the caller's own or another member's that is shared with the caller. The open is counted asynchronously, on the bookmark itself, so the owner sees the total of everyone's opens: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address"
           },
           "400": {
             "content": {
@@ -7700,7 +8089,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted"
+            "description": "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted"
           },
           "422": {
             "content": {
@@ -7750,6 +8139,381 @@
         ],
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "go",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/bookmarks/{id}/shares": {
+      "get": {
+        "operationId": "listBookmarkShares",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The bookmark's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkShareList"
+                }
+              }
+            },
+            "description": "The shares of the bookmark and the size of the audience they make. Only the owner of the bookmark reads them"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable), or the bookmark is another member's and shared with the caller, who can read it and may not see or change its shares (forbidden)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace and one that never existed are answered alike"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the shares of a bookmark",
+        "tags": [
+          "sharing"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read"
+      },
+      "post": {
+        "operationId": "createBookmarkShare",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The bookmark's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBookmarkShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkShare"
+                }
+              }
+            },
+            "description": "The bookmark was shared with this target already: the share that exists, with nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkShare"
+                }
+              }
+            },
+            "description": "The bookmark is shared with the target; the audit log records share.granted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace does not hold the entitlement of the kind of target: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable), or the bookmark is another member's and shared with the caller, who can read it and may not see or change its shares (forbidden)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace and one that never existed are answered alike, or the bookmark is plan-archived"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier or the body did not pass validation: no target or two, a field the operation does not declare, the caller as the member (validation_failed on accountId, cannot_share_with_self), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Share a bookmark with a member or a team",
+        "tags": [
+          "sharing"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "write",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/bookmarks/{id}/shares/{shareId}": {
+      "delete": {
+        "operationId": "deleteBookmarkShare",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The bookmark's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shareId",
+            "required": true,
+            "schema": {
+              "description": "The share's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The share is revoked for good: the target can no longer read the bookmark through it. The audit log records share.revoked"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable), or the bookmark is another member's and shared with the caller, who can read it and may not see or change its shares (forbidden)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace and one that never existed are answered alike, or the bookmark has no share with this identifier: a share of another bookmark, one that never existed and one that was revoked before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifiers did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Revoke a share of a bookmark",
+        "tags": [
+          "sharing"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "write",
         "x-slugbase-scope": "write"
       }
     },
@@ -8837,7 +9601,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not take it out of a folder (forbidden); none of the bookmarks is unfiled"
           },
           "404": {
             "content": {
@@ -8972,7 +9736,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not file it (forbidden); none of the bookmarks is filed"
           },
           "404": {
             "content": {
@@ -9029,6 +9793,381 @@
         "summary": "File bookmarks in a folder",
         "tags": [
           "folders"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "write",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/folders/{id}/shares": {
+      "get": {
+        "operationId": "listFolderShares",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The folder's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderShareList"
+                }
+              }
+            },
+            "description": "The shares of the folder and the size of the audience they make. Only the owner of the folder reads them"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the shares of a folder",
+        "tags": [
+          "sharing"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read"
+      },
+      "post": {
+        "operationId": "createFolderShare",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The folder's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFolderShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderShare"
+                }
+              }
+            },
+            "description": "The folder was shared with this target already: the share that exists, with nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderShare"
+                }
+              }
+            },
+            "description": "The folder, and every bookmark filed in it now or later, is readable by the target; the audit log records share.granted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace does not hold the entitlement of the kind of target: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier or the body did not pass validation: no target or two, a field the operation does not declare, the caller as the member (validation_failed on accountId, cannot_share_with_self), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Share a folder with a member or a team",
+        "tags": [
+          "sharing"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "write",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/folders/{id}/shares/{shareId}": {
+      "delete": {
+        "operationId": "deleteFolderShare",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The folder's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shareId",
+            "required": true,
+            "schema": {
+              "description": "The share's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The share is revoked for good: the target can no longer read the folder, or the bookmarks in it, through it. The audit log records share.revoked"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike, or the folder has no share with this identifier: a share of another folder, one that never existed and one that was revoked before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifiers did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Revoke a share of a folder",
+        "tags": [
+          "sharing"
         ],
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "write",
@@ -11185,7 +12324,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry, which cannot be invited into yet"
+            "description": "The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry that is no team of the workspace (unknown_team, whether no team has the identifier or another workspace's does)"
           },
           "429": {
             "content": {
@@ -14238,7 +15377,7 @@
                 }
               }
             },
-            "description": "One page of the workspace's members, each with the account's display name and email address and nothing else of the account"
+            "description": "One page of the workspace's members, each with the account's display name and email address and nothing else of the account, and the teams of the workspace it belongs to"
           },
           "400": {
             "content": {
@@ -15027,6 +16166,135 @@
         ],
         "x-slugbase-auth": "anonymous",
         "x-slugbase-rate": "public"
+      }
+    },
+    "/api/v1/share-targets": {
+      "get": {
+        "operationId": "listShareTargets",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Lists the targets whose name contains this text, or, for a member, whose email address does, without regard to case; left out, every target is listed",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "The most targets to return, at most 50",
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareTargetList"
+                }
+              }
+            },
+            "description": "The members (other than the caller) and the teams of the workspace that match, for the kinds the workspace may share with"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (an unknown parameter, a text that is blank, longer than 100 characters or holds a NUL character, a limit outside 1 to 50)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Find the members and teams to share with",
+        "tags": [
+          "sharing"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read"
       }
     },
     "/api/v1/slugs/availability": {
@@ -17771,6 +19039,9 @@
     },
     {
       "name": "setup"
+    },
+    {
+      "name": "sharing"
     },
     {
       "name": "tags"

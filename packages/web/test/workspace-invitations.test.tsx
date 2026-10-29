@@ -383,9 +383,9 @@ describe("the invite dialog", () => {
     expect(within(results).getAllByRole("listitem")).toHaveLength(3);
     const sent = stub.received("POST", INVITATIONS_PATH);
     expect(sent.map(({ body }) => body)).toEqual([
-      { email: "new@example.org", role: "admin" },
-      { email: "other@example.org", role: "admin" },
-      { email: "third@example.org", role: "admin" },
+      { email: "new@example.org", role: "admin", teamIds: [] },
+      { email: "other@example.org", role: "admin", teamIds: [] },
+      { email: "third@example.org", role: "admin", teamIds: [] },
     ]);
     const keys = sent.map(({ idempotencyKey }) => idempotencyKey);
     expect(new Set(keys).size).toBe(3);
@@ -489,7 +489,7 @@ describe("the invite dialog", () => {
     await press(within(dialog).getByRole("button", { name: "Send invitations" }));
 
     await screen.findByRole("list", { name: "Result for each address" });
-    expect(stub.received("POST", INVITATIONS_PATH).map(({ body }) => body)).toEqual([{ email: "keep@example.org", role: "member" }]);
+    expect(stub.received("POST", INVITATIONS_PATH).map(({ body }) => body)).toEqual([{ email: "keep@example.org", role: "member", teamIds: [] }]);
   }, SLOW_TEST_TIMEOUT_MS);
 
   it("explains where the server cannot send mail that the link is copied from the list", async () => {

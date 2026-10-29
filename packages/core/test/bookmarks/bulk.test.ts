@@ -25,6 +25,7 @@ const TAG_B = "0192f3a0-eeee-7000-8000-0000000000B2";
 
 interface Calls {
   readonly removed: (readonly string[])[];
+  readonly sharedAsked: { readonly bookmarkIds: readonly string[]; readonly accountId: string }[];
   readonly pinned: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly pinned: boolean }[];
   readonly filters: { readonly filter: BookmarkListFilter; readonly limit: number }[];
   readonly events: AuditEventInput[];
@@ -35,6 +36,8 @@ interface Calls {
 
 interface BulkingOptions {
   readonly matching?: readonly string[];
+  /** The bookmarks the store says are shared with the account, among those it is asked about. */
+  readonly shared?: readonly string[];
   readonly removed?: number | undefined;
   readonly pinned?: number;
   /** What the store answers a filing and a tagging; the number of bookmarks it was given when left out. */
@@ -43,12 +46,16 @@ interface BulkingOptions {
 }
 
 function bulking(options: BulkingOptions = {}) {
-  const calls: Calls = { removed: [], pinned: [], filters: [], events: [], filed: [], tagged: [], previewed: [] };
+  const calls: Calls = { removed: [], sharedAsked: [], pinned: [], filters: [], events: [], filed: [], tagged: [], previewed: [] };
   const dependencies = {
     store: {
       ids: (filter: BookmarkListFilter, limit: number) => {
         calls.filters.push({ filter, limit });
         return Promise.resolve((options.matching ?? []).slice(0, limit));
+      },
+      sharedAmong: (request: { readonly bookmarkIds: readonly string[]; readonly accountId: string }) => {
+        calls.sharedAsked.push(request);
+        return Promise.resolve(request.bookmarkIds.filter((id) => (options.shared ?? []).includes(id)));
       },
       removeMany: (bookmarkIds: readonly string[]) => {
         calls.removed.push(bookmarkIds);
@@ -165,7 +172,7 @@ describe("bulkBookmarks by filter", () => {
 
     expect(outcome).toEqual({ kind: "done", requested: 3, affected: 3, skipped: { not_owner: 0, not_found: 0 } });
     expect(calls.filters).toEqual([
-      { filter: { ownerId: ACCOUNT.toLowerCase(), pinned: true, hasSlug: undefined, forwarding: undefined, urlCanonical: "http://example.com/a" }, limit: BOOKMARK_SELECT_ALL_CAP + 1 },
+      { filter: { ownerId: ACCOUNT.toLowerCase(), scope: "mine", pinned: true, hasSlug: undefined, forwarding: undefined, urlCanonical: "http://example.com/a" }, limit: BOOKMARK_SELECT_ALL_CAP + 1 },
     ]);
     expect(calls.removed).toEqual([matching]);
     expect(calls.events.map((event) => event.metadata)).toEqual([{ count: "3" }]);
@@ -240,7 +247,7 @@ describe("bulkBookmarks filing", () => {
     const outcome = await run("add_to_folder", { ...noFilter, folderId: FOLDER, tagIds: [TAG_B, TAG_A, TAG_B] }, { folderId: FOLDER });
 
     expect(outcome).toEqual({ kind: "done", requested: 2, affected: 2, skipped: { not_owner: 0, not_found: 0 } });
-    expect(calls.filters[0]?.filter).toEqual({ ownerId: ACCOUNT.toLowerCase(), folderId: FOLDER.toLowerCase(), tagIds: [TAG_A.toLowerCase(), TAG_B.toLowerCase()] });
+    expect(calls.filters[0]?.filter).toEqual({ ownerId: ACCOUNT.toLowerCase(), scope: "mine", folderId: FOLDER.toLowerCase(), tagIds: [TAG_A.toLowerCase(), TAG_B.toLowerCase()] });
   });
 
   it("acts on the bookmarks a filter with a text query matches, and hands the text to the store as the list does", async () => {
@@ -335,7 +342,7 @@ describe("listBookmarkIds", () => {
 
     expect(cut).toEqual({ kind: "listed", ids: matching.slice(0, BOOKMARK_SELECT_ALL_CAP), truncated: true });
     expect(whole).toEqual({ kind: "listed", ids: matching.slice(0, 3), truncated: false });
-    expect(calls.filters[0]).toEqual({ filter: { ownerId: ACCOUNT, pinned: undefined, hasSlug: false, forwarding: undefined, urlCanonical: undefined }, limit: BOOKMARK_SELECT_ALL_CAP + 1 });
+    expect(calls.filters[0]).toEqual({ filter: { ownerId: ACCOUNT, scope: "all", pinned: undefined, hasSlug: false, forwarding: undefined, urlCanonical: undefined }, limit: BOOKMARK_SELECT_ALL_CAP + 1 });
   });
 
   it("hands the folder and the tags of the list to the store as the list does", async () => {
@@ -360,5 +367,60 @@ describe("listBookmarkIds", () => {
     const outcome = await listBookmarkIds({ store: { ids: () => Promise.reject(new Error("not read")) } }, { accountId: ACCOUNT, scope: "all", pinned: undefined, hasSlug: undefined, forwarding: undefined, url: "javascript:alert(1)" });
 
     expect(outcome).toEqual({ kind: "url_refused", reason: "not_http" });
+  });
+});
+
+describe("a selection that holds a bookmark shared with the caller", () => {
+  const SHARED = idOf(900);
+  const OWN = idOf(901);
+  const ACTIONS = [
+    ["delete", {}],
+    ["pin", {}],
+    ["unpin", {}],
+    ["add_to_folder", { folderId: FOLDER }],
+    ["move_to_folder", { folderId: FOLDER }],
+    ["remove_from_folder", { folderId: FOLDER }],
+    ["add_tags", { tagIds: [TAG_A] }],
+    ["remove_tags", { tagIds: [TAG_A] }],
+  ] as const;
+
+  it.each(ACTIONS)("refuses %s as a whole, with nothing written, whether it is named by identifier or matched by a filter", async (action, acting) => {
+    const byIds = bulking({ shared: [SHARED] });
+    const byFilter = bulking({ shared: [SHARED], matching: [OWN, SHARED] });
+
+    expect(await byIds.run(action, { kind: "ids", ids: [OWN, SHARED] }, acting)).toEqual({ kind: "forbidden" });
+    expect(await byFilter.run(action, { ...noFilter, scope: "all" }, acting)).toEqual({ kind: "forbidden" });
+
+    for (const { calls } of [byIds, byFilter]) {
+      expect(calls.removed).toEqual([]);
+      expect(calls.pinned).toEqual([]);
+      expect(calls.filed).toEqual([]);
+      expect(calls.tagged).toEqual([]);
+      expect(calls.events).toEqual([]);
+    }
+  });
+
+  it("asks the store which of the named bookmarks are shared with the account, in lower case, once and before it acts", async () => {
+    const { calls, run } = bulking({ shared: [] });
+
+    expect(await run("pin", { kind: "ids", ids: [OWN, OWN.toUpperCase()] })).toMatchObject({ kind: "done", affected: 1 });
+    expect(calls.sharedAsked).toEqual([{ bookmarkIds: [OWN], accountId: ACCOUNT.toLowerCase() }]);
+  });
+
+  it("hands the scope of a filter to the store, so that a selection of the shared bookmarks is the one the list shows", async () => {
+    const { calls, run } = bulking({ shared: [], matching: [OWN] });
+
+    await run("pin", { ...noFilter, scope: "shared_with_me" });
+
+    expect(calls.filters[0]?.filter).toMatchObject({ ownerId: ACCOUNT.toLowerCase(), scope: "shared_with_me" });
+  });
+
+  it("refuses the preview of tags for it too, and previews the rest", async () => {
+    const refused = bulking({ shared: [SHARED] });
+    const allowed = bulking({ shared: [] });
+
+    expect(await refused.preview({ kind: "ids", ids: [SHARED] }, [TAG_A])).toEqual({ kind: "forbidden" });
+    expect(refused.calls.previewed).toEqual([]);
+    expect(await allowed.preview({ kind: "ids", ids: [OWN] }, [TAG_A])).toMatchObject({ kind: "previewed", affected: 1 });
   });
 });

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -173,6 +174,7 @@ interface MemberBody {
   role: string;
   joinedAt: string;
   lastActiveAt: string | null;
+  teams: { id: string; name: string }[];
 }
 
 describe("GET /api/v1/members", () => {
@@ -197,11 +199,36 @@ describe("GET /api/v1/members", () => {
       role: "owner",
       joinedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/) as string,
       lastActiveAt: null,
+      teams: [],
     });
     expect(body.items.find((item) => item.accountId === caller.account.id)?.lastActiveAt).toEqual(expect.stringMatching(/^\d{4}-/) as string);
     expect(JSON.stringify(body)).not.toContain(only(other.people, 0).account.id);
     expect(JSON.stringify(body)).not.toMatch(/password|mfa|argon/i);
     expect(workspaceId).not.toBe(other.workspaceId);
+  });
+
+  it("gives each member the teams of this workspace it belongs to by name, and shows no team of another workspace", async () => {
+    const world = serve();
+    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const other = await workspaceOf(world, "owner");
+    const joined = only(people, 1);
+    const teamIds = { support: randomUUID(), design: randomUUID(), elsewhere: randomUUID() };
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamIds.support}, ${workspaceId}, 'support'), (${teamIds.design}, ${workspaceId}, 'Design'), (${teamIds.elsewhere}, ${other.workspaceId}, 'Elsewhere')`;
+      await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamIds.support}, ${joined.account.id}), (${workspaceId}, ${teamIds.design}, ${joined.account.id}), (${other.workspaceId}, ${teamIds.elsewhere}, ${only(other.people, 0).account.id})`;
+    });
+
+    const response = await send(world, "GET", MEMBERS, { cookie: only(people, 0).cookie });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { items: MemberBody[] };
+    expect(body.items.find((item) => item.accountId === joined.account.id)?.teams).toEqual([
+      { id: teamIds.design, name: "Design" },
+      { id: teamIds.support, name: "support" },
+    ]);
+    expect(body.items.find((item) => item.accountId === only(people, 0).account.id)?.teams).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("Elsewhere");
   });
 
   it("is callable with a read-scope token and a read-write one, which list the workspace they are bound to", async () => {
@@ -278,6 +305,7 @@ describe("PATCH /api/v1/members/{accountId}", () => {
       role: "admin",
       joinedAt: expect.any(String) as string,
       lastActiveAt: null,
+      teams: [],
     });
     expect(((await toOwner.json()) as MemberBody).role).toBe("owner");
     expect(((await toMember.json()) as MemberBody).role).toBe("member");

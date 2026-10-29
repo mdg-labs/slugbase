@@ -107,6 +107,18 @@ async function seedTargetEvent(workspaceId: string, actor: Person, action: strin
   return id;
 }
 
+/** A share event: about a bookmark, and naming the member it was shared with by the account identifier in its metadata. */
+async function seedShareEvent(workspaceId: string, actor: Person, action: string, metadata: Record<string, string>): Promise<string> {
+  const id = freshId();
+  await asSystem(
+    db,
+    (tx) => tx`
+      INSERT INTO audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, entity_type, entity_id, metadata)
+      VALUES (${id}, ${workspaceId}, 'account', ${actor.id}, 'Grace', ${action}, 'bookmark', ${freshId()}, ${JSON.stringify(metadata)}::text::jsonb)`,
+  );
+  return id;
+}
+
 async function seedToken(accountId: string, workspaceId: string): Promise<string> {
   const id = freshId();
   const outcome = await inTenant({ accountId }, (tx) =>
@@ -214,6 +226,8 @@ describe("deleting an account", () => {
     const removedHeidi = await seedTargetEvent(shared, grace, "member.removed", heidi.id, { content: "transfer", transferTo: ada.id });
     const removedAda = await seedTargetEvent(shared, grace, "member.removed", ada.id, { content: "transfer", transferTo: grace.id });
     const gracesTarget = await seedTargetEvent(shared, grace, "member.role_changed", grace.id, { from: "member", to: "admin" });
+    const sharedWithAda = await seedShareEvent(shared, grace, "share.granted", { targetKind: "member", targetId: ada.id, targetName: "Ada" });
+    const sharedWithGrace = await seedShareEvent(shared, heidi, "share.granted", { targetKind: "member", targetId: grace.id, targetName: "Grace" });
     const adaBefore = await tablesHolding(ada.id);
     expect(adaBefore.length).toBeGreaterThan(5);
     expect(await tablesHolding(ada.email)).toEqual(expect.arrayContaining(["accounts", "account_identities", "credential_tokens"]));
@@ -236,6 +250,11 @@ describe("deleting an account", () => {
     expect(target[removedHeidi]?.metadata).not.toHaveProperty("transferTo");
     expect(target[removedAda]).toMatchObject({ entity_id: null, metadata: { content: "transfer", transferTo: grace.id } });
     expect(target[gracesTarget]).toMatchObject({ entity_id: grace.id, metadata: { from: "member", to: "admin" } });
+    // a share event that names the account as the target of the share loses the identifier and keeps the name it was shown under; one that names another member is left as it was
+    const shares = await asSystem(db, (tx) => tx<{ id: string; metadata: Record<string, string> }[]>`SELECT id, metadata FROM audit_events WHERE id IN (${sharedWithAda}, ${sharedWithGrace})`);
+    const share = Object.fromEntries(shares.map((event) => [event.id, event]));
+    expect(share[sharedWithAda]?.metadata).toEqual({ targetKind: "member", targetName: "Ada" });
+    expect(share[sharedWithGrace]?.metadata).toEqual({ targetKind: "member", targetId: grace.id, targetName: "Grace" });
     // the events keep their label and their workspace, and lose the account and the network
     const events = await asSystem(
       db,

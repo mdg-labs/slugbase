@@ -16,7 +16,9 @@ import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ME_QUERY_KEY, meQuery, type Me } from "../account/me.ts";
+import { useIsGranted } from "../entitlements/index.ts";
 import { useFormat } from "../i18n/use-format.ts";
+import { ManageTeamsDialog } from "../teams/manage-teams-dialog.tsx";
 import { EndMembershipDialog } from "./end-membership-dialog.tsx";
 import { TransferOwnershipDialog } from "./transfer-ownership-dialog.tsx";
 import { WorkspaceAdminOnly } from "./workspace-admin-only.tsx";
@@ -62,6 +64,9 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
   const [refusals, setRefusals] = useState<ReadonlyMap<string, RoleChangeRefusal>>(new Map());
   const [removing, setRemoving] = useState<Member | undefined>(undefined);
   const [transferring, setTransferring] = useState<Member | undefined>(undefined);
+  const [managingTeams, setManagingTeams] = useState<Member | undefined>(undefined);
+  // The server decides in the end; where the entitlements are not known yet the action is offered.
+  const canManageTeams = useIsGranted("teams.manage");
 
   const change = useMutation({
     mutationKey: ["workspace", "members", "role"],
@@ -130,9 +135,21 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
           },
         ]
       : [];
+    const teamsAction: readonly RowAction[] = canManageTeams
+      ? [
+          {
+            id: "teams",
+            label: t("settings.members.action.manageTeams"),
+            onSelect: () => {
+              setManagingTeams(member);
+            },
+          },
+        ]
+      : [];
     return canRemove(viewerRole, viewerId, member)
       ? [
           ...roleActions,
+          ...teamsAction,
           ...transferAction,
           {
             id: "remove",
@@ -143,7 +160,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
             },
           },
         ]
-      : [...roleActions, ...transferAction];
+      : [...roleActions, ...teamsAction, ...transferAction];
   }
 
   const columns: readonly DataTableColumn<Member>[] = [
@@ -185,6 +202,22 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
           />
         );
       },
+    },
+    {
+      id: "teams",
+      header: t("settings.members.column.teams"),
+      cell: (member) =>
+        member.teams.length === 0 ? (
+          <span className="text-muted-foreground">{t("settings.members.teams.none")}</span>
+        ) : (
+          <ul aria-label={t("settings.members.teams.of", { name: member.displayName })} className="flex flex-wrap gap-1">
+            {member.teams.map((team) => (
+              <li key={team.id}>
+                <StatusBadge>{team.name}</StatusBadge>
+              </li>
+            ))}
+          </ul>
+        ),
     },
     { id: "joined", header: t("settings.members.column.joined"), cell: (member) => dateTime(member.joinedAt) },
     {
@@ -230,6 +263,14 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
           target={{ kind: "remove", member: removing, viewerId }}
         />
       ) : null}
+      {managingTeams === undefined ? null : (
+        <ManageTeamsDialog
+          member={managingTeams}
+          onClose={() => {
+            setManagingTeams(undefined);
+          }}
+        />
+      )}
       {transferring === undefined ? null : (
         <TransferOwnershipDialog
           member={transferring}

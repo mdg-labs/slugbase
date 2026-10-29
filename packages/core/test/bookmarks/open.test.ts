@@ -16,6 +16,8 @@ const STORED: BookmarkRecord = {
   pinned: false,
   openCount: 0,
   lastOpenedAt: null,
+  owner: null,
+  sharedVia: null,
   folders: [],
   tags: [],
   version: 1,
@@ -51,7 +53,7 @@ describe("openBookmark", () => {
     expect(recorded).toEqual([]);
   });
 
-  it("is the same not_found, counting nothing, for a bookmark another member owns or that has no owner", async () => {
+  it("is the same not_found, counting nothing, for a bookmark another member owns that the store says is not shared with the caller, or that has no owner", async () => {
     const other = opening({ ...STORED, ownerId: "0192f3a0-bbbb-7000-8000-00000000000b" });
     const ownerless = opening({ ...STORED, ownerId: null });
 
@@ -59,6 +61,17 @@ describe("openBookmark", () => {
     expect(await openBookmark(ownerless.dependencies, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toEqual({ kind: "not_found" });
     expect(other.recorded).toEqual([]);
     expect(ownerless.recorded).toEqual([]);
+  });
+
+  it("counts an open of a bookmark another member shared with the caller on that bookmark, which the owner sees in the total", async () => {
+    const owner = { accountId: "0192f3a0-bbbb-7000-8000-00000000000b", displayName: "Olga Owner" };
+    const shared = opening({ ...STORED, ownerId: owner.accountId, owner, sharedVia: "team" });
+    const ownerless = opening({ ...STORED, ownerId: null, owner: null, sharedVia: "folder" });
+
+    expect(await openBookmark(shared.dependencies, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toEqual({ kind: "opened", url: "https://example.com/docs" });
+    expect(await openBookmark(ownerless.dependencies, { bookmarkId: BOOKMARK, accountId: ACCOUNT })).toEqual({ kind: "opened", url: "https://example.com/docs" });
+    expect(shared.recorded).toEqual([BOOKMARK]);
+    expect(ownerless.recorded).toEqual([BOOKMARK]);
   });
 
   it.each(["javascript:alert(1)", "data:text/html,<script>alert(1)</script>", "file:///etc/passwd", "//example.com/path", "ftp://example.com/file", ""])(

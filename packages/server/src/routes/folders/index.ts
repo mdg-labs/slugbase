@@ -39,6 +39,7 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_FOLDER = "No such resource.";
+const SHARED_READ_ONLY = "This bookmark is shared with you, and a share gives read access only.";
 const NAME_TAKEN = "You already have a folder with this name.";
 const NAME_INVALID = "A folder name has 1 to 64 characters.";
 const STALE_VERSION = "The folder has changed since it was read; read it again and retry.";
@@ -171,6 +172,9 @@ export function folderRoutes({ cursorSecret }: FolderRoutesOptions): RouteBindin
     route(addFolderBookmarksOperation).handle(async ({ params, body }, context) => {
       const tenant = tenantOf(context);
       const outcome = await tenant.withTenant((tx) => fileBookmarks({ store: folderRepository(tx) }, { folderId: params.id, accountId: tenant.accountId, bookmarkIds: body.bookmarkIds }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", SHARED_READ_ONLY);
+      }
       if (outcome.kind === "not_found") {
         throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
@@ -180,6 +184,9 @@ export function folderRoutes({ cursorSecret }: FolderRoutesOptions): RouteBindin
     route(removeFolderBookmarksOperation).handle(async ({ params, body }, context) => {
       const tenant = tenantOf(context);
       const outcome = await tenant.withTenant((tx) => unfileBookmarks({ store: folderRepository(tx) }, { folderId: params.id, accountId: tenant.accountId, bookmarkIds: body.bookmarkIds }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", SHARED_READ_ONLY);
+      }
       if (outcome.kind === "not_found") {
         throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }

@@ -23,6 +23,9 @@ export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 /** A team no workspace holds: the walker's request to read, change, delete or fill it is the declared 404, and a team named in an invitation is refused whichever workspace holds it. */
 export const UNKNOWN_TEAM_ID = "0192f3a0-cccc-7000-8000-000000000005";
 
+/** A share no bookmark holds: the walker's request to revoke it is the declared 404. */
+export const UNKNOWN_SHARE_ID = "0192f3a0-cccc-7000-8000-00000000000d";
+
 /** A workspace no instance holds: the walker's request to delete it is the declared 404. */
 export const UNKNOWN_WORKSPACE_ID = "0192f3a0-dddd-7000-8000-000000000008";
 
@@ -176,7 +179,7 @@ export const FIXTURES: ContractFixtures = {
   },
   // The invitation acts in the workspace of the request and names a team of it by identifier in its body. The walker's server holds the entitlement the
   // operation declares for every account but the one that has none, so the valid request is the declared 201. A team is refused with 422 whichever workspace
-  // holds it, since no team can be invited into yet, so the request naming a team is the declared 422 for a team of workspace B as for any other; the matrix
+  // holds it, since an invitation takes only the teams of the workspace of the request, so the request naming a team is the declared 422 for a team of workspace B as for any other; the matrix
   // and the walker hold that one answer to the 404 they expect for an identifier of another workspace (see contract.integration.test.ts).
   createInvitation: {
     body: { email: "walker-invitee@example.test", role: "member" },
@@ -351,6 +354,29 @@ export const FIXTURES: ContractFixtures = {
   updateTeam: { path: { id: UNKNOWN_TEAM_ID }, body: { name: "Walker team" }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID }, body: { name: "Walker team" } } },
   deleteTeam: { path: { id: UNKNOWN_TEAM_ID }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID } } },
   replaceTeamMembers: { path: { id: UNKNOWN_TEAM_ID }, body: { accountIds: [] }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID }, body: { accountIds: [UNKNOWN_MEMBER_ID] } } },
+  // The shares of a bookmark. The search for share targets names no identifier of any workspace: it acts in the workspace of the request and takes a text, so the walker's
+  // valid request is the declared 200. The list, the grant and the revocation name a bookmark of the caller by identifier, which the walker cannot know for a bookmark it
+  // would own, so each valid request names a bookmark that no workspace holds, the declared 404 whoever would hold it, and so does the request that names the bookmark of workspace B
+  // that the matrix puts in the path. The grant names a target in its body (the matrix puts a member of B in `accountId` and a team of B in `teamId`, and the test that runs it
+  // sends them apart, since a request with both is refused as malformed) and the revocation a share, of workspace B for the matrix.
+  listShareTargets: { query: { q: "walker" } },
+  listBookmarkShares: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
+  createBookmarkShare: {
+    path: { id: UNKNOWN_BOOKMARK_ID },
+    body: { accountId: UNKNOWN_MEMBER_ID },
+    status: 404,
+    foreign: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { accountId: UNKNOWN_MEMBER_ID } },
+  },
+  deleteBookmarkShare: { path: { id: UNKNOWN_BOOKMARK_ID, shareId: UNKNOWN_SHARE_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID, shareId: UNKNOWN_SHARE_ID } } },
+  // The shares of a folder are walked the same way, with a folder no workspace holds.
+  listFolderShares: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
+  createFolderShare: {
+    path: { id: UNKNOWN_FOLDER_ID },
+    body: { accountId: UNKNOWN_MEMBER_ID },
+    status: 404,
+    foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { accountId: UNKNOWN_MEMBER_ID } },
+  },
+  deleteFolderShare: { path: { id: UNKNOWN_FOLDER_ID, shareId: UNKNOWN_SHARE_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID, shareId: UNKNOWN_SHARE_ID } } },
   // The search names no identifier of any workspace: it takes a text, and acts on the caller's own bookmarks, folders and tags in the workspace of the request. The text is the one
   // the rows of workspace B are named after (the matrix seeds bookmarks, a tag and a folder called matrix-...), so a row of B in an answer would show.
   search: { query: { q: "matrix" } },

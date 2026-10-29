@@ -456,19 +456,20 @@ describe("create and find", () => {
     expect(created.kind === "created" && created.bookmark.pinned).toBe(false);
   });
 
-  it("finds a bookmark of another member of the workspace, which the service then keeps from its reader, and none of another workspace", async () => {
+  it("finds a bookmark of another member of the workspace only when it is shared with the caller, and none of another workspace", async () => {
     const a = await workspaceOf(2);
     const b = await workspaceOf(1);
     const theirs = await seedBookmark({ workspaceId: a.id, ownerId: memberOf(a, 1) });
     const ofB = await seedBookmark({ workspaceId: b.id, ownerId: memberOf(b, 0) });
+    const as = { accountId: memberOf(a, 0), workspaceId: a.id };
 
-    const found = await inTenant({ accountId: memberOf(a, 0), workspaceId: a.id }, async (tx) => ({
-      theirs: await bookmarkRepository(tx).find(theirs),
-      ofB: await bookmarkRepository(tx).find(ofB),
-    }));
+    const unshared = await inTenant(as, async (tx) => ({ theirs: await bookmarkRepository(tx).find(theirs), ofB: await bookmarkRepository(tx).find(ofB) }));
+    await asSystem(db, (tx) => tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${a.id}, ${theirs}, ${memberOf(a, 0)}, ${memberOf(a, 1)})`);
+    const shared = await inTenant(as, async (tx) => ({ theirs: await bookmarkRepository(tx).find(theirs), ofB: await bookmarkRepository(tx).find(ofB) }));
 
-    expect(found.theirs?.ownerId).toBe(memberOf(a, 1));
-    expect(found.ofB).toBeUndefined();
+    expect(unshared).toEqual({ theirs: undefined, ofB: undefined });
+    expect(shared.theirs).toMatchObject({ ownerId: memberOf(a, 1), sharedVia: "direct", pinned: false });
+    expect(shared.ofB).toBeUndefined();
   });
 
   it("does not find a plan-archived bookmark, or one that does not exist", async () => {

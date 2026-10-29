@@ -1,14 +1,17 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { GO_SHARED_VIA } from "./go.ts";
 import { SEARCH_QUERY_MAX_LENGTH } from "./search.ts";
 import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 import { withoutNul } from "./text.ts";
 
 // The bookmarks tag of doc 04 section 10.6: the operations that create a bookmark, read it back, change it and delete it. They
 // act in the workspace the request is bound to and name none (D11), and a bookmark is its owner's: another member's bookmark of
-// the same workspace and any bookmark of another workspace are answered 404, like one that does not exist (doc 04 section 2.4,
-// doc 10 T1 and T2). The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
-// T13). The list pages through the caller's own bookmarks by a signed keyset cursor (doc 04 section 6.1). An open records that the
+// the same workspace that is not shared with the caller and any bookmark of another workspace are answered 404, like one that does not
+// exist (doc 04 section 2.4, doc 10 T1 and T2). A bookmark that is shared with the caller, directly, through a team or through a folder, is one they can
+// read and open, and the list can be narrowed to those or to the caller's own; they may not change it, tag it, file it or share it, and a try is
+// answered 403 forbidden (doc 02 section 8.2, Q22). The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
+// T13). The list pages through the bookmarks its scope covers by a signed keyset cursor (doc 04 section 6.1). An open records that the
 // caller used a bookmark and answers the destination to go to (doc 02 section 5.5). A bookmark is filed in the caller's own folders by
 // `folderIds` on a creation and a change, and the list can be narrowed to one folder; a folder that is another member's, another
 // workspace's or unknown is answered 404 and files nothing (doc 02 sections 7.1 and 8.2, Q22). A bookmark is tagged with the caller's own
@@ -154,16 +157,32 @@ export const BookmarkSchema = z
     description: z.string().nullable().describe("The bookmark's description, null when it has none"),
     slug: z.string().nullable().describe("The bookmark's slug, null when it has none"),
     forwarding: z.boolean().describe("Whether /go forwards to the bookmark by its slug"),
-    pinned: z.boolean().describe("Whether the bookmark is pinned"),
-    openCount: z.number().int().min(0).describe("How many times the bookmark was opened"),
+    pinned: z.boolean().describe("Whether the caller pinned the bookmark; always false for a bookmark that is shared with the caller, since a pin is the owner's"),
+    openCount: z.number().int().min(0).describe("How many times the bookmark was opened, by everyone it is shared with included"),
     lastOpenedAt: z.iso.datetime().nullable().describe("When the bookmark was last opened, RFC 3339 UTC, null when it never was"),
-    folders: z.array(BookmarkFolderSchema).describe("The owner's folders the bookmark is filed in, in the order of their names; empty when it is filed in none"),
-    tags: z.array(BookmarkTagSchema).describe("The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, and empty when the caller put none on it"),
+    owner: z
+      .strictObject({
+        accountId: z.uuid().describe("The owner's account"),
+        displayName: z.string().describe("The owner's display name, as a member of the workspace sees it"),
+      })
+      .nullable()
+      .optional()
+      .describe("Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null"),
+    sharedVia: z
+      .enum(GO_SHARED_VIA)
+      .nullable()
+      .optional()
+      .describe("How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark. The server always sends it; a client reads an absent value as null"),
+    folders: z.array(BookmarkFolderSchema).describe("The caller's folders the bookmark is filed in, in the order of their names; empty when it is filed in none, and always for a bookmark that is shared with the caller"),
+    tags: z.array(BookmarkTagSchema).describe("The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, the owner's among them, and empty when the caller put none on it"),
     version: z.number().int().min(1).describe("Moves by one with every change; the ETag header carries it and If-Match takes it back"),
     createdAt: z.iso.datetime().describe("When the bookmark was created, RFC 3339 UTC"),
     updatedAt: z.iso.datetime().describe("When the bookmark last changed, RFC 3339 UTC"),
   })
   .meta({ id: "Bookmark" });
+
+/** The bookmarks a list, a select-all and a filter of a bulk request cover (doc 02 section 5.7). */
+export const BOOKMARK_SCOPES = ["all", "mine", "shared_with_me", "shared_by_me"] as const;
 
 /** The most bookmarks a page returns (doc 04 section 6.1). */
 export const BOOKMARK_LIST_MAX_LIMIT = 100;
@@ -195,7 +214,12 @@ const BookmarkTextQuerySchema = z
   );
 
 export const ListBookmarksQuerySchema = z.strictObject({
-  scope: z.enum(["all", "mine"]).default("all").describe("Whose bookmarks are listed. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today"),
+  scope: z
+    .enum(BOOKMARK_SCOPES)
+    .default("all")
+    .describe(
+      "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
+    ),
   pinned: QueryBooleanSchema.optional().describe("true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on"),
   hasSlug: QueryBooleanSchema.optional().describe("true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on"),
   forwarding: QueryBooleanSchema.optional().describe("true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on"),
@@ -232,7 +256,7 @@ export const ListBookmarksQuerySchema = z.strictObject({
 
 export const BookmarkListSchema = z
   .strictObject({
-    items: z.array(BookmarkSchema).describe("One page of the caller's bookmarks, in the order asked for; plan-archived bookmarks are never listed"),
+    items: z.array(BookmarkSchema).describe("One page of the bookmarks the scope covers, in the order asked for; plan-archived bookmarks are never listed"),
     nextCursor: z.string().nullable().describe("Passed as `cursor` to get the next page; null on the last page"),
     total: z.number().int().min(0).nullable().describe("How many bookmarks match the filters, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so"),
     totalAtLeast: z.literal(BOOKMARK_LIST_TOTAL_CAP).optional().describe("Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks"),
@@ -265,7 +289,10 @@ const BookmarkTagFilterSchema = z
 
 export const BookmarkFilterSchema = z
   .strictObject({
-    scope: z.enum(["all", "mine"]).optional().describe("Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out"),
+    scope: z
+      .enum(BOOKMARK_SCOPES)
+      .optional()
+      .describe("Whose bookmarks are matched, as the list's scope says; mine when left out. A selection that holds a bookmark shared with the caller is refused by a bulk request with 403, whatever the action"),
     pinned: z.boolean().optional().describe("true matches pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on"),
     hasSlug: z.boolean().optional().describe("true matches bookmarks with a slug only and false those without one; left out, slugs are not filtered on"),
     forwarding: z.boolean().optional().describe("true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on"),
@@ -330,7 +357,7 @@ export const BulkBookmarksRequestSchema = z
 
 const BulkSkippedReasonsSchema = z
   .strictObject({
-    not_owner: z.number().int().min(0).describe("Bookmarks the caller can read and does not own; none exist until sharing arrives"),
+    not_owner: z.number().int().min(0).describe("Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403"),
     not_found: z
       .number()
       .int()
@@ -389,7 +416,7 @@ export const BookmarkIdsQuerySchema = ListBookmarksQuerySchema.omit({ sort: true
 
 export const BookmarkIdsSchema = z
   .strictObject({
-    ids: z.array(z.uuid()).max(BOOKMARK_SELECT_ALL_CAP).describe("The identifiers of the caller's bookmarks that match the filters, newest first, at most 5 000"),
+    ids: z.array(z.uuid()).max(BOOKMARK_SELECT_ALL_CAP).describe("The identifiers of the bookmarks the scope covers that match the filters, newest first, at most 5 000"),
     truncated: z.boolean().describe("true when more than 5 000 bookmarks match, so ids holds the first 5 000 only and a bulk request by the same filter is refused"),
   })
   .meta({ id: "BookmarkIds" });
@@ -511,7 +538,7 @@ export const listBookmarks = defineOperation({
   request: { query: ListBookmarksQuerySchema },
   responses: {
     200: jsonResponse(
-      "One page of the caller's bookmarks in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks, those of another workspace and plan-archived ones are never listed",
+      "One page of the bookmarks the scope covers in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks that are not shared with the caller, those of another workspace and plan-archived ones are never listed. A bookmark of another member carries its owner and how it is shared with the caller, and none of the owner's folders, tags or pin",
       BookmarkListSchema,
     ),
     400: problemResponse("The request was malformed, or the cursor is not one this account was issued for this workspace, these filters and this sort (bad_request)"),
@@ -534,11 +561,15 @@ export const getBookmark = defineOperation({
   scope: "read",
   request: { params: BookmarkParamsSchema },
   responses: {
-    200: jsonResponse("The caller's bookmark", BookmarkSchema, { headers: BookmarkEntityTag }),
+    200: jsonResponse(
+      "The caller's bookmark, or a bookmark of another member that is shared with the caller, directly, through a team or through a folder. The latter carries its owner (the display name, null once the owner has left the workspace) and how it is shared with the caller, and nothing of the owner's tags, folders or pin and no list of the others it is shared with",
+      BookmarkSchema,
+      { headers: BookmarkEntityTag },
+    ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike",
+      "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a plan-archived one, a bookmark of another workspace and one that never existed are answered alike",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -564,9 +595,11 @@ export const updateBookmark = defineOperation({
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not change it, tag it or file it (forbidden); nothing is changed",
+    ),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed",
+      "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed and none shared with the caller: another member's bookmark that is not shared with them, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed",
     ),
     409: problemResponse("The caller already uses the slug on another bookmark of the workspace (slug_taken, errors on slug), also when two requests set it at once; nothing is written"),
     412: problemResponse("If-Match names a version other than the bookmark's current one (precondition_failed); the bookmark is unchanged"),
@@ -594,9 +627,11 @@ export const deleteBookmark = defineOperation({
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted",
+    ),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
+      "The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -616,14 +651,14 @@ export const openBookmark = defineOperation({
   request: { params: BookmarkParamsSchema },
   responses: {
     200: jsonResponse(
-      "The destination of the bookmark. The open is counted asynchronously: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address",
+      "The destination of the bookmark, which is the caller's own or another member's that is shared with the caller. The open is counted asynchronously, on the bookmark itself, so the owner sees the total of everyone's opens: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address",
       BookmarkOpenSchema,
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted",
+      "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted",
     ),
     422: problemResponse("The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -643,7 +678,7 @@ export const listBookmarkIds = defineOperation({
   request: { query: BookmarkIdsQuerySchema },
   responses: {
     200: jsonResponse(
-      "The identifiers of the caller's bookmarks that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks, those of another workspace and plan-archived ones are never returned",
+      "The identifiers of the bookmarks the scope covers that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks that are not shared with the caller, those of another workspace and plan-archived ones are never returned",
       BookmarkIdsSchema,
     ),
     400: problemResponse("The request was malformed"),
@@ -667,12 +702,14 @@ export const bulkBookmarks = defineOperation({
   request: { body: BulkBookmarksRequestSchema },
   responses: {
     200: jsonResponse(
-      "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone",
+      "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone",
       BulkBookmarksResultSchema,
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden); nothing is changed",
+    ),
     404: problemResponse(
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or the folder of a folder action or a tag of a tag action is not one the caller has in it (another member's, another workspace's or unknown), and nothing is changed",
     ),
@@ -701,7 +738,9 @@ export const previewBulkBookmarks = defineOperation({
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not tag it (forbidden)",
+    ),
     404: problemResponse(
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown)",
     ),

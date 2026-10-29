@@ -184,6 +184,42 @@ async function seedTeamRows(database: TestDatabase, fixture: TenantFixture): Pro
   });
 }
 
+/**
+ * The shares the RLS-only mode runs against: a share is written by the owner of its bookmark, in the owner's name. The owner of A owns the bookmarks `seedLinkRows` made, and the team
+ * `seedTeamRows` made: the bookmark `...a0b3` is shared with that team (the share the delete of the registry removes and the insert of the sample leaves in place; the sample shares
+ * `...a0b2` with the admin of A, a member `seedTeamRows` made). B holds the same of its own, the share the methods must not reach.
+ */
+async function seedShareRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  const sides = [
+    { workspaceId: fixture.a.id, owner: fixture.a.owner.accountId, bookmark: "0192f3a0-2222-7000-8000-00000000a0b3", team: "0192f3a0-2222-7000-8000-00000000a0e1", shareId: "0192f3a0-2222-7000-8000-00000000a0f1" },
+    { workspaceId: fixture.b.id, owner: fixture.b.owner.accountId, bookmark: "0192f3a0-2222-7000-8000-00000000b0b3", team: "0192f3a0-2222-7000-8000-00000000b0e1", shareId: "0192f3a0-2222-7000-8000-00000000b0f1" },
+  ];
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    for (const { workspaceId, owner, bookmark, team, shareId } of sides) {
+      await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_team_id, granted_by) VALUES (${shareId}, ${workspaceId}, ${bookmark}, ${team}, ${owner}) ON CONFLICT DO NOTHING`;
+    }
+  });
+}
+
+/**
+ * The shares of folders the RLS-only mode runs against, written as the shares of bookmarks are: by the owner of the folder. The owner of A owns the folder `seedLinkRows` made
+ * (`...a0d2`), which is shared with the team `seedTeamRows` made (the share the delete of the registry removes; the sample shares the folder with the admin of A). B holds the
+ * same of its own, the share the methods must not reach.
+ */
+async function seedFolderShareRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  const sides = [
+    { workspaceId: fixture.a.id, owner: fixture.a.owner.accountId, folder: "0192f3a0-2222-7000-8000-00000000a0d2", team: "0192f3a0-2222-7000-8000-00000000a0e1", shareId: "0192f3a0-2222-7000-8000-00000000a0f2" },
+    { workspaceId: fixture.b.id, owner: fixture.b.owner.accountId, folder: "0192f3a0-2222-7000-8000-00000000b0d2", team: "0192f3a0-2222-7000-8000-00000000b0e1", shareId: "0192f3a0-2222-7000-8000-00000000b0f2" },
+  ];
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    for (const { workspaceId, owner, folder, team, shareId } of sides) {
+      await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_team_id, granted_by) VALUES (${shareId}, ${workspaceId}, ${folder}, ${team}, ${owner}) ON CONFLICT DO NOTHING`;
+    }
+  });
+}
+
 const database = useTestDatabase();
 let scoped: Probe;
 let permissive: Probe;
@@ -210,7 +246,7 @@ describe("the matrix over the committed contract and the repository registry", (
   // chain does for a member of B: 403 to a token of an operation that declares no scope, or the write scope when the token may only read (the bookmark read takes
   // a token of either scope), to a plain member where the policy is the admin's (the leaving and the bookmark read are a member's) and to an admin where it is the
   // owner's (the ownership transfer), 404 to the rest. The invitation names a team of B in its body, and the
-  // server refuses any team with 422 because no team can be invited into yet and none can be told from another, so the responder gives an admin and
+  // server refuses a team of B with 422, as it does an unknown one, since an invitation takes only the teams of the workspace of the request, so the responder gives an admin and
   // an owner session that answer (the member and the tokens are refused with 403 before the handler).
   const answersAsTheChainDoes = (call: ApiCall): Promise<ApiResponse> => {
     if (call.operation.operationId === "createInvitation" && !("scope" in call.principal) && call.principal.role !== "member") {
@@ -245,7 +281,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202 } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202 } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -257,14 +293,14 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the page-metadata lookup, the creation, the list and the statistics of tags, the creation and the list of folders, the creation and the list of teams, the list of remembered choices and the dashboard read act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder, and the read, the change, the deletion and the replacement of the members of a team name a team (the replacement also the members of B in `accountIds`); the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(54);
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder, and the read, the change, the deletion and the replacement of the members of a team name a team (the replacement also the members of B in `accountIds`), and the list, the grant and the revocation of the shares of a bookmark name a bookmark of B in the path (the grant also a member and a team of B, the revocation also a share of B), and the list, the grant and the revocation of the shares of a folder name a folder of B in the path (with the same members, team and share); the search for share targets and the invitation list take no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(61);
     // Three sessions and six tokens of A, once on each of the nineteen operations that name no member other than the creation of a bookmark and twice on the creation of a bookmark (once for each of the two bookmarks of B put in its `slug`, which is mapped to a bookmark and judged with the folder and the tag of B in the same call), once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
-    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for the team of B on each of the read, the change and the deletion of a team and once for each of the three members of B with the team of B on the replacement of its members, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice, and once for each of the two hosts of B on the favicon (answered the placeholder, 202, by a principal that reaches the handler).
-    expect(report.attempts).toBe(9 * 22 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3));
+    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for the team of B on each of the read, the change and the deletion of a team and once for each of the three members of B with the team of B on the replacement of its members, and once for each of the two bookmarks of B on the list of the shares of a bookmark, once for each of the two bookmarks of B with each of the three members of B and the team of B on the grant of a share, and once for each of the two bookmarks of B with the share of B on its revocation, and once for the folder of B on the list of the shares of a folder, once for the folder of B with each of the three members of B and the team of B on the grant of a share of a folder, and once for the folder of B with the share of B on its revocation, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice, and once for each of the two hosts of B on the favicon (answered the placeholder, 202, by a principal that reaches the handler).
+    expect(report.attempts).toBe(9 * 23 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1));
     assertMatrixPassed(report);
   });
 
@@ -281,6 +317,8 @@ describe("the matrix over the committed contract and the repository registry", (
     await seedPreferenceRows(database(), scoped.fixture);
     await seedMetadataRows(database(), scoped.fixture);
     await seedTeamRows(database(), scoped.fixture);
+    await seedShareRows(database(), scoped.fixture);
+    await seedFolderShareRows(database(), scoped.fixture);
     const methods = listRepositoryMethods();
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
@@ -300,6 +338,10 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(methods.filter((entry) => entry.repository === "teams").map((entry) => entry.method).sort()).toEqual(["delete", "insert", "select", "update"]);
     // the repository of the team members is in the registry with the three methods the application role may run on the table: it reads, inserts the columns of a membership and deletes, and updates none
     expect(methods.filter((entry) => entry.repository === "team_members").map((entry) => entry.method)).toEqual(["select", "insert", "delete"]);
+    // the repository of the shares of folders is in the registry with the same three methods
+    expect(methods.filter((entry) => entry.repository === "folder_shares").map((entry) => entry.method)).toEqual(["select", "insert", "delete"]);
+    // the repository of the shares is in the registry with the three methods the application role may run on the table: it reads, inserts the columns of a grant and deletes, and updates none
+    expect(methods.filter((entry) => entry.repository === "bookmark_shares").map((entry) => entry.method)).toEqual(["select", "insert", "delete"]);
     // the bookmarks repository is in the registry with the three methods the application role may run on the table, and no other: a delete is a system operation
     expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
     // every method ran once more as the instance admin of the fixture, which belongs to neither workspace

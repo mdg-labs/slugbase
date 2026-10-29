@@ -328,6 +328,9 @@ export const BOOKMARK_LIST_MAX_LIMIT = 100;
 export const BOOKMARK_LIST_TOTAL_CAP = 10000;
 
 // @public
+export const BOOKMARK_SCOPES: readonly ["all", "mine", "shared_with_me", "shared_by_me"];
+
+// @public
 export const BOOKMARK_SELECT_ALL_CAP = 5000;
 
 // @public
@@ -356,6 +359,8 @@ export const BookmarkFilterSchema: z.ZodObject<{
     scope: z.ZodOptional<z.ZodEnum<{
         all: "all";
         mine: "mine";
+        shared_with_me: "shared_with_me";
+        shared_by_me: "shared_by_me";
     }>>;
     pinned: z.ZodOptional<z.ZodBoolean>;
     hasSlug: z.ZodOptional<z.ZodBoolean>;
@@ -379,6 +384,8 @@ export const BookmarkIdsQuerySchema: z.ZodObject<{
     scope: z.ZodDefault<z.ZodEnum<{
         all: "all";
         mine: "mine";
+        shared_with_me: "shared_with_me";
+        shared_by_me: "shared_by_me";
     }>>;
     url: z.ZodOptional<z.ZodString>;
     tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -423,6 +430,15 @@ export const BookmarkListSchema: z.ZodObject<{
         pinned: z.ZodBoolean;
         openCount: z.ZodNumber;
         lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+            direct: "direct";
+            team: "team";
+            folder: "folder";
+        }>>>;
         folders: z.ZodArray<z.ZodObject<{
             id: z.ZodUUID;
             name: z.ZodString;
@@ -480,6 +496,15 @@ export const BookmarkSchema: z.ZodObject<{
     pinned: z.ZodBoolean;
     openCount: z.ZodNumber;
     lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+    owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>>;
+    sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+    }>>>;
     folders: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         name: z.ZodString;
@@ -493,6 +518,48 @@ export const BookmarkSchema: z.ZodObject<{
     version: z.ZodNumber;
     createdAt: z.ZodISODateTime;
     updatedAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkShareListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+            member: "member";
+            team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    audienceSize: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkShareParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    shareId: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkShareSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+    }>;
+    accountId: z.ZodNullable<z.ZodUUID>;
+    teamId: z.ZodNullable<z.ZodUUID>;
+    name: z.ZodString;
+    email: z.ZodNullable<z.ZodString>;
+    createdAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkSharesParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -547,6 +614,8 @@ export const bulkBookmarks: {
                 scope: z.ZodOptional<z.ZodEnum<{
                     all: "all";
                     mine: "mine";
+                    shared_with_me: "shared_with_me";
+                    shared_by_me: "shared_by_me";
                 }>>;
                 pinned: z.ZodOptional<z.ZodBoolean>;
                 hasSlug: z.ZodOptional<z.ZodBoolean>;
@@ -588,6 +657,8 @@ export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
         scope: z.ZodOptional<z.ZodEnum<{
             all: "all";
             mine: "mine";
+            shared_with_me: "shared_with_me";
+            shared_by_me: "shared_by_me";
         }>>;
         pinned: z.ZodOptional<z.ZodBoolean>;
         hasSlug: z.ZodOptional<z.ZodBoolean>;
@@ -634,6 +705,8 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
         scope: z.ZodOptional<z.ZodEnum<{
             all: "all";
             mine: "mine";
+            shared_with_me: "shared_with_me";
+            shared_by_me: "shared_by_me";
         }>>;
         pinned: z.ZodOptional<z.ZodBoolean>;
         hasSlug: z.ZodOptional<z.ZodBoolean>;
@@ -970,8 +1043,13 @@ export interface ComponentTypes {
             id: string;
             lastOpenedAt: string | null;
             openCount: number;
+            owner?: {
+                accountId: string;
+                displayName: string;
+            } | null;
             ownerId: string | null;
             pinned: boolean;
+            sharedVia?: ("direct" | "team" | "folder") | null;
             slug: string | null;
             tags: ComponentTypes["schemas"]["BookmarkTag"][];
             title: string;
@@ -985,7 +1063,7 @@ export interface ComponentTypes {
             hasSlug?: boolean;
             pinned?: boolean;
             q?: string;
-            scope?: "all" | "mine";
+            scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
             tag?: string | string[];
             url?: string;
         };
@@ -1018,6 +1096,19 @@ export interface ComponentTypes {
         };
         BookmarkOpen: {
             url: string;
+        };
+        BookmarkShare: {
+            accountId: string | null;
+            createdAt: string;
+            email: string | null;
+            id: string;
+            kind: "member" | "team";
+            name: string;
+            teamId: string | null;
+        };
+        BookmarkShareList: {
+            audienceSize: number;
+            items: ComponentTypes["schemas"]["BookmarkShare"][];
         };
         BookmarkTag: {
             id: string;
@@ -1091,10 +1182,20 @@ export interface ComponentTypes {
             title: string;
             url: string;
         };
+        CreateBookmarkShareRequest: {
+            accountId: string;
+        } | {
+            teamId: string;
+        };
         CreateFolderRequest: {
             color?: number;
             icon?: "folder" | "folder-open" | "folder-heart" | "folder-code" | "folder-archive" | "briefcase" | "building-2" | "book" | "book-open" | "bookmark" | "star" | "heart" | "house" | "newspaper" | "graduation-cap" | "flask-conical" | "code" | "terminal" | "cpu" | "database" | "server" | "cloud" | "globe" | "map" | "map-pin" | "plane" | "car" | "utensils" | "coffee" | "shopping-cart" | "gift" | "music" | "film" | "camera" | "image" | "video" | "gamepad-2" | "palette" | "lightbulb" | "rocket" | "target" | "trophy" | "flag" | "tag" | "wallet" | "credit-card" | "dumbbell" | "leaf" | "sun" | "moon" | "zap" | "shield" | "lock" | "users" | "mail" | "calendar" | "inbox" | "package" | "wrench" | "sparkles";
             name: string;
+        };
+        CreateFolderShareRequest: {
+            accountId: string;
+        } | {
+            teamId: string;
         };
         CreateInstanceWorkspaceRequest: {
             name: string;
@@ -1222,6 +1323,19 @@ export interface ComponentTypes {
             nextCursor: string | null;
             total: number | null;
             totalAtLeast?: 10000;
+        };
+        FolderShare: {
+            accountId: string | null;
+            createdAt: string;
+            email: string | null;
+            id: string;
+            kind: "member" | "team";
+            name: string;
+            teamId: string | null;
+        };
+        FolderShareList: {
+            audienceSize: number;
+            items: ComponentTypes["schemas"]["FolderShare"][];
         };
         ForgotPasswordRequest: {
             email: string;
@@ -1447,10 +1561,15 @@ export interface ComponentTypes {
             joinedAt: string;
             lastActiveAt: string | null;
             role: "owner" | "admin" | "member";
+            teams: ComponentTypes["schemas"]["MemberTeam"][];
         };
         MemberList: {
             items: ComponentTypes["schemas"]["Member"][];
             nextCursor: string | null;
+        };
+        MemberTeam: {
+            id: string;
+            name: string;
         };
         Membership: {
             name: string;
@@ -1602,6 +1721,15 @@ export interface ComponentTypes {
         SetupStatus: {
             setupRequired: boolean;
             setupTokenRequired: boolean;
+        };
+        ShareTarget: {
+            email: string | null;
+            id: string;
+            kind: "member" | "team";
+            name: string;
+        };
+        ShareTargetList: {
+            items: ComponentTypes["schemas"]["ShareTarget"][];
         };
         SlugAvailability: {
             othersUseCount: number;
@@ -1912,6 +2040,15 @@ export const createBookmark: {
         pinned: z.ZodBoolean;
         openCount: z.ZodNumber;
         lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>>;
         folders: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         name: z.ZodString;
@@ -1951,6 +2088,68 @@ export const CreateBookmarkRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const createBookmarkShare: {
+    readonly method: "post";
+    readonly path: "/api/v1/bookmarks/{id}/shares";
+    readonly operationId: "createBookmarkShare";
+    readonly tag: "sharing";
+    readonly summary: "Share a bookmark with a member or a team";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly scope: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodUnion<readonly [z.ZodObject<{
+            accountId: z.ZodUUID;
+        }, z.core.$strict>, z.ZodObject<{
+            teamId: z.ZodUUID;
+        }, z.core.$strict>]>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateBookmarkShareRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
+    accountId: z.ZodUUID;
+}, z.core.$strict>, z.ZodObject<{
+    teamId: z.ZodUUID;
+}, z.core.$strict>]>;
+
+// @public (undocumented)
 export const CreatedApiTokenSchema: z.ZodObject<{
     id: z.ZodUUID;
     name: z.ZodString;
@@ -1984,8 +2183,8 @@ export const createFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
-                bookmark: "bookmark";
                 folder: "folder";
+                bookmark: "bookmark";
                 tag: "tag";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
@@ -2075,8 +2274,8 @@ export const CreateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
-        bookmark: "bookmark";
         folder: "folder";
+        bookmark: "bookmark";
         tag: "tag";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
@@ -2135,6 +2334,68 @@ export const CreateFolderRequestSchema: z.ZodObject<{
     }>>;
     color: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const createFolderShare: {
+    readonly method: "post";
+    readonly path: "/api/v1/folders/{id}/shares";
+    readonly operationId: "createFolderShare";
+    readonly tag: "sharing";
+    readonly summary: "Share a folder with a member or a team";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly scope: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodUnion<readonly [z.ZodObject<{
+            accountId: z.ZodUUID;
+        }, z.core.$strict>, z.ZodObject<{
+            teamId: z.ZodUUID;
+        }, z.core.$strict>]>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateFolderShareRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
+    accountId: z.ZodUUID;
+}, z.core.$strict>, z.ZodObject<{
+    teamId: z.ZodUUID;
+}, z.core.$strict>]>;
 
 // @public (undocumented)
 export const createInstanceWorkspace: {
@@ -2549,6 +2810,34 @@ export const deleteBookmark: {
 };
 
 // @public (undocumented)
+export const deleteBookmarkShare: {
+    readonly method: "delete";
+    readonly path: "/api/v1/bookmarks/{id}/shares/{shareId}";
+    readonly operationId: "deleteBookmarkShare";
+    readonly tag: "sharing";
+    readonly summary: "Revoke a share of a bookmark";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly scope: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+            shareId: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const deleteFolder: {
     readonly method: "delete";
     readonly path: "/api/v1/folders/{id}";
@@ -2561,6 +2850,34 @@ export const deleteFolder: {
     readonly request: {
         readonly params: z.ZodObject<{
             id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const deleteFolderShare: {
+    readonly method: "delete";
+    readonly path: "/api/v1/folders/{id}/shares/{shareId}";
+    readonly operationId: "deleteFolderShare";
+    readonly tag: "sharing";
+    readonly summary: "Revoke a share of a folder";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly scope: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+            shareId: z.ZodUUID;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -3014,6 +3331,48 @@ export const FolderSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const FolderShareListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+            member: "member";
+            team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    audienceSize: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FolderShareParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    shareId: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FolderShareSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+    }>;
+    accountId: z.ZodNullable<z.ZodUUID>;
+    teamId: z.ZodNullable<z.ZodUUID>;
+    name: z.ZodString;
+    email: z.ZodNullable<z.ZodString>;
+    createdAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FolderSharesParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const forgotPassword: {
     readonly method: "post";
     readonly path: "/api/v1/auth/password/forgot";
@@ -3117,6 +3476,15 @@ export const getBookmark: {
         pinned: z.ZodBoolean;
         openCount: z.ZodNumber;
         lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>>;
         folders: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         name: z.ZodString;
@@ -3743,9 +4111,9 @@ export const GoCandidateSchema: z.ZodObject<{
         displayName: z.ZodString;
     }, z.core.$strict>>;
     sharedVia: z.ZodNullable<z.ZodEnum<{
-        folder: "folder";
         direct: "direct";
         team: "team";
+        folder: "folder";
     }>>;
 }, z.core.$strict>;
 
@@ -3811,9 +4179,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-            folder: "folder";
             direct: "direct";
             team: "team";
+            folder: "folder";
         }>>;
     }, z.core.$strict>;
 }, z.core.$strict>, z.ZodObject<{
@@ -3827,9 +4195,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-            folder: "folder";
             direct: "direct";
             team: "team";
+            folder: "folder";
         }>>;
     }, z.core.$strict>;
 }, z.core.$strict>, z.ZodObject<{
@@ -3843,9 +4211,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-            folder: "folder";
             direct: "direct";
             team: "team";
+            folder: "folder";
         }>>;
     }, z.core.$strict>>;
 }, z.core.$strict>], "result">;
@@ -3866,9 +4234,9 @@ export const GoSuggestionSchema: z.ZodObject<{
         displayName: z.ZodString;
     }, z.core.$strict>>;
     sharedVia: z.ZodNullable<z.ZodEnum<{
-        folder: "folder";
         direct: "direct";
         team: "team";
+        folder: "folder";
     }>>;
 }, z.core.$strict>;
 
@@ -3884,9 +4252,9 @@ export const GoSuggestionsSchema: z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-            folder: "folder";
             direct: "direct";
             team: "team";
+            folder: "folder";
         }>>;
     }, z.core.$strict>>;
 }, z.core.$strict>;
@@ -4465,6 +4833,8 @@ export const listBookmarkIds: {
             scope: z.ZodDefault<z.ZodEnum<{
                 all: "all";
                 mine: "mine";
+                shared_with_me: "shared_with_me";
+                shared_by_me: "shared_by_me";
             }>>;
             url: z.ZodOptional<z.ZodString>;
             tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -4513,6 +4883,8 @@ export const listBookmarks: {
             scope: z.ZodDefault<z.ZodEnum<{
                 all: "all";
                 mine: "mine";
+                shared_with_me: "shared_with_me";
+                shared_by_me: "shared_by_me";
             }>>;
             pinned: z.ZodOptional<z.ZodEnum<{
                 true: "true";
@@ -4556,6 +4928,15 @@ export const listBookmarks: {
         pinned: z.ZodBoolean;
         openCount: z.ZodNumber;
         lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>>;
         folders: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         name: z.ZodString;
@@ -4584,10 +4965,52 @@ export const listBookmarks: {
 };
 
 // @public (undocumented)
+export const listBookmarkShares: {
+    readonly method: "get";
+    readonly path: "/api/v1/bookmarks/{id}/shares";
+    readonly operationId: "listBookmarkShares";
+    readonly tag: "sharing";
+    readonly summary: "List the shares of a bookmark";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        audienceSize: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const ListBookmarksQuerySchema: z.ZodObject<{
     scope: z.ZodDefault<z.ZodEnum<{
         all: "all";
         mine: "mine";
+        shared_with_me: "shared_with_me";
+        shared_by_me: "shared_by_me";
     }>>;
     pinned: z.ZodOptional<z.ZodEnum<{
         true: "true";
@@ -4662,6 +5085,46 @@ export const listFolders: {
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listFolderShares: {
+    readonly method: "get";
+    readonly path: "/api/v1/folders/{id}/shares";
+    readonly operationId: "listFolderShares";
+    readonly tag: "sharing";
+    readonly summary: "List the shares of a folder";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        teamId: z.ZodNullable<z.ZodUUID>;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        audienceSize: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
@@ -4905,6 +5368,10 @@ export const listMembers: {
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
         }, z.core.$strict>>;
         nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
@@ -4951,6 +5418,49 @@ export const listSessions: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const listShareTargets: {
+    readonly method: "get";
+    readonly path: "/api/v1/share-targets";
+    readonly operationId: "listShareTargets";
+    readonly tag: "sharing";
+    readonly summary: "Find the members and teams to share with";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            q: z.ZodOptional<z.ZodString>;
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        id: z.ZodUUID;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ListShareTargetsQuerySchema: z.ZodObject<{
+    q: z.ZodOptional<z.ZodString>;
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const listTags: {
@@ -5175,6 +5685,10 @@ export const MemberListSchema: z.ZodObject<{
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+            id: z.ZodUUID;
+            name: z.ZodString;
+        }, z.core.$strict>>;
     }, z.core.$strict>>;
     nextCursor: z.ZodNullable<z.ZodString>;
 }, z.core.$strict>;
@@ -5191,6 +5705,10 @@ export const MemberSchema: z.ZodObject<{
     }>;
     joinedAt: z.ZodISODateTime;
     lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+    teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -5211,6 +5729,12 @@ export const MembershipSchema: z.ZodObject<{
         admin: "admin";
         owner: "owner";
     }>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MemberTeamSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -6594,6 +7118,97 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    createBookmarkShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateBookmarkShareRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BookmarkShare"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BookmarkShare"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     createFolder: {
         parameters: {
             query?: never;
@@ -6648,6 +7263,97 @@ export interface OperationTypes {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    createFolderShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateFolderShareRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["FolderShare"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["FolderShare"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7255,12 +7961,168 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    deleteBookmarkShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                shareId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     deleteFolder: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    deleteFolderShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                shareId: string;
             };
             cookie?: never;
         };
@@ -9495,7 +10357,7 @@ export interface OperationTypes {
     listBookmarkIds: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
@@ -9573,7 +10435,7 @@ export interface OperationTypes {
     listBookmarks: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
@@ -9651,6 +10513,85 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listBookmarkShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BookmarkShareList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listFolders: {
         parameters: {
             query?: {
@@ -9683,6 +10624,85 @@ export interface OperationTypes {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listFolderShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["FolderShareList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10173,6 +11193,86 @@ export interface OperationTypes {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listShareTargets: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ShareTargetList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13991,6 +15091,40 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/bookmarks/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listBookmarkShares"];
+        put?: never;
+        post: OperationTypes["createBookmarkShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/bookmarks/{id}/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["deleteBookmarkShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/dashboard": {
         parameters: {
             query?: never;
@@ -14087,6 +15221,40 @@ export interface paths {
         put?: never;
         post: OperationTypes["addFolderBookmarks"];
         delete: OperationTypes["removeFolderBookmarks"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/folders/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listFolderShares"];
+        put?: never;
+        post: OperationTypes["createFolderShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/folders/{id}/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["deleteFolderShare"];
         options?: never;
         head?: never;
         patch?: never;
@@ -14892,6 +16060,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/share-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listShareTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/slugs/availability": {
         parameters: {
             query?: never;
@@ -15183,6 +16368,8 @@ export const previewBulkBookmarks: {
                 scope: z.ZodOptional<z.ZodEnum<{
                     all: "all";
                     mine: "mine";
+                    shared_with_me: "shared_with_me";
+                    shared_by_me: "shared_by_me";
                 }>>;
                 pinned: z.ZodOptional<z.ZodBoolean>;
                 hasSlug: z.ZodOptional<z.ZodBoolean>;
@@ -16076,9 +17263,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-        folder: "folder";
         direct: "direct";
         team: "team";
+        folder: "folder";
         }>>;
         }, z.core.$strict>;
         }, z.core.$strict>, z.ZodObject<{
@@ -16092,9 +17279,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-        folder: "folder";
         direct: "direct";
         team: "team";
+        folder: "folder";
         }>>;
         }, z.core.$strict>;
         }, z.core.$strict>, z.ZodObject<{
@@ -16108,9 +17295,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-        folder: "folder";
         direct: "direct";
         team: "team";
+        folder: "folder";
         }>>;
         }, z.core.$strict>>;
         }, z.core.$strict>], "result">, Readonly<Record<string, ResponseHeader>>>;
@@ -16478,6 +17665,42 @@ export const SetupStatusSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const SHARE_TARGET_KINDS: readonly ["member", "team"];
+
+// @public
+export const SHARE_TARGET_LIST_DEFAULT_LIMIT = 20;
+
+// @public
+export const SHARE_TARGET_LIST_MAX_LIMIT = 50;
+
+// @public
+export const SHARE_TARGET_SEARCH_MAX_LENGTH = 100;
+
+// @public (undocumented)
+export const ShareTargetListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        kind: z.ZodEnum<{
+            member: "member";
+            team: "team";
+        }>;
+        id: z.ZodUUID;
+        name: z.ZodString;
+        email: z.ZodNullable<z.ZodString>;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ShareTargetSchema: z.ZodObject<{
+    kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+    }>;
+    id: z.ZodUUID;
+    name: z.ZodString;
+    email: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const SLUG_AVAILABILITY_STATUSES: readonly ["available", "taken_by_me", "invalid"];
 
 // @public (undocumented)
@@ -16591,9 +17814,9 @@ export const suggestSlugs: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
-        folder: "folder";
         direct: "direct";
         team: "team";
+        folder: "folder";
         }>>;
         }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
@@ -16791,6 +18014,10 @@ export const transferWorkspaceOwnership: {
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
@@ -16911,6 +18138,15 @@ export const updateBookmark: {
         pinned: z.ZodBoolean;
         openCount: z.ZodNumber;
         lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>>;
         folders: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         name: z.ZodString;
@@ -16978,8 +18214,8 @@ export const updateFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
-                bookmark: "bookmark";
                 folder: "folder";
+                bookmark: "bookmark";
                 tag: "tag";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
@@ -17075,8 +18311,8 @@ export const UpdateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
-        bookmark: "bookmark";
         folder: "folder";
+        bookmark: "bookmark";
         tag: "tag";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
@@ -17358,6 +18594,10 @@ export const updateMember: {
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;

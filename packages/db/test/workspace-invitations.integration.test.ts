@@ -666,6 +666,37 @@ describe("invitationRepository.actorRole and memberHoldsEmail", () => {
   });
 });
 
+describe("invitationRepository.teamsExist", () => {
+  async function team(workspaceId: string, name: string): Promise<string> {
+    const id = freshId();
+    await asSystem(db, (tx) => tx`INSERT INTO teams (id, workspace_id, name) VALUES (${id}, ${workspaceId}, ${name})`);
+    return id;
+  }
+
+  it("is true for none and for the teams of the workspace, in either case, and false when any identifier is no team of it: unknown, deleted or another workspace's alike", async () => {
+    const a = await workspaceOf("owner");
+    const b = await workspaceOf("owner");
+    const mine = await team(a.workspaceId, "Mine");
+    const other = await team(a.workspaceId, "Other");
+    const theirs = await team(b.workspaceId, "Theirs");
+    const ask = (teamIds: readonly string[]): Promise<boolean> => inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).teamsExist(teamIds));
+
+    expect(await ask([])).toBe(true);
+    expect(await ask([mine])).toBe(true);
+    expect(await ask([mine, other, mine.toUpperCase()])).toBe(true);
+    expect(await ask([theirs])).toBe(false);
+    expect(await ask([mine, theirs])).toBe(false);
+    expect(await ask([freshId()])).toBe(false);
+    await asSystem(db, (tx) => tx`DELETE FROM teams WHERE id = ${other}`);
+    expect(await ask([mine, other])).toBe(false);
+  });
+
+  it("needs a workspace", async () => {
+    const a = await workspaceOf("owner");
+    await expect(inTenant({ accountId: who(a, 0) }, (tx) => invitationRepository(tx).teamsExist([freshId()]))).rejects.toThrow(/workspace/);
+  });
+});
+
 describe("invitationRepository.issueToken", () => {
   it("replaces the token hash of a pending invitation, which ends the earlier link, and says what the email states", async () => {
     const a = await workspaceOf("owner");

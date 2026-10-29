@@ -18,6 +18,7 @@ export const IDENTIFIER_KINDS = [
   "slug",
   "host",
   "invitation",
+  "share",
   "token",
 ] as const;
 export type IdentifierKind = (typeof IDENTIFIER_KINDS)[number];

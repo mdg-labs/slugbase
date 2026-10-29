@@ -4,7 +4,8 @@
 // workspace only through a credential in the request (an invitation token), or because the limit is a count of the
 // account's own rows that must be taken under a lock in the transaction that writes (`workspaces.ownMax`), or a count of
 // the workspace's members that the acceptance counts under the workspace's lock (`seats.max`), or a count of the workspace's bookmarks
-// that the creation takes under the workspace's lock (`bookmarks.max`). A point that
+// that the creation takes under the workspace's lock (`bookmarks.max`), or because which of two entitlements a request needs follows the kind of
+// target in it (`sharing.members` for a member, `sharing.teams` for a team). A point that
 // leaves one kind of request out of its entitlement records that in `exemption`. A point enters this list in the commit that
 // implements it, with its test; `enforcement-points.test.ts` fails for a declared entitlement that is missing here and
 // for a point whose test file does not name its operation.
@@ -25,6 +26,7 @@ const WORKSPACE_LIMIT = "workspace-limit.integration.test.ts";
 const SEATS = "seat-limit.integration.test.ts";
 const OIDC_INVITATIONS = "../auth/oidc-invitation.integration.test.ts";
 const BOOKMARK_LIMIT = "bookmark-limit.integration.test.ts";
+const SHARING = "sharing-enforcement.integration.test.ts";
 // Seating the first owner of a workspace is not the feature `members.invite` names (doc 01 section 7.5). The seat limit still applies.
 const OWNER_INVITATION = "the owner invitation an instance admin issues";
 
@@ -43,4 +45,18 @@ export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "completeOidcSignIn", entitlement: "seats.max", decidedBy: "handler", test: OIDC_INVITATIONS },
   { operationId: "createWorkspace", entitlement: "workspaces.ownMax", decidedBy: "handler", test: WORKSPACE_LIMIT },
   { operationId: "createBookmark", entitlement: "bookmarks.max", decidedBy: "handler", test: BOOKMARK_LIMIT },
+  { operationId: "listShareTargets", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "listShareTargets", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "listBookmarkShares", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "listBookmarkShares", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "createBookmarkShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "createBookmarkShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "deleteBookmarkShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "deleteBookmarkShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "listFolderShares", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "listFolderShares", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "createFolderShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "createFolderShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "deleteFolderShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "deleteFolderShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
 ];
