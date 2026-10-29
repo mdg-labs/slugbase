@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, meOf, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, allowSlowRender, meOf, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // The bookmarks page (doc 03 section 3, doc 02 section 5.7) against the handlers generated from openapi.json, through the
 // app's own API client. The failure scenarios are a filter or sort that does not reach the address or the request, a "load
@@ -77,7 +77,10 @@ async function bodyOf(call: Call | undefined): Promise<unknown> {
   return JSON.parse((await call?.body) ?? "null") as unknown;
 }
 
+let restoreWait: () => void = () => undefined;
+
 beforeAll(() => {
+  restoreWait = allowSlowRender();
   server.listen({ onUnhandledRequest: "error" });
   server.events.on("request:start", ({ request }) => {
     const url = new URL(request.url);
@@ -99,6 +102,7 @@ afterEach(() => {
 
 afterAll(() => {
   server.close();
+  restoreWait();
 });
 
 beforeEach(() => {
