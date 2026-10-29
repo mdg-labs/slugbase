@@ -1,4 +1,5 @@
 import { BOOKMARK_SORTS, type BookmarkListRequest, type BookmarkPosition, type BookmarkSort } from "@slugbase/core";
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bookmarkRepository } from "../src/index.ts";
@@ -22,6 +23,7 @@ const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_000;
 const BUDGET_MS = 100;
 const RUNS = 5;
+const SCOPE_ALL_RUNS = 20;
 const PAGE = 49;
 
 let db: TestDatabase;
@@ -492,4 +494,60 @@ describe("the time of the list with a text on a workspace of 50 000 bookmarks", 
 
     expect(elapsed).toBeLessThan(BUDGET_MS);
   }, HOOK_TIMEOUT_MS);
+});
+
+function percentile95(times: readonly number[]): number {
+  const sorted = [...times].sort((a, b) => a - b);
+  return sorted[Math.ceil(sorted.length * 0.95) - 1] ?? Number.POSITIVE_INFINITY;
+}
+
+/** The time of each of `SCOPE_ALL_RUNS` runs of `work`, after one run that is not counted. */
+async function timesOf(work: () => Promise<unknown>): Promise<number[]> {
+  await work();
+  const times: number[] = [];
+  for (let run = 0; run < SCOPE_ALL_RUNS; run += 1) {
+    const started = performance.now();
+    await work();
+    times.push(performance.now() - started);
+  }
+  return times;
+}
+
+// The default scope (`all`) reads the page by the statement that holds both plans of the page, and the estimate of its branch for many matches, which a text few bookmarks hold never runs, is above
+// `jit_above_cost`: a statement that is compiled on each call spends about 300 ms of its time on the compilation, however few bookmarks match, so a member who types in the search box waits that long for each key.
+describe("the time of the list with a text in the default scope on a workspace of 50 000 bookmarks", () => {
+  it.each([...FEW, ...MANY, "zzzq"])(`reads a page of the matches of %s and counts them in under ${String(BUDGET_MS)} ms at the 95th percentile`, async (text) => {
+    const times = await inTenant((tx) => {
+      const repository = bookmarkRepository(tx);
+      return timesOf(async () => {
+        await repository.listWithCount({ filter: { ownerId: accountId, q: text, scope: "all" }, sort: "recent", after: undefined, limit: PAGE }, 10_001);
+      });
+    });
+
+    expect(percentile95(times)).toBeLessThan(BUDGET_MS);
+  }, HOOK_TIMEOUT_MS);
+
+  it.each(BOOKMARK_SORTS)(`reads a page of the matches of a text most of the workspace holds, sorted by %s, and counts them in under ${String(BUDGET_MS)} ms at the 95th percentile`, async (sort) => {
+    const times = await inTenant((tx) => {
+      const repository = bookmarkRepository(tx);
+      return timesOf(async () => {
+        await repository.listWithCount({ filter: { ownerId: accountId, q: "www", scope: "all" }, sort, after: undefined, limit: PAGE }, 10_001);
+      });
+    });
+
+    expect(percentile95(times)).toBeLessThan(BUDGET_MS);
+  }, HOOK_TIMEOUT_MS);
+
+  it.each(["on", "off"])("leaves the transaction's own setting of jit as it was (%s)", async (setting) => {
+    const settings = await inTenant(async (tx) => {
+      const handle = tenantHandle(tx);
+      const read = async (): Promise<string | undefined> => (await handle.execute<{ value: string }>(sql`SELECT current_setting('jit') AS value`))[0]?.value;
+      await handle.execute(sql`SELECT set_config('jit', ${setting}, true)`);
+      const before = await read();
+      await bookmarkRepository(tx).listWithCount({ filter: { ownerId: accountId, q: "docs", scope: "all" }, sort: "recent", after: undefined, limit: PAGE }, 10_001);
+      return { before, after: await read() };
+    });
+
+    expect(settings).toEqual({ before: setting, after: setting });
+  });
 });
