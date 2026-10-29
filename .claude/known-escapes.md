@@ -27,7 +27,7 @@ existing line by adding its PR number.
 - **one scheme for many** — a check for a script address (in a guard or a test's injection detector) matches `javascript:` only, so `vbscript:` and `data:` addresses pass — PR 577, 612
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
-- **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422
+- **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422, 641
 
 - **runtime floor** — code relies on a runtime API newer than the declared engine floor (`import.meta.main` under `engines` `>=24.0.0`), so a permitted runtime silently skips the code it guards — PR 409
 - **copied threshold list** — a runner classifies a tool's exit status against its own copy of the thresholds the tool enforces, the copy misses some, so a crossed threshold reads as a failed run instead of a regression — PR 622
@@ -36,7 +36,7 @@ existing line by adding its PR number.
 
 - **cache key** — a cached value depends on a scope the key omits (an account-scoped value in a workspace-keyed cache) — PR 354
 - **dedupe key the job does not carry** — a queued job is deduplicated on a value (a page address) it does not carry and re-reads from a mutable row (the bookmark) when it runs, so a waiting job can stand for a row that has since moved away and a later job for that value is dropped as a duplicate — PR 629
-- **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558
+- **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558, 641
 - **external behaviour** — a doc or comment states a third-party system's behaviour more broadly than that system documents it (a database "waits for every older transaction" where it waits only for writers and older snapshots) — PR 365
 
 - **comment vs check** — a comment summarising what a check rejects states the rule more broadly than the check enforces ("a secret" where the workflow token is allowed), so the next editor misreads the guard — PR 444
