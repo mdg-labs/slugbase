@@ -3339,7 +3339,7 @@ export interface components {
              * @description When the team's version last moved, RFC 3339 UTC
              */
             updatedAt: string;
-            /** @description Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
+            /** @description Moves by one with every change of the name, the description or the member set, and with every join of an account to the workspace, for every team of it: an invitation accepted into the workspace, whichever teams it names, and an instance admin adding themselves (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
             version: number;
         };
         TeamList: {
@@ -3383,7 +3383,7 @@ export interface components {
              * @description When the team's version last moved, RFC 3339 UTC
              */
             updatedAt: string;
-            /** @description Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
+            /** @description Moves by one with every change of the name, the description or the member set, and with every join of an account to the workspace, for every team of it: an invitation accepted into the workspace, whichever teams it names, and an instance admin adding themselves (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
             version: number;
         };
         TransferOwnershipRequest: {
@@ -12417,7 +12417,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, or the replacement adds an account that joined the workspace after that version was written; the member set is unchanged, and in the second case only the version has moved, so a new read of the team carries the version to send */
+            /** @description If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, including a version from before an account joined the workspace; the member set is unchanged */
             412: {
                 headers: {
                     [name: string]: unknown;

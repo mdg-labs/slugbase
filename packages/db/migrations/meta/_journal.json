@@ -764,6 +764,13 @@
       "when": 1793345892653,
       "tag": "20261030073812_add_slug_preference_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1793348663383,
+      "tag": "20261030082423_add_instance_join_team_versions",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HookResult, type DeletionGuardInput, type ServerHooks } from "../../src/hooks/index.ts";
@@ -25,6 +26,8 @@ const DELETE_JOB = "workspace.delete";
 const EVENT_JOB = "event.workspace.created";
 const JOINED_JOB = "event.member.joined";
 const MEMBERS = "/api/v1/members";
+const TEAMS = "/api/v1/teams";
+const TEAMS_GRANTED: EntitlementCheck = (entitlement) => entitlement === "teams.manage";
 const ACTIVE_WORKSPACE = "/api/v1/session/active-workspace";
 
 const database = useTestDatabase();
@@ -538,6 +541,36 @@ describe("POST /instance/workspaces/{id}/membership", () => {
       { actor_account_id: root.accountId, action: "instance.workspace_joined", entity_type: "workspace", entity_id: workspaceId, metadata: {} },
     ]);
     expect(await jobs(JOINED_JOB)).toEqual([{ eventId: expect.any(String) as string, workspaceId, accountId: root.accountId, role: "member" }]);
+  });
+
+  it("moves the version of every team of the workspace, so a stale replacement cannot add the admin and one read after the join is applied", async () => {
+    const world = harness.serve({ entitlements: TEAMS_GRANTED });
+    const root = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+    const teamOf = async (name: string): Promise<{ id: string; version: number }> => {
+      const response = await send(world, "POST", TEAMS, { cookie: owner.cookie }, { name });
+      expect(response.status).toBe(201);
+      return (await response.json()) as { id: string; version: number };
+    };
+    const design = await teamOf("Design");
+    const ops = await teamOf("Ops");
+    const replace = (team: { id: string }, accountIds: string[], version: number) =>
+      send(world, "PUT", `${TEAMS}/${team.id}/members`, { cookie: owner.cookie, "if-match": `"${String(version)}"` }, { accountIds });
+    const versionOf = async (team: { id: string }): Promise<string | null> => (await send(world, "GET", `${TEAMS}/${team.id}`, { cookie: owner.cookie })).headers.get("etag");
+
+    expect((await join(world, root, workspaceId)).status).toBe(201);
+
+    expect(await versionOf(design)).toBe('"2"');
+    expect(await versionOf(ops)).toBe('"2"');
+    const stale = await replace(design, [owner.account.id, root.accountId], design.version);
+    expect(stale.status).toBe(412);
+    expect(((await stale.json()) as { code: string }).code).toBe("precondition_failed");
+    expect(await versionOf(design)).toBe('"2"');
+    const fresh = await replace(ops, [root.accountId], 2);
+    expect(fresh.status).toBe(200);
+    expect(fresh.headers.get("etag")).toBe('"3"');
+    expect(((await fresh.json()) as { members: { accountId: string }[] }).members.map((member) => member.accountId)).toEqual([root.accountId]);
   });
 
   it("does not move the session to the workspace: the admin switches to it as any member does", async () => {

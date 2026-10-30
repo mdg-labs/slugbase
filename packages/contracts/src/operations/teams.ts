@@ -69,7 +69,7 @@ export const TeamSchema = z
     name: z.string().describe("The team's name, in the case it was entered in"),
     description: z.string().describe("The team's description; empty when it has none"),
     memberCount: z.number().int().min(0).describe("How many members the team has"),
-    version: z.number().int().min(1).describe("Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back"),
+    version: z.number().int().min(1).describe("Moves by one with every change of the name, the description or the member set, and with every join of an account to the workspace, for every team of it: an invitation accepted into the workspace, whichever teams it names, and an instance admin adding themselves (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back"),
     createdAt: z.iso.datetime().describe("When the team was created, RFC 3339 UTC"),
     updatedAt: z.iso.datetime().describe("When the team's version last moved, RFC 3339 UTC"),
   })
@@ -257,7 +257,7 @@ export const replaceTeamMembers = defineOperation({
     401: problemResponse(NO_SESSION),
     403: problemResponse(CHANGE_REFUSED),
     404: problemResponse(NO_TEAM),
-    412: problemResponse("If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, or the replacement adds an account that joined the workspace after that version was written; the member set is unchanged, and in the second case only the version has moved, so a new read of the team carries the version to send"),
+    412: problemResponse("If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, including a version from before an account joined the workspace; the member set is unchanged"),
     422: problemResponse(
       "The identifier or the body did not pass validation: an account that is no current member of the workspace (validation_failed on accountIds, whichever workspace the account belongs to), more than 1 000 identifiers, or a field the operation does not declare. Nothing is written",
     ),

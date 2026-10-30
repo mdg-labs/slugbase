@@ -6194,8 +6194,7 @@ export type TeamMembersReplacement =
     readonly team: TeamDetail;
 }
 /**
-* The version of the team, read under its lock, is none of the accepted ones (nothing was written), or the set adds an account that joined the
-* workspace after that version was written (the team's version moved once and no membership was written).
+* The version of the team, read under its lock, is none of the accepted ones; nothing was written.
 */
 | {
     readonly kind: "stale";

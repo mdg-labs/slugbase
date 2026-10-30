@@ -22,6 +22,15 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- commits first is seen as 'unknown_workspace' and one that comes after waits for this membership), then the admin's
 -- row (FOR SHARE, which sys_instance_update_account holds FOR UPDATE while it changes the flag or the disabled state). The admin is checked
 -- again under those locks, so a demotion or a disabling that committed first ends this call as it ends any other.
+--
+-- The membership moves the version of every team of the workspace by one, in the transaction that inserts it, as the acceptance of an
+-- invitation does (workspace_invitations_touch_teams in 640-teams.sql): the teams are locked FOR NO KEY UPDATE in the order of their
+-- identifiers before the membership is inserted, then updated. A form of a team's member set read before this commit is stale
+-- afterwards whatever the order in which the transactions began, so a replacement made from it cannot put the admin into a team, and
+-- one read after it is not refused. A team of another workspace moves nothing. A replacement holds the row of one team (FOR UPDATE) and
+-- then takes KEY SHARE on the workspace_members rows of the accounts it names. The only lock it can wait for here is a team row, which
+-- this function takes before it holds any row a replacement needs (the membership it inserts is invisible to the replacement until it
+-- commits), so the two cannot wait for one another.
 CREATE OR REPLACE FUNCTION public.sys_instance_add_membership(p_workspace_event_id uuid, p_instance_event_id uuid, p_ip_prefix cidr, p_workspace_id uuid)
   RETURNS text
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -58,7 +67,15 @@ BEGIN
     RETURN 'already_member';
   END IF;
 
+  PERFORM 1 FROM public.teams t
+  WHERE t.workspace_id = p_workspace_id
+  ORDER BY t.id
+  FOR NO KEY UPDATE OF t;
+
   INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (p_workspace_id, public.app_account_id(), 'member');
+
+  UPDATE public.teams t SET members_version = t.members_version + 1
+  WHERE t.workspace_id = p_workspace_id;
 
   INSERT INTO public.audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, entity_type, entity_id, metadata, ip_prefix)
   VALUES (

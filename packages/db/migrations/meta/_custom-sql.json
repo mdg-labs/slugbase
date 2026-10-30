@@ -1,4 +1,4 @@
 {
-  "sha256": "de62dcf561107e45a479e986b0b6c0d6c467b4a2ca3b153c7755696763d707ea",
-  "migration": "20261030073812_add_slug_preference_cleanup"
+  "sha256": "863eb2324f58134d5b3982d41d96d13ace875c7544d8cc5fa4f558d0de80e5e4",
+  "migration": "20261030082423_add_instance_join_team_versions"
 }

@@ -92,8 +92,7 @@ export type TeamMembersReplacement =
   /** The team has exactly these members already; nothing was written and the version stays. */
   | { readonly kind: "unchanged"; readonly team: TeamDetail }
   /**
-   * The version of the team, read under its lock, is none of the accepted ones (nothing was written), or the set adds an account that joined the
-   * workspace after that version was written (the team's version moved once and no membership was written).
+   * The version of the team, read under its lock, is none of the accepted ones; nothing was written.
    */
   | { readonly kind: "stale" }
   /** An account of the set is no member of the workspace; nothing was written. */
@@ -116,8 +115,8 @@ export interface TeamStore {
   remove(teamId: string): Promise<string | undefined>;
   /**
    * Makes `accountIds` the members of the team. The team is locked, and its version, read under the lock, must be one of
-   * `request.expectedVersions` when that is given (`stale` otherwise, and also when the set adds an account whose membership of the workspace began
-   * after the version was written, which moves the version once and writes no membership). Every account must be a current member of the workspace, which is locked
+   * `request.expectedVersions` when that is given (`stale` otherwise, with nothing written; every join of an account to the workspace
+   * moves the version of every team, so a set read before the join is stale). Every account must be a current member of the workspace, which is locked
    * for the rest of the transaction so a member who leaves meanwhile is neither added nor left in the team. A set that changes moves the team's
    * version by one; the set the team has is `unchanged` and writes nothing.
    */
