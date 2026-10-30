@@ -5,14 +5,16 @@ import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
-import { ACTIONS, expected, RELATIONS, type Action, type Relation } from "./access-oracle.ts";
+import { ACTIONS, expected, expectedForFolder, FOLDER_ACTIONS, FOLDER_RELATIONS, RELATIONS, type Action, type FolderAction, type FolderRelation, type Relation } from "./access-oracle.ts";
 
 // The within-workspace access matrix of doc 02 section 8.2 through the HTTP operations (doc 08 section 3.3, doc 04 section 2.4, doc 10 T2, T11 and T12), over the
 // migrated database. The oracle (`access-oracle.ts`) states the table itself and imports nothing from the code judged here; for every action and every way to
 // perform it, each relation of a member to the bookmark (the owner, a direct share, a team share, a shared folder, no share, an admin with no share, and a member who
 // has left) makes the request, and the answer must be the oracle's: done, `403 forbidden` for a member who can read the bookmark, `404 not_found` for one who cannot,
 // or, for a list, a `200` that leaves the bookmark out. A request that is refused leaves every row of the tables it could write as it was. The owner asks last,
-// since an owner's request changes the bookmark. Besides the table: the owner's tags, pin and folders reach no recipient, and the recipient cannot reach the tag.
+// since an owner's request changes the bookmark. The same table judges the share operations of a folder, for the relations a folder can have (a direct share, a
+// team share, none, an admin with no share and a member who has left): a recipient is told `403`, a member who cannot read the folder `404`, and the answer
+// to each is the one `GET /folders/{id}` agrees with. Besides the table: the owner's tags, pin and folders reach no recipient, and the recipient cannot reach the tag.
 
 const TEST_TIMEOUT_MS = 90_000;
 const BOOKMARKS = "/api/v1/bookmarks";
@@ -88,17 +90,19 @@ async function outcomeOf(response: Response, done: readonly number[]): Promise<s
 /** What is in the tables a refused request could write; the counts of opens are the usage buffer's and leave the comparison. */
 async function snapshot(): Promise<string> {
   const parts: string[] = [];
-  for (const [table, row] of [
-    ["bookmarks", "(to_jsonb(t) - 'open_count' - 'last_opened_at')::text"],
-    ["bookmark_tags", "t::text"],
-    ["folder_bookmarks", "t::text"],
-    ["bookmark_shares", "t::text"],
-    ["tags", "t::text"],
-    ["folders", "t::text"],
+  for (const [table, row, where] of [
+    ["bookmarks", "(to_jsonb(t) - 'open_count' - 'last_opened_at')::text", undefined],
+    ["bookmark_tags", "t::text", undefined],
+    ["folder_bookmarks", "t::text", undefined],
+    ["bookmark_shares", "t::text", undefined],
+    ["folder_shares", "t::text", undefined],
+    ["tags", "t::text", undefined],
+    ["folders", "t::text", undefined],
+    ["audit_events", "t::text", "t.action LIKE 'share.%'"],
   ] as const) {
     const rows = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
-      return tx.unsafe<{ row: string }[]>(`SELECT ${row} AS row FROM ${table} t ORDER BY 1`);
+      return tx.unsafe<{ row: string }[]>(`SELECT ${row} AS row FROM ${table} t ${where === undefined ? "" : `WHERE ${where}`} ORDER BY 1`);
     });
     parts.push(`${table}\n${rows.map((entry) => entry.row).join("\n")}`);
   }
@@ -117,6 +121,8 @@ interface Cast {
   /** A bookmark nobody else is asked about, for the checks of what recipients see. */
   readonly leak: { readonly id: string; readonly slug: string };
   readonly sharedFolder: string;
+  /** For each action that applies to a folder, the owner's folder it is asked of: shared with `direct` and `former` directly and with `team` and `former` through a team. */
+  readonly folderObjects: Readonly<Record<FolderAction, string>>;
 }
 
 let cast: Cast;
@@ -159,6 +165,18 @@ async function setup(serving: World): Promise<Cast> {
   const bookmarks = Object.fromEntries(await Promise.all(ACTIONS.map(async (action) => [action, await make(action)] as const))) as Record<Action, { id: string; slug: string }>;
   const leak = await make("leak");
 
+  const folderObjects = Object.fromEntries(
+    await Promise.all(
+      FOLDER_ACTIONS.map(async (action) => {
+        const id = await idOf(send(serving, "POST", FOLDERS, as(owner), { name: `Folder object ${action}` }));
+        for (const target of [{ accountId: direct.account.id }, { accountId: former.account.id }, { teamId: readers }]) {
+          expect((await send(serving, "POST", `${FOLDERS}/${id}/shares`, as(owner), target)).status).toBe(201);
+        }
+        return [action, id] as const;
+      }),
+    ),
+  ) as Record<FolderAction, string>;
+
   // Each member has a folder of their own, which is theirs to file into.
   const folderOf = Object.fromEntries(
     await Promise.all(RELATIONS.map(async (relation) => [relation, await idOf(send(serving, "POST", FOLDERS, as(people[relation]), { name: `Own ${relation}` }))] as const)),
@@ -168,7 +186,7 @@ async function setup(serving: World): Promise<Cast> {
   // theirs after it is made in no workspace.
   expect((await send(serving, "GET", `${BOOKMARKS}/${leak.id}`, as(former))).status).toBe(200);
   expect((await send(serving, "DELETE", `${MEMBERS}/${former.account.id}`, as(owner), { content: "delete" })).status).toBe(200);
-  return { people, spare, spareTeam, folderOf, tag, bookmarks, leak, sharedFolder };
+  return { people, spare, spareTeam, folderOf, tag, bookmarks, leak, sharedFolder, folderObjects };
 }
 
 interface Probe {
@@ -282,6 +300,97 @@ describe("the access matrix of doc 02 section 8.2, through the HTTP operations",
       expect(edited.status).toBe(200);
       expect(await edited.json()).toMatchObject({ title: "Taken over", slug: "taken-over", forwarding: false, ownerId: owner.account.id });
       expect((await send(world, "GET", `${BOOKMARKS}/${cast.bookmarks.delete.id}`, as(owner))).status).toBe(404);
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+interface FolderProbe {
+  readonly name: string;
+  readonly run: (as: Relation, folderId: string, extra: { readonly shareId: string }) => Promise<string>;
+}
+
+/** For each action that applies to a folder, the operations that perform it, in the order they are asked. */
+const FOLDER_PROBES: Readonly<Record<FolderAction, readonly FolderProbe[]>> = {
+  share: [
+    { name: "POST shares with a member", run: async (as, id) => outcomeOf(await request(as, "POST", `${FOLDERS}/${id}/shares`, { accountId: cast.spare.account.id }), [200, 201]) },
+    { name: "POST shares with a team", run: async (as, id) => outcomeOf(await request(as, "POST", `${FOLDERS}/${id}/shares`, { teamId: cast.spareTeam }), [200, 201]) },
+    { name: "DELETE a share", run: async (as, id, extra) => outcomeOf(await request(as, "DELETE", `${FOLDERS}/${id}/shares/${extra.shareId}`), [204]) },
+  ],
+  "see-recipients": [{ name: "GET shares", run: async (as, id) => outcomeOf(await request(as, "GET", `${FOLDERS}/${id}/shares`), [200]) }],
+};
+
+describe("the access matrix of doc 02 section 8.2 for a folder, through the HTTP operations", () => {
+  it.each(FOLDER_ACTIONS)(
+    "%s: every relation gets the oracle's answer from every operation, and a refused request changes nothing",
+    async (action) => {
+      const folderId = cast.folderObjects[action];
+      const shareId =
+        action === "share"
+          ? await (async () => {
+              const response = await send(world, "POST", `${FOLDERS}/${folderId}/shares`, as(cast.people.owner), { accountId: cast.spare.account.id });
+              expect(response.status).toBe(201);
+              return ((await response.json()) as { id: string }).id;
+            })()
+          : "";
+      const asking = ASKING.filter((relation): relation is FolderRelation => (FOLDER_RELATIONS as readonly Relation[]).includes(relation));
+      const answered: { probe: string; relation: FolderRelation; outcome: string }[] = [];
+
+      for (const probe of FOLDER_PROBES[action]) {
+        const before = await snapshot();
+        for (const relation of asking) {
+          if (relation === "owner") {
+            expect(await snapshot(), `${probe.name}: a refused request changed a row`).toBe(before);
+          }
+          answered.push({ probe: probe.name, relation, outcome: await probe.run(relation, folderId, { shareId }) });
+        }
+      }
+
+      expect(answered).toEqual(answered.map(({ probe, relation }) => ({ probe, relation, outcome: expectedForFolder(relation, action) })));
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "tells a member nothing through the share operations that GET /folders/{id} does not: a folder they can read is 403, one they cannot is 404, whichever share is named",
+    async () => {
+      const folderId = cast.folderObjects["see-recipients"];
+      const unknownShare = "0192f3a0-cccc-7000-8000-0000000000ab";
+      for (const relation of FOLDER_RELATIONS) {
+        const read = await request(relation, "GET", `${FOLDERS}/${folderId}`);
+        const answers = [
+          await request(relation, "GET", `${FOLDERS}/${folderId}/shares`),
+          await request(relation, "POST", `${FOLDERS}/${folderId}/shares`, { accountId: cast.people[relation].account.id }),
+          await request(relation, "DELETE", `${FOLDERS}/${folderId}/shares/${unknownShare}`),
+        ];
+        if (relation === "owner") {
+          expect(read.status).toBe(200);
+          expect(answers.map((answer) => answer.status)).toEqual([200, 422, 404]);
+          continue;
+        }
+        const readable = read.status === 200;
+        expect(readable, relation).toBe(relation === "direct" || relation === "team");
+        expect(await Promise.all(answers.map((answer) => outcomeOf(answer, [])))).toEqual(Array.from({ length: 3 }, () => (readable ? "forbidden" : "not_found")));
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "answers an ownerless folder as GET /folders/{id} shows it: 403 to a member it is still shared with, 404 to one it is not",
+    async () => {
+      const created = await send(world, "POST", FOLDERS, as(cast.people.owner), { name: "Ownerless soon" });
+      const folderId = ((await created.json()) as { id: string }).id;
+      expect((await send(world, "POST", `${FOLDERS}/${folderId}/shares`, as(cast.people.owner), { accountId: cast.people.direct.account.id })).status).toBe(201);
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE folders SET owner_id = NULL WHERE id = ${folderId}`;
+      });
+
+      expect((await request("direct", "GET", `${FOLDERS}/${folderId}`)).status).toBe(200);
+      expect(await outcomeOf(await request("direct", "GET", `${FOLDERS}/${folderId}/shares`), [200])).toBe("forbidden");
+      expect((await request("none", "GET", `${FOLDERS}/${folderId}`)).status).toBe(404);
+      expect(await outcomeOf(await request("none", "GET", `${FOLDERS}/${folderId}/shares`), [200])).toBe("not_found");
     },
     TEST_TIMEOUT_MS,
   );

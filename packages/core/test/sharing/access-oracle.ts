@@ -6,6 +6,10 @@
 // `packages/server/test/routes/sharing-matrix.integration.test.ts` through the HTTP operations. The server suite holds a copy of this file under the same
 // name and fails when the two differ, so one table judges both.
 //
+// A folder is a second kind of object the table judges. Its recipients read it through a direct or a team share, and the rows that apply to it are the two
+// that name its shares, `share` and `see-recipients` (`FOLDER_ACTIONS`), for the relations of `FOLDER_RELATIONS`: no folder is filed in a folder, so the `folder`
+// relation has no meaning for it. `expectedForFolder` gives the cell, by the same columns and the same rule of doc 04 section 2.4 as a bookmark's.
+//
 // The export column of the doc has no row here: no export operation exists yet, so there is nothing to ask. Its row joins the table with the operation.
 
 /** How a member M relates to a bookmark that O owns, in the active workspace. */
@@ -76,4 +80,19 @@ export function expected(relation: Relation, action: Action): Outcome {
   }
   // Doc 04 section 2.4: 403 only when the caller can see the resource and may not perform the action; a resource the caller cannot see is 404.
   return column === "viaShare" ? "forbidden" : "not_found";
+}
+
+/** The relations a member can have to a folder O owns: a bookmark's, less the folder it is filed in. */
+export const FOLDER_RELATIONS = ["owner", "direct", "team", "none", "admin", "former"] as const satisfies readonly Relation[];
+
+export type FolderRelation = (typeof FOLDER_RELATIONS)[number];
+
+/** The rows of the matrix that apply to a folder: sharing it, and seeing who else it is shared with. */
+export const FOLDER_ACTIONS = ["share", "see-recipients"] as const satisfies readonly Action[];
+
+export type FolderAction = (typeof FOLDER_ACTIONS)[number];
+
+/** What M's request for `action` on O's folder must get: the table's cell for the same relation and action, since a folder is read through the same shares. */
+export function expectedForFolder(relation: FolderRelation, action: FolderAction): Outcome {
+  return expected(relation, action);
 }

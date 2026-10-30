@@ -174,6 +174,41 @@ describe("the failure scenario", () => {
   );
 
   it(
+    "answers 403 to a member who reads the folder through a team or a direct share and 404 to one who cannot, writes no row and records nothing",
+    async () => {
+      const world = harness.serve(SELF_ENTITLED);
+      const { owner, max, mia, cy, a, folder } = await setup(world);
+      const team = await teamOf(world, owner, "Design", [mia]);
+      expect((await grant(world, owner, folder, { teamId: team })).status).toBe(201);
+      const direct = ((await (await grant(world, owner, folder, { accountId: max.account.id })).json()) as Share).id;
+      const before = await storedShares();
+      const audited = await auditOf(a.workspaceId);
+
+      for (const reader of [mia, max]) {
+        expect((await send(world, "GET", `${FOLDERS}/${folder}`, { cookie: reader.cookie })).status).toBe(200);
+        const responses = [
+          await list(world, reader, folder),
+          await grant(world, reader, folder, { accountId: cy.account.id }),
+          await grant(world, reader, folder, { teamId: team }),
+          await revoke(world, reader, folder, direct),
+          await revoke(world, reader, folder, "0192f3a0-cccc-7000-8000-0000000000ab"),
+        ];
+        expect(responses.map((response) => response.status)).toEqual([403, 403, 403, 403, 403]);
+        for (const response of responses) {
+          expect((await problemOf(response)).code).toBe("forbidden");
+        }
+      }
+
+      expect((await send(world, "GET", `${FOLDERS}/${folder}`, { cookie: cy.cookie })).status).toBe(404);
+      const strangerAnswers = [await list(world, cy, folder), await grant(world, cy, folder, { accountId: cy.account.id }), await revoke(world, cy, folder, direct)];
+      expect(strangerAnswers.map((response) => response.status)).toEqual([404, 404, 404]);
+      expect(await storedShares()).toEqual(before);
+      expect(await auditOf(a.workspaceId)).toEqual(audited);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
     "answers 404 for a folder of workspace B, and for one that does not exist, as it does for another member's, and 404 for a share of another folder",
     async () => {
       const world = harness.serve(SELF_ENTITLED);

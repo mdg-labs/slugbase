@@ -3028,6 +3028,8 @@ export interface FolderShareAsk {
 export interface FolderShareDependencies {
     // (undocumented)
     readonly audit: AuditWriter;
+    // (undocumented)
+    readonly folders: Pick<FolderStore, "sharedWith">;
     readonly newId: () => string;
     // (undocumented)
     readonly store: Pick<FolderShareStore, "ownedFolder" | "grant" | "revoke">;
@@ -3061,6 +3063,10 @@ export type FolderShareGrantOutcome = {
 } | {
     readonly kind: "existing";
     readonly share: FolderShareRecord;
+}
+/** The folder is shared with the caller, who may not share it further. */
+| {
+    readonly kind: "forbidden";
 } | {
     readonly kind: "not_found";
 }
@@ -3084,6 +3090,8 @@ export type FolderShareListOutcome = {
     readonly kind: "listed";
     readonly list: FolderShareList;
 } | {
+    readonly kind: "forbidden";
+} | {
     readonly kind: "not_found";
 };
 
@@ -3096,6 +3104,8 @@ export interface FolderShareReadAsk {
 
 // @public (undocumented)
 export interface FolderShareReadDependencies {
+    // (undocumented)
+    readonly folders: Pick<FolderStore, "sharedWith">;
     // (undocumented)
     readonly store: Pick<FolderShareStore, "ownedFolder" | "list">;
 }
@@ -3128,6 +3138,8 @@ export interface FolderShareRevocationAsk extends FolderShareAsk {
 export type FolderShareRevocationOutcome = {
     readonly kind: "revoked";
     readonly share: FolderShareRecord;
+} | {
+    readonly kind: "forbidden";
 } | {
     readonly kind: "not_found";
 };
@@ -5591,7 +5603,7 @@ export function restoreBookmarks(tx: BookmarkArchiveTransaction, request: Bookma
 export function revokeBookmarkShare(input: Pick<BookmarkShareDependencies, "store" | "audit">, ask: BookmarkShareRevocationAsk): Promise<BookmarkShareRevocationOutcome>;
 
 // @public (undocumented)
-export function revokeFolderShare(input: Pick<FolderShareDependencies, "store" | "audit">, ask: FolderShareRevocationAsk): Promise<FolderShareRevocationOutcome>;
+export function revokeFolderShare(input: Pick<FolderShareDependencies, "store" | "folders" | "audit">, ask: FolderShareRevocationAsk): Promise<FolderShareRevocationOutcome>;
 
 // @public
 export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;

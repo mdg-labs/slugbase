@@ -4,10 +4,13 @@ import {
   deleteBookmark,
   fileBookmarks,
   grantBookmarkShare,
+  grantFolderShare,
   listBookmarkShares,
+  listFolderShares,
   openBookmark,
   readBookmark,
   revokeBookmarkShare,
+  revokeFolderShare,
   unfileBookmarks,
   updateBookmark,
   type AuditRecord,
@@ -18,8 +21,11 @@ import {
   type BookmarkStore,
   type FolderFilingStore,
   type FolderRecord,
+  type FolderShareRecord,
+  type FolderShareStore,
+  type FolderStore,
 } from "../../src/index.ts";
-import { ACTIONS, expected, type Action, type Outcome, type Relation } from "./access-oracle.ts";
+import { ACTIONS, expected, expectedForFolder, FOLDER_ACTIONS, FOLDER_RELATIONS, type Action, type FolderAction, type FolderRelation, type Outcome, type Relation } from "./access-oracle.ts";
 
 // The within-workspace access matrix of doc 02 section 8.2 through the services of core (doc 08 section 3.3, doc 10 T2, T11 and T12). Every cell of the
 // oracle (`access-oracle.ts`, which states the table itself and imports nothing from the code judged here) is asked of the service that decides it, once for
@@ -323,4 +329,120 @@ describe("the access matrix of doc 02 section 8.2, through the services", () => 
     expect(await openBookmark({ store: leaky, usage: w.usage }, { bookmarkId: BOOKMARK, accountId: MEMBERS.none.id })).toEqual({ kind: "not_found" });
     expect(w.opens).toEqual([]);
   });
+});
+
+// The same table for the shares of a folder O owns (doc 04 section 10.7): a member who reads the folder through a direct or a team share is answered `forbidden`,
+// one who does not is answered `not_found`, and only the owner is let through. The store answers from the world as the real one does: `ownedFolder` is true for
+// the owner alone, and `sharedWith` for a member whom the folder is shared with and who is not its owner.
+
+const FOLDER_ID = "0192f3a0-9999-7000-8000-0000000000e1";
+
+const FOLDER_MEMBERS: Readonly<Record<FolderRelation, { readonly id: string; readonly reads: boolean }>> = {
+  owner: { id: OWNER, reads: true },
+  direct: { id: MEMBERS.direct.id, reads: true },
+  team: { id: MEMBERS.team.id, reads: true },
+  none: { id: MEMBERS.none.id, reads: false },
+  admin: { id: MEMBERS.admin.id, reads: false },
+  // A member who has left acts in no workspace, so no service is ever asked for them (the server suite judges them).
+  former: { id: "0192f3a0-bbbb-7000-8000-0000000000a7", reads: false },
+};
+
+const SERVICE_FOLDER_RELATIONS = FOLDER_RELATIONS.filter((relation) => relation !== "former");
+
+function folderShareRecord(): FolderShareRecord {
+  return { id: SHARE, folderId: FOLDER_ID, accountId: OTHER_MEMBER, teamId: null, name: "Max Member", email: "max@example.test", createdAt: NOW };
+}
+
+function folderWorld(accountId: string) {
+  const writes: string[] = [];
+  const audits: AuditRecord[] = [];
+  const shares: FolderShareStore = {
+    ownedFolder: (request) => Promise.resolve(request.folderId === FOLDER_ID && request.ownerId === OWNER),
+    list: () => Promise.resolve({ shares: [folderShareRecord()], audienceSize: 1 }),
+    grant: () => {
+      writes.push("grant");
+      return Promise.resolve({ kind: "granted", share: folderShareRecord() });
+    },
+    revoke: () => {
+      writes.push("revoke");
+      return Promise.resolve(folderShareRecord());
+    },
+  };
+  const reads = Object.values(FOLDER_MEMBERS).some((member) => member.id === accountId && member.reads);
+  const folders: Pick<FolderStore, "sharedWith"> = {
+    sharedWith: (request) => Promise.resolve(request.folderId === FOLDER_ID && request.accountId === accountId && accountId !== OWNER && reads),
+  };
+  const audit = createAuditWriter({
+    store: {
+      insert: (entry) => {
+        audits.push(entry);
+        return Promise.resolve();
+      },
+    },
+    newId: () => "0192f3a0-eeee-7000-8000-000000000001",
+  });
+  return { writes, audits, shares, folders, audit };
+}
+
+interface FolderProbe {
+  readonly name: string;
+  readonly run: (accountId: string, w: ReturnType<typeof folderWorld>) => Promise<Outcome>;
+  readonly writes?: string;
+}
+
+const FOLDER_PROBES: Readonly<Record<FolderAction, readonly FolderProbe[]>> = {
+  share: [
+    {
+      name: "share the folder with a member",
+      run: async (accountId, w) =>
+        outcomeOf(
+          (await grantFolderShare({ store: w.shares, folders: w.folders, audit: w.audit, newId: () => SHARE }, { ...OWNER_ASK, actor: actorOf(accountId), folderId: FOLDER_ID, target: { kind: "member", accountId: OTHER_MEMBER } })).kind,
+        ),
+      writes: "grant",
+    },
+    {
+      name: "share the folder with a team",
+      run: async (accountId, w) =>
+        outcomeOf((await grantFolderShare({ store: w.shares, folders: w.folders, audit: w.audit, newId: () => SHARE }, { ...OWNER_ASK, actor: actorOf(accountId), folderId: FOLDER_ID, target: { kind: "team", teamId: TEAM } })).kind),
+      writes: "grant",
+    },
+    {
+      name: "revoke a share of the folder",
+      run: async (accountId, w) => outcomeOf((await revokeFolderShare({ store: w.shares, folders: w.folders, audit: w.audit }, { ...OWNER_ASK, actor: actorOf(accountId), folderId: FOLDER_ID, shareId: SHARE })).kind),
+      writes: "revoke",
+    },
+  ],
+  "see-recipients": [
+    {
+      name: "list the shares of the folder",
+      run: async (accountId, w) => outcomeOf((await listFolderShares({ store: w.shares, folders: w.folders }, { accountId, folderId: FOLDER_ID })).kind),
+    },
+  ],
+};
+
+describe("the access matrix of doc 02 section 8.2 for a folder, through the services", () => {
+  it("has a probe for every row of the oracle that applies to a folder", () => {
+    expect(Object.keys(FOLDER_PROBES).sort()).toEqual([...FOLDER_ACTIONS].sort());
+  });
+
+  for (const relation of SERVICE_FOLDER_RELATIONS) {
+    describe(`a ${relation}`, () => {
+      for (const action of FOLDER_ACTIONS) {
+        for (const probe of FOLDER_PROBES[action]) {
+          it(`${action}: ${probe.name} is ${expectedForFolder(relation, action)}`, async () => {
+            const accountId = FOLDER_MEMBERS[relation].id;
+            const w = folderWorld(accountId);
+
+            const outcome = await probe.run(accountId, w);
+
+            expect(outcome).toBe(expectedForFolder(relation, action));
+            expect(w.writes).toEqual(outcome === "allowed" && probe.writes !== undefined ? [probe.writes] : []);
+            if (outcome !== "allowed") {
+              expect(w.audits).toEqual([]);
+            }
+          });
+        }
+      }
+    });
+  }
 });

@@ -26,7 +26,7 @@ import {
   type EntitlementUpgradeCheck,
   type ShareTargetKind,
 } from "@slugbase/core";
-import { accountProfileRepository, auditEventRepository, bookmarkShareRepository, folderShareRepository, shareTargetRepository } from "@slugbase/db";
+import { accountProfileRepository, auditEventRepository, bookmarkShareRepository, folderRepository, folderShareRepository, shareTargetRepository } from "@slugbase/db";
 import type { z } from "zod";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { entitlementRequired } from "../../http/authorize.ts";
@@ -39,9 +39,9 @@ import { route } from "../register.ts";
 
 // GET /api/v1/share-targets, GET, POST /api/v1/bookmarks/{id}/shares and DELETE /api/v1/bookmarks/{id}/shares/{shareId}, and the same three operations on
 // /api/v1/folders/{id}/shares (doc 04 section 10.7, doc 02 section 8, doc 05 section 2.5, doc 10 T1, T2 and T11). All act in the workspace the request is
-// bound to and name none. A folder is the owner's to share exactly as a bookmark is: another member's folder, another workspace's and an unknown one are the
-// same `404 not_found`, the rules of the entitlements, of the refusals of a grant and of the audit events are those of the bookmark's, and the events are about
-// the folder.
+// bound to and name none. A folder is the owner's to share exactly as a bookmark is: one that is shared with the caller is `403 forbidden` and another member's
+// that is not, another workspace's and an unknown one are the same `404 not_found`, the rules of the entitlements, of the refusals of a grant and of the audit
+// events are those of the bookmark's, and the events are about the folder.
 //
 // Sharing needs `sharing.members` for a member and `sharing.teams` for a team. The kind is in the request, so the handlers decide the entitlement with
 // the check stage 9 uses, before they touch the database: a grant needs the entitlement of its target, a search offers the kinds the workspace holds
@@ -61,6 +61,7 @@ const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
 const NO_SUCH_FOLDER = "No such resource.";
 const SHARED_READ_ONLY = "This bookmark is shared with you, and a share gives read access only.";
+const SHARED_FOLDER_READ_ONLY = "This folder is shared with you, and a share gives read access only.";
 const SELF_SHARE = "A bookmark is not shared with its owner.";
 const SELF_SHARE_FOLDER = "A folder is not shared with its owner.";
 const NOT_A_MEMBER = "The account must be a current member of the workspace.";
@@ -149,7 +150,7 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
   async function acting<T>(
     context: ChainContext,
     tenant: RequestTenant,
-    work: (stores: { readonly store: ReturnType<typeof bookmarkShareRepository>; readonly folderStore: ReturnType<typeof folderShareRepository>; readonly audit: ReturnType<typeof createAuditWriter> }, request: { readonly workspaceId: string; readonly actor: ReturnType<typeof auditActorOf>; readonly ipPrefix: string | null }) => Promise<T>,
+    work: (stores: { readonly store: ReturnType<typeof bookmarkShareRepository>; readonly folderStore: ReturnType<typeof folderShareRepository>; readonly folders: ReturnType<typeof folderRepository>; readonly audit: ReturnType<typeof createAuditWriter> }, request: { readonly workspaceId: string; readonly actor: ReturnType<typeof auditActorOf>; readonly ipPrefix: string | null }) => Promise<T>,
   ): Promise<T> {
     const principal = context.get("principal");
     if (principal === undefined) {
@@ -163,7 +164,7 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
       }
       const actor = auditActorOf(principal, tenant.accountId, profile.displayName);
       return {
-        value: await work({ store: bookmarkShareRepository(tx), folderStore: folderShareRepository(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) }, { workspaceId: tenant.workspaceId, actor, ipPrefix }),
+        value: await work({ store: bookmarkShareRepository(tx), folderStore: folderShareRepository(tx), folders: folderRepository(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) }, { workspaceId: tenant.workspaceId, actor, ipPrefix }),
       };
     });
     if (outcome === undefined) {
@@ -234,7 +235,10 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
     route(listFolderSharesOperation).handle(async ({ params }, context) => {
       const tenant = tenantOf(context);
       await requireSharing(context, tenant);
-      const outcome = await tenant.withTenant((tx) => listFolderShares({ store: folderShareRepository(tx) }, { accountId: tenant.accountId, folderId: params.id }));
+      const outcome = await tenant.withTenant((tx) => listFolderShares({ store: folderShareRepository(tx), folders: folderRepository(tx) }, { accountId: tenant.accountId, folderId: params.id }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", SHARED_FOLDER_READ_ONLY);
+      }
       if (outcome.kind === "not_found") {
         throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
@@ -245,12 +249,14 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
       const tenant = tenantOf(context);
       const target = "accountId" in body ? ({ kind: "member", accountId: body.accountId } as const) : ({ kind: "team", teamId: body.teamId } as const);
       await requireSharingWith(context, tenant, target.kind);
-      const outcome = await acting(context, tenant, ({ folderStore, audit }, request) => grantFolderShare({ store: folderStore, audit, newId: uuidv7 }, { ...request, folderId: params.id, target }));
+      const outcome = await acting(context, tenant, ({ folderStore, folders, audit }, request) => grantFolderShare({ store: folderStore, folders, audit, newId: uuidv7 }, { ...request, folderId: params.id, target }));
       switch (outcome.kind) {
         case "granted":
           return { status: 201, body: folderShareBody(outcome.share) };
         case "existing":
           return { status: 200, body: folderShareBody(outcome.share) };
+        case "forbidden":
+          throw new ProblemError("forbidden", SHARED_FOLDER_READ_ONLY);
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_FOLDER);
         case "self":
@@ -265,7 +271,10 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
     route(deleteFolderShareOperation).handle(async ({ params }, context) => {
       const tenant = tenantOf(context);
       await requireSharing(context, tenant);
-      const outcome = await acting(context, tenant, ({ folderStore, audit }, request) => revokeFolderShare({ store: folderStore, audit }, { ...request, folderId: params.id, shareId: params.shareId }));
+      const outcome = await acting(context, tenant, ({ folderStore, folders, audit }, request) => revokeFolderShare({ store: folderStore, folders, audit }, { ...request, folderId: params.id, shareId: params.shareId }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", SHARED_FOLDER_READ_ONLY);
+      }
       if (outcome.kind === "not_found") {
         throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
