@@ -778,6 +778,34 @@
       "when": 1793356573113,
       "tag": "20261030103613_add_member_departure",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1793386749662,
+      "tag": "20261030185909_index_audit_events_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1793386749663,
+      "tag": "20261030185910_index_audit_events_account_2",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1793386749664,
+      "tag": "20261030185911_index_audit_events_account_3",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1793386749665,
+      "tag": "20261030185912_index_audit_events_account_4",
+      "breakpoints": true
     }
   ]
 }
