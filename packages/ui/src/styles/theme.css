@@ -171,6 +171,14 @@
   --color-folder-6: var(--folder-6);
   --color-folder-7: var(--folder-7);
   --color-folder-8: var(--folder-8);
+  --color-avatar-1: var(--avatar-1);
+  --color-avatar-2: var(--avatar-2);
+  --color-avatar-3: var(--avatar-3);
+  --color-avatar-4: var(--avatar-4);
+  --color-avatar-5: var(--avatar-5);
+  --color-avatar-6: var(--avatar-6);
+  --color-avatar-7: var(--avatar-7);
+  --color-avatar-8: var(--avatar-8);
 }
 
 @theme {
@@ -281,6 +289,15 @@
   --folder-6: #b178f7;
   --folder-7: #f78fb0;
   --folder-8: #5fd6a0;
+
+  --avatar-1: var(--folder-1);
+  --avatar-2: var(--folder-2);
+  --avatar-3: var(--folder-3);
+  --avatar-4: var(--folder-4);
+  --avatar-5: var(--folder-5);
+  --avatar-6: var(--folder-6);
+  --avatar-7: var(--folder-7);
+  --avatar-8: var(--folder-8);
 }
 
 /* Light: chosen with a theme class, or by the system while no class is set. */
@@ -338,6 +355,15 @@
   --folder-6: #8a4fe0;
   --folder-7: #d6457f;
   --folder-8: #0f8f7d;
+
+  --avatar-1: #505ce6;
+  --avatar-2: #197d53;
+  --avatar-3: #926517;
+  --avatar-4: #cd2e33;
+  --avatar-5: #23749e;
+  --avatar-6: #8648df;
+  --avatar-7: #c92c6b;
+  --avatar-8: #0d7a6b;
 }
 
 @media (prefers-color-scheme: light) {
@@ -395,6 +421,15 @@
     --folder-6: #8a4fe0;
     --folder-7: #d6457f;
     --folder-8: #0f8f7d;
+
+    --avatar-1: #505ce6;
+    --avatar-2: #197d53;
+    --avatar-3: #926517;
+    --avatar-4: #cd2e33;
+    --avatar-5: #23749e;
+    --avatar-6: #8648df;
+    --avatar-7: #c92c6b;
+    --avatar-8: #0d7a6b;
   }
 }
 
