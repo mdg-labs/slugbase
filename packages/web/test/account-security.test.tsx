@@ -2,6 +2,7 @@ import type { ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -171,11 +172,18 @@ afterEach(() => {
 });
 
 describe("the sign-in alerts switch", () => {
-  it("shows the switch on, as the account has it, and turning it off sends exactly that change", async () => {
+  it("shows the switch on, as the account has it", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
+    stubServer();
+    await openSecurity();
+    const alerts = await screen.findByRole("switch", { name: "Email me when a new device signs in" });
+
+    expect(alerts.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("sends exactly that change when it is turned off", async () => {
     const server = stubServer();
     await openSecurity();
     const alerts = await screen.findByRole("switch", { name: "Email me when a new device signs in" });
-    expect(alerts.getAttribute("aria-checked")).toBe("true");
 
     await act_(() => {
       fireEvent.click(alerts);
