@@ -3,7 +3,8 @@ name: E2E
 # The browser journeys of doc 08 section 5.1 against the image built from this
 # commit, started through compose.yml with the Mailpit of compose.e2e.yml that
 # catches the mail of the stack, once on PostgreSQL 17 and once on 18 (doc 08
-# section 6.2, Q3). The stack runs on the Docker daemon of the runner itself, as in
+# section 6.2, Q3), each leg in two Playwright shards on runners of their own (doc
+# 08 section 5.1). The stack runs on the Docker daemon of the runner itself, as in
 # the `build` job of ci.yml, with its ports published on 127.0.0.1; only the
 # journeys run in a container, the Playwright image of e2e/Dockerfile (pinned to the
 # version of @playwright/test and to a digest) with the host's network, so the job
@@ -33,16 +34,20 @@ env:
   TURBO_TELEMETRY_DISABLED: "1"
 
 jobs:
-  e2e:
-    name: e2e (PostgreSQL ${{ matrix.postgres }})
+  # One shard of one leg: a runner of its own with its own stack, so the shards of a
+  # leg share neither the database, the mail, the sign-in limits of the stack's client
+  # address (doc 04 section 7) nor the session files under e2e/.auth. A failing shard
+  # stops no other, so every shard and both majors report.
+  shards:
+    name: e2e shard (PostgreSQL ${{ matrix.postgres }}, ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    # Each leg is a runner of its own with its own stack; a failing leg does not
-    # stop the other, so both majors report.
     strategy:
       fail-fast: false
       matrix:
         postgres: ["17", "18"]
+        # --shard=<n>/2 below: the two have to agree.
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -78,13 +83,15 @@ jobs:
       # the project, its volume and its temporary files however the command ends.
       # The journeys run in the Playwright image on the network of the runner
       # (e2e/in-image.sh), as the user of the runner, so that what they write under
-      # e2e/ is readable by the upload step. The step fails when a test does.
+      # e2e/ is readable by the upload step. The step fails when a test does. --shard
+      # takes the shard's half of the tests of every project, and the `setup` project,
+      # which the other projects depend on, runs in each shard against its stack.
       - name: Run the journeys
         env:
           BUILD_COMMIT: ${{ github.sha }}
           SLUGBASE_IMAGE: slugbase:e2e
           SMOKE_POSTGRES_MAJOR: ${{ matrix.postgres }}
-        run: bash e2e/with-stack.sh bash e2e/in-image.sh node run-tests.ts
+        run: bash e2e/with-stack.sh bash e2e/in-image.sh node run-tests.ts --shard=${{ matrix.shard }}/2
       # A stack that the script could not remove (its process killed, say) is removed
       # here; a run that ended normally leaves nothing to find.
       - name: Remove any stack left behind
@@ -102,9 +109,33 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-artifacts-postgres-${{ matrix.postgres }}
+          name: e2e-artifacts-postgres-${{ matrix.postgres }}-shard-${{ matrix.shard }}
           path: |
             e2e/test-results/
             e2e/playwright-report/
           if-no-files-found: ignore
           retention-days: 14
+
+  # The check each leg has always reported, which the ruleset of `main` requires by
+  # name ("e2e (PostgreSQL 17)", "e2e (PostgreSQL 18)"). It fails unless every shard
+  # succeeded: a failed, cancelled or skipped shard is not a pass, and `needs` waits
+  # for the shards of both legs, so one failing shard fails the check of both.
+  e2e:
+    name: e2e (PostgreSQL ${{ matrix.postgres }})
+    needs: shards
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        postgres: ["17", "18"]
+    steps:
+      - name: Require every shard to have succeeded
+        env:
+          SHARDS_RESULT: ${{ needs.shards.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$SHARDS_RESULT" != "success" ]]; then
+            echo "the e2e shards ended '$SHARDS_RESULT', not 'success'" >&2
+            exit 1
+          fi
