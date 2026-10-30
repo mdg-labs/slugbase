@@ -35,6 +35,8 @@ interface Problem {
 interface Folder {
   readonly id: string;
   readonly ownerId: string | null;
+  readonly owner?: { readonly accountId: string; readonly displayName: string } | null;
+  readonly shareSummary?: { readonly memberCount: number; readonly teams: readonly { readonly id: string; readonly name: string }[] } | null;
   readonly name: string;
   readonly icon: string;
   readonly color: number;
@@ -240,6 +242,8 @@ describe("createFolder", () => {
       expect(folder).toEqual({
         id: folder.id,
         ownerId: owner.account.id,
+        owner: null,
+        shareSummary: { memberCount: 0, teams: [] },
         name: "Reading List",
         icon: "folder",
         color: 1,
@@ -470,7 +474,7 @@ describe("listFolders", () => {
   );
 
   it(
-    "names the caller's own folders for scope all and scope mine alike",
+    "names the caller's own folders for scope all and scope mine, and none of another member's that is not shared with the caller for scope shared",
     async () => {
       const world = harness.serve();
       const { owner, member } = await setup(world);
@@ -479,7 +483,8 @@ describe("listFolders", () => {
 
       expect(await namesOf(world, owner, "?scope=all")).toEqual(["Owner's"]);
       expect(await namesOf(world, owner, "?scope=mine")).toEqual(["Owner's"]);
-      expect((await list(world, owner, "?scope=shared")).status).toBe(422);
+      expect(await namesOf(world, owner, "?scope=shared")).toEqual([]);
+      expect((await list(world, owner, "?scope=everyone")).status).toBe(422);
     },
     TEST_TIMEOUT_MS,
   );

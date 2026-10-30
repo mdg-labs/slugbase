@@ -24,6 +24,7 @@ let accountId: string;
 let otherId: string;
 let workspaceId: string;
 let hotBookmarkId: string;
+let sharedIds: { direct: string; team: string; folder: string };
 
 beforeAll(async () => {
   db = await createTestDatabase();
@@ -47,6 +48,25 @@ beforeAll(async () => {
     VALUES (${hotBookmarkId}, ${workspaceId}, ${accountId}, 'https://example.com/hot', 'https://example.com/hot', 'example.com', 'Hot', 'mail', true),
            (${freshId()}, ${workspaceId}, ${otherId}, 'https://example.com/hot2', 'https://example.com/hot2', 'example.com', 'Hot 2', 'mail', true)`);
   await asSystem(db, (tx) => tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${workspaceId}, ${accountId}, 'mail', ${hotBookmarkId})`);
+  // The other member shares three bookmarks with the caller, one by each kind of route, and has a fourth with the same slug that is shared with nobody.
+  sharedIds = { direct: freshId(), team: freshId(), folder: freshId() };
+  const team = freshId();
+  const folder = freshId();
+  await asSystem(db, async (tx) => {
+    await tx`
+      INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
+      VALUES (${sharedIds.direct}, ${workspaceId}, ${otherId}, 'https://example.com/d', 'https://example.com/d', 'example.com', 'Direct', 'shared-slug', true),
+             (${sharedIds.team}, ${workspaceId}, ${otherId}, 'https://example.com/t', 'https://example.com/t', 'example.com', 'Team', 'shared-team', true),
+             (${sharedIds.folder}, ${workspaceId}, ${otherId}, 'https://example.com/f', 'https://example.com/f', 'example.com', 'Folder', 'shared-folder', true),
+             (${freshId()}, ${workspaceId}, ${otherId}, 'https://example.com/u', 'https://example.com/u', 'example.com', 'Unshared', 'shared-none', true)`;
+    await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${team}, ${workspaceId}, 'Readers')`;
+    await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${team}, ${accountId})`;
+    await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${folder}, ${workspaceId}, ${otherId}, 'Shared folder')`;
+    await tx`INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES (${workspaceId}, ${folder}, ${sharedIds.folder})`;
+    await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${folder}, ${accountId}, ${otherId})`;
+    await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${sharedIds.direct}, ${accountId}, ${otherId})`;
+    await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_team_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${sharedIds.team}, ${team}, ${otherId})`;
+  });
   // Many small workspaces, each with one member, one forwarding bookmark with the same slug and one remembered choice, so no workspace dominates a table.
   await asSystem(db, (tx) => tx`
     INSERT INTO workspaces (id, name)
@@ -64,7 +84,22 @@ beforeAll(async () => {
     SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${accountId}, 'mail', ('00000001-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid
     FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`);
   // A running instance has its tables vacuumed and analysed, and a vacuum marks all-visible each page whose rows every transaction can see, so an Index Only Scan answers for the entries on those pages from the index alone: the fixture vacuums until the map covers every page, so the map is part of the fixture.
-  await vacuumUntilAllVisible(db, ["bookmarks", "slug_preferences"]);
+  // Each of them also shares its bookmark and a folder of it with another member, so the share tables hold the rows of many workspaces and no workspace dominates them.
+  await asSystem(db, async (tx) => {
+    const small = (n: string) => `('00000000-0000-7000-8000-' || lpad(${n}::text, 12, '0'))::uuid`;
+    await tx`INSERT INTO workspace_members (workspace_id, account_id, role) SELECT ${tx.unsafe(small("n"))}, ${otherId}, 'member' FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+    await tx`
+      INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+      SELECT gen_random_uuid(), ${tx.unsafe(small("n"))}, ('00000001-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${otherId}, ${accountId} FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+    await tx`INSERT INTO folders (id, workspace_id, owner_id, name) SELECT ${tx.unsafe(small("n"))}, ${tx.unsafe(small("n"))}, ${accountId}, 'Small folder' FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+    await tx`
+      INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id)
+      SELECT ${tx.unsafe(small("n"))}, ${tx.unsafe(small("n"))}, ('00000001-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+    await tx`
+      INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by)
+      SELECT gen_random_uuid(), ${tx.unsafe(small("n"))}, ${tx.unsafe(small("n"))}, ${otherId}, ${accountId} FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+  });
+  await vacuumUntilAllVisible(db, ["bookmarks", "slug_preferences", "bookmark_shares", "folder_bookmarks", "folder_shares"]);
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
@@ -100,7 +135,7 @@ function inTenant<T>(work: Parameters<typeof db.tenant.withTenant<T>>[1]): Promi
   return db.tenant.withTenant({ accountId, workspaceId, requestId: "go-plan-test" }, work);
 }
 
-describe.each(["mail", "slug-15", "slug-5"])("the candidate scan of the slug %s on a workspace of 50 000 bookmarks", (slug) => {
+describe.each(["mail", "slug-15", "slug-5", "shared-slug", "shared-team", "shared-folder", "shared-none"])("the candidate scan of the slug %s on a workspace of 50 000 bookmarks", (slug) => {
   it("is an Index Only Scan of bookmarks_slug_idx with the slug in its index condition and no sequential scan anywhere", async () => {
     const statement = await inTenant((tx) => Promise.resolve(new PgDialect({ casing: "snake_case" }).sqlToQuery(candidatesStatement(tx, { slug, accountId }))));
 
@@ -112,6 +147,12 @@ describe.each(["mail", "slug-15", "slug-5"])("the candidate scan of the slug %s 
     expect(scans[0]?.["Index Cond"]).toContain(`slug = '${slug}'::text`);
     expect(scans[0]?.["Index Cond"]).toContain("workspace_id");
     expect(nodes.filter((node) => node["Relation Name"] === "bookmarks").map((node) => node["Node Type"])).toEqual(["Index Only Scan"]);
+    // The shares are probed for the candidates only: each by its index, with the candidate's identifier or the account as the condition, never read as a whole.
+    const probes = nodes.filter((node) => node["Relation Name"] === "bookmark_shares" || node["Relation Name"] === "folder_bookmarks" || node["Relation Name"] === "folder_shares");
+    expect(probes.length).toBeGreaterThan(0);
+    for (const node of probes) {
+      expect(node["Node Type"], `${node["Relation Name"] ?? ""} ${node["Node Type"]}`).toMatch(/Index/);
+    }
   });
 });
 
@@ -136,6 +177,22 @@ describe("the candidates on a workspace of 50 000 bookmarks", () => {
       const found = await inTenant((tx) => goRepository(tx).candidates({ slug, accountId }));
       expect(found, slug).toEqual({ candidates: [], preferredId: undefined });
     }
+  });
+});
+
+describe("the candidates that others share with the caller on a workspace of 50 000 bookmarks", () => {
+  it.each([
+    ["shared-slug", "direct", "direct"],
+    ["shared-team", "team", "team"],
+    ["shared-folder", "folder", "folder"],
+  ] as const)("find the bookmark of the slug %s with the route that gives it", async (slug, key, access) => {
+    const found = await inTenant((tx) => goRepository(tx).candidates({ slug, accountId }));
+
+    expect(found.candidates).toEqual([expect.objectContaining({ id: sharedIds[key], ownerId: otherId, access })]);
+  });
+
+  it("find nothing for a slug of the other member's bookmark that is shared with nobody", async () => {
+    expect(await inTenant((tx) => goRepository(tx).candidates({ slug: "shared-none", accountId }))).toEqual({ candidates: [], preferredId: undefined });
   });
 });
 

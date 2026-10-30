@@ -40,7 +40,10 @@
       "loading": "Loading the folder list",
       "loadFailed": "The folder list could not be loaded.",
       "retry": "Reload folders",
-      "empty": "You have no folders yet"
+      "empty": "You have no folders yet",
+      "shared": "Shared with you",
+      "sharedBy": "{name}, shared by {owner}",
+      "sharedLoadFailed": "The folders shared with you could not be loaded."
     }
   },
   "home": {
@@ -77,6 +80,11 @@
     "tags": {
       "title": "Most used tags",
       "empty": "The tags you put on bookmarks appear here."
+    },
+    "sharing": {
+      "title": "Sharing",
+      "withYou": "Shared with you",
+      "byYou": "Shared by you"
     },
     "empty": {
       "title": "Save your first bookmark",
@@ -121,7 +129,11 @@
       "retry": "Try again",
       "empty": {
         "title": "No bookmarks yet",
-        "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself."
+        "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself.",
+        "sharedWithMe": {
+          "title": "Nothing has been shared with you yet",
+          "description": "Bookmarks that other members share with you, directly, through a team or through a folder, appear here."
+        }
       },
       "noMatch": "No bookmarks match these filters",
       "search": {
@@ -177,7 +189,9 @@
       "scope": {
         "label": "Scope",
         "all": "All",
-        "mine": "Mine"
+        "mine": "Mine",
+        "sharedWithMe": "Shared with me",
+        "sharedByMe": "Shared by me"
       },
       "sort": {
         "label": "Sort by",
@@ -211,6 +225,14 @@
       "opens": "{count, plural, one {# open} other {# opens}}",
       "usage": "{count, plural, one {# open} other {# opens}} · {when}",
       "edit": "Edit",
+      "open": "Open",
+      "copyAddress": "Copy address",
+      "addressCopied": "Address copied.",
+      "addressCopyFailed": "The address could not be copied. Copy it from the bookmark’s link instead.",
+      "shared": {
+        "marker": "Shared",
+        "formerMember": "Former member"
+      },
       "share": "Share",
       "unpin": "Unpin",
       "pin": {
@@ -240,6 +262,14 @@
       "label": "Selected bookmarks",
       "count": "{count, plural, one {# selected} other {# selected}}",
       "clear": "Clear selection",
+      "openAll": {
+        "action": "Open all",
+        "partial": "Opened {opened, number} of {selected, number}. The others are not loaded in the list or have no web address."
+      },
+      "limited": {
+        "note": "{count, plural, one {# shared bookmark is selected, so only Open all is available.} other {# shared bookmarks are selected, so only Open all is available.}}",
+        "reason": "Bookmarks shared with you can be opened but not changed. Deselect them to use this action."
+      },
       "pin": "Pin",
       "unpin": "Unpin",
       "addToFolder": "Add to folder",
@@ -269,7 +299,8 @@
         "removeFromFolder": "{count, plural, one {# bookmark removed from “{folder}”.} other {# bookmarks removed from “{folder}”.}}",
         "addTags": "{count, plural, one {Tags added to # bookmark.} other {Tags added to # bookmarks.}}",
         "removeTags": "{count, plural, one {Tags removed from # bookmark.} other {Tags removed from # bookmarks.}}",
-        "undone": "{count, plural, one {# bookmark put back in “{folder}”.} other {# bookmarks put back in “{folder}”.}}"
+        "undone": "{count, plural, one {# bookmark put back in “{folder}”.} other {# bookmarks put back in “{folder}”.}}",
+        "share": "{count, plural, one {# bookmark shared with {name}.} other {# bookmarks shared with {name}.}}"
       },
       "skipped": "{count, plural, one {# bookmark was skipped because it no longer exists or can’t be changed.} other {# bookmarks were skipped because they no longer exist or can’t be changed.}}",
       "error": {
@@ -283,7 +314,9 @@
         "removeTags": "The tags could not be removed. Nothing was changed. Try again in a moment.",
         "folderGone": "That folder no longer exists. Nothing was changed.",
         "tagsGone": "One of those tags no longer exists. Nothing was changed.",
-        "undo": "The bookmarks could not be put back in the folder. Try again in a moment."
+        "undo": "The bookmarks could not be put back in the folder. Try again in a moment.",
+        "share": "The bookmarks could not be shared. Nothing was changed. Try again in a moment.",
+        "shareTargetGone": "{name} is no longer a member or team of this workspace. Nothing was changed."
       },
       "link": {
         "close": "Close",
@@ -319,6 +352,31 @@
           "skipped": "{count, plural, one {# bookmark will be skipped because it no longer exists or can’t be changed.} other {# bookmarks will be skipped because they no longer exist or can’t be changed.}}",
           "tagCount": "{bookmarkCount, plural, one {# bookmark} other {# bookmarks}}, {added, number} new"
         }
+      },
+      "share": {
+        "action": "Share",
+        "close": "Close",
+        "cancel": "Cancel",
+        "retry": "Try again",
+        "title": "Share {count, plural, one {# bookmark} other {# bookmarks}}",
+        "description": "Choose the member or team who can read these bookmarks. A share gives read access only.",
+        "label": "Share with",
+        "placeholder": "Search members and teams",
+        "empty": "No member or team matches.",
+        "loading": "Loading members and teams",
+        "loadFailed": "Members and teams could not be loaded.",
+        "members": "Members",
+        "teams": "Teams",
+        "preview": {
+          "title": "Who can read them",
+          "loading": "Working out who these bookmarks will be shared with",
+          "error": "The preview could not be loaded.",
+          "summary": "{count, plural, one {# bookmark will be shared with {name}.} other {# bookmarks will be shared with {name}.}}",
+          "added": "{added, plural, one {# new share is made.} other {# new shares are made.}}",
+          "audience": "{count, plural, one {# member can read them.} other {# members can read them.}}",
+          "none": "None of these bookmarks can be shared.",
+          "skipped": "{count, plural, one {# bookmark will be skipped because it no longer exists or can’t be changed.} other {# bookmarks will be skipped because they no longer exist or can’t be changed.}}"
+        }
       }
     },
     "modal": {
@@ -327,6 +385,10 @@
       "save": "Save",
       "more": "More",
       "loading": "Loading the bookmark",
+      "shared": {
+        "title": "This bookmark is shared with you",
+        "description": "Its owner changes it. You can open it and copy its address from the list."
+      },
       "retry": "Try again",
       "saved": {
         "created": "Bookmark saved.",
@@ -475,6 +537,11 @@
       "count": "Bookmarks",
       "updated": "Recently updated"
     },
+    "scope": {
+      "label": "Folders to show",
+      "mine": "Mine",
+      "shared": "Shared with me"
+    },
     "list": {
       "label": "Folders",
       "loading": "Loading the folders",
@@ -490,12 +557,17 @@
       "table": {
         "name": "Name",
         "bookmarks": "Bookmarks",
+        "sharing": "Sharing",
         "updated": "Updated",
         "actions": "Actions"
       },
       "empty": {
         "title": "No folders yet",
-        "description": "Folders group related bookmarks, like everything for one project or one topic. A bookmark can be filed in several folders, and deleting a folder never deletes the bookmarks in it."
+        "description": "Folders group related bookmarks, like everything for one project or one topic. A bookmark can be filed in several folders, and deleting a folder never deletes the bookmarks in it.",
+        "shared": {
+          "title": "Nothing has been shared with you yet",
+          "description": "Folders that other members share with you, directly or through a team, appear here. You can read them and the bookmarks in them, but only their owner can change them."
+        }
       }
     },
     "actions": {
@@ -504,6 +576,10 @@
       "restyle": "Change icon and colour",
       "share": "Share settings",
       "delete": "Delete"
+    },
+    "sharing": {
+      "received": "Shared with you",
+      "receivedBy": "Shared with you by {owner}"
     },
     "delete": {
       "title": "Delete “{name}”?",
@@ -2096,6 +2172,7 @@
         "error": {
           "teamGone": "A team you chose no longer exists. Remove it and try again.",
           "memberGone": "This person is no longer a member of this workspace.",
+          "changedElsewhere": "A team was changed somewhere else, so nothing in it was overwritten. Save again to apply your changes to its latest members.",
           "unavailable": "The teams could not be saved right now. Try again in a moment.",
           "partlySaved": "Some of your changes were saved, but not all of them. Save again to send the rest."
         }

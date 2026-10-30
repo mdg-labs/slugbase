@@ -590,8 +590,11 @@ export function createServer(options: CreateServerOptions): Server {
     },
   });
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
+  // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
+  const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);
+  const upgradeCheck = options.entitlements === undefined && adapters.entitlements.available ? createEntitlementUpgradeCheck(entitlementService) : noUpgradeAvailable;
   // So are the bookmarks of the active workspace: created under the workspace's `bookmarks.max` (the ceiling is read from the engine, the count is taken in the database) and read back by their owner.
-  builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), cursorSecret: config.SESSION_SECRET, usage, egress: adapters.egress, ...(options.metadataBudgetMs === undefined ? {} : { metadataBudgetMs: options.metadataBudgetMs }) }));
+  builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), sharingEntitlements: entitlementCheck, upgradeAvailable: upgradeCheck, cursorSecret: config.SESSION_SECRET, usage, egress: adapters.egress, ...(options.metadataBudgetMs === undefined ? {} : { metadataBudgetMs: options.metadataBudgetMs }) }));
   // The icon of a host the bookmarks point at, from the deployment-wide cache, queuing its fetch for a host the caller can read a bookmark on.
   builtInRoutes.push(...faviconRoutes());
   // And the tags of the member who makes them: created, listed with their counts, renamed and deleted by their owner alone.
@@ -605,12 +608,9 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...goPreferenceRoutes({ cursorSecret: config.SESSION_SECRET }));
   // And the search across the member's readable bookmarks, own folders and own tags (the palette's query).
   builtInRoutes.push(...searchRoutes());
-  // And the member's dashboard: their own counts, quick access, pinned bookmarks, top tags and Getting started checklist in one read.
-  builtInRoutes.push(...dashboardRoutes());
+  // And the member's dashboard: their own counts, quick access (shared bookmarks included), pinned bookmarks, top tags, sharing counts and Getting started checklist in one read.
+  builtInRoutes.push(...dashboardRoutes({ sharingEntitlements: entitlementCheck }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
-  // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
-  const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);
-  const upgradeCheck = options.entitlements === undefined && adapters.entitlements.available ? createEntitlementUpgradeCheck(entitlementService) : noUpgradeAvailable;
   // The CE instance admin's operations are part of the server and mounted in every composition: the policy admits no one on a deployment
   // where no account holds the flag (Q44), so a composition needs no switch of its own.
   builtInRoutes.push(

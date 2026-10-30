@@ -1,3 +1,4 @@
+import { LimitedEntitlementSource } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
@@ -451,6 +452,256 @@ describe("the request", () => {
     }
 
     expect({ rows: await rowsOf(other.workspaceId), counter: await counterOf(other.workspaceId) }).toEqual(before);
+  });
+});
+
+const PREVIEW = `${BULK}/preview`;
+const TEAMS = "/api/v1/teams";
+
+interface ShareRow {
+  readonly bookmark_id: string;
+  readonly target_account_id: string | null;
+  readonly target_team_id: string | null;
+  readonly granted_by: string | null;
+}
+
+async function sharesOf(workspaceId: string): Promise<ShareRow[]> {
+  return database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<ShareRow[]>`SELECT bookmark_id, target_account_id, target_team_id, granted_by FROM bookmark_shares WHERE workspace_id = ${workspaceId} ORDER BY bookmark_id, target_account_id, target_team_id`;
+  });
+}
+
+async function shareAuditOf(workspaceId: string): Promise<AuditRow[]> {
+  return database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<AuditRow[]>`
+      SELECT action, actor_type, actor_account_id, actor_token_id, metadata, audit_events::text AS row FROM audit_events
+      WHERE workspace_id = ${workspaceId} AND action LIKE 'share.%' ORDER BY created_at, id`;
+  });
+}
+
+/** A server whose workspaces hold every entitlement, the sharing ones and `teams.manage` included. */
+const servingShares = () => harness.serve({ env: relaxed, entitlementSource: new LimitedEntitlementSource() });
+
+const previewOf = (world: World, as: Person, body: unknown) => send(world, "POST", PREVIEW, { cookie: as.cookie }, body);
+
+interface Preview extends Result {
+  readonly tags: readonly unknown[];
+  readonly audience: { readonly kind: string; readonly id: string; readonly name: string; readonly memberCount: number; readonly added: number } | null;
+}
+
+/** A workspace of an owner and two members, and one of a stranger; the first member's bookmark is shared with the owner, which makes it one the owner may read and not share. */
+async function sharingSetup(world: World) {
+  const owner = await harness.person(world);
+  const reader = await harness.person(world);
+  const sharer = await harness.person(world);
+  const stranger = await harness.person(world);
+  const shared = await harness.workspaceOf([
+    { person: owner, role: "owner" },
+    { person: reader, role: "member" },
+    { person: sharer, role: "member" },
+  ]);
+  const other = await harness.workspaceOf([{ person: stranger, role: "owner" }]);
+  const team = await send(world, "POST", TEAMS, { cookie: owner.cookie }, { name: "Design" });
+  expect(team.status).toBe(201);
+  const teamId = ((await team.json()) as { id: string }).id;
+  expect((await send(world, "PUT", `${TEAMS}/${teamId}/members`, { cookie: owner.cookie }, { accountIds: [reader.account.id, owner.account.id] })).status).toBe(200);
+  return { owner, reader, sharer, stranger, shared, other, teamId };
+}
+
+describe("bulk share", () => {
+  it("shares the caller's own bookmarks with a member, skips another member's, a plan-archived one, another workspace's and an unknown one as not found, and the member can read exactly the shared ones", async () => {
+    const world = servingShares();
+    const { owner, reader, sharer, stranger, shared, other } = await sharingSetup(world);
+    const own = await seed(shared.workspaceId, owner, 3);
+    const archived = await seed(shared.workspaceId, owner, 1, { archived: true });
+    const theirs = await seed(shared.workspaceId, sharer, 1);
+    const ofB = await seed(other.workspaceId, stranger, 1);
+    const named = [...own, ...archived, ...theirs, ...ofB, UNKNOWN_ID];
+
+    const result = await done(await bulk(world, owner, { action: "share", ids: named, accountId: reader.account.id }));
+
+    expect(result).toEqual({ requested: 7, affected: 3, skipped: 4, skippedReasons: { not_owner: 0, not_found: 4 } });
+    expect(await sharesOf(shared.workspaceId)).toEqual(own.toSorted().map((bookmarkId) => ({ bookmark_id: bookmarkId, target_account_id: reader.account.id, target_team_id: null, granted_by: owner.account.id })));
+    expect(await sharesOf(other.workspaceId)).toEqual([]);
+    for (const id of own) {
+      expect((await send(world, "GET", `${BOOKMARKS}/${id}`, { cookie: reader.cookie })).status).toBe(200);
+    }
+    for (const id of [...archived, ...theirs]) {
+      expect((await send(world, "GET", `${BOOKMARKS}/${id}`, { cookie: reader.cookie })).status).toBe(404);
+    }
+  });
+
+  it("records one share.bulk_granted event with the number of shares and the target, no event per bookmark and none for a repeat that made no share, and nothing about the bookmarks", async () => {
+    const world = servingShares();
+    const { owner, reader, shared } = await sharingSetup(world);
+    const own = await seed(shared.workspaceId, owner, 4, { slug: "private-slug" });
+
+    expect(await done(await bulk(world, owner, { action: "share", ids: own.slice(0, 3), accountId: reader.account.id }))).toMatchObject({ affected: 3 });
+    expect(await done(await bulk(world, owner, { action: "share", ids: own.slice(0, 3), accountId: reader.account.id }))).toEqual({ requested: 3, affected: 3, skipped: 0, skippedReasons: { not_owner: 0, not_found: 0 } });
+    expect(await done(await bulk(world, owner, { action: "share", ids: own, accountId: reader.account.id }))).toMatchObject({ affected: 4 });
+
+    const events = await shareAuditOf(shared.workspaceId);
+    expect(events.map((event) => [event.action, event.actor_account_id, event.metadata])).toEqual([
+      ["share.bulk_granted", owner.account.id, { count: "3", targetKind: "member", targetId: reader.account.id, targetName: "Test account" }],
+      ["share.bulk_granted", owner.account.id, { count: "1", targetKind: "member", targetId: reader.account.id, targetName: "Test account" }],
+    ]);
+    expect(await sharesOf(shared.workspaceId)).toHaveLength(4);
+    for (const event of events) {
+      expect(event.row).not.toContain("A private title");
+      expect(event.row).not.toContain("example.com");
+      expect(event.row).not.toContain("private-slug");
+      for (const id of own) {
+        expect(event.row).not.toContain(id);
+      }
+    }
+  });
+
+  it("shares with a team, and the members of the team read the bookmarks", async () => {
+    const world = servingShares();
+    const { owner, reader, shared, teamId } = await sharingSetup(world);
+    const own = await seed(shared.workspaceId, owner, 2);
+
+    expect(await done(await bulk(world, owner, { action: "share", ids: own, teamId }))).toMatchObject({ affected: 2, skipped: 0 });
+
+    expect((await sharesOf(shared.workspaceId)).map((share) => [share.target_account_id, share.target_team_id])).toEqual([[null, teamId], [null, teamId]]);
+    expect((await shareAuditOf(shared.workspaceId)).map((event) => event.metadata)).toEqual([{ count: "2", targetKind: "team", targetId: teamId, targetName: "Design" }]);
+    expect((await send(world, "GET", `${BOOKMARKS}/${own[0] ?? ""}`, { cookie: reader.cookie })).status).toBe(200);
+  });
+
+  it("shares the bookmarks a filter matches", async () => {
+    const world = servingShares();
+    const { owner, reader, shared } = await sharingSetup(world);
+    const pinned = await seed(shared.workspaceId, owner, 2, { pinned: true });
+    await seed(shared.workspaceId, owner, 2);
+
+    expect(await done(await bulk(world, owner, { action: "share", filter: { pinned: true }, accountId: reader.account.id }))).toMatchObject({ requested: 2, affected: 2 });
+
+    expect((await sharesOf(shared.workspaceId)).map((share) => share.bookmark_id)).toEqual(pinned.toSorted());
+  });
+
+  it("refuses a selection that holds a bookmark shared with the caller as a whole with 403: nothing is shared, nothing is recorded, and the recipient's access is as it was", async () => {
+    const world = servingShares();
+    const { owner, reader, sharer, shared } = await sharingSetup(world);
+    const own = await seed(shared.workspaceId, owner, 2);
+    const [recipientOnly] = await seed(shared.workspaceId, sharer, 1);
+    expect((await send(world, "POST", `${BOOKMARKS}/${recipientOnly ?? ""}/shares`, { cookie: sharer.cookie }, { accountId: owner.account.id })).status).toBe(201);
+    const before = await sharesOf(shared.workspaceId);
+    expect(before).toHaveLength(1);
+    const eventsBefore = await shareAuditOf(shared.workspaceId);
+
+    const byIds = await bulk(world, owner, { action: "share", ids: [...own, recipientOnly], accountId: reader.account.id });
+    const byFilter = await bulk(world, owner, { action: "share", filter: { scope: "all" }, accountId: reader.account.id });
+    const preview = await previewOf(world, owner, { action: "share", ids: [...own, recipientOnly], accountId: reader.account.id });
+
+    for (const refused of [byIds, byFilter, preview]) {
+      expect(refused.status).toBe(403);
+      expect((await problemOf(refused)).code).toBe("forbidden");
+    }
+    expect(await sharesOf(shared.workspaceId)).toEqual(before);
+    expect(await shareAuditOf(shared.workspaceId)).toEqual(eventsBefore);
+    for (const id of [...own, recipientOnly]) {
+      expect((await send(world, "GET", `${BOOKMARKS}/${id ?? ""}`, { cookie: reader.cookie })).status).toBe(404);
+    }
+  });
+
+  it("refuses the caller as the member, an account that is no member of the workspace, another workspace's member and a team of another workspace with 422 whatever the bookmarks, and writes nothing", async () => {
+    const world = servingShares();
+    const { owner, stranger, shared, other } = await sharingSetup(world);
+    const own = await seed(shared.workspaceId, owner, 1);
+    const foreignTeam = await send(world, "POST", TEAMS, { cookie: stranger.cookie }, { name: "Elsewhere" });
+    expect(foreignTeam.status).toBe(201);
+    const foreignTeamId = ((await foreignTeam.json()) as { id: string }).id;
+
+    const refusals = [
+      { body: { action: "share", ids: own, accountId: owner.account.id }, error: { path: "accountId", code: "cannot_share_with_self" } },
+      { body: { action: "share", ids: own, accountId: stranger.account.id }, error: { path: "accountId", code: "unknown_member" } },
+      { body: { action: "share", ids: [UNKNOWN_ID], accountId: UNKNOWN_ID }, error: { path: "accountId", code: "unknown_member" } },
+      { body: { action: "share", ids: own, teamId: foreignTeamId }, error: { path: "teamId", code: "unknown_team" } },
+      { body: { action: "share", filter: {}, teamId: UNKNOWN_ID }, error: { path: "teamId", code: "unknown_team" } },
+    ];
+    for (const { body, error } of refusals) {
+      for (const send_ of [(request: unknown) => bulk(world, owner, request), (request: unknown) => previewOf(world, owner, request)]) {
+        const refused = await send_(body);
+        expect(refused.status).toBe(422);
+        const problem = await problemOf(refused);
+        expect(problem.code).toBe("validation_failed");
+        expect(problem.errors).toEqual([error]);
+      }
+    }
+
+    expect(await sharesOf(shared.workspaceId)).toEqual([]);
+    expect(await sharesOf(other.workspaceId)).toEqual([]);
+    expect(await shareAuditOf(shared.workspaceId)).toEqual([]);
+  });
+
+  it.each([
+    ["no target", { action: "share", ids: [UNKNOWN_ID] }],
+    ["a member and a team", { action: "share", ids: [UNKNOWN_ID], accountId: UNKNOWN_ID, teamId: UNKNOWN_ID }],
+    ["an identifier that is not one", { action: "share", ids: [UNKNOWN_ID], accountId: "not-an-identifier" }],
+    ["a member on pin", { action: "pin", ids: [UNKNOWN_ID], accountId: UNKNOWN_ID }],
+    ["a team on delete", { action: "delete", ids: [UNKNOWN_ID], teamId: UNKNOWN_ID }],
+    ["tags on share", { action: "share", ids: [UNKNOWN_ID], accountId: UNKNOWN_ID, tagIds: [UNKNOWN_ID] }],
+    ["a folder on share", { action: "share", ids: [UNKNOWN_ID], accountId: UNKNOWN_ID, folderId: UNKNOWN_ID }],
+  ])("answers 422 validation_failed for %s", async (_name, body) => {
+    const world = servingShares();
+    const { owner } = await sharingSetup(world);
+
+    const refused = await bulk(world, owner, body);
+
+    expect(refused.status).toBe(422);
+    expect((await problemOf(refused)).code).toBe("validation_failed");
+  });
+
+  it("previews who the bookmarks would be shared with without writing: the counts, the target and how many get a share", async () => {
+    const world = servingShares();
+    const { owner, reader, sharer, shared, teamId } = await sharingSetup(world);
+    const own = await seed(shared.workspaceId, owner, 3);
+    const theirs = await seed(shared.workspaceId, sharer, 1);
+    expect(await done(await bulk(world, owner, { action: "share", ids: own.slice(0, 1), teamId }))).toMatchObject({ affected: 1 });
+    const before = { shares: await sharesOf(shared.workspaceId), events: await shareAuditOf(shared.workspaceId) };
+
+    const team = (await (await previewOf(world, owner, { action: "share", ids: [...own, ...theirs], teamId })).json()) as Preview;
+    const member = (await (await previewOf(world, owner, { action: "share", filter: {}, accountId: reader.account.id })).json()) as Preview;
+
+    expect(team).toEqual({
+      requested: 4,
+      affected: 3,
+      skipped: 1,
+      skippedReasons: { not_owner: 0, not_found: 1 },
+      tags: [],
+      audience: { kind: "team", id: teamId, name: "Design", memberCount: 1, added: 2 },
+    });
+    expect(member).toMatchObject({ requested: 3, affected: 3, audience: { kind: "member", id: reader.account.id, name: "Test account", memberCount: 1, added: 3 } });
+    expect({ shares: await sharesOf(shared.workspaceId), events: await shareAuditOf(shared.workspaceId) }).toEqual(before);
+  });
+
+  it("keeps the preview of adding tags as it was, with a null audience", async () => {
+    const world = servingShares();
+    const { owner } = await sharingSetup(world);
+    const created = await send(world, "POST", "/api/v1/tags", { cookie: owner.cookie }, { name: "alpha" });
+    expect(created.status).toBe(201);
+    const tagId = ((await created.json()) as { id: string }).id;
+
+    const previewed = (await (await previewOf(world, owner, { action: "add_tags", ids: [UNKNOWN_ID], tagIds: [tagId] })).json()) as Preview;
+
+    expect(previewed).toMatchObject({ requested: 1, affected: 0, audience: null, tags: [{ id: tagId, name: "alpha", bookmarkCount: 0, added: 0 }] });
+    expect((await previewOf(world, owner, { action: "add_tags", ids: [UNKNOWN_ID], tagIds: [tagId], accountId: UNKNOWN_ID })).status).toBe(422);
+    expect((await previewOf(world, owner, { action: "share", ids: [UNKNOWN_ID], tagIds: [tagId], accountId: UNKNOWN_ID })).status).toBe(422);
+  });
+
+  it("answers 403 token_scope to a token that may only read, and shares nothing", async () => {
+    const world = servingShares();
+    const { owner, reader, shared } = await sharingSetup(world);
+    const own = await seed(shared.workspaceId, owner, 1);
+    const token = await harness.token(shared.workspaceId, owner, "read");
+
+    const refused = await send(world, "POST", BULK, bearer(token), { action: "share", ids: own, accountId: reader.account.id });
+
+    expect(refused.status).toBe(403);
+    expect((await problemOf(refused)).code).toBe("token_scope");
+    expect(await sharesOf(shared.workspaceId)).toEqual([]);
   });
 });
 

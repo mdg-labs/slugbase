@@ -34,6 +34,43 @@ async function asSystem<R extends object>(db: TestDatabase, query: string): Prom
   return result.rows;
 }
 
+/** The slugs of the demo workspace collide across the two members and are shared, which the member's suggestions name own first (doc 02 sections 6.2, 6.3 and 8). */
+async function expectSlugsAndShares(db: TestDatabase): Promise<void> {
+  const [admin, member] = instance.accounts;
+  const [workspace] = instance.workspaces;
+  if (admin === undefined || member === undefined || workspace === undefined) {
+    throw new Error("the demo instance has two accounts and a workspace");
+  }
+  expect(
+    await asSystem<{ slug: string; owners: number; forwarding: number }>(
+      db,
+      `SELECT slug, count(DISTINCT owner_id)::int AS owners, count(*) FILTER (WHERE forwarding)::int AS forwarding FROM bookmarks WHERE workspace_id = '${workspace.id}' AND slug IS NOT NULL GROUP BY slug ORDER BY slug`,
+    ),
+  ).toEqual([
+    { slug: "docs", owners: 2, forwarding: 2 },
+    { slug: "mail", owners: 2, forwarding: 2 },
+    { slug: "standup", owners: 1, forwarding: 1 },
+    { slug: "wiki", owners: 2, forwarding: 2 },
+  ]);
+  expect(
+    await asSystem<{ folders: number; filed: number; folder_shares: number; bookmark_shares: number }>(
+      db,
+      `SELECT (SELECT count(*)::int FROM folders WHERE workspace_id = '${workspace.id}') AS folders, (SELECT count(*)::int FROM folder_bookmarks WHERE workspace_id = '${workspace.id}') AS filed,
+              (SELECT count(*)::int FROM folder_shares WHERE workspace_id = '${workspace.id}') AS folder_shares, (SELECT count(*)::int FROM bookmark_shares WHERE workspace_id = '${workspace.id}') AS bookmark_shares`,
+    ),
+  ).toEqual([{ folders: 1, filed: 2, folder_shares: 1, bookmark_shares: 1 }]);
+  const suggestionsFor = (accountId: string, prefix: string) =>
+    db.app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspace.id}, true)`;
+      return tx<{ slug: string; access: string }[]>`SELECT slug, access FROM sys_go_suggest(${prefix}) ORDER BY access <> 'owner', slug`;
+    });
+  expect(await suggestionsFor(member.id, "d")).toEqual([{ slug: "docs", access: "owner" }]);
+  expect(await suggestionsFor(member.id, "m")).toEqual([{ slug: "mail", access: "owner" }, { slug: "mail", access: "folder" }]);
+  expect(await suggestionsFor(member.id, "s")).toEqual([{ slug: "standup", access: "folder" }]);
+  expect(await suggestionsFor(member.id, "w")).toEqual([{ slug: "wiki", access: "owner" }, { slug: "wiki", access: "direct" }]);
+  expect(await suggestionsFor(admin.id, "s")).toEqual([{ slug: "standup", access: "owner" }]);
+}
+
 describe("the seed script through psql as the migrator", () => {
   const database = useTestDatabase();
 
@@ -98,6 +135,7 @@ describe("the seed script through psql as the migrator", () => {
     expect(shapes?.unopened).toBeGreaterThan(1_000);
     expect(shapes?.duplicates).toBeGreaterThan(4);
     expect(shapes?.longest).toBe(300);
+    await expectSlugsAndShares(db);
   });
 
   it("leaves the demo workspace readable by its owner through row-level security", { timeout: HOOK_TIMEOUT_MS }, async () => {

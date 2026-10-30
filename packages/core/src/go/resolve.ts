@@ -1,8 +1,8 @@
 import { parseSlug } from "./slug.ts";
 
 // The resolution of a slug for a member (doc 02 sections 6.2 to 6.4, doc 05 section 4, Q25, doc 10 T1, T2 and T12). The candidates are the bookmarks of the
-// workspace of the transaction that have the slug, forward, are not plan-archived and that the member can read, which the store decides (today a bookmark
-// is readable by its owner; sharing, when it is built, widens the store's predicate and nothing here). The choice among them is made here, in the order of Q25: a
+// workspace of the transaction that have the slug, forward, are not plan-archived and that the member can read, which the store decides (a bookmark is readable
+// by its owner and by a member it is shared with, directly, through a team or through a folder, doc 02 section 8). The choice among them is made here, in the order of Q25: a
 // remembered preference that is still a candidate, then the member's own bookmark, then the one shared candidate, then the several shared candidates, which
 // the member picks from. Nothing is found for a slug outside the grammar, and a bookmark the member cannot read is never named, so a slug that exists only in
 // another workspace, or only as another member's private bookmark, resolves to nothing. A remembered choice that is no candidate is ignored, and the store forgets

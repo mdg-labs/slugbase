@@ -36,8 +36,9 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // forged, altered or foreign cursor is `400 bad_request`. GET, POST, PATCH and PUT answer the team's version as `ETag`. PATCH is a JSON Merge
 // Patch of the name and the description; `If-Match` is compared with the version under the team's row lock and a mismatch is `412
 // precondition_failed` with nothing written; without the header the patch applies. A patch that changes nothing answers 200 with the unchanged
-// `ETag`. PUT replaces the member set: every account must be a current member of the workspace (anything else is `422 validation_failed` with
-// nothing written), and the version does not move since it covers the name and the description. DELETE removes the team and its memberships; the
+// `ETag`. PUT replaces the member set under the same `If-Match` rule (the version covers the member set as well as the name and the description,
+// so a replacement that changes the set moves it and one that names the set the team has leaves it): every account must be a current member of
+// the workspace (anything else is `422 validation_failed` with nothing written). DELETE removes the team and its memberships; the
 // repeat is `404`.
 //
 // Each change and its audit event (`team.created`, `team.updated`, `team.deleted`, `team.members_changed`, which name the team and nothing about
@@ -218,11 +219,14 @@ export function teamRoutes({ cursorSecret }: TeamRoutesOptions): RouteBinding[] 
     }),
 
     route(replaceTeamMembersOperation).handle(async ({ params, body }, context) => {
-      const outcome = await acting(context, ({ store, audit }, request) => replaceTeamMembers({ store, audit }, { ...request, teamId: params.id, accountIds: body.accountIds }));
+      const expectedVersions = acceptedVersions(context.req.header("if-match"));
+      const outcome = await acting(context, ({ store, audit }, request) => replaceTeamMembers({ store, audit }, { ...request, teamId: params.id, accountIds: body.accountIds, expectedVersions }));
       switch (outcome.kind) {
         case "replaced":
         case "unchanged":
           return { status: 200, ...withEntityTag(outcome.team) };
+        case "stale":
+          throw new ProblemError("precondition_failed", STALE_VERSION);
         case "unknown_members":
           throw new ProblemError("validation_failed", NOT_MEMBERS, { errors: [{ path: "accountIds", code: "unknown_member" }] });
         case "not_found":

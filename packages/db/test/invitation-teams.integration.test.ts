@@ -1,7 +1,9 @@
 import type { InvitationAcceptResult } from "@slugbase/core";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createAuthStore, invitationAcceptanceRepository, type AuthStore, type NewInvitationAccount } from "../src/index.ts";
+import { createAuthStore, invitationAcceptanceRepository, teamRepository, type AuthStore, type NewInvitationAccount } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
+import { tenantHandle } from "../src/tenant.ts";
 import { asSystem, freshId, freshToken, seedAccount } from "./support/auth-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
@@ -105,6 +107,18 @@ async function teamsOf(accountId: string): Promise<string[]> {
   return rows.map((row) => row.team_id);
 }
 
+async function versionOf(teamId: string): Promise<number> {
+  const rows = await asSystem(db, (tx) => tx<{ version: number }[]>`SELECT version FROM teams WHERE id = ${teamId}`);
+  return rows[0]?.version ?? -1;
+}
+
+/** Replaces the members of a team as the owner of the workspace does, against the versions given. */
+function replaceMembers(workspaceId: string, owner: string, teamId: string, accountIds: string[], expectedVersions: readonly number[]) {
+  return db.tenant.withTenant({ accountId: owner, workspaceId, requestId: "invitation-teams-test" }, (tx) =>
+    teamRepository(tx).replaceMembers({ teamId, accountIds, expectedVersions }),
+  );
+}
+
 async function roleOf(workspaceId: string, accountId: string): Promise<string | undefined> {
   const rows = await asSystem(db, (tx) => tx<{ role: string }[]>`SELECT role::text AS role FROM workspace_members WHERE workspace_id = ${workspaceId} AND account_id = ${accountId}`);
   return rows[0]?.role;
@@ -171,6 +185,16 @@ async function waitingPids(): Promise<number[]> {
     SELECT DISTINCT l.pid FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
     WHERE NOT l.granted AND s.datname = current_database() ORDER BY l.pid`;
   return rows.map((row) => row.pid);
+}
+
+async function waitUntilSomeoneWaits(what: string): Promise<void> {
+  const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+  while ((await waitingPids()).length < 1) {
+    if (Date.now() > deadline) {
+      throw new Error(`${what} never waited for a lock`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
 }
 
 async function waitUntilBlockedBy(holderPid: number, what: string): Promise<void> {
@@ -309,4 +333,189 @@ describe("sys_invitation_accept_new_account with teams", () => {
     expect(await teamsOf(accountId)).toEqual([]);
     expect(await roleOf(workspaceId, accountId)).toBe("member");
   });
+});
+
+describe("the version of a team that an invitation joins", () => {
+  it("moves with the acceptance, and for a team it does not name, so a replacement made against the version read before it is stale and the new member stays", async () => {
+    const { workspaceId, owner } = await scene();
+    const design = await seedTeam(workspaceId, "Design");
+    const unnamed = await seedTeam(workspaceId, "Unnamed");
+    const invitee = await account();
+    const invitation = await invite(workspaceId, invitee.email, [design]);
+
+    expect(await accept(invitee.id, invitation.hash)).toMatchObject({ kind: "accepted" });
+
+    expect(await versionOf(design)).toBe(2);
+    expect(await versionOf(unnamed)).toBe(2);
+    expect(await replaceMembers(workspaceId, owner, design, [owner], [1])).toEqual({ kind: "stale" });
+    expect(await teamsOf(invitee.id)).toEqual([design]);
+    expect(await replaceMembers(workspaceId, owner, design, [owner, invitee.id], [2])).toMatchObject({ kind: "replaced", team: { version: 3 } });
+  });
+
+  it("moves with the acceptance that creates the account, once for a team whatever the other teams the invitation names", async () => {
+    const { workspaceId, owner } = await scene();
+    const design = await seedTeam(workspaceId, "Design");
+    const support = await seedTeam(workspaceId, "Support");
+    emailNumber += 1;
+    const invitation = await invite(workspaceId, `version-new-account${String(emailNumber)}@example.test`, [design, support]);
+    const accountId = freshId();
+
+    expect(await store.acceptInvitationWithNewAccount(newAccountInput(invitation.hash, accountId))).toMatchObject({ kind: "accepted" });
+
+    expect(await versionOf(design)).toBe(2);
+    expect(await versionOf(support)).toBe(2);
+    expect(await replaceMembers(workspaceId, owner, design, [owner], [1])).toEqual({ kind: "stale" });
+    expect(await teamsOf(accountId)).toEqual([design, support].sort());
+  });
+
+  it("moves the version of every team of the workspace for an acceptance that joins no team, and no other workspace's", async () => {
+    const { workspaceId, owner } = await scene();
+    const other = await scene();
+    const design = await seedTeam(workspaceId, "Design");
+    const support = await seedTeam(workspaceId, "Support");
+    const theirs = await seedTeam(other.workspaceId, "Theirs");
+    const invitee = await account();
+    const invitation = await invite(workspaceId, invitee.email, []);
+
+    expect(await accept(invitee.id, invitation.hash)).toMatchObject({ kind: "accepted" });
+
+    expect(await teamsOf(invitee.id)).toEqual([]);
+    expect(await versionOf(design)).toBe(2);
+    expect(await versionOf(support)).toBe(2);
+    expect(await versionOf(theirs)).toBe(1);
+    expect(await replaceMembers(workspaceId, owner, support, [owner], [1])).toEqual({ kind: "stale" });
+  });
+
+  it("leaves the version of every team where it was for an acceptance that does not happen", async () => {
+    const { workspaceId } = await scene();
+    const design = await seedTeam(workspaceId, "Design");
+    const invitee = await account();
+    const stranger = await account();
+    const invitation = await invite(workspaceId, invitee.email, [design]);
+
+    expect(await accept(stranger.id, invitation.hash)).toMatchObject({ kind: "email_mismatch" });
+
+    expect(await versionOf(design)).toBe(1);
+  });
+
+  it("refuses a replacement read before a member left and rejoined through an invitation that names no team, so the one who returned is not put back", async () => {
+    const { workspaceId, owner } = await scene();
+    const design = await seedTeam(workspaceId, "Design");
+    const returning = await account();
+    await seedMember(db, { workspaceId, accountId: returning.id, role: "member" });
+    await asSystem(db, (tx) => tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${design}, ${returning.id})`);
+    const read = await versionOf(design);
+    expect(await teamsOf(returning.id)).toEqual([design]);
+
+    // The member leaves: the memberships go with the membership, and the version stays.
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspaceId} AND account_id = ${returning.id}`);
+    expect(await teamsOf(returning.id)).toEqual([]);
+    expect(await versionOf(design)).toBe(read);
+    // The member is invited again, to no team, and accepts.
+    const invitation = await invite(workspaceId, returning.email, []);
+    expect(await accept(returning.id, invitation.hash)).toMatchObject({ kind: "accepted" });
+    expect(await teamsOf(returning.id)).toEqual([]);
+
+    // A replacement made from the form read before all this names the returned account: it is stale, and the account stays out.
+    expect(await replaceMembers(workspaceId, owner, design, [owner, returning.id], [read])).toEqual({ kind: "stale" });
+    expect(await teamsOf(returning.id)).toEqual([]);
+    const current = await versionOf(design);
+    expect(current).toBe(read + 1);
+    expect(await replaceMembers(workspaceId, owner, design, [owner, returning.id], [current])).toMatchObject({ kind: "replaced", added: 2 });
+  });
+
+  it("lets a replacement read after the acceptance add the member who joined, since the version was written by the transaction that joined them", async () => {
+    const { workspaceId, owner } = await scene();
+    const design = await seedTeam(workspaceId, "Design");
+    const invitee = await account();
+    const invitation = await invite(workspaceId, invitee.email, []);
+    expect(await accept(invitee.id, invitation.hash)).toMatchObject({ kind: "accepted" });
+    const read = await versionOf(design);
+
+    expect(await replaceMembers(workspaceId, owner, design, [owner, invitee.id], [read])).toMatchObject({ kind: "replaced", added: 2 });
+    expect(await teamsOf(invitee.id)).toEqual([design]);
+  });
+
+  it("waits for a replacement that holds the team and then moves the version once more, without a deadlock", async () => {
+    const { workspaceId, owner } = await scene();
+    const design = await seedTeam(workspaceId, "Design");
+    const invitee = await account();
+    const invitation = await invite(workspaceId, invitee.email, [design]);
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held: () => void = () => undefined;
+    const readied = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    const replacing = db.tenant.withTenant({ accountId: owner, workspaceId, requestId: "invitation-teams-test" }, async (tx) => {
+      const result = await teamRepository(tx).replaceMembers({ teamId: design, accountIds: [owner], expectedVersions: [1] });
+      held();
+      await released;
+      return result;
+    });
+    await readied;
+
+    const accepting = settle(accept(invitee.id, invitation.hash));
+    try {
+      await waitUntilSomeoneWaits("the acceptance");
+    } finally {
+      release();
+    }
+
+    expect(await replacing).toMatchObject({ kind: "replaced", team: { version: 2 } });
+    expect(await accepting).toMatchObject({ value: { kind: "accepted" } });
+    expect(await versionOf(design)).toBe(3);
+    expect(await teamsOf(invitee.id)).toEqual([design]);
+  }, TEST_TIMEOUT_MS);
+
+  it("waits for a replacement of a team the invitation does not name and takes the teams in order, without a deadlock", async () => {
+    const { workspaceId, owner } = await scene();
+    const [first, named, last] = [await seedTeam(workspaceId, "One"), await seedTeam(workspaceId, "Two"), await seedTeam(workspaceId, "Three")].sort();
+    if (first === undefined || named === undefined || last === undefined) {
+      throw new Error("three teams were seeded");
+    }
+    const invitee = await account();
+    const invitation = await invite(workspaceId, invitee.email, [named]);
+    // Holds the first team, so the acceptance has joined the named team and inserted the memberships when it stops at that team.
+    const earlier = await holder((tx) => tx`SELECT id FROM teams WHERE id = ${first} FOR UPDATE`);
+    const accepting = settle(accept(invitee.id, invitation.hash));
+    await waitUntilBlockedBy(earlier.pid, "the acceptance");
+
+    // A replacement of the last team, which the invitation does not name, names the account the acceptance has not committed.
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held: () => void = () => undefined;
+    const readied = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    let pid = 0;
+    const replacing = db.tenant.withTenant({ accountId: owner, workspaceId, requestId: "invitation-teams-test" }, async (tx) => {
+      const result = await teamRepository(tx).replaceMembers({ teamId: last, accountIds: [owner, invitee.id], expectedVersions: [1] });
+      pid = (await tenantHandle(tx).execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`))[0]?.pid ?? 0;
+      held();
+      await released;
+      return result;
+    });
+    try {
+      await readied;
+      // The acceptance goes on to the last team and waits for the replacement there.
+      earlier.release();
+      await earlier.done;
+      await waitUntilBlockedBy(pid, "the acceptance");
+    } finally {
+      release();
+    }
+
+    // The replacement did not wait for the acceptance, whose account it cannot see yet, and the acceptance waited for it.
+    expect(await replacing).toEqual({ kind: "unknown_members" });
+    expect(await accepting).toMatchObject({ value: { kind: "accepted" } });
+    expect(await teamsOf(invitee.id)).toEqual([named]);
+    expect(await versionOf(first)).toBe(2);
+    expect(await versionOf(named)).toBe(2);
+    expect(await versionOf(last)).toBe(2);
+  }, TEST_TIMEOUT_MS);
 });

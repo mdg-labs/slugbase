@@ -18,14 +18,23 @@ import { defineScopedRepository } from "./scoped.ts";
 // fails, which ends the transaction it ran in with nothing written, and `isTeamNameTaken` tells that failure from any other so the caller
 // answers it as a name that is taken.
 //
-// A change locks the team's row and compares its version with the caller's `If-Match` under that lock. Replacing the members locks the team's
-// row first and then the membership rows of the accounts named (`FOR KEY SHARE`, in the order of their identifiers): an account that a
-// concurrent transaction removes from the workspace is then either found gone or waited for, and never met half-way by the foreign key of the
-// membership, and the removal of the member waits for this transaction to end.
+// A change locks the team's row and compares its version with the caller's `If-Match` under that lock. Replacing the members does the same, and
+// the version covers the member set: a replacement that changes it writes `members_version`, which the trigger turns into one move of the
+// version (src/sql/640-teams.sql). After the team's row it locks the membership rows of the accounts named (`FOR KEY SHARE`, in the order of
+// their identifiers): an account that a concurrent transaction removes from the workspace is then either found gone or waited for, and never
+// met half-way by the foreign key of the membership, and the removal of the member waits for this transaction to end.
+//
+// A replacement that carries a precondition is also `stale` when it adds an account whose `workspace_members.joined_at` is later than the team's
+// `versioned_at`: the time the transaction that wrote the version began, against the time the transaction that joined the account began. A
+// member who left the workspace takes its team memberships without moving the version, and one that joins without an invitation (an instance
+// admin adding themselves) moves none either, so the version alone would let a form read before the account left put it back. Both times are
+// the database's `now()`, and a join that began before the version was written is not caught by this comparison; every join through an
+// invitation moves the versions itself (src/sql/640-teams.sql). The refusal moves the version, once, so that a caller who reads the team again
+// and names the account is not refused by the same join.
 
 const scoped = defineScopedRepository("teams", teams, {
   insertColumns: ["id", "name", "description"],
-  updateColumns: ["name", "description"],
+  updateColumns: ["name", "description", "membersVersion"],
 });
 
 // The registry entry of `team_members` for the cross-tenant matrix (doc 08 section 3.3): the application role may read, insert (the two columns of a
@@ -176,15 +185,18 @@ export function teamRepository(tx: TenantTx): TeamRepository {
       return deleted[0]?.name;
     },
 
-    async replaceMembers({ teamId, accountIds }) {
+    async replaceMembers({ teamId, accountIds, expectedVersions }) {
       const workspaceId = requireWorkspace(tx);
       const [locked] = await tenantHandle(tx)
-        .select({ id: teams.id })
+        .select({ id: teams.id, version: teams.version, membersVersion: teams.membersVersion })
         .from(teams)
         .where(and(eq(teams.workspaceId, workspaceId), eq(teams.id, teamId)))
         .for("update");
       if (locked === undefined) {
         return { kind: "not_found" };
+      }
+      if (expectedVersions !== undefined && !expectedVersions.includes(locked.version)) {
+        return { kind: "stale" };
       }
       const wanted = distinctIdentifiers(accountIds);
       requireIdentifiers(wanted, "replacing the members of a team");
@@ -201,6 +213,20 @@ export function teamRepository(tx: TenantTx): TeamRepository {
       const present = (await links.select(eq(teamMembers.teamId, teamId))).map((link) => link.accountId);
       const toRemove = present.filter((accountId) => !wanted.includes(accountId));
       const toAdd = wanted.filter((accountId) => !present.includes(accountId));
+      if (expectedVersions !== undefined && toAdd.length > 0) {
+        // An account this replacement adds that joined the workspace after the version was written (an instance admin who left and added
+        // themselves again moves no version) may have been absent from the form the caller read, or left and returned since. The one write
+        // is the version moving, so the caller's next read carries a version the join precedes; the set stays as it was.
+        const joined = await tenantHandle(tx).execute(sql`
+          SELECT 1 FROM public.workspace_members m
+          WHERE m.workspace_id = ${workspaceId}::uuid AND m.account_id = ANY (${uuidArray(toAdd)}::uuid[])
+            AND m.joined_at > (SELECT t.versioned_at FROM ${teams} AS t WHERE t.id = ${teamId}::uuid)
+          LIMIT 1`);
+        if (joined.length > 0) {
+          await rows.update({ membersVersion: locked.membersVersion + 1 }, eq(teams.id, teamId));
+          return { kind: "stale" };
+        }
+      }
       if (toRemove.length > 0) {
         await links.delete(and(eq(teamMembers.teamId, teamId), sql`${teamMembers.accountId} = ANY (${uuidArray(toRemove)}::uuid[])`));
       }
@@ -211,8 +237,12 @@ export function teamRepository(tx: TenantTx): TeamRepository {
           SELECT ${workspaceId}::uuid, ${teamId}::uuid, a.id FROM unnest(${uuidArray(toAdd)}::uuid[]) AS a(id)
           ON CONFLICT (team_id, account_id) DO NOTHING`);
       }
-      const team = await requireDetail(tx, teamId);
-      return toRemove.length + toAdd.length === 0 ? { kind: "unchanged", team } : { kind: "replaced", team, added: toAdd.length, removed: toRemove.length };
+      if (toRemove.length + toAdd.length === 0) {
+        return { kind: "unchanged", team: await requireDetail(tx, teamId) };
+      }
+      // The trigger moves the member revision and the version by one, whatever value is written here.
+      await rows.update({ membersVersion: locked.membersVersion + 1 }, eq(teams.id, teamId));
+      return { kind: "replaced", team: await requireDetail(tx, teamId), added: toAdd.length, removed: toRemove.length };
     },
   };
 }

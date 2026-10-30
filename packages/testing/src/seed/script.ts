@@ -34,6 +34,8 @@ function row(workspaceId: string, bookmark: SeedBookmark): string {
     text(bookmark.host),
     text(bookmark.title),
     nullable(bookmark.description),
+    nullable(bookmark.slug ?? null),
+    String(bookmark.forwarding ?? false),
     time(bookmark.pinnedAt),
     String(bookmark.openCount),
     time(bookmark.lastOpenedAt),
@@ -75,7 +77,23 @@ export function seedScript(instance: DemoInstance, passwordHashes: Readonly<Reco
     for (let start = 0; start < workspace.bookmarks.length; start += BATCH) {
       const rows = workspace.bookmarks.slice(start, start + BATCH).map((bookmark) => row(workspace.id, bookmark));
       lines.push(
-        `INSERT INTO public.bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, description, pinned_at, open_count, last_opened_at, created_at, updated_at) SELECT v.id::uuid, v.workspace_id::uuid, v.owner_id::uuid, v.url, v.url_canonical, v.host, v.title, v.description, v.pinned_at::timestamptz, v.open_count, v.last_opened_at::timestamptz, v.created_at::timestamptz, v.created_at::timestamptz FROM (VALUES ${rows.join(", ")}) AS v(id, workspace_id, owner_id, url, url_canonical, host, title, description, pinned_at, open_count, last_opened_at, created_at);`,
+        `INSERT INTO public.bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, open_count, last_opened_at, created_at, updated_at) SELECT v.id::uuid, v.workspace_id::uuid, v.owner_id::uuid, v.url, v.url_canonical, v.host, v.title, v.description, v.slug, v.forwarding::boolean, v.pinned_at::timestamptz, v.open_count, v.last_opened_at::timestamptz, v.created_at::timestamptz, v.created_at::timestamptz FROM (VALUES ${rows.join(", ")}) AS v(id, workspace_id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, open_count, last_opened_at, created_at);`,
+      );
+    }
+    for (const folder of workspace.folders) {
+      lines.push(`INSERT INTO public.folders (id, workspace_id, owner_id, name) VALUES (${text(folder.id)}, ${text(workspace.id)}, ${text(accountId(folder.owner))}, ${text(folder.name)});`);
+      for (const bookmarkId of folder.bookmarkIds) {
+        lines.push(`INSERT INTO public.folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES (${text(workspace.id)}, ${text(folder.id)}, ${text(bookmarkId)});`);
+      }
+      for (const share of folder.shares) {
+        lines.push(
+          `INSERT INTO public.folder_shares (id, workspace_id, folder_id, target_account_id, granted_by) VALUES (${text(share.id)}, ${text(workspace.id)}, ${text(folder.id)}, ${text(accountId(share.target))}, ${text(accountId(folder.owner))});`,
+        );
+      }
+    }
+    for (const share of workspace.bookmarkShares) {
+      lines.push(
+        `INSERT INTO public.bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${text(share.id)}, ${text(workspace.id)}, ${text(share.bookmarkId)}, ${text(accountId(share.target))}, ${text(accountId(share.granted))});`,
       );
     }
     lines.push(

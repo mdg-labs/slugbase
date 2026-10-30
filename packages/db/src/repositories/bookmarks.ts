@@ -29,7 +29,7 @@ import { bookmarks } from "../schema/bookmarks.ts";
 import { folderBookmarks, folders } from "../schema/folders.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { auditEventRepository } from "./audit-events.ts";
-import { bookmarkReadableBy, bookmarkSharedByOwner, sharedBookmarks, sharedViaOf, type SharedVia } from "./bookmark-access.ts";
+import { bookmarkReadableBy, bookmarkSharedByOwner, folderSharedWith, sharedBookmarks, sharedViaOf, type SharedVia } from "./bookmark-access.ts";
 import { entitlementRepository } from "./entitlements.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -58,7 +58,7 @@ import { deleteTagLinks, deleteTagLinksMany, insertTagLinks, insertTagLinksMany,
 // microseconds the database keeps, and a row that shares its key with the cursor's would then be skipped or repeated. A bookmark is filed in
 // the folders of its owner in the same transaction that creates or changes it (`folderIds`), through the links of src/repositories/folder-links.ts;
 // the folders are locked and checked before the first write, so a folder that is not the owner's ends the call with nothing written, and every
-// record carries the folders it is filed in. A list may be narrowed to one folder of the caller's, which an EXISTS over the links of the
+// record carries the folders it is filed in. A list may be narrowed to one folder, the caller's own or one of another member's that is shared with the caller (the part of the scope that holds shared bookmarks adds that the folder is shared with the caller), which an EXISTS over the links of the
 // bookmark answers by the primary key of `folder_bookmarks`, `(folder_id, bookmark_id)`; the index on `(workspace_id, bookmark_id)`
 // serves the read of the folders of the bookmarks of a page. A bookmark carries the tags of its owner in the same way (`tagIds` and `tagNames`
 // of a creation and `tags` of a change, through src/repositories/tag-links.ts): tags named by identifier are checked before the first write, a name
@@ -259,12 +259,15 @@ export interface BookmarkRepository {
   listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
 }
 
-/** The bookmark is filed in the folder `folderId`, and the folder is its owner's: a folder of another member matches nothing. */
+/**
+ * The bookmark is filed in the folder `folderId`, and the folder is its owner's. Two ownerless rows match: the owner of a folder and of the bookmarks filed in it can leave the
+ * workspace together, and a share outlives them, so the shared leg still lists what the folder holds.
+ */
 function filedIn(folderId: string): SQL {
   requireIdentifiers([folderId], "listing the bookmarks of a folder");
   return sql`EXISTS (
     SELECT 1 FROM ${folderBookmarks} INNER JOIN ${folders} ON ${folders.workspaceId} = ${folderBookmarks.workspaceId} AND ${folders.id} = ${folderBookmarks.folderId}
-    WHERE ${folderBookmarks.workspaceId} = ${bookmarks.workspaceId} AND ${folderBookmarks.bookmarkId} = ${bookmarks.id} AND ${folderBookmarks.folderId} = ${folderId}::uuid AND ${folders.ownerId} = ${bookmarks.ownerId})`;
+    WHERE ${folderBookmarks.workspaceId} = ${bookmarks.workspaceId} AND ${folderBookmarks.bookmarkId} = ${bookmarks.id} AND ${folderBookmarks.folderId} = ${folderId}::uuid AND ${folders.ownerId} IS NOT DISTINCT FROM ${bookmarks.ownerId})`;
 }
 
 /** The bookmark carries the tag `tagId`, and the tag is its owner's: a tag of another member matches nothing. */
@@ -279,11 +282,12 @@ function tagged(tagId: string): SQL {
 type Branch = "own" | "shared" | "sharedByMe";
 
 /**
- * The parts of the scope of `filter`. A filter that names the caller's folder or tags, or the URL of the duplicate warning, reaches the caller's own bookmarks alone: a bookmark shared
- * with the caller is filed in none of their folders and carries none of their tags (Q22), and the warning is about what they saved themselves (doc 04 section 10.6).
+ * The parts of the scope of `filter`. A filter that names the caller's tags, or the URL of the duplicate warning, reaches the caller's own bookmarks alone: a bookmark shared with the caller carries
+ * none of their tags (Q22), and the warning is about what they saved themselves (doc 04 section 10.6). A filter that names a folder reaches the caller's own bookmarks filed in the caller's folder and the
+ * bookmarks filed in a folder of another member that is shared with the caller (`branchPredicate`).
  */
 function branchesOf(filter: BookmarkListFilter): readonly Branch[] {
-  const own = filter.folderId !== undefined || (filter.tagIds ?? []).length > 0 || filter.urlCanonical !== undefined;
+  const own = (filter.tagIds ?? []).length > 0 || filter.urlCanonical !== undefined;
   switch (filter.scope ?? "mine") {
     case "mine":
       return ["own"];
@@ -330,6 +334,8 @@ function branchPredicate(workspaceId: string, filter: BookmarkListFilter, branch
     filter.forwarding === undefined ? undefined : eq(bookmarks.forwarding, filter.forwarding),
     filter.urlCanonical === undefined ? undefined : eq(bookmarks.urlCanonical, filter.urlCanonical),
     filter.folderId === undefined ? undefined : filedIn(filter.folderId),
+    // The folder of another member is read through its share: a bookmark shared with the caller by another route is not in it for the caller.
+    shared && filter.folderId !== undefined ? folderSharedWith(filter.ownerId, { workspaceId: sql`${bookmarks.workspaceId}`, id: sql`${filter.folderId}::uuid` }) : undefined,
     ...(filter.tagIds ?? []).map(tagged),
   );
   if (predicate === undefined) {
@@ -523,13 +529,13 @@ export function countQuery(tx: TenantTx, filter: BookmarkListFilter, limit: numb
 }
 
 // A list with a text query (`filter.q`) reads the bookmarks that match through the system operation `sys_bookmark_match` (src/sql/610-bookmark-match.sql): the policy of `bookmarks` is
-// FORCEd and the operators of the search are not leakproof, so as slugbase_app they would never be index conditions. The operation answers the identifiers of the caller's own, not
-// plan-archived matches and nothing else, as one materialised set that the statement below reads once; every other predicate of the list (the filters, the keyset, the owner, the
+// FORCEd and the operators of the search are not leakproof, so as slugbase_app they would never be index conditions. The operation answers the identifiers of the matches that the caller can read (their own and those shared with them), not
+// plan-archived, and nothing else, as one materialised set that the statement below reads once; every other predicate of the list (the scope, the filters, the keyset, the owner, the
 // workspace and the archive state) is still the statement's own, and the policy applies to every row it reads.
 //
 // The cost of the page depends on how many bookmarks match, and the statement does not know that before it runs, so it holds both plans and runs the one that is cheap for the
 // count it finds: up to `FEW_MATCHES` (the total a list counts exactly, Q42) the page probes each match by the primary key of `bookmarks` and sorts what survives the other predicates, which reads as many
-// rows as there are matches; above it the page walks the index of its sort in order, as a list without a text does, and tests each row against the set, which reads about as many rows as the page
+// rows as there are matches; above it the page walks the index of its sort in order, as a list without a text does (one walk for each part of the scope, see `matchedPageStatement`), and tests each row against the set, which reads about as many rows as the page
 // holds divided by the share of the workspace that matches, and at most the workspace. The branch that is not chosen is not run (its one-time filter reads the count). The probe is a lateral subquery
 // that the planner cannot flatten (`OFFSET 0`), so it is always a nested loop over the matches and never a scan of the table; the set is tested in the walk behind a term that the planner cannot fold
 // (`random() < 0`), so that it stays a filter of the walk and does not become a join that drives it. The page is read as identifiers and sort keys, and the rows are read in a second statement by
@@ -559,32 +565,54 @@ export function matchedPageStatement(tx: TenantTx, { filter, sort, after, limit 
   const { column, key, order, dir } = SORT_ORDERS[sort];
   const predicate = after === undefined ? filterPredicate(workspaceId, filter) : and(filterPredicate(workspaceId, filter), afterPosition(sort, after));
   const few = sql.raw(String(FEW_MATCHES));
+  // The walk of many matches has one leg for each part of the scope, as the page of a list without a text has (`pageStatement`): the caller's own bookmarks are walked in the order of the index
+  // of the sort, which is prefixed by the owner, and the shared ones are driven from the set of the grants to the caller. One walk over the whole scope has no index that serves its order, so it would read
+  // every bookmark of the workspace and sort them. A scope that reads no part walks nothing.
+  const branches = branchesOf(filter);
+  const grants = branches.includes("shared") ? sql`, shared AS MATERIALIZED (${sharedBookmarks(tx.accountId, workspaceId)})` : sql``;
+  const isMatch = sql`(${bookmarks.id} IN (SELECT id FROM m) OR random() < 0)`;
+  const legs = branches.map((branch) => {
+    const base = branchPredicate(workspaceId, filter, branch, branch === "shared");
+    const leg = after === undefined ? base : and(base, afterPosition(sort, after));
+    if (branch !== "shared") {
+      return sql`(SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks}
+       WHERE ${leg} AND ${isMatch} AND (SELECT n FROM c) > ${few}
+       ORDER BY ${order} LIMIT ${limit}::integer)`;
+    }
+    return sql`(SELECT probed.id, probed.ord, probed.sort_key FROM shared
+       CROSS JOIN LATERAL (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE ${bookmarks.id} = shared.bookmark_id AND ${leg} AND ${isMatch} OFFSET 0) probed
+       WHERE (SELECT n FROM c) > ${few}
+       ORDER BY probed.ord ${dir}, probed.id ${dir} LIMIT ${limit}::integer)`;
+  });
+  const walks =
+    legs.length === 0
+      ? sql`(SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE false LIMIT ${limit}::integer)`
+      : sql.join(legs, sql` UNION ALL `);
   return sql`
     WITH m AS MATERIALIZED (SELECT id FROM sys_bookmark_match(${filter.q}::text)),
-         c AS MATERIALIZED (SELECT count(*) AS n FROM m)
+         c AS MATERIALIZED (SELECT count(*) AS n FROM m)${grants}
     SELECT page.id, page.sort_key, c.n::int AS matched FROM c LEFT JOIN (
       (SELECT probed.id, probed.ord, probed.sort_key FROM m
        CROSS JOIN LATERAL (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE ${bookmarks.id} = m.id AND ${predicate} OFFSET 0) probed
        WHERE (SELECT n FROM c) <= ${few}
        ORDER BY probed.ord ${dir}, probed.id ${dir} LIMIT ${limit}::integer)
       UNION ALL
-      (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks}
-       WHERE ${predicate} AND (${bookmarks.id} IN (SELECT id FROM m) OR random() < 0) AND (SELECT n FROM c) > ${few}
-       ORDER BY ${order} LIMIT ${limit}::integer)
+      ${walks}
     ) page ON true
     ORDER BY page.ord ${dir}, page.id ${dir} LIMIT ${limit}::integer`;
 }
 
 /**
- * The filter is a text query and nothing else, the owner is the account of the transaction and the scope is the account's own or its own with the shared ones (`all`): the bookmarks it matches
- * are exactly the answer of `sys_bookmark_match`, which applies the workspace, the account and the plan-archive rule itself, so the answer can be counted without reading the bookmarks. Any
- * other filter narrows the answer by a predicate of the statement, and an owner other than the account matches nothing, so those are counted by probing.
+ * The filter is a text query and nothing else, the owner is the account of the transaction and the scope is the account's own with the shared ones (`all`): the bookmarks it matches
+ * are exactly the answer of `sys_bookmark_match`, which applies the workspace, the account, the access rule and the plan-archive rule itself, so the answer can be counted without reading the
+ * bookmarks. Any other filter narrows the answer by a predicate of the statement (the scope `mine` leaves out the shared matches), and an owner other than the account matches nothing, so those
+ * are counted by probing.
  */
 function matchesAreTheAnswer(tx: TenantTx, filter: BookmarkListFilter): boolean {
   return (
     filter.q !== undefined &&
     filter.ownerId.toLowerCase() === tx.accountId.toLowerCase() &&
-    (filter.scope === undefined || filter.scope === "mine" || filter.scope === "all") &&
+    filter.scope === "all" &&
     filter.pinned === undefined &&
     filter.hasSlug === undefined &&
     filter.forwarding === undefined &&
@@ -617,9 +645,24 @@ export function matchedCountStatement(tx: TenantTx, filter: BookmarkListFilter, 
       LIMIT ${limit}::integer) capped`;
 }
 
-/** The page of a list with a text query: the bookmarks of the page, and how many matches the function answered, which an empty page carries too. */
+/**
+ * The page of a list with a text query: the bookmarks of the page, and how many matches the function answered, which an empty page carries too.
+ *
+ * The statement is planned with JIT compilation off for its own run. It holds the plans of both branches, and the estimate of the branch for many matches (the access rule tested for each row of a walk of
+ * the workspace) is above `jit_above_cost` for a library of tens of thousands of bookmarks, so a statement that is compiled on each call spends about 300 ms compiling whichever branch it runs, though it runs one
+ * of two that read a few hundred rows. The setting is the transaction's own and is put back as it was after the statement; when the statement fails, the transaction or its savepoint is rolled back and the
+ * setting with it.
+ */
 async function matchedPage(tx: TenantTx, request: BookmarkListRequest): Promise<{ readonly page: readonly { readonly id: string; readonly sort_key: string | null }[]; readonly matched: number }> {
-  const found = await tenantHandle(tx).execute<MatchedPageRow>(matchedPageStatement(tx, request));
+  const statement = matchedPageStatement(tx, request);
+  const handle = tenantHandle(tx);
+  const previous = (await handle.execute<{ value: string }>(sql`SELECT current_setting('jit') AS value`))[0]?.value;
+  if (previous === undefined) {
+    throw new Error("reading jit did not return a row");
+  }
+  await handle.execute(sql`SELECT set_config('jit', 'off', true)`);
+  const found = await handle.execute<MatchedPageRow>(statement);
+  await handle.execute(sql`SELECT set_config('jit', ${previous}, true)`);
   const matched = found[0]?.matched;
   if (matched === undefined) {
     throw new Error("listing bookmarks returned no row");

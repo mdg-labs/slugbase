@@ -7,6 +7,7 @@
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import { BookmarkArchiveTransaction } from '@slugbase/core';
+import type { BookmarkBulkStore } from '@slugbase/core';
 import { BookmarkFilingMode } from '@slugbase/core';
 import { BookmarkLinkingResult } from '@slugbase/core';
 import { BookmarkListFilter } from '@slugbase/core';
@@ -400,7 +401,7 @@ export interface BookmarkRepository {
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository;
 
 // @public (undocumented)
-export type BookmarkShareRepository = BookmarkShareStore;
+export type BookmarkShareRepository = BookmarkShareStore & Pick<BookmarkBulkStore, "share" | "previewShare">;
 
 // @public (undocumented)
 export function bookmarkShareRepository(tx: TenantTx): BookmarkShareRepository;

@@ -6,7 +6,7 @@ import { useRouter, useSearch } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { BookmarkEditor } from "./bookmark-editor.tsx";
-import { bookmarkQuery, isBookmarkMissing, type Bookmark } from "./bookmarks.ts";
+import { bookmarkQuery, isBookmarkMissing, isSharedWithMe, type Bookmark } from "./bookmarks.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 
 function CreateBookmark(): ReactElement {
@@ -37,6 +37,30 @@ function EditBookmark({ id }: { id: string }): ReactElement {
     return true;
   }
 
+  if (read !== undefined && isSharedWithMe(read.bookmark)) {
+    // A share grants reading only (Q22): the bookmark of another member is not edited, whatever address opened the modal.
+    return (
+      <FormOverlay
+        closeLabel={t("bookmarks.modal.close")}
+        onOpenChange={(open) => {
+          if (!open) {
+            modal.close();
+          }
+        }}
+        open
+        title={t("bookmarks.modal.edit.title")}
+      >
+        <div className="flex flex-col gap-4">
+          <Banner description={t("bookmarks.modal.shared.description")} title={t("bookmarks.modal.shared.title")} variant="info" />
+          <div className="flex justify-end">
+            <Button onClick={modal.close} variant="outline">
+              {t("bookmarks.modal.close")}
+            </Button>
+          </div>
+        </div>
+      </FormOverlay>
+    );
+  }
   if (read !== undefined) {
     return <BookmarkEditor bookmark={read.bookmark} key={`${read.bookmark.id}:${String(read.epoch)}`} onClose={modal.close} onEditExisting={modal.edit} onReload={reload} />;
   }

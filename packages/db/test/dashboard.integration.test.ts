@@ -79,7 +79,7 @@ function asMember<T>(workspaceId: string, accountId: string, work: Parameters<ty
 }
 
 function dashboardOf(workspaceId: string, accountId: string) {
-  return asMember(workspaceId, accountId, (tx) => dashboard({ store: dashboardRepository(tx), tags: tagRepository(tx) }, { accountId }));
+  return asMember(workspaceId, accountId, (tx) => dashboard({ store: dashboardRepository(tx), tags: tagRepository(tx) }, { accountId, sharing: false }));
 }
 
 const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60_000);

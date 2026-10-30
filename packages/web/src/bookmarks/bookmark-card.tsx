@@ -1,11 +1,13 @@
-import { CardGridItem, PencilIcon, PinIcon, PinOffIcon, Share2Icon, Trash2Icon, type RowAction } from "@slugbase/ui/patterns";
+import { CardGridItem, CopyIcon, ExternalLinkIcon, PencilIcon, PinIcon, PinOffIcon, Share2Icon, Trash2Icon, type RowAction } from "@slugbase/ui/patterns";
 import { useRouter } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { useIsOwner, useSharingGranted } from "../sharing/index.ts";
 import { FolderDots, TagBadges } from "./bookmark-labels.tsx";
-import { isHttpUrl, recordOpen, type Bookmark } from "./bookmarks.ts";
+import { copyAddress, openInNewTab } from "./bookmark-open.ts";
+import { isHttpUrl, isSharedWithMe, recordOpen, type Bookmark } from "./bookmarks.ts";
+import { SharedMarker } from "./shared-marker.tsx";
 
 export interface BookmarkActionHandlers {
   readonly bookmark: Bookmark;
@@ -26,13 +28,32 @@ export type BookmarkCardProps = BookmarkActionHandlers & {
   readonly onSelectedChange: (bookmark: Bookmark, selected: boolean) => void;
 };
 
-/** The actions of one bookmark, which its card and its table row show as one list. */
+/**
+ * The actions of one bookmark, which its card and its table row show as one list. A bookmark shared with the member offers
+ * Open and Copy address only: a share grants reading and nothing more (doc 02 section 8.2, Q22).
+ */
 export function useBookmarkActions({ bookmark, pinPending, onEdit, onPin, onShare, onDelete }: BookmarkActionHandlers): readonly RowAction[] {
   const { t } = useTranslation();
+  const router = useRouter();
   // Only the owner shares a bookmark, and only a workspace that may share offers the action.
   const sharingGranted = useSharingGranted();
   const owned = useIsOwner(bookmark.ownerId);
   const shareable = sharingGranted && owned;
+  if (isSharedWithMe(bookmark)) {
+    return [
+      ...(isHttpUrl(bookmark.url)
+        ? [{ id: "open", label: t("bookmarks.list.open"), icon: <ExternalLinkIcon aria-hidden="true" />, onSelect: () => { openInNewTab(router.options.context.api, bookmark); } }]
+        : []),
+      {
+        id: "copy",
+        label: t("bookmarks.list.copyAddress"),
+        icon: <CopyIcon aria-hidden="true" />,
+        onSelect: () => {
+          void copyAddress(bookmark, { copied: t("bookmarks.list.addressCopied"), failed: t("bookmarks.list.addressCopyFailed") });
+        },
+      },
+    ];
+  }
   return [
     { id: "edit", label: t("bookmarks.list.edit"), icon: <PencilIcon aria-hidden="true" />, onSelect: () => { onEdit(bookmark); } },
     ...(shareable ? [{ id: "share", label: t("bookmarks.list.share"), icon: <Share2Icon aria-hidden="true" />, onSelect: () => { onShare(bookmark); } }] : []),
@@ -88,6 +109,7 @@ export function BookmarkCard({ bookmark, pinPending, selected, selectionActive, 
       subtitle={bookmark.host}
       title={bookmark.title}
     >
+      {isSharedWithMe(bookmark) ? <SharedMarker bookmark={bookmark} /> : null}
       {bookmark.folders.length === 0 && bookmark.tags.length === 0 ? null : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <FolderDots folders={bookmark.folders} />

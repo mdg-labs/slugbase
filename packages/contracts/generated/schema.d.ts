@@ -215,7 +215,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Delete, pin, unpin, file or tag many bookmarks */
+        /** Delete, pin, unpin, file, tag or share many bookmarks */
         post: operations["bulkBookmarks"];
         delete?: never;
         options?: never;
@@ -232,7 +232,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Preview adding tags to many bookmarks */
+        /** Preview adding tags to, or sharing, many bookmarks */
         post: operations["previewBulkBookmarks"];
         delete?: never;
         options?: never;
@@ -403,7 +403,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List my folders */
+        /** List folders */
         get: operations["listFolders"];
         put?: never;
         /** Create a folder */
@@ -1807,7 +1807,7 @@ export interface components {
         BookmarkFilter: {
             /**
              * Format: uuid
-             * @description Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on
+             * @description Matches the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown matches nothing. Left out, folders are not filtered on
              */
             folderId?: string;
             /** @description true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on */
@@ -1925,6 +1925,8 @@ export interface components {
         BulkBookmarksPreview: {
             /** @description How many of them the action would reach: the caller's own bookmarks that are not plan-archived */
             affected: number;
+            /** @description For share, who the bookmarks the action would reach are shared with afterwards; null for add_tags */
+            audience: components["schemas"]["BulkPreviewAudience"] | null;
             /** @description How many bookmarks the request named (the distinct identifiers) or the filter matched */
             requested: number;
             /** @description How many it would leave alone: requested minus affected */
@@ -1936,28 +1938,43 @@ export interface components {
                 /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
             };
-            /** @description The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds */
+            /** @description For add_tags, the tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds; empty for share */
             tags: components["schemas"]["BulkPreviewTag"][];
         };
         BulkBookmarksPreviewRequest: {
             /**
-             * @description The action to preview; only add_tags has a preview
-             * @constant
+             * Format: uuid
+             * @description The member the share action shares the bookmarks with; it must be a current member of the workspace other than the caller. share requires this or teamId, and not both; every other action refuses it
              */
-            action: "add_tags";
+            accountId?: string;
+            /**
+             * @description The action to preview: add_tags, or share
+             * @enum {string}
+             */
+            action: "add_tags" | "share";
             /** @description Previews on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
             filter?: components["schemas"]["BookmarkFilter"];
             /** @description The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both */
             ids?: string[];
-            /** @description The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers. A tag that is another member's, another workspace's or unknown is refused with 404 */
-            tagIds: string[];
+            /** @description The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers; required for add_tags and refused for share. A tag that is another member's, another workspace's or unknown is refused with 404 */
+            tagIds?: string[];
+            /**
+             * Format: uuid
+             * @description The team the share action shares the bookmarks with; it must be a team of the workspace. share requires this or accountId, and not both; every other action refuses it
+             */
+            teamId?: string;
         };
         BulkBookmarksRequest: {
             /**
-             * @description delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off
+             * Format: uuid
+             * @description The member the share action shares the bookmarks with; it must be a current member of the workspace other than the caller. share requires this or teamId, and not both; every other action refuses it
+             */
+            accountId?: string;
+            /**
+             * @description delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off. share shares them with the member accountId or the team teamId, read-only; only the caller's own bookmarks are shared, it needs the sharing entitlement of the target's kind, and a bookmark the target is shared with already counts as affected
              * @enum {string}
              */
-            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags";
+            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags" | "share";
             /** @description Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
             filter?: components["schemas"]["BookmarkFilter"];
             /**
@@ -1969,6 +1986,11 @@ export interface components {
             ids?: string[];
             /** @description The caller's tags add_tags and remove_tags act with, 1 to 100 identifiers; required for them and refused for every other action. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed */
             tagIds?: string[];
+            /**
+             * Format: uuid
+             * @description The team the share action shares the bookmarks with; it must be a team of the workspace. share requires this or accountId, and not both; every other action refuses it
+             */
+            teamId?: string;
         };
         BulkBookmarksResult: {
             /** @description How many of them are now deleted, or are in the state the action asks for: pinned or unpinned, filed in or out of the folder, tagged or untagged (a bookmark that already was is counted) */
@@ -1984,6 +2006,24 @@ export interface components {
                 /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
             };
+        };
+        BulkPreviewAudience: {
+            /** @description How many of the bookmarks the action would reach are not shared with the target yet, so get a share from the action */
+            added: number;
+            /**
+             * Format: uuid
+             * @description The account identifier of the member, or the identifier of the team
+             */
+            id: string;
+            /**
+             * @description What the bookmarks would be shared with: a member of the workspace, or one of its teams
+             * @enum {string}
+             */
+            kind: "member" | "team";
+            /** @description How many members other than the caller can read the bookmarks through this target: 1 for a member, the members of the team without the caller for a team */
+            memberCount: number;
+            /** @description The member's display name or the team's name */
+            name: string;
         };
         BulkPreviewTag: {
             /** @description How many of them get the tag from the action: those that do not carry it yet */
@@ -2173,9 +2213,9 @@ export interface components {
             onboarding: components["schemas"]["DashboardOnboarding"];
             /** @description Up to 12 of the caller's own pinned bookmarks, the most recently pinned first; plan-archived bookmarks are never in it */
             pinned: components["schemas"]["DashboardBookmark"][];
-            /** @description Up to 8 of the caller's own bookmarks that forward by a slug, the most opened first; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it */
+            /** @description Up to 8 of the bookmarks the caller can read, its own and those shared with it, that forward by a slug, the most opened first by the bookmark's total opens; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it */
             quickAccess: components["schemas"]["DashboardBookmark"][];
-            /** @description The sharing counts; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements */
+            /** @description The sharing counts; null whenever the caller's workspace does not hold the sharing entitlements */
             sharing: components["schemas"]["DashboardSharing"] | null;
             /** @description Up to 12 of the caller's own tags, the one on the most bookmarks first, then by name; another member's tags are never in it */
             topTags: components["schemas"]["DashboardTag"][];
@@ -2204,7 +2244,7 @@ export interface components {
             bookmarks: number;
             /** @description The caller's own folders */
             folders: number;
-            /** @description The bookmarks shared with the caller; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements */
+            /** @description The bookmarks other members shared with the caller, plan-archived ones not counted; null whenever the caller's workspace does not hold the sharing entitlements */
             sharedWithYou: number | null;
             /** @description The caller's own tags */
             tags: number;
@@ -2224,7 +2264,7 @@ export interface components {
             slugGiven: boolean;
         };
         DashboardSharing: {
-            /** @description The caller's bookmarks that are shared with others */
+            /** @description The caller's bookmarks that are shared with others, plan-archived ones not counted */
             sharedByYou: number;
             /** @description The bookmarks other members shared with the caller */
             sharedWithYou: number;
@@ -2322,8 +2362,20 @@ export interface components {
             id: string;
             /** @description The folder's name, in the case it was entered in */
             name: string;
+            /** @description Who owns a folder that is shared with the caller; null for the caller's own folder and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null */
+            owner?: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
             /** @description The account of the member who owns the folder; null once that member has left the workspace */
             ownerId: string | null;
+            /** @description How the caller's own folder is shared: with how many members directly and with which teams; no members and no teams for a private folder. Null for a folder that is another member's, whose recipient sees only who shared it. The server always sends it; a client reads an absent value as null */
+            shareSummary?: components["schemas"]["FolderShareSummary"] | null;
             /**
              * Format: date-time
              * @description When the folder last changed, RFC 3339 UTC
@@ -2337,7 +2389,7 @@ export interface components {
             bookmarkIds: string[];
         };
         FolderList: {
-            /** @description One page of the caller's folders in the workspace, in the order asked for; another member's folders are never listed */
+            /** @description One page of the folders the scope covers in the workspace, in the order asked for; another member's folder that is not shared with the caller is never listed. A folder of another member carries its owner, and the caller's own carries how it is shared */
             items: components["schemas"]["Folder"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
@@ -2379,6 +2431,20 @@ export interface components {
             audienceSize: number;
             /** @description The shares of the folder, oldest first */
             items: components["schemas"]["FolderShare"][];
+        };
+        FolderShareSummary: {
+            /** @description How many members the folder is shared with directly; the members of the teams it is shared with are not counted */
+            memberCount: number;
+            /** @description The teams the folder is shared with, in the order of their names */
+            teams: {
+                /**
+                 * Format: uuid
+                 * @description The team's identifier
+                 */
+                id: string;
+                /** @description The team's name */
+                name: string;
+            }[];
         };
         ForgotPasswordRequest: {
             /**
@@ -3270,10 +3336,10 @@ export interface components {
             name: string;
             /**
              * Format: date-time
-             * @description When the team's name or description last changed, RFC 3339 UTC
+             * @description When the team's version last moved, RFC 3339 UTC
              */
             updatedAt: string;
-            /** @description Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back */
+            /** @description Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
             version: number;
         };
         TeamList: {
@@ -3314,10 +3380,10 @@ export interface components {
             name: string;
             /**
              * Format: date-time
-             * @description When the team's name or description last changed, RFC 3339 UTC
+             * @description When the team's version last moved, RFC 3339 UTC
              */
             updatedAt: string;
-            /** @description Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back */
+            /** @description Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
             version: number;
         };
         TransferOwnershipRequest: {
@@ -4497,7 +4563,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone */
+            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone. A share action grants a read-only share of each bookmark it reaches to the member or team, once for a target a bookmark is shared with already, and records one share.bulk_granted audit event with the number of shares it made and the target, none when it made none */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4524,7 +4590,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden); nothing is changed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden), or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4542,7 +4608,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written */
+            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a share without accountId and teamId or with both, an accountId or teamId on another action, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share action's target is the caller (cannot_share_with_self on accountId), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4586,7 +4652,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What add_tags with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards. Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist */
+            /** @description What add_tags or share with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards; share does the same for who the bookmarks would be shared with (audience). Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4613,7 +4679,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not tag it (forbidden) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not act on it (forbidden), or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4631,7 +4697,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks */
+            /** @description The body did not pass validation (an action other than add_tags or share, neither or both of ids and filter, no identifier or more than 1 000, add_tags without tags or share with tags, more than 100 tags, a malformed identifier, a share without accountId and teamId or with both, an accountId or teamId on add_tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share target that is the caller, no current member of the workspace or no team of it */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5717,7 +5783,7 @@ export interface operations {
     listFolders: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared";
                 q?: string;
                 sort?: "name" | "count" | "updated";
                 limit?: number;
@@ -5729,7 +5795,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One page of the caller's folders in the workspace in the order asked for, each with the number of bookmarks filed in it, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast) */
+            /** @description One page of the folders the scope covers in the workspace in the order asked for, each with the number of bookmarks filed in it and its owner or its share summary, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5905,7 +5971,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's folder with the number of bookmarks filed in it */
+            /** @description The caller's folder, or another member's folder that is shared with the caller, with the number of bookmarks filed in it and its owner or its share summary */
             200: {
                 headers: {
                     /** @description The folder's version as an entity tag, for example "3"; the If-Match of the next change */
@@ -5934,7 +6000,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6010,7 +6076,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6019,7 +6085,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6105,7 +6171,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not change it (forbidden); nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6114,7 +6180,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6216,7 +6282,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not file it (forbidden); none of the bookmarks is filed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not file into it or file it (forbidden); none of the bookmarks is filed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6225,7 +6291,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed */
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6309,7 +6375,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not take it out of a folder (forbidden); none of the bookmarks is unfiled */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not take bookmarks out of it or take it out of a folder (forbidden); none of the bookmarks is unfiled */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6318,7 +6384,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled */
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12290,7 +12356,9 @@ export interface operations {
     replaceTeamMembers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 id: string;
             };
@@ -12302,7 +12370,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added; the team's version does not move, since it covers the name and the description */
+            /** @description The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added. A set that differs from the team's moves the version by one and the ETag is that of the new version; the set the team has already writes nothing and answers with the unchanged version */
             200: {
                 headers: {
                     /** @description The team's version as an entity tag, for example "3"; the If-Match of the next change */
@@ -12342,6 +12410,15 @@ export interface operations {
             };
             /** @description The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, or the replacement adds an account that joined the workspace after that version was written; the member set is unchanged, and in the second case only the version has moved, so a new read of the team carries the version to send */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };

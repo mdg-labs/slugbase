@@ -6,8 +6,11 @@ export type {
   FolderListRequest,
   FolderListRow,
   FolderNameRefusal,
+  FolderOwner,
   FolderPosition,
   FolderRecord,
+  FolderScope,
+  FolderShareSummary,
   FolderSort,
   FolderStore,
   FolderStoreCreationResult,
@@ -20,6 +23,6 @@ export type { FolderReadAsk, FolderReadDependencies } from "./read.ts";
 export { updateFolder } from "./update.ts";
 export type { FolderChanges, FolderPatch, FolderUpdateAsk, FolderUpdateDependencies, FolderUpdateOutcome, FolderUpdateRequest, FolderUpdateResult } from "./update.ts";
 export { deleteFolder } from "./delete.ts";
-export type { FolderDeletionAsk, FolderDeletionDependencies } from "./delete.ts";
+export type { FolderDeletionAsk, FolderDeletionDependencies, FolderDeletionResult } from "./delete.ts";
 export { fileBookmarks, unfileBookmarks } from "./filing.ts";
 export type { FolderFilingAsk, FolderFilingDependencies, FolderFilingRequest, FolderFilingResult, FolderFilingStore, FolderFilingStoreResult } from "./filing.ts";

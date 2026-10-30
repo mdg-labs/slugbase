@@ -11,7 +11,7 @@ import { Slot } from "../extensions/index.ts";
 import { usePaletteState } from "../palette/palette-state.tsx";
 import { isApplePlatform } from "../palette/platform.ts";
 import { GettingStarted } from "./getting-started.tsx";
-import { CountsRow, HomeSkeleton, PinnedRow, QuickAccessRow, TopTagsRow } from "./dashboard-rows.tsx";
+import { CountsRow, HomeSkeleton, PinnedRow, QuickAccessRow, SharingRow, TopTagsRow } from "./dashboard-rows.tsx";
 import { dashboardQuery } from "./dashboard.ts";
 
 // The shell's main area has no padding of its own: each page keeps its content off the edges, as the settings and admin layouts do.
@@ -64,7 +64,7 @@ function NoBookmarks(): ReactElement {
 
 /**
  * `/` (doc 03 section 2, doc 02 section 9.3): the extension slot, the counts and the search that opens the palette, then the
- * quick access slugs, the pinned bookmarks and the most used tags, all read in one call. A workspace with no bookmarks gets the
+ * quick access slugs, the pinned bookmarks, the most used tags and the sharing counts, all read in one call. A workspace with no bookmarks gets the
  * teaching empty state in place of the three lists. The heading and the search do not wait for the answer.
  */
 export function HomePage(): ReactElement {
@@ -101,6 +101,7 @@ export function HomePage(): ReactElement {
             <TopTagsRow tags={data.topTags} />
           </>
         )}
+        <SharingRow sharing={data.sharing} />
         <GettingStarted onboarding={data.onboarding} />
       </>
     );

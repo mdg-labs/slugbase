@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 
 // The dashboard tag of doc 04 section 10.8 (doc 02 section 9.3, doc 03 section 2): what the home screen shows, in one round trip. It acts in the workspace the request is bound to and
-// names none (D11), answers the caller's own bookmarks, folders and tags only, and never counts or lists a plan-archived bookmark (doc 10 T1 and T2). It is the session's alone: it
+// names none (D11), answers the caller's own bookmarks, folders and tags, and lists the forwarding bookmarks other members shared with the caller, and never counts or lists a plan-archived bookmark or one the caller cannot read (doc 10 T1 and T2). It is the session's alone: it
 // declares no token scope, so an API token is refused before the handler.
 
 /** The most bookmarks the quick access holds (doc 02 section 9.3). */
@@ -24,7 +24,7 @@ export const DashboardCountsSchema = z
       .int()
       .min(0)
       .nullable()
-      .describe("The bookmarks shared with the caller; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements"),
+      .describe("The bookmarks other members shared with the caller, plan-archived ones not counted; null whenever the caller's workspace does not hold the sharing entitlements"),
   })
   .meta({ id: "DashboardCounts" });
 
@@ -51,7 +51,7 @@ export const DashboardTagSchema = z
 export const DashboardSharingSchema = z
   .strictObject({
     sharedWithYou: z.number().int().min(0).describe("The bookmarks other members shared with the caller"),
-    sharedByYou: z.number().int().min(0).describe("The caller's bookmarks that are shared with others"),
+    sharedByYou: z.number().int().min(0).describe("The caller's bookmarks that are shared with others, plan-archived ones not counted"),
   })
   .meta({ id: "DashboardSharing" });
 
@@ -72,7 +72,7 @@ export const DashboardSchema = z
     quickAccess: z
       .array(DashboardBookmarkSchema)
       .max(DASHBOARD_QUICK_ACCESS_LIMIT)
-      .describe("Up to 8 of the caller's own bookmarks that forward by a slug, the most opened first; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it"),
+      .describe("Up to 8 of the bookmarks the caller can read, its own and those shared with it, that forward by a slug, the most opened first by the bookmark's total opens; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it"),
     pinned: z
       .array(DashboardBookmarkSchema)
       .max(DASHBOARD_PINNED_LIMIT)
@@ -81,7 +81,7 @@ export const DashboardSchema = z
       .array(DashboardTagSchema)
       .max(DASHBOARD_TOP_TAGS_LIMIT)
       .describe("Up to 12 of the caller's own tags, the one on the most bookmarks first, then by name; another member's tags are never in it"),
-    sharing: DashboardSharingSchema.nullable().describe("The sharing counts; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements"),
+    sharing: DashboardSharingSchema.nullable().describe("The sharing counts; null whenever the caller's workspace does not hold the sharing entitlements"),
     onboarding: DashboardOnboardingSchema,
   })
   .meta({ id: "Dashboard" });

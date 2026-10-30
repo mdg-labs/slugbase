@@ -2,7 +2,8 @@
 // The k6 scenarios of the performance budgets (doc 08 section 5.3, doc 01 section 9.3), run by scripts/perf/run.mjs against a
 // server on this machine whose database holds the large instance. One session is made in setup() and every request carries it.
 // The scenarios run one after the other, so each budget is measured without the load of the others. "Server time" is the time
-// k6 waits for the first byte of the answer (http_req_waiting): /go p95 under 30 ms, list and search p95 under 100 ms.
+// k6 waits for the first byte of the answer (http_req_waiting): /go p95 under 30 ms, list and search p95 under 100 ms. /go and search
+// include the bookmarks that members share with the account (doc 02 sections 6.3 and 8), and the budgets cover them.
 import http from "k6/http";
 import { check, fail } from "k6";
 import { PAGES, SORTS, budgetThresholds } from "./budgets.js";
@@ -84,12 +85,46 @@ export function setup() {
   return { headers, cursors };
 }
 
+// Where a request of the /go scenario goes: most to a slug of the account's own, some to a slug that a member shares with the account as well
+// (the account's own comes first), to a slug only one member shares (forwarded to), to a slug several members share and the account has none of
+// (the disambiguation page, which the server answers with the single-page app and status 200), and some to a slug nobody has. The shared kinds
+// are left out when the instance has no such slug.
+const GO_KINDS = [
+  { kind: "own", weight: 60, slugs: () => fixtures.slugs },
+  { kind: "colliding", weight: 15, slugs: () => fixtures.collidingSlugs || [] },
+  { kind: "shared", weight: 5, slugs: () => fixtures.sharedSlugs || [] },
+  { kind: "ambiguous", weight: 5, slugs: () => fixtures.ambiguousSlugs || [] },
+  { kind: "missing", weight: 15, slugs: () => [`no-such-slug-${Math.floor(Math.random() * 1000)}`] },
+];
+
+function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function goKind() {
+  const available = GO_KINDS.filter((entry) => entry.slugs().length > 0);
+  let roll = Math.random() * available.reduce((sum, entry) => sum + entry.weight, 0);
+  for (const entry of available) {
+    roll -= entry.weight;
+    if (roll < 0) {
+      return entry;
+    }
+  }
+  return available[0];
+}
+
+const GO_CHECKS = {
+  own: { "a slug forwards": (r) => r.status === 302 && /^https?:\/\//.test(r.headers.Location) },
+  colliding: { "a slug shared by a member forwards to the account's own": (r) => r.status === 302 && /^https?:\/\//.test(r.headers.Location) },
+  shared: { "a slug only a member shares forwards": (r) => r.status === 302 && /^https?:\/\//.test(r.headers.Location) },
+  ambiguous: { "a slug several members share asks to choose": (r) => r.status === 200 },
+  missing: { "an unknown slug is not found": (r) => r.status === 404 },
+};
+
 export function go(data) {
-  // One request in ten asks for a slug nobody has, which the product answers with its not-found page.
-  const hit = Math.random() >= 0.1;
-  const slug = hit ? fixtures.slugs[Math.floor(Math.random() * fixtures.slugs.length)] : `no-such-slug-${Math.floor(Math.random() * 1000)}`;
-  const response = get(`/go/${slug}`, data.headers, { kind: "go", hit: String(hit) }, 0);
-  check(response, hit ? { "a slug forwards": (r) => r.status === 302 && /^https?:\/\//.test(r.headers.Location) } : { "an unknown slug is not found": (r) => r.status === 404 });
+  const entry = goKind();
+  const response = get(`/go/${pick(entry.slugs())}`, data.headers, { kind: "go", hit: String(entry.kind !== "missing"), route: entry.kind }, 0);
+  check(response, GO_CHECKS[entry.kind]);
 }
 
 export function list(data) {
@@ -101,7 +136,13 @@ export function list(data) {
 }
 
 export function search(data) {
-  const term = fixtures.searchTerms[Math.floor(Math.random() * fixtures.searchTerms.length)];
-  const response = get(`/api/v1/search?q=${encodeURIComponent(term)}`, data.headers, { kind: "search" });
-  check(response, { "search results": (r) => r.status === 200 && Array.isArray(r.json("bookmarks")) });
+  // Some of the terms only bookmarks that members share with the account match, so the search reads the shares as well as the account's own bookmarks.
+  const shared = fixtures.sharedSearchTerms || [];
+  const useShared = shared.length > 0 && Math.random() < 0.2;
+  const term = useShared ? pick(shared) : pick(fixtures.searchTerms);
+  const response = get(`/api/v1/search?q=${encodeURIComponent(term)}`, data.headers, { kind: "search", shared: String(useShared) });
+  check(response, {
+    "search results": (r) => r.status === 200 && Array.isArray(r.json("bookmarks")),
+    "a shared bookmark is found": (r) => !useShared || (r.status === 200 && r.json("bookmarks").length > 0),
+  });
 }

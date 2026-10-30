@@ -426,6 +426,127 @@ describe("granting, listing and revoking", () => {
   });
 });
 
+describe("sharing many bookmarks at once", () => {
+  it("shares the owner's live bookmarks with a member in one statement, once for a bookmark shared with the member already, and reports the shares it made", async () => {
+    const workspace = await workspaceOf();
+    const owner = memberOf(workspace, 0);
+    const recipient = memberOf(workspace, 2);
+    const [first, second, third] = [await seedBookmark(workspace.id, owner), await seedBookmark(workspace.id, owner), await seedBookmark(workspace.id, owner)];
+    await seedShare(workspace.id, first, { accountId: recipient }, owner);
+
+    const result = await inTenant(ownerTenant(workspace), (tx) =>
+      bookmarkShareRepository(tx).share({ bookmarkIds: [first, second, third, second.toUpperCase()], ownerId: owner, target: { kind: "member", accountId: recipient }, newId: freshId }),
+    );
+
+    expect(result).toEqual({ kind: "done", affected: 3, granted: 2, targetName: "Member 2" });
+    const stored = await storedShares(workspace.id);
+    expect(stored.map((share) => [share.bookmark_id, share.target_account_id, share.granted_by]).sort()).toEqual(
+      [first, second, third].map((bookmarkId) => [bookmarkId, recipient, owner]).sort(),
+    );
+  });
+
+  it("shares with a team, and a repeat of the same request makes no share", async () => {
+    const workspace = await workspaceOf();
+    const owner = memberOf(workspace, 0);
+    const teamId = await seedTeam(workspace.id, "Design", [memberOf(workspace, 1)]);
+    const bookmarkIds = [await seedBookmark(workspace.id, owner), await seedBookmark(workspace.id, owner)];
+
+    const results = await inTenant(ownerTenant(workspace), async (tx) => {
+      const repository = bookmarkShareRepository(tx);
+      const request = { bookmarkIds, ownerId: owner, target: { kind: "team", teamId } as const, newId: freshId };
+      return [await repository.share(request), await repository.share(request)];
+    });
+
+    expect(results).toEqual([
+      { kind: "done", affected: 2, granted: 2, targetName: "Design" },
+      { kind: "done", affected: 2, granted: 0, targetName: "Design" },
+    ]);
+    expect(await storedShares(workspace.id)).toHaveLength(2);
+  });
+
+  it("reaches only the owner's own live bookmarks: another member's, one that is plan-archived, one of another workspace and an unknown one get no share, and the recipient's access stays as it was", async () => {
+    const workspace = await workspaceOf();
+    const other = await workspaceOf();
+    const owner = memberOf(workspace, 0);
+    const recipient = memberOf(workspace, 2);
+    const own = await seedBookmark(workspace.id, owner);
+    const recipientOnly = await seedBookmark(workspace.id, memberOf(workspace, 1));
+    await seedShare(workspace.id, recipientOnly, { accountId: owner }, memberOf(workspace, 1));
+    const archived = await seedBookmark(workspace.id, owner, { archived: true });
+    const foreign = await seedBookmark(other.id, memberOf(other, 0));
+    const before = await storedShares(workspace.id);
+
+    const result = await inTenant(ownerTenant(workspace), (tx) =>
+      bookmarkShareRepository(tx).share({ bookmarkIds: [own, recipientOnly, archived, foreign, freshId()], ownerId: owner, target: { kind: "member", accountId: recipient }, newId: freshId }),
+    );
+
+    expect(result).toEqual({ kind: "done", affected: 1, granted: 1, targetName: "Member 2" });
+    const after = await storedShares(workspace.id);
+    expect(after.filter((share) => !before.some((known) => known.id === share.id)).map((share) => [share.bookmark_id, share.target_account_id])).toEqual([[own, recipient]]);
+    expect(after.filter((share) => share.bookmark_id === recipientOnly)).toEqual(before.filter((share) => share.bookmark_id === recipientOnly));
+    expect(await storedShares(other.id)).toEqual([]);
+  });
+
+  it("answers unknown_target, writing nothing, for an account that is no member of the workspace and for a team of another workspace, even when no bookmark is named", async () => {
+    const workspace = await workspaceOf();
+    const other = await workspaceOf();
+    const owner = memberOf(workspace, 0);
+    const bookmarkId = await seedBookmark(workspace.id, owner);
+    const foreignTeam = await seedTeam(other.id, "Elsewhere", [memberOf(other, 1)]);
+
+    const results = await inTenant(ownerTenant(workspace), async (tx) => {
+      const repository = bookmarkShareRepository(tx);
+      return [
+        await repository.share({ bookmarkIds: [bookmarkId], ownerId: owner, target: { kind: "member", accountId: memberOf(other, 1) }, newId: freshId }),
+        await repository.share({ bookmarkIds: [bookmarkId], ownerId: owner, target: { kind: "team", teamId: foreignTeam }, newId: freshId }),
+        await repository.share({ bookmarkIds: [], ownerId: owner, target: { kind: "member", accountId: freshId() }, newId: freshId }),
+      ];
+    });
+
+    expect(results).toEqual([{ kind: "unknown_target" }, { kind: "unknown_target" }, { kind: "unknown_target" }]);
+    expect(await storedShares(workspace.id)).toEqual([]);
+    expect(await storedShares(other.id)).toEqual([]);
+  });
+
+  it("shares nothing as another account: only the account of the transaction shares its own bookmarks", async () => {
+    const workspace = await workspaceOf();
+    const owner = memberOf(workspace, 0);
+    const bookmarkId = await seedBookmark(workspace.id, owner);
+
+    await expect(
+      inTenant({ accountId: memberOf(workspace, 2), workspaceId: workspace.id }, (tx) =>
+        bookmarkShareRepository(tx).share({ bookmarkIds: [bookmarkId], ownerId: owner, target: { kind: "member", accountId: memberOf(workspace, 1) }, newId: freshId }),
+      ),
+    ).rejects.toThrow("only the account of the transaction shares its own bookmarks");
+    expect(await storedShares(workspace.id)).toEqual([]);
+  });
+
+  it("previews who the bookmarks are shared with afterwards without writing: the audience of a member is one, that of a team its members without the owner, and added counts the bookmarks not shared yet", async () => {
+    const workspace = await workspaceOf(["owner", "admin", "member", "member", "member"]);
+    const owner = memberOf(workspace, 0);
+    const teamId = await seedTeam(workspace.id, "Design", [owner, memberOf(workspace, 1), memberOf(workspace, 2)]);
+    const [first, second] = [await seedBookmark(workspace.id, owner), await seedBookmark(workspace.id, owner)];
+    const recipientOnly = await seedBookmark(workspace.id, memberOf(workspace, 1));
+    await seedShare(workspace.id, first, { teamId }, owner);
+    const before = await storedShares(workspace.id);
+
+    const previews = await inTenant(ownerTenant(workspace), async (tx) => {
+      const repository = bookmarkShareRepository(tx);
+      const bookmarkIds = [first, second, recipientOnly];
+      return {
+        team: await repository.previewShare({ bookmarkIds, ownerId: owner, target: { kind: "team", teamId } }),
+        member: await repository.previewShare({ bookmarkIds, ownerId: owner, target: { kind: "member", accountId: memberOf(workspace, 3) } }),
+        unknown: await repository.previewShare({ bookmarkIds, ownerId: owner, target: { kind: "member", accountId: freshId() } }),
+      };
+    });
+
+    expect(previews.team).toEqual({ kind: "previewed", affected: 2, audience: { kind: "team", id: teamId, name: "Design", memberCount: 2, added: 1 } });
+    expect(previews.member).toEqual({ kind: "previewed", affected: 2, audience: { kind: "member", id: memberOf(workspace, 3), name: "Member 3", memberCount: 1, added: 2 } });
+    expect(previews.unknown).toEqual({ kind: "unknown_target" });
+    expect(await storedShares(workspace.id)).toEqual(before);
+  });
+});
+
 describe("what takes a share away", () => {
   it("removes the shares of a bookmark with the bookmark, those of a member with the member, and those of a team with the team", async () => {
     const workspace = await workspaceOf();

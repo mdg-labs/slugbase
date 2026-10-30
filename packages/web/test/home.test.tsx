@@ -11,7 +11,8 @@ import { allowSlowRender, json, renderApp, stubBrowserApis, stubMatchMedia } fro
 // The Home screen (doc 03 section 2, doc 02 section 9.3) against the handlers generated from openapi.json, through the app's own API
 // client. The failure scenarios are a row that shows more than the answer holds or one that is missing, a "Shared with you" tile
 // the answer did not offer, a quick access tile or tag link that leads somewhere other than /go/<slug> or the filtered list, a
-// pinned link that follows an address that is not http or https, a title or tag name rendered as markup, an empty workspace that
+// Sharing row or tile the answer did not offer or the workspace does not grant, a Sharing link that leads to another list than the
+// scope it names, a pinned link that follows an address that is not http or https, a title or tag name rendered as markup, an empty workspace that
 // still shows empty rows, and a failed or pending request shown as an empty screen.
 
 type Dashboard = ComponentTypes["schemas"]["Dashboard"];
@@ -131,8 +132,8 @@ describe("the counts and the search", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => 
     expect(within(totals).queryByText("Shared with you")).toBeNull();
   });
 
-  it("adds the Shared with you tile when the answer carries that count", async () => {
-    use({ fixtures: { getDashboard: dashboard({ counts: { bookmarks: 3, folders: 1, tags: 2, sharedWithYou: 5 } }) } });
+  it("adds the Shared with you tile when the answer carries that count and the workspace grants sharing", async () => {
+    use({ fixtures: { getDashboard: dashboard({ counts: { bookmarks: 3, folders: 1, tags: 2, sharedWithYou: 5 } }), getEntitlements: entitlementsOf(true) } });
     await openHome();
 
     const totals = await screen.findByRole("group", { name: "Totals" });
@@ -157,6 +158,81 @@ describe("the counts and the search", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => 
     const totals = await screen.findByRole("group", { name: "Totals" });
     expect(notice.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(heading.compareDocumentPosition(totals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+function entitlementsOf(sharing: boolean) {
+  return {
+    entitlements: {
+      "bookmarks.max": "unlimited",
+      "seats.max": "unlimited",
+      "workspaces.ownMax": "unlimited",
+      "ai.suggestions": true,
+      "sharing.members": sharing,
+      "sharing.teams": sharing,
+      "members.invite": true,
+      "teams.manage": true,
+      "audit.log": true,
+    },
+    usage: { "bookmarks.used": 0, "seats.used": 1, "workspaces.owned": 1 },
+    upgradeAvailable: false,
+  };
+}
+
+describe("sharing", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  const shared = (): Dashboard => dashboard({ counts: { bookmarks: 3, folders: 1, tags: 2, sharedWithYou: 5 }, sharing: { sharedWithYou: 5, sharedByYou: 1204 }, quickAccess: [bookmark(1)] });
+
+  it("shows the Sharing row with the two counts, each a link to the list of its scope", async () => {
+    use({ fixtures: { getDashboard: shared(), getEntitlements: entitlementsOf(true) } });
+    await openHome();
+
+    const region = await section("Sharing");
+    const withYou = within(region).getByRole("link", { name: /Shared with you/ });
+    const byYou = within(region).getByRole("link", { name: /Shared by you/ });
+    expect(withYou.getAttribute("href")).toBe("/bookmarks?scope=shared_with_me");
+    expect(withYou.textContent).toContain("5");
+    expect(byYou.getAttribute("href")).toBe("/bookmarks?scope=shared_by_me");
+    expect(byYou.textContent).toContain("1,204");
+  });
+
+  it("opens the list of the scope a link names", async () => {
+    use({ fixtures: { getDashboard: shared(), getEntitlements: entitlementsOf(true) } });
+    await openHome();
+
+    await press(within(await section("Sharing")).getByRole("link", { name: /Shared by you/ }));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/bookmarks");
+    });
+    expect(window.location.search).toBe("?scope=shared_by_me");
+  });
+
+  it("keeps the row and the tile when the member has no bookmarks of their own but something is shared with them", async () => {
+    use({ fixtures: { getDashboard: dashboard({ counts: { bookmarks: 0, folders: 0, tags: 0, sharedWithYou: 2 }, sharing: { sharedWithYou: 2, sharedByYou: 0 } }), getEntitlements: entitlementsOf(true) } });
+    await openHome();
+
+    expect(await section("Sharing")).toBeTruthy();
+    expect(within(await screen.findByRole("group", { name: "Totals" })).getByText("Shared with you").nextSibling?.textContent).toBe("2");
+  });
+
+  it("shows neither the row nor the tile when the answer carries no sharing counts", async () => {
+    use({ fixtures: { getDashboard: dashboard(), getEntitlements: entitlementsOf(true) } });
+    await openHome();
+
+    const totals = await screen.findByRole("group", { name: "Totals" });
+    expect(within(totals).queryByText("Shared with you")).toBeNull();
+    expect(screen.queryByRole("heading", { level: 2, name: "Sharing" })).toBeNull();
+  });
+
+  it("shows neither the row nor the tile when the workspace does not grant sharing, whatever the answer carries", async () => {
+    use({ fixtures: { getDashboard: shared(), getEntitlements: entitlementsOf(false) } });
+    await openHome();
+
+    await screen.findByRole("heading", { level: 2, name: "Quick access" });
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { level: 2, name: "Sharing" })).toBeNull();
+      expect(within(screen.getByRole("group", { name: "Totals" })).queryByText("Shared with you")).toBeNull();
+    });
   });
 });
 

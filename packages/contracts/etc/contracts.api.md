@@ -133,6 +133,17 @@ export const addFolderBookmarks: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -579,10 +590,13 @@ export const BookmarkTagSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
-export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags"];
+export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags", "share"];
 
 // @public (undocumented)
 export const BULK_FOLDER_ACTIONS: readonly ["add_to_folder", "move_to_folder", "remove_from_folder"];
+
+// @public
+export const BULK_PREVIEW_ACTIONS: readonly ["add_tags", "share"];
 
 // @public (undocumented)
 export const BULK_TAG_ACTIONS: readonly ["add_tags", "remove_tags"];
@@ -593,7 +607,7 @@ export const bulkBookmarks: {
     readonly path: "/api/v1/bookmarks/bulk";
     readonly operationId: "bulkBookmarks";
     readonly tag: "bookmarks";
-    readonly summary: "Delete, pin, unpin, file or tag many bookmarks";
+    readonly summary: "Delete, pin, unpin, file, tag or share many bookmarks";
     readonly auth: "member";
     readonly rate: "bulk";
     readonly scope: "write";
@@ -608,6 +622,7 @@ export const bulkBookmarks: {
                 remove_tags: "remove_tags";
                 pin: "pin";
                 unpin: "unpin";
+                share: "share";
             }>;
             ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             filter: z.ZodOptional<z.ZodObject<{
@@ -627,6 +642,8 @@ export const bulkBookmarks: {
             }, z.core.$strict>>;
             folderId: z.ZodOptional<z.ZodUUID>;
             tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            accountId: z.ZodOptional<z.ZodUUID>;
+            teamId: z.ZodOptional<z.ZodUUID>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -651,7 +668,10 @@ export const bulkBookmarks: {
 
 // @public (undocumented)
 export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
-    action: z.ZodLiteral<"add_tags">;
+    action: z.ZodEnum<{
+        add_tags: "add_tags";
+        share: "share";
+    }>;
     ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     filter: z.ZodOptional<z.ZodObject<{
         scope: z.ZodOptional<z.ZodEnum<{
@@ -668,7 +688,9 @@ export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
         folderId: z.ZodOptional<z.ZodUUID>;
         tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
     }, z.core.$strict>>;
-    tagIds: z.ZodArray<z.ZodUUID>;
+    tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    accountId: z.ZodOptional<z.ZodUUID>;
+    teamId: z.ZodOptional<z.ZodUUID>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -686,6 +708,16 @@ export const BulkBookmarksPreviewSchema: z.ZodObject<{
         bookmarkCount: z.ZodNumber;
         added: z.ZodNumber;
     }, z.core.$strict>>;
+    audience: z.ZodNullable<z.ZodObject<{
+        kind: z.ZodEnum<{
+            member: "member";
+            team: "team";
+        }>;
+        id: z.ZodUUID;
+        name: z.ZodString;
+        memberCount: z.ZodNumber;
+        added: z.ZodNumber;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -699,6 +731,7 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
         remove_tags: "remove_tags";
         pin: "pin";
         unpin: "unpin";
+        share: "share";
     }>;
     ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     filter: z.ZodOptional<z.ZodObject<{
@@ -718,6 +751,8 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
     }, z.core.$strict>>;
     folderId: z.ZodOptional<z.ZodUUID>;
     tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    accountId: z.ZodOptional<z.ZodUUID>;
+    teamId: z.ZodOptional<z.ZodUUID>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -729,6 +764,18 @@ export const BulkBookmarksResultSchema: z.ZodObject<{
         not_owner: z.ZodNumber;
         not_found: z.ZodNumber;
     }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BulkPreviewAudienceSchema: z.ZodObject<{
+    kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+    }>;
+    id: z.ZodUUID;
+    name: z.ZodString;
+    memberCount: z.ZodNumber;
+    added: z.ZodNumber;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -1116,6 +1163,7 @@ export interface ComponentTypes {
         };
         BulkBookmarksPreview: {
             affected: number;
+            audience: ComponentTypes["schemas"]["BulkPreviewAudience"] | null;
             requested: number;
             skipped: number;
             skippedReasons: {
@@ -1125,17 +1173,21 @@ export interface ComponentTypes {
             tags: ComponentTypes["schemas"]["BulkPreviewTag"][];
         };
         BulkBookmarksPreviewRequest: {
-            action: "add_tags";
+            accountId?: string;
+            action: "add_tags" | "share";
             filter?: ComponentTypes["schemas"]["BookmarkFilter"];
             ids?: string[];
-            tagIds: string[];
+            tagIds?: string[];
+            teamId?: string;
         };
         BulkBookmarksRequest: {
-            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags";
+            accountId?: string;
+            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags" | "share";
             filter?: ComponentTypes["schemas"]["BookmarkFilter"];
             folderId?: string;
             ids?: string[];
             tagIds?: string[];
+            teamId?: string;
         };
         BulkBookmarksResult: {
             affected: number;
@@ -1145,6 +1197,13 @@ export interface ComponentTypes {
                 not_found: number;
                 not_owner: number;
             };
+        };
+        BulkPreviewAudience: {
+            added: number;
+            id: string;
+            kind: "member" | "team";
+            memberCount: number;
+            name: string;
         };
         BulkPreviewTag: {
             added: number;
@@ -1311,7 +1370,12 @@ export interface ComponentTypes {
             icon: string;
             id: string;
             name: string;
+            owner?: {
+                accountId: string;
+                displayName: string;
+            } | null;
             ownerId: string | null;
+            shareSummary?: ComponentTypes["schemas"]["FolderShareSummary"] | null;
             updatedAt: string;
             version: number;
         };
@@ -1336,6 +1400,13 @@ export interface ComponentTypes {
         FolderShareList: {
             audienceSize: number;
             items: ComponentTypes["schemas"]["FolderShare"][];
+        };
+        FolderShareSummary: {
+            memberCount: number;
+            teams: {
+                id: string;
+                name: string;
+            }[];
         };
         ForgotPasswordRequest: {
             email: string;
@@ -2248,6 +2319,17 @@ export const createFolder: {
         readonly 201: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -3275,6 +3357,9 @@ export const FOLDER_LIST_TOTAL_CAP = 10000;
 // @public
 export const FOLDER_NAME_MAX_LENGTH = 64;
 
+// @public (undocumented)
+export const FOLDER_SCOPES: readonly ["all", "mine", "shared"];
+
 // @public
 export const FOLDER_SEARCH_MAX_LENGTH = 64;
 
@@ -3299,6 +3384,17 @@ export const FolderListSchema: z.ZodObject<{
     items: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            memberCount: z.ZodNumber;
+            teams: z.ZodArray<z.ZodObject<{
+                id: z.ZodUUID;
+                name: z.ZodString;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -3321,6 +3417,17 @@ export const FolderParamsSchema: z.ZodObject<{
 export const FolderSchema: z.ZodObject<{
     id: z.ZodUUID;
     ownerId: z.ZodNullable<z.ZodUUID>;
+    owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>>;
+    shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+            id: z.ZodUUID;
+            name: z.ZodString;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>>;
     name: z.ZodString;
     icon: z.ZodString;
     color: z.ZodNumber;
@@ -3370,6 +3477,15 @@ export const FolderShareSchema: z.ZodObject<{
 // @public (undocumented)
 export const FolderSharesParamsSchema: z.ZodObject<{
     id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FolderShareSummarySchema: z.ZodObject<{
+    memberCount: z.ZodNumber;
+    teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -3670,6 +3786,17 @@ export const getFolder: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -5046,7 +5173,7 @@ export const listFolders: {
     readonly path: "/api/v1/folders";
     readonly operationId: "listFolders";
     readonly tag: "folders";
-    readonly summary: "List my folders";
+    readonly summary: "List folders";
     readonly auth: "member";
     readonly rate: "read";
     readonly scope: "read";
@@ -5055,6 +5182,7 @@ export const listFolders: {
             scope: z.ZodDefault<z.ZodEnum<{
                 all: "all";
                 mine: "mine";
+                shared: "shared";
             }>>;
             q: z.ZodOptional<z.ZodString>;
             sort: z.ZodDefault<z.ZodEnum<{
@@ -5071,6 +5199,17 @@ export const listFolders: {
         items: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -5137,6 +5276,7 @@ export const ListFoldersQuerySchema: z.ZodObject<{
     scope: z.ZodDefault<z.ZodEnum<{
         all: "all";
         mine: "mine";
+        shared: "shared";
     }>>;
     q: z.ZodOptional<z.ZodString>;
     sort: z.ZodDefault<z.ZodEnum<{
@@ -10595,7 +10735,7 @@ export interface OperationTypes {
     listFolders: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared";
                 q?: string;
                 sort?: "name" | "count" | "updated";
                 limit?: number;
@@ -12450,7 +12590,9 @@ export interface OperationTypes {
     replaceTeamMembers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 id: string;
             };
@@ -12496,6 +12638,14 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16356,13 +16506,16 @@ export const previewBulkBookmarks: {
     readonly path: "/api/v1/bookmarks/bulk/preview";
     readonly operationId: "previewBulkBookmarks";
     readonly tag: "bookmarks";
-    readonly summary: "Preview adding tags to many bookmarks";
+    readonly summary: "Preview adding tags to, or sharing, many bookmarks";
     readonly auth: "member";
     readonly rate: "read";
     readonly scope: "write";
     readonly request: {
         readonly body: z.ZodObject<{
-            action: z.ZodLiteral<"add_tags">;
+            action: z.ZodEnum<{
+                add_tags: "add_tags";
+                share: "share";
+            }>;
             ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             filter: z.ZodOptional<z.ZodObject<{
                 scope: z.ZodOptional<z.ZodEnum<{
@@ -16379,7 +16532,9 @@ export const previewBulkBookmarks: {
                 folderId: z.ZodOptional<z.ZodUUID>;
                 tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
             }, z.core.$strict>>;
-            tagIds: z.ZodArray<z.ZodUUID>;
+            tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            accountId: z.ZodOptional<z.ZodUUID>;
+            teamId: z.ZodOptional<z.ZodUUID>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -16395,6 +16550,16 @@ export const previewBulkBookmarks: {
         id: z.ZodUUID;
         name: z.ZodString;
         bookmarkCount: z.ZodNumber;
+        added: z.ZodNumber;
+        }, z.core.$strict>>;
+        audience: z.ZodNullable<z.ZodObject<{
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        id: z.ZodUUID;
+        name: z.ZodString;
+        memberCount: z.ZodNumber;
         added: z.ZodNumber;
         }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
@@ -16815,6 +16980,17 @@ export const removeFolderBookmarks: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -16984,6 +17160,9 @@ export const replaceTeamMembers: {
         readonly params: z.ZodObject<{
             id: z.ZodUUID;
         }, z.core.$strict>;
+        readonly headers: z.ZodObject<{
+            "If-Match": z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>;
         readonly body: z.ZodObject<{
             accountIds: z.ZodArray<z.ZodUUID>;
         }, z.core.$strict>;
@@ -17012,6 +17191,7 @@ export const replaceTeamMembers: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 412: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
@@ -18279,6 +18459,17 @@ export const updateFolder: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;

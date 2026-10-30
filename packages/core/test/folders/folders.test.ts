@@ -21,7 +21,7 @@ const FOLDER = "0192f3a0-aaaa-7000-8000-000000000001";
 const NOW = new Date("2026-10-24T05:00:00.000Z");
 
 function recordOf(name: string, id = FOLDER): FolderRecord {
-  return { id, ownerId: ACCOUNT.toLowerCase(), name, icon: "folder", color: 1, bookmarkCount: 0, version: 1, createdAt: NOW, updatedAt: NOW };
+  return { id, ownerId: ACCOUNT.toLowerCase(), name, icon: "folder", color: 1, bookmarkCount: 0, version: 1, createdAt: NOW, updatedAt: NOW, owner: null, shareSummary: { memberCount: 0, teams: [] } };
 }
 
 function rowOf(name: string, id = FOLDER, extra: Partial<FolderListRow> = {}): FolderListRow {
@@ -42,6 +42,7 @@ function store(answers: Partial<FolderStore> = {}) {
     count: answers.count ?? ((request) => record("count", request, 0)),
     update: answers.update ?? ((request: FolderUpdateRequest) => record("update", request, { kind: "updated", folder: recordOf(request.changes.name ?? "Same") } as const)),
     remove: answers.remove ?? ((request) => record("remove", request, true)),
+    sharedWith: answers.sharedWith ?? ((request) => record("sharedWith", request, false)),
   };
   return { calls, store: dependencies };
 }
@@ -108,10 +109,10 @@ describe("createFolder", () => {
 });
 
 describe("readFolder", () => {
-  it("names the folder and the owner in lower case to the store and passes its answer on", async () => {
+  it("names the folder and the viewer in lower case to the store and passes its answer on", async () => {
     const { calls, store: folderStore } = store();
     expect(await readFolder({ store: folderStore }, { folderId: FOLDER, accountId: ACCOUNT })).toEqual(recordOf("Found"));
-    expect(calls).toEqual([{ method: "find", request: { folderId: FOLDER, ownerId: ACCOUNT.toLowerCase() } }]);
+    expect(calls).toEqual([{ method: "find", request: { folderId: FOLDER, viewerId: ACCOUNT.toLowerCase() } }]);
 
     const { store: empty } = store({ find: () => Promise.resolve(undefined) });
     expect(await readFolder({ store: empty }, { folderId: FOLDER, accountId: ACCOUNT })).toBeUndefined();
@@ -138,12 +139,12 @@ describe("listFolders", () => {
 
   const ask = { workspaceId: WORKSPACE, accountId: ACCOUNT, scope: "all", search: undefined, sort: "name", limit: 2, cursor: undefined } as const;
 
-  it("asks the store for one folder more than the page for the account alone and the total up to one past the cap, and answers a page", async () => {
+  it("asks the store for one folder more than the page for the account and the scope and the total up to one past the cap, and answers a page", async () => {
     const recording = store();
-    expect(await listFolders({ store: recording.store, cursors: cursors() }, { ...ask, sort: "count", search: "read" })).toEqual({ kind: "listed", items: [], nextCursor: null, total: 0 });
+    expect(await listFolders({ store: recording.store, cursors: cursors() }, { ...ask, scope: "shared", sort: "count", search: "read" })).toEqual({ kind: "listed", items: [], nextCursor: null, total: 0 });
     expect(recording.calls).toEqual([
-      { method: "list", request: { ownerId: ACCOUNT.toLowerCase(), search: "read", sort: "count", after: undefined, limit: 3 } },
-      { method: "count", request: { ownerId: ACCOUNT.toLowerCase(), search: "read", limit: FOLDER_LIST_TOTAL_CAP + 1 } },
+      { method: "list", request: { viewerId: ACCOUNT.toLowerCase(), scope: "shared", search: "read", sort: "count", after: undefined, limit: 3 } },
+      { method: "count", request: { viewerId: ACCOUNT.toLowerCase(), scope: "shared", search: "read", limit: FOLDER_LIST_TOTAL_CAP + 1 } },
     ]);
   });
 
@@ -197,6 +198,7 @@ describe("listFolders", () => {
       { ...ask, workspaceId: "0192f3a0-cccc-7000-8000-000000000002", cursor: sealed(mine, position) },
       { ...ask, search: "x", cursor: sealed(mine, position) },
       { ...ask, scope: "mine", cursor: sealed(mine, position) },
+      { ...ask, scope: "shared", cursor: sealed(mine, position) },
       { ...ask, sort: "count", cursor: sealed({ ...mine, sort: "count" }, position) },
       { ...ask, sort: "updated", cursor: sealed({ ...mine, sort: "updated" }, position) },
       { ...ask, cursor: sealed(mine, { ...position, count: 3 }) },
@@ -214,6 +216,18 @@ describe("listFolders", () => {
 describe("updateFolder", () => {
   const unchangedPatch = { name: undefined, icon: undefined, color: undefined };
 
+  it("answers not_found when the caller owns no such folder and none is shared with it, and forbidden when one is, whatever the patch holds", async () => {
+    const refused = { update: () => Promise.resolve({ kind: "not_found" } as const) };
+    const unshared = store(refused);
+    expect(await updateFolder({ store: unshared.store }, { folderId: FOLDER, accountId: ACCOUNT, patch: { name: "Taken over" }, expectedVersions: undefined })).toEqual({ kind: "not_found" });
+    expect(unshared.calls).toEqual([{ method: "sharedWith", request: { folderId: FOLDER, accountId: ACCOUNT.toLowerCase() } }]);
+
+    const shared = store({ ...refused, sharedWith: () => Promise.resolve(true) });
+    for (const patch of [{ name: "Taken over" }, { icon: "star" }, { color: 3 }]) {
+      expect(await updateFolder({ store: shared.store }, { folderId: FOLDER, accountId: ACCOUNT, patch, expectedVersions: undefined })).toEqual({ kind: "forbidden" });
+    }
+  });
+
   it("names the folder, the owner, the trimmed name, the other changes and the accepted versions to the store and passes its answer on", async () => {
     const { calls, store: folderStore } = store();
 
@@ -230,7 +244,7 @@ describe("updateFolder", () => {
   });
 
   it("refuses an invalid name before the store is asked, and passes stale, name_taken, unchanged and not_found on", async () => {
-    for (const answer of [{ kind: "stale" }, { kind: "name_taken" }, { kind: "unchanged", folder: recordOf("Same") }, { kind: "not_found" }] as const) {
+    for (const answer of [{ kind: "stale" }, { kind: "name_taken" }, { kind: "unchanged", folder: recordOf("Same") }] as const) {
       const { store: folderStore } = store({ update: () => Promise.resolve(answer) });
       expect(await updateFolder({ store: folderStore }, { folderId: FOLDER, accountId: ACCOUNT, patch: { name: "Same" }, expectedVersions: undefined })).toEqual(answer);
     }
@@ -242,12 +256,18 @@ describe("updateFolder", () => {
 });
 
 describe("deleteFolder", () => {
-  it("names the folder and the owner to the store, and answers whether it deleted one", async () => {
+  it("names the folder and the owner to the store, and answers that it deleted one without asking whether it is shared", async () => {
     const { calls, store: folderStore } = store();
-    expect(await deleteFolder({ store: folderStore }, { folderId: FOLDER, accountId: ACCOUNT })).toBe(true);
+    expect(await deleteFolder({ store: folderStore }, { folderId: FOLDER, accountId: ACCOUNT })).toEqual({ kind: "deleted" });
     expect(calls).toEqual([{ method: "remove", request: { folderId: FOLDER, ownerId: ACCOUNT.toLowerCase() } }]);
+  });
 
-    const { store: empty } = store({ remove: () => Promise.resolve(false) });
-    expect(await deleteFolder({ store: empty }, { folderId: FOLDER, accountId: ACCOUNT })).toBe(false);
+  it("answers not_found when the owner owns no such folder and none is shared with it, and forbidden when one is", async () => {
+    const empty = store({ remove: () => Promise.resolve(false) });
+    expect(await deleteFolder({ store: empty.store }, { folderId: FOLDER, accountId: ACCOUNT })).toEqual({ kind: "not_found" });
+    expect(empty.calls).toEqual([{ method: "sharedWith", request: { folderId: FOLDER, accountId: ACCOUNT.toLowerCase() } }]);
+
+    const shared = store({ remove: () => Promise.resolve(false), sharedWith: () => Promise.resolve(true) });
+    expect(await deleteFolder({ store: shared.store }, { folderId: FOLDER, accountId: ACCOUNT })).toEqual({ kind: "forbidden" });
   });
 });

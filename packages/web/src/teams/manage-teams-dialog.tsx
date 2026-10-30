@@ -13,7 +13,12 @@ const SECONDS_PER_MINUTE = 60;
 const SAVE_KEY = ["teams", "member"] as const;
 
 // The refusals `teamFailureOf` tells in the dialog, for which the shared error toast stays quiet; any other failure still raises it.
-const SHOWN_IN_THE_DIALOG = inPlaceRefusals([{ status: 404, code: "not_found" }, { status: 422 }, { status: 429, code: "rate_limited" }]);
+const SHOWN_IN_THE_DIALOG = inPlaceRefusals([
+  { status: 404, code: "not_found" },
+  { status: 412, code: "precondition_failed" },
+  { status: 422 },
+  { status: 429, code: "rate_limited" },
+]);
 
 function sortedOptions(options: ReadonlyMap<string, PickerOption>): PickerOption[] {
   return [...options.values()].sort((a, b) => a.label.localeCompare(b.label) || a.value.localeCompare(b.value));
@@ -21,7 +26,7 @@ function sortedOptions(options: ReadonlyMap<string, PickerOption>): PickerOption
 
 /**
  * The teams of one member (doc 03 section 11.7, `Manage teams`, a `form-overlay` with a `multi-pick` over the workspace's teams).
- * Each team that changes is a separate request, read again before it is replaced, so when a later one fails the earlier ones stand:
+ * Each team that changes is a separate request, read again before it is replaced and replaced against the version of that read, so when a later one fails the earlier ones stand:
  * the dialog stays open, says some changes were saved, and a second try sends what is left. The member list and the team lists are
  * read again whatever the end, since a step that went through has changed them.
  */
@@ -96,6 +101,8 @@ export function ManageTeamsDialog({ member, onClose }: { member: Member; onClose
         return t("settings.members.teams.error.teamGone");
       case "memberGone":
         return t("settings.members.teams.error.memberGone");
+      case "changedElsewhere":
+        return t("settings.members.teams.error.changedElsewhere");
       case "rateLimited":
         if (value.seconds === undefined) {
           return t("reauth.error.rateLimited.unknown");
@@ -105,7 +112,6 @@ export function ManageTeamsDialog({ member, onClose }: { member: Member; onClose
           : t("reauth.error.rateLimited.minutes", { count: Math.ceil(value.seconds / SECONDS_PER_MINUTE) });
       case "nameTaken":
       case "invalidName":
-      case "changedElsewhere":
       case "unavailable":
         return t("settings.members.teams.error.unavailable");
     }

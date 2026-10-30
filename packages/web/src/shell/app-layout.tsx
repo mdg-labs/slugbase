@@ -22,7 +22,7 @@ import { NewBookmarkButton } from "../bookmarks/new-bookmark-button.tsx";
 import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
-import { useAllFolders } from "../folders/use-all-folders.ts";
+import { useAllFolders, useSharedFolders } from "../folders/use-all-folders.ts";
 import { PaletteDialog } from "../palette/palette-dialog.tsx";
 import { PaletteProvider } from "../palette/palette-state.tsx";
 import { PaletteTrigger } from "../palette/palette-trigger.tsx";
@@ -46,9 +46,10 @@ function AppLayoutShell(): ReactElement {
   const account = useCachedAccount();
   const inBookmarks = pathname === "/bookmarks" || pathname.startsWith("/bookmarks/");
   const folders = useAllFolders();
-  // The folder the bookmarks list is filtered by, when it is one of the member's: it is the current item of the sidebar and the last crumb.
+  const sharedFolders = useSharedFolders();
+  // The folder the bookmarks list is filtered by, when it is one of the member's or one shared with them: it is the current item of the sidebar and the last crumb.
   const filterFolderId = pathname === "/bookmarks" ? validateBookmarkListSearch(search).folderId : undefined;
-  const filterFolder = folders.folders.find((folder) => folder.id === filterFolderId);
+  const filterFolder = [...folders.folders, ...sharedFolders.folders].find((folder) => folder.id === filterFolderId);
   const inFolders = pathname === "/folders" || pathname.startsWith("/folders/");
   const inTags = pathname === "/tags" || pathname.startsWith("/tags/");
   const inForwarding = pathname === "/forwarding" || pathname.startsWith("/forwarding/");
@@ -190,7 +191,7 @@ function AppLayoutShell(): ReactElement {
               )),
             )}
           </SidebarMenu>
-          <SidebarFolders activeId={filterFolder?.id} folders={folders} />
+          <SidebarFolders activeId={filterFolder?.id} folders={folders} shared={sharedFolders} />
         </>
       }
       productName={product.name}

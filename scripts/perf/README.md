@@ -24,7 +24,9 @@ The exit status is 0 when every budget holds, 10 when one is exceeded and 1 when
 
 `packages/testing/src/seed/large.ts` builds it deterministically from a fixed seed: 50 000 bookmarks in one workspace of three members (the
 instance admin owns eight in ten), 2 000 further workspaces with an owner and ten bookmarks each. About 12 % of the rows have a slug (85 % of
-those forward), 40 % are tagged and 35 % filed in a folder. `packages/testing/src/seed/perf.ts` writes it. The seed takes the handle of a
+those forward), 40 % are tagged and 35 % filed in a folder. The two other members share forwarding bookmarks with the admin by every route (directly, through a folder of theirs and through a team of all three), so
+their slugs, which come from the same words as the admin's, collide with the admin's own, and two slugs exist only as shared bookmarks: `perf-shared-one` (one member shares
+it) and `perf-shared-many` (both do, and the admin has none). `packages/testing/src/seed/perf.ts` writes it. The seed takes the handle of a
 database that the test harness created and nothing else, so it cannot be pointed at another database: it refuses any name other than
 `test_` and 16 hex digits, a server that is neither on this machine (a loopback host) nor the host of the server the harness is
 configured with (`SLUGBASE_TEST_PG_URL`, which CI reaches by its service name), a handle that is not connected to the database it names, and a database
@@ -36,9 +38,10 @@ that already has an account. It then runs `VACUUM (ANALYZE)` so that the planner
 scenarios run one after another so that a budget is measured without the load of the others, at a constant arrival rate (`--rate`, default 40
 a second, for `--duration` seconds each):
 
-- `go`: `GET /go/<slug>` for a slug of the admin, with one request in ten for a slug nobody has.
+- `go`: `GET /go/<slug>` for a slug of the admin (six in ten), for a slug the admin has and a member shares as well (the admin's own is followed), for the slug only one
+  member shares (followed), for the slug several members share (the single-page app, status 200, which asks to choose), and for a slug nobody has (not found).
 - `list`: `GET /api/v1/bookmarks` for each of the six sorts, the first page and a deep page (the 400th of 48).
-- `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders.
+- `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders, and for the slugs of the shared bookmarks, which only the shares let the admin find.
 
 The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape has a threshold of its own, so a
 regression names the sort and the page. `budgets.js` holds the sorts, the pages and the limits once: `scenarios.js` makes the thresholds from it and

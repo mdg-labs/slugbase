@@ -4,8 +4,9 @@ import { Link, useRouter } from "@tanstack/react-router";
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { isHttpUrl, recordOpen } from "../bookmarks/bookmarks.ts";
+import { useSharingGranted } from "../sharing/index.ts";
 import { useFormat } from "../i18n/use-format.ts";
-import type { Dashboard, DashboardBookmark } from "./dashboard.ts";
+import { SHARED_BY_YOU_SEARCH, SHARED_WITH_YOU_SEARCH, type Dashboard, type DashboardBookmark } from "./dashboard.ts";
 
 function Row({ id, title, action, children }: { readonly id: string; readonly title: string; readonly action?: ReactNode; readonly children: ReactNode }): ReactElement {
   return (
@@ -21,16 +22,17 @@ function Row({ id, title, action, children }: { readonly id: string; readonly ti
   );
 }
 
-/** Row 1, the counts (doc 03 section 2): the tile of what is shared with the member appears only when the answer carries that count. */
+/** Row 1, the counts (doc 03 section 2): the tile of what is shared with the member appears only when the answer carries that count and the workspace grants sharing. */
 export function CountsRow({ counts }: { readonly counts: Dashboard["counts"] }): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
+  const sharingGranted = useSharingGranted();
   return (
     <div aria-label={t("home.counts.label")} className="grid grid-cols-2 gap-3 md:grid-cols-4" role="group">
       <MetricTile label={t("home.counts.bookmarks")} value={format.number(counts.bookmarks)} />
       <MetricTile label={t("home.counts.folders")} value={format.number(counts.folders)} />
       <MetricTile label={t("home.counts.tags")} value={format.number(counts.tags)} />
-      {counts.sharedWithYou === null ? null : <MetricTile label={t("home.counts.sharedWithYou")} value={format.number(counts.sharedWithYou)} />}
+      {counts.sharedWithYou === null || !sharingGranted ? null : <MetricTile label={t("home.counts.sharedWithYou")} value={format.number(counts.sharedWithYou)} />}
     </div>
   );
 }
@@ -113,6 +115,28 @@ export function TopTagsRow({ tags }: { readonly tags: Dashboard["topTags"] }): R
           ))}
         </ul>
       )}
+    </Row>
+  );
+}
+
+/** Row 4, beside the tags: how many bookmarks are shared with the member and by the member, each a link to the list of that scope. Absent unless the answer carries the counts and the workspace grants sharing. */
+export function SharingRow({ sharing }: { readonly sharing: Dashboard["sharing"] }): ReactElement | null {
+  const { t } = useTranslation();
+  const format = useFormat();
+  const sharingGranted = useSharingGranted();
+  if (sharing === null || !sharingGranted) {
+    return null;
+  }
+  return (
+    <Row id="home-sharing" title={t("home.sharing.title")}>
+      <ul aria-labelledby="home-sharing" className="flex flex-wrap gap-2">
+        <li>
+          <TagLink count={format.number(sharing.sharedWithYou)} link={<Link search={SHARED_WITH_YOU_SEARCH} to="/bookmarks" />} name={t("home.sharing.withYou")} />
+        </li>
+        <li>
+          <TagLink count={format.number(sharing.sharedByYou)} link={<Link search={SHARED_BY_YOU_SEARCH} to="/bookmarks" />} name={t("home.sharing.byYou")} />
+        </li>
+      </ul>
     </Row>
   );
 }

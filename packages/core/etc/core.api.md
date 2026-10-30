@@ -515,6 +515,27 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "share.bulk_granted": {
+        readonly category: "share";
+        readonly metadata: {
+            readonly count: {
+                readonly type: "count";
+            };
+            readonly targetKind: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly targetId: {
+                readonly type: "uuid";
+            };
+            readonly targetName: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
 };
 
 // @public
@@ -1028,7 +1049,7 @@ export interface BillingWithdrawal {
 export function bindOidcState(key: Uint8Array, state: string): string;
 
 // @public (undocumented)
-export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags"];
+export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags", "share"];
 
 // @public (undocumented)
 export const BOOKMARK_BULK_FOLDER_ACTIONS: readonly ["add_to_folder", "move_to_folder", "remove_from_folder"];
@@ -1098,6 +1119,7 @@ export interface BookmarkBulkAsk {
     readonly folderId?: string | undefined;
     // (undocumented)
     readonly ipPrefix: string | null;
+    readonly shareTarget?: ShareTarget | undefined;
     readonly tagIds?: readonly string[] | undefined;
     // (undocumented)
     readonly target: BookmarkBulkTarget;
@@ -1107,6 +1129,7 @@ export interface BookmarkBulkAsk {
 // @public (undocumented)
 export interface BookmarkBulkDependencies {
     readonly audit: AuditWriter;
+    readonly newId: () => string;
     // (undocumented)
     readonly store: BookmarkBulkStore;
 }
@@ -1142,6 +1165,15 @@ export type BookmarkBulkOutcome = {
 /** The folder of a folder action or a tag of a tag action is not one the caller has (another member's, another workspace's or unknown); nothing was written. */
 | {
     readonly kind: "target_not_found";
+}
+/** A share names the caller as the member to share with; nothing was written. */
+| {
+    readonly kind: "self";
+}
+/** A share names an account that is no member of the workspace, or a team that is none of its teams; nothing was written. */
+| {
+    readonly kind: "unknown_target";
+    readonly field: "accountId" | "teamId";
 };
 
 // @public (undocumented)
@@ -1189,6 +1221,55 @@ export type BookmarkBulkPreviewOutcome = {
 };
 
 // @public (undocumented)
+export interface BookmarkBulkSharePreviewAsk {
+    readonly accountId: string;
+    readonly shareTarget: ShareTarget;
+    // (undocumented)
+    readonly target: BookmarkBulkTarget;
+}
+
+// @public (undocumented)
+export interface BookmarkBulkSharePreviewDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkBulkStore, "ids" | "previewShare" | "sharedAmong">;
+}
+
+// @public (undocumented)
+export type BookmarkBulkSharePreviewOutcome = {
+    readonly kind: "previewed";
+    readonly requested: number;
+    readonly affected: number;
+    readonly skipped: {
+        readonly not_owner: number;
+        readonly not_found: number;
+    };
+    readonly audience: BookmarkSharePreviewAudience;
+}
+/** The request names more identifiers than `BOOKMARK_BULK_IDS_MAX` or its filter matches more than `BOOKMARK_SELECT_ALL_CAP`. */
+| {
+    readonly kind: "too_many";
+    readonly limit: number;
+}
+/** The `url` filter is not a URL a bookmark can have. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** The selection holds a bookmark that is shared with the caller, who may not share it. */
+| {
+    readonly kind: "forbidden";
+}
+/** The target is the caller. */
+| {
+    readonly kind: "self";
+}
+/** The target is no member or team of the workspace. */
+| {
+    readonly kind: "unknown_target";
+    readonly field: "accountId" | "teamId";
+};
+
+// @public (undocumented)
 export interface BookmarkBulkStore {
     fileIn(request: {
         readonly bookmarkIds: readonly string[];
@@ -1197,6 +1278,11 @@ export interface BookmarkBulkStore {
         readonly mode: BookmarkFilingMode;
     }): Promise<BookmarkLinkingResult>;
     ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+    previewShare(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly target: ShareTarget;
+    }): Promise<BookmarkSharePreviewResult>;
     previewTags(request: {
         readonly bookmarkIds: readonly string[];
         readonly ownerId: string;
@@ -1208,6 +1294,12 @@ export interface BookmarkBulkStore {
         readonly ownerId: string;
         readonly pinned: boolean;
     }): Promise<number>;
+    share(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly target: ShareTarget;
+        readonly newId: () => string;
+    }): Promise<BookmarkShareManyResult>;
     sharedAmong(request: {
         readonly bookmarkIds: readonly string[];
         readonly accountId: string;
@@ -1766,6 +1858,37 @@ export type BookmarkShareListOutcome = {
     readonly kind: "not_found";
 };
 
+// @public
+export type BookmarkShareManyResult = {
+    readonly kind: "done";
+    readonly affected: number;
+    readonly granted: number;
+    readonly targetName: string;
+} | {
+    readonly kind: "unknown_target";
+};
+
+// @public
+export interface BookmarkSharePreviewAudience {
+    readonly added: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: ShareTarget["kind"];
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export type BookmarkSharePreviewResult = {
+    readonly kind: "previewed";
+    readonly affected: number;
+    readonly audience: BookmarkSharePreviewAudience;
+} | {
+    readonly kind: "unknown_target";
+};
+
 // @public (undocumented)
 export interface BookmarkShareReadAsk {
     readonly accountId: string;
@@ -2205,6 +2328,7 @@ export const DASHBOARD_TOP_TAGS_LIMIT = 12;
 // @public (undocumented)
 export interface DashboardAsk {
     readonly accountId: string;
+    readonly sharing: boolean;
 }
 
 // @public
@@ -2233,11 +2357,20 @@ export interface DashboardDependencies {
     readonly tags: Pick<TagStore, "list">;
 }
 
+// @public
+export interface DashboardSharedCounts {
+    // (undocumented)
+    readonly sharedByYou: number;
+    // (undocumented)
+    readonly sharedWithYou: number;
+}
+
 // @public (undocumented)
 export interface DashboardStore {
     onboarding(ownerId: string): Promise<StoredOnboarding | undefined>;
     pinned(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
     quickAccess(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
+    sharedCounts(ownerId: string): Promise<DashboardSharedCounts>;
     summary(ownerId: string): Promise<DashboardSummary>;
 }
 
@@ -2258,8 +2391,8 @@ export function deleteAccount<Code extends string>(input: AccountDeletionDepende
 // @public (undocumented)
 export function deleteBookmark(input: BookmarkDeletionDependencies, ask: BookmarkDeletionAsk): Promise<BookmarkDeletionOutcome>;
 
-// @public
-export function deleteFolder(input: FolderDeletionDependencies, ask: FolderDeletionAsk): Promise<boolean>;
+// @public (undocumented)
+export function deleteFolder(input: FolderDeletionDependencies, ask: FolderDeletionAsk): Promise<FolderDeletionResult>;
 
 // @public
 export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
@@ -2669,8 +2802,21 @@ export interface FolderDeletionAsk {
 // @public (undocumented)
 export interface FolderDeletionDependencies {
     // (undocumented)
-    readonly store: Pick<FolderStore, "remove">;
+    readonly store: Pick<FolderStore, "remove" | "sharedWith">;
 }
+
+// @public (undocumented)
+export type FolderDeletionResult = {
+    readonly kind: "deleted";
+}
+/** The account owns no such folder and none is shared with it, which a caller must not tell apart from any other case. */
+| {
+    readonly kind: "not_found";
+}
+/** The folder is shared with the account, which can read it and may not delete it; nothing was deleted. */
+| {
+    readonly kind: "forbidden";
+};
 
 // @public (undocumented)
 export interface FolderFilingAsk {
@@ -2707,7 +2853,7 @@ export type FolderFilingResult =
 | {
     readonly kind: "not_found";
 }
-/** A bookmark named is shared with the caller, who can read it and may not file it; nothing was written. */
+/** The folder, or a bookmark named, is shared with the caller, who can read it and may not file into it or file it; nothing was written. */
 | {
     readonly kind: "forbidden";
 };
@@ -2719,6 +2865,10 @@ export interface FolderFilingStore {
         readonly bookmarkIds: readonly string[];
         readonly accountId: string;
     }): Promise<readonly string[]>;
+    sharedWith(request: {
+        readonly folderId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
     unfile(request: FolderFilingRequest): Promise<FolderFilingStoreResult>;
 }
 
@@ -2745,7 +2895,7 @@ export interface FolderListAsk {
     // (undocumented)
     readonly cursor: string | undefined;
     readonly limit: number;
-    readonly scope: "all" | "mine";
+    readonly scope: FolderScope;
     // (undocumented)
     readonly search: string | undefined;
     // (undocumented)
@@ -2780,10 +2930,11 @@ export interface FolderListRequest {
     // (undocumented)
     readonly limit: number;
     // (undocumented)
-    readonly ownerId: string;
+    readonly scope: FolderScope;
     readonly search: string | undefined;
     // (undocumented)
     readonly sort: FolderSort;
+    readonly viewerId: string;
 }
 
 // @public
@@ -2794,6 +2945,14 @@ export interface FolderListRow extends FolderRecord {
 
 // @public (undocumented)
 export type FolderNameRefusal = "empty" | "too_long";
+
+// @public
+export interface FolderOwner {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+}
 
 // @public
 export interface FolderPatch {
@@ -2841,11 +3000,16 @@ export interface FolderRecord {
     // (undocumented)
     readonly id: string;
     readonly name: string;
+    readonly owner: FolderOwner | null;
     readonly ownerId: string | null;
+    readonly shareSummary: FolderShareSummary | null;
     // (undocumented)
     readonly updatedAt: Date;
     readonly version: number;
 }
+
+// @public
+export type FolderScope = "all" | "mine" | "shared";
 
 // @public (undocumented)
 export interface FolderShareAsk {
@@ -2984,6 +3148,15 @@ export interface FolderShareStore {
 }
 
 // @public
+export interface FolderShareSummary {
+    readonly memberCount: number;
+    readonly teams: readonly {
+        readonly id: string;
+        readonly name: string;
+    }[];
+}
+
+// @public
 export type FolderShareUse = "read" | "grant" | "revoke";
 
 // @public (undocumented)
@@ -2992,19 +3165,24 @@ export type FolderSort = "name" | "count" | "updated";
 // @public (undocumented)
 export interface FolderStore {
     count(request: {
-        readonly ownerId: string;
+        readonly viewerId: string;
+        readonly scope: FolderScope;
         readonly search: string | undefined;
         readonly limit: number;
     }): Promise<number>;
     create(folder: NewFolder): Promise<FolderStoreCreationResult>;
     find(request: {
         readonly folderId: string;
-        readonly ownerId: string;
+        readonly viewerId: string;
     }): Promise<FolderRecord | undefined>;
     list(request: FolderListRequest): Promise<readonly FolderListRow[]>;
     remove(request: {
         readonly folderId: string;
         readonly ownerId: string;
+    }): Promise<boolean>;
+    sharedWith(request: {
+        readonly folderId: string;
+        readonly accountId: string;
     }): Promise<boolean>;
     update(request: FolderUpdateRequest): Promise<FolderUpdateResult>;
 }
@@ -3033,7 +3211,7 @@ export interface FolderUpdateAsk {
 // @public (undocumented)
 export interface FolderUpdateDependencies {
     // (undocumented)
-    readonly store: Pick<FolderStore, "update">;
+    readonly store: Pick<FolderStore, "update" | "sharedWith">;
 }
 
 // @public (undocumented)
@@ -3072,9 +3250,13 @@ export type FolderUpdateResult =
 | {
     readonly kind: "name_taken";
 }
-/** The caller owns no such folder; nothing was written. */
+/** The caller owns no such folder, and none is shared with it; nothing was written. */
 | {
     readonly kind: "not_found";
+}
+/** The folder is another member's and shared with the caller, who can read it and may not change it; nothing was written. */
+| {
+    readonly kind: "forbidden";
 };
 
 // @public
@@ -5281,6 +5463,9 @@ export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_una
 export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
 
 // @public
+export function previewBulkShare(input: BookmarkBulkSharePreviewDependencies, ask: BookmarkBulkSharePreviewAsk): Promise<BookmarkBulkSharePreviewOutcome>;
+
+// @public
 export function previewBulkTags(input: BookmarkBulkPreviewDependencies, ask: BookmarkBulkPreviewAsk): Promise<BookmarkBulkPreviewOutcome>;
 
 // @public
@@ -5977,6 +6162,8 @@ export interface TeamMembersAsk {
     // (undocumented)
     readonly actor: AuditActor;
     // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
     readonly ipPrefix: string | null;
     // (undocumented)
     readonly teamId: string;
@@ -5994,17 +6181,24 @@ export interface TeamMembersDependencies {
 
 // @public (undocumented)
 export type TeamMembersReplacement =
-/** The set was replaced; `team` has the new members, and `added` and `removed` count the memberships written and deleted. */
+/** The set was replaced and the version moved; `team` has the new members, and `added` and `removed` count the memberships written and deleted. */
     {
     readonly kind: "replaced";
     readonly team: TeamDetail;
     readonly added: number;
     readonly removed: number;
 }
-/** The team has exactly these members already; nothing was written. */
+/** The team has exactly these members already; nothing was written and the version stays. */
 | {
     readonly kind: "unchanged";
     readonly team: TeamDetail;
+}
+/**
+* The version of the team, read under its lock, is none of the accepted ones (nothing was written), or the set adds an account that joined the
+* workspace after that version was written (the team's version moved once and no membership was written).
+*/
+| {
+    readonly kind: "stale";
 }
 /** An account of the set is no member of the workspace; nothing was written. */
 | {
@@ -6012,6 +6206,15 @@ export type TeamMembersReplacement =
 } | {
     readonly kind: "not_found";
 };
+
+// @public (undocumented)
+export interface TeamMembersRequest {
+    // (undocumented)
+    readonly accountIds: readonly string[];
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly teamId: string;
+}
 
 // @public
 export interface TeamPatch {
@@ -6057,10 +6260,7 @@ export interface TeamStore {
     find(teamId: string): Promise<TeamDetail | undefined>;
     list(request: TeamListRequest): Promise<readonly TeamRecord[]>;
     remove(teamId: string): Promise<string | undefined>;
-    replaceMembers(request: {
-        readonly teamId: string;
-        readonly accountIds: readonly string[];
-    }): Promise<TeamMembersReplacement>;
+    replaceMembers(request: TeamMembersRequest): Promise<TeamMembersReplacement>;
     update(request: TeamUpdateRequest): Promise<TeamUpdateResult>;
 }
 

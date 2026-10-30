@@ -43,6 +43,7 @@ interface Result {
 
 interface Preview extends Result {
   readonly tags: readonly { readonly id: string; readonly name: string; readonly bookmarkCount: number; readonly added: number }[];
+  readonly audience: null;
 }
 
 interface Bookmark {
@@ -356,6 +357,7 @@ describe("the preview of adding tags", () => {
           { id: alpha, name: "Alpha", bookmarkCount: 2, added: 2 },
           { id: beta, name: "beta", bookmarkCount: 2, added: 1 },
         ],
+        audience: null,
       });
       expect(await storedLinks()).toBe(before);
       const applied = await done(await bulk(world, owner, { action: "add_tags", ids: [first.id, second.id, theirs.id], tagIds: [alpha, beta] }));

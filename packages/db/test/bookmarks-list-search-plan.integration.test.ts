@@ -1,4 +1,5 @@
 import { BOOKMARK_SORTS, type BookmarkListRequest, type BookmarkPosition, type BookmarkSort } from "@slugbase/core";
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bookmarkRepository } from "../src/index.ts";
@@ -22,6 +23,7 @@ const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_000;
 const BUDGET_MS = 100;
 const RUNS = 5;
+const SCOPE_ALL_RUNS = 20;
 const PAGE = 49;
 
 let db: TestDatabase;
@@ -121,6 +123,7 @@ interface PlanNode {
   "Index Cond"?: string;
   "Function Name"?: string;
   "Actual Loops"?: number;
+  "Actual Rows"?: number;
   "Rows Removed by Filter"?: number;
   Filter?: string;
   Plans?: PlanNode[];
@@ -324,7 +327,7 @@ describe.each(BOOKMARK_SORTS)("the page of the list sorted by %s on a workspace 
 
 describe("the count of the list with a text on a workspace of 50 000 bookmarks", () => {
   it.each([...FEW, ...MANY])("calls the function once and counts what it answers, probing no bookmark, for a text and nothing else (%s)", async (text) => {
-    const statement = await inTenant((tx) => Promise.resolve(planned(matchedCountStatement(tx, { ownerId: accountId, q: text }, 10_001))));
+    const statement = await inTenant((tx) => Promise.resolve(planned(matchedCountStatement(tx, { ownerId: accountId, q: text, scope: "all" }, 10_001))));
 
     const nodes = await analyse(statement);
 
@@ -376,7 +379,7 @@ async function functionCallsOf<T>(work: (repository: ReturnType<typeof bookmarkR
 
 describe("the page of the list with a text and its count, read together on a workspace of 50 000 bookmarks", () => {
   it.each([...FEW, ...MANY])("calls the function once for a text and nothing else, and answers what the page and the count answer apart (%s)", async (text) => {
-    const filter = { ownerId: accountId, q: text };
+    const filter = { ownerId: accountId, q: text, scope: "all" as const };
     const request: BookmarkListRequest = { filter, sort: "recent", after: undefined, limit: PAGE + 1 };
 
     const together = await functionCallsOf((repository) => repository.listWithCount(request, 10_001));
@@ -387,12 +390,12 @@ describe("the page of the list with a text and its count, read together on a wor
   });
 
   it("counts an empty page with the one call of the function too: a page after the last match and the page of a text nothing matches", async () => {
-    const nothing = await functionCallsOf((repository) => repository.listWithCount({ filter: { ownerId: accountId, q: "zzzq" }, sort: "recent", after: undefined, limit: PAGE + 1 }, 10_001));
+    const nothing = await functionCallsOf((repository) => repository.listWithCount({ filter: { ownerId: accountId, q: "zzzq", scope: "all" }, sort: "recent", after: undefined, limit: PAGE + 1 }, 10_001));
     expect(nothing).toEqual({ result: { rows: [], count: 0 }, calls: 1 });
 
-    const last = await inTenant((tx) => bookmarkRepository(tx).list({ filter: { ownerId: accountId, q: "gh" }, sort: "recent", after: undefined, limit: 1000 }));
+    const last = await inTenant((tx) => bookmarkRepository(tx).list({ filter: { ownerId: accountId, q: "gh", scope: "all" }, sort: "recent", after: undefined, limit: 1000 }));
     const end = last.at(-1);
-    const request: BookmarkListRequest = { filter: { ownerId: accountId, q: "gh" }, sort: "recent", after: end === undefined ? undefined : { key: end.key, id: end.bookmark.id }, limit: PAGE + 1 };
+    const request: BookmarkListRequest = { filter: { ownerId: accountId, q: "gh", scope: "all" }, sort: "recent", after: end === undefined ? undefined : { key: end.key, id: end.bookmark.id }, limit: PAGE + 1 };
 
     const { result, calls } = await functionCallsOf((repository) => repository.listWithCount(request, 10_001));
 
@@ -492,4 +495,137 @@ describe("the time of the list with a text on a workspace of 50 000 bookmarks", 
 
     expect(elapsed).toBeLessThan(BUDGET_MS);
   }, HOOK_TIMEOUT_MS);
+});
+
+function percentile95(times: readonly number[]): number {
+  const sorted = [...times].sort((a, b) => a - b);
+  return sorted[Math.ceil(sorted.length * 0.95) - 1] ?? Number.POSITIVE_INFINITY;
+}
+
+/** The time of each of `SCOPE_ALL_RUNS` runs of `work`, after one run that is not counted. */
+async function timesOf(work: () => Promise<unknown>): Promise<number[]> {
+  await work();
+  const times: number[] = [];
+  for (let run = 0; run < SCOPE_ALL_RUNS; run += 1) {
+    const started = performance.now();
+    await work();
+    times.push(performance.now() - started);
+  }
+  return times;
+}
+
+// The default scope (`all`) reads the page by the statement that holds both plans of the page, and the estimate of its branch for many matches, which a text few bookmarks hold never runs, is above
+// `jit_above_cost`: a statement that is compiled on each call spends about 300 ms of its time on the compilation, however few bookmarks match, so a member who types in the search box waits that long for each key.
+describe("the time of the list with a text in the default scope on a workspace of 50 000 bookmarks", () => {
+  it.each([...FEW, ...MANY, "zzzq"])(`reads a page of the matches of %s and counts them in under ${String(BUDGET_MS)} ms at the 95th percentile`, async (text) => {
+    const times = await inTenant((tx) => {
+      const repository = bookmarkRepository(tx);
+      return timesOf(async () => {
+        await repository.listWithCount({ filter: { ownerId: accountId, q: text, scope: "all" }, sort: "recent", after: undefined, limit: PAGE }, 10_001);
+      });
+    });
+
+    expect(percentile95(times)).toBeLessThan(BUDGET_MS);
+  }, HOOK_TIMEOUT_MS);
+
+  it.each(BOOKMARK_SORTS)(`reads a page of the matches of a text most of the workspace holds, sorted by %s, and counts them in under ${String(BUDGET_MS)} ms at the 95th percentile`, async (sort) => {
+    const times = await inTenant((tx) => {
+      const repository = bookmarkRepository(tx);
+      return timesOf(async () => {
+        await repository.listWithCount({ filter: { ownerId: accountId, q: "www", scope: "all" }, sort, after: undefined, limit: PAGE }, 10_001);
+      });
+    });
+
+    expect(percentile95(times)).toBeLessThan(BUDGET_MS);
+  }, HOOK_TIMEOUT_MS);
+
+  it.each(["on", "off"])("leaves the transaction's own setting of jit as it was (%s)", async (setting) => {
+    const settings = await inTenant(async (tx) => {
+      const handle = tenantHandle(tx);
+      const read = async (): Promise<string | undefined> => (await handle.execute<{ value: string }>(sql`SELECT current_setting('jit') AS value`))[0]?.value;
+      await handle.execute(sql`SELECT set_config('jit', ${setting}, true)`);
+      const before = await read();
+      await bookmarkRepository(tx).listWithCount({ filter: { ownerId: accountId, q: "docs", scope: "all" }, sort: "recent", after: undefined, limit: PAGE }, 10_001);
+      return { before, after: await read() };
+    });
+
+    expect(settings).toEqual({ before: setting, after: setting });
+  });
+});
+
+// The default scope reads the caller's own bookmarks and those shared with them. A text most of the workspace holds is walked in the order of the sort by one leg for each of the two parts: the caller's own bookmarks
+// from the index of the sort, which is prefixed by the owner, and the shared ones driven from the grants. A walk over both parts in one has no index that serves its order, so it reads every bookmark of the workspace
+// and sorts them, which is what a title sort (the index of which is prefixed by the owner) spent most of its time on. The other member's bookmarks that are shared with the caller are part of the fixture from here on.
+describe("the page of the list with a text in the default scope, when bookmarks of another member are shared with the caller, on a workspace of 50 000 bookmarks", () => {
+  const SHARED_EVERY = 8;
+
+  beforeAll(async () => {
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+        SELECT gen_random_uuid(), ${workspaceId}, id, ${accountId}, ${otherId}
+        FROM bookmarks
+        WHERE workspace_id = ${workspaceId} AND owner_id = ${otherId} AND plan_archived_at IS NULL AND host LIKE 'www.%' AND abs(hashtext(id::text)) % ${SHARED_EVERY} = 0`,
+    );
+  }, HOOK_TIMEOUT_MS);
+
+  async function referenceAll(text: string, sort: BookmarkSort): Promise<string[]> {
+    const ids = await matchesOf(text);
+    const rows = await asSystem(
+      db,
+      (tx) => tx.unsafe<{ id: string }[]>(`SELECT id FROM bookmarks WHERE id = ANY ($1::uuid[]) AND workspace_id = $2 AND plan_archived_at IS NULL ORDER BY ${ORDER_BY[sort]}`, [`{${ids.join(",")}}`, workspaceId]),
+    );
+    return rows.map((row) => row.id);
+  }
+
+  it("has bookmarks of the other member among the matches of a text most of the workspace holds", async () => {
+    const ids = await matchesOf("www");
+    const owners = await asSystem(db, (tx) => tx.unsafe<{ shared: number }[]>("SELECT count(*)::int AS shared FROM bookmarks WHERE id = ANY ($1::uuid[]) AND owner_id = $2", [`{${ids.join(",")}}`, otherId]));
+
+    expect(owners[0]?.shared).toBeGreaterThan(100);
+  });
+
+  it.each(BOOKMARK_SORTS)("walks the index of the sort for the caller's own matches and probes the shared ones, reading about a page of bookmarks and not the workspace (%s)", async (sort) => {
+    const request: BookmarkListRequest = { filter: { ownerId: accountId, q: "www", scope: "all" }, sort, after: undefined, limit: PAGE };
+    const statement = await inTenant((tx) => Promise.resolve(planned(matchedPageStatement(tx, request))));
+
+    const nodes = await analyse(statement);
+
+    expect(nodes.filter((node) => node["Node Type"] === "Seq Scan").map((node) => node["Relation Name"])).not.toContain("bookmarks");
+    expect(held(nodes, (node) => node["Function Name"] === "sys_bookmark_match")).toHaveLength(1);
+    const walked = ran(nodes, walksIndex(sort));
+    expect(walked).toHaveLength(1);
+    expect((walked[0]?.["Actual Rows"] ?? 0) + (walked[0]?.["Rows Removed by Filter"] ?? 0)).toBeLessThan(BOOKMARKS / 50);
+    // The shared bookmarks are probed by primary key, once for each grant, and every other read of bookmarks is that walk.
+    const reads = ran(nodes, (node) => node["Relation Name"] === "bookmarks" && node["Index Name"] !== undefined && node["Index Name"] !== "bookmarks_pkey");
+    expect(reads).toHaveLength(1);
+    expect(ran(nodes, isProbe).reduce((total, node) => total + (node["Actual Loops"] ?? 0), 0)).toBeLessThanOrEqual(BOOKMARKS / SHARED_EVERY);
+  });
+
+  it("walks nothing for a scope that reads no part: the shared ones filtered by a tag of the caller, which a bookmark shared with them never carries", async () => {
+    const filter = { ownerId: accountId, q: "www", scope: "shared_with_me" as const, tagIds: [freshId()] };
+
+    const page = await inTenant((tx) => bookmarkRepository(tx).listWithCount({ filter, sort: "title_asc", after: undefined, limit: PAGE }, 10_001));
+
+    expect(page).toEqual({ rows: [], count: 0 });
+  });
+
+  it.each(BOOKMARK_SORTS)("answers the first page, the page after a deep position and the count of the matches of www in the order of %s, own and shared together", async (sort) => {
+    const wanted = await referenceAll("www", sort);
+    const filter = { ownerId: accountId, q: "www", scope: "all" as const };
+
+    const first = await inTenant((tx) => bookmarkRepository(tx).listWithCount({ filter, sort, after: undefined, limit: PAGE }, 10_001));
+    expect(first.rows.map((row) => row.bookmark.id)).toEqual(wanted.slice(0, PAGE));
+    expect(first.count).toBe(Math.min(wanted.length, 10_001));
+
+    // The page that starts just before the first match shared with the caller, so that the cursor of the walk is a position in the order of the whole scope.
+    const sharedIds = new Set((await asSystem(db, (tx) => tx<{ bookmark_id: string }[]>`SELECT bookmark_id FROM bookmark_shares WHERE workspace_id = ${workspaceId} AND target_account_id = ${accountId}`)).map((row) => row.bookmark_id));
+    const at = Math.max(wanted.findIndex((id) => sharedIds.has(id)) - 2, 1);
+    const anchor = await inTenant((tx) => bookmarkRepository(tx).list({ filter, sort, after: undefined, limit: at }));
+    const last = anchor.at(-1);
+    const second = await inTenant((tx) => bookmarkRepository(tx).list({ filter, sort, after: last === undefined ? undefined : { key: last.key, id: last.bookmark.id }, limit: PAGE }));
+    expect(second.map((row) => row.bookmark.id)).toEqual(wanted.slice(at, at + PAGE));
+    expect(second.some((row) => row.bookmark.sharedVia !== null)).toBe(true);
+  });
 });

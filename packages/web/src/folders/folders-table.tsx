@@ -1,10 +1,12 @@
-import { DataTable, ExternalLinkIcon, PaletteIcon, PencilIcon, RowActions, Share2Icon, Trash2Icon, type DataTableColumn } from "@slugbase/ui/patterns";
+import { DataTable, ExternalLinkIcon, PaletteIcon, PencilIcon, RowActions, Share2Icon, StatusBadge, Trash2Icon, type DataTableColumn } from "@slugbase/ui/patterns";
 import { useRouter } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
+import { DEFAULT_LOCALE } from "../i18n/locales.ts";
 import { useIsOwner, useSharingGranted } from "../sharing/index.ts";
 import { FolderGlyph } from "./folder-glyph.tsx";
+import { sharingLabelOf, sharingOf } from "./folder-sharing-label.ts";
 import type { Folder } from "./folders.ts";
 
 export interface FoldersTableProps {
@@ -20,18 +22,18 @@ type FolderActionHandlers = Pick<FoldersTableProps, "onRename" | "onRestyle" | "
 function ActionsCell({ folder, onRename, onRestyle, onShare, onDelete }: FolderActionHandlers): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
-  // Only the owner shares a folder, and only a workspace that may share offers the action.
+  // Only the owner changes, shares or deletes a folder (a share gives read access only), and only a workspace that may share offers the share action.
   const sharingGranted = useSharingGranted();
   const owned = useIsOwner(folder.ownerId);
-  const actions = [
-    {
-      id: "open",
-      label: t("folders.actions.open"),
-      icon: <ExternalLinkIcon aria-hidden="true" />,
-      onSelect: () => {
-        void router.navigate({ to: "/bookmarks", search: { folderId: folder.id } });
-      },
+  const open = {
+    id: "open",
+    label: t("folders.actions.open"),
+    icon: <ExternalLinkIcon aria-hidden="true" />,
+    onSelect: () => {
+      void router.navigate({ to: "/bookmarks", search: { folderId: folder.id } });
     },
+  };
+  const ownerActions = [
     {
       id: "rename",
       label: t("folders.actions.rename"),
@@ -48,7 +50,7 @@ function ActionsCell({ folder, onRename, onRestyle, onShare, onDelete }: FolderA
         onRestyle(folder);
       },
     },
-    ...(sharingGranted && owned
+    ...(sharingGranted
       ? [
           {
             id: "share",
@@ -70,16 +72,25 @@ function ActionsCell({ folder, onRename, onRestyle, onShare, onDelete }: FolderA
       },
     },
   ];
+  const actions = owned ? [open, ...ownerActions] : [open];
   return <RowActions actions={actions} label={t("folders.list.actionsFor", { name: folder.name })} />;
+}
+
+function SharingCell({ folder }: { folder: Folder }): ReactElement {
+  const { t, i18n } = useTranslation();
+  const owned = useIsOwner(folder.ownerId);
+  const sharing = sharingOf(folder, owned);
+  return <StatusBadge variant={sharing === "private" ? "neutral" : "info"}>{sharingLabelOf(t, i18n.resolvedLanguage ?? DEFAULT_LOCALE, folder, owned)}</StatusBadge>;
 }
 
 /**
  * The folders as a table (doc 03 section 6): the icon in its colour with the name, how many bookmarks are filed in the
- * folder, when it last changed, and the actions of the row. The order is the page's; below `md` each row is a card.
+ * folder, how it is shared where the workspace may share, when it last changed, and the actions of the row. The order is the page's; below `md` each row is a card.
  */
 export function FoldersTable({ folders, onRename, onRestyle, onShare, onDelete }: FoldersTableProps): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
+  const sharingGranted = useSharingGranted();
   const columns: readonly DataTableColumn<Folder>[] = [
     {
       id: "name",
@@ -97,6 +108,15 @@ export function FoldersTable({ folders, onRename, onRestyle, onShare, onDelete }
       header: t("folders.list.table.bookmarks"),
       cell: (folder) => t("folders.list.bookmarkCount", { count: folder.bookmarkCount }),
     },
+    ...(sharingGranted
+      ? [
+          {
+            id: "sharing",
+            header: t("folders.list.table.sharing"),
+            cell: (folder: Folder) => <SharingCell folder={folder} />,
+          },
+        ]
+      : []),
     {
       id: "updated",
       header: t("folders.list.table.updated"),

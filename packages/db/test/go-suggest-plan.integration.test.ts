@@ -12,7 +12,7 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // timing is what the application sees through the repository.
 
 const HOOK_TIMEOUT_MS = 300_000;
-const FIXTURE_TABLES = ["bookmarks"] as const;
+const FIXTURE_TABLES = ["bookmark_shares", "bookmarks"] as const;
 const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_000;
 const P95_BUDGET_MS = 50;
@@ -48,6 +48,13 @@ beforeAll(async () => {
       INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
       VALUES (${freshId()}, ${workspaceId}, ${accountId}, 'https://github.com/', 'https://github.com/', 'github.com', 'GitHub', 'gh', true),
              (${freshId()}, ${workspaceId}, ${accountId}, 'https://mail.example.com/', 'https://mail.example.com/', 'mail.example.com', 'Mail', 'mail', true)`,
+  );
+  // The other member shares all their bookmarks with the caller directly, so the shared candidates of a prefix are as many as the caller's own are.
+  await asSystem(
+    db,
+    (tx) => tx`
+      INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+      SELECT gen_random_uuid(), ${workspaceId}, b.id, ${accountId}, ${otherId} FROM bookmarks b WHERE b.workspace_id = ${workspaceId} AND b.owner_id = ${otherId}`,
   );
   // Many small workspaces whose bookmarks carry the same slugs, so no workspace dominates a table.
   await asSystem(
@@ -154,12 +161,12 @@ describe.each(["slug-1", "slug-12", "s", "g", "gh", "docs-", "mail", "zz", "a-b"
   });
 });
 
-describe.each(["s", "g", "d", "m", "n"])("the candidates of the prefix %s on a workspace of 50 000 bookmarks, which holds hundreds of its slugs", (prefix) => {
-  it("are cut to 50 by a Limit node before the access rule narrows them to 10", async () => {
+describe.each(["s", "g", "d", "m", "n"])("the candidates of the prefix %s on a workspace of 50 000 bookmarks, which holds hundreds of its slugs, of the caller's and shared with the caller", (prefix) => {
+  it("are cut to 10 by a Limit node for the caller's own and another for the ones shared with the caller, before the two are joined and cut to 10 again", async () => {
     const limits = (await planOfSuggest(prefix, true)).filter((node) => node["Node Type"] === "Limit").map((node) => node["Actual Rows"]);
 
-    expect(limits).toContain(50);
-    expect(limits).toContain(10);
+    expect(limits.filter((rows) => rows === 10).length).toBeGreaterThanOrEqual(3);
+    expect(limits.filter((rows) => rows !== undefined && rows > 10)).toEqual([]);
   });
 });
 
@@ -168,10 +175,10 @@ describe("the suggestions on a workspace of 50 000 bookmarks", () => {
     return db.tenant.withTenant({ accountId, workspaceId, requestId: "go-suggest-plan-test" }, (tx) => goRepository(tx).suggest({ prefix, accountId, limit: 10 }));
   }
 
-  it("name the caller's own slugs that forward and are not archived, and no other member's", async () => {
+  it("name the slugs of the caller's own bookmarks and of the ones shared with the caller that forward and are not archived, and no other", async () => {
     const readable = await asSystem(
       db,
-      (tx) => tx<{ id: string }[]>`SELECT id FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId} AND forwarding AND plan_archived_at IS NULL AND slug IS NOT NULL`,
+      (tx) => tx<{ id: string }[]>`SELECT id FROM bookmarks WHERE workspace_id = ${workspaceId} AND (owner_id = ${accountId} OR id IN (SELECT bookmark_id FROM bookmark_shares WHERE workspace_id = ${workspaceId} AND target_account_id = ${accountId})) AND forwarding AND plan_archived_at IS NULL AND slug IS NOT NULL`,
     );
     const visible = new Set(readable.map((row) => row.id));
     for (const prefix of ["s", "slug", "slug-1", "g", "m", "docs-2", "n"]) {

@@ -1,4 +1,5 @@
 import type { AuditActor, AuditWriter } from "../audit/writer.ts";
+import type { ShareTarget } from "../sharing/store.ts";
 import { bookmarkListFilter, type BookmarkFilterAsk, type BookmarkListFilter, type BookmarkScope } from "./list.ts";
 import type { BookmarkUrlRefusal } from "./url.ts";
 
@@ -8,7 +9,8 @@ import type { BookmarkUrlRefusal } from "./url.ts";
 // links, the workspace's `bookmark_count` and the one audit event commit or roll back together. Only the caller's own bookmarks change;
 // every other identifier (another member's, another workspace's, one that is gone, and for every action but a delete one that is
 // plan-archived) is skipped as `not_found`, which no answer tells apart from another. The folder a filing acts with and the tags a tagging
-// acts with are the caller's own too: one that is not is `target_not_found` and nothing is written. A selection that holds a bookmark the caller can read because it is
+// acts with are the caller's own too: one that is not is `target_not_found` and nothing is written. A share names a member or a team of the workspace: the owner as the
+// target (`self`) and a target that is no member or team of the workspace (`unknown_target`) end the request with nothing written. A selection that holds a bookmark the caller can read because it is
 // shared with them is one they cannot act on (doc 02 sections 5.8 and 8.2, Q22): the whole request is `forbidden` and nothing is written, whichever action it asks for.
 // The answer is counts only.
 
@@ -25,7 +27,7 @@ export const BOOKMARK_BULK_FOLDER_ACTIONS = ["add_to_folder", "move_to_folder", 
 
 export const BOOKMARK_BULK_TAG_ACTIONS = ["add_tags", "remove_tags"] as const;
 
-export const BOOKMARK_BULK_ACTIONS = ["delete", "pin", "unpin", ...BOOKMARK_BULK_FOLDER_ACTIONS, ...BOOKMARK_BULK_TAG_ACTIONS] as const;
+export const BOOKMARK_BULK_ACTIONS = ["delete", "pin", "unpin", ...BOOKMARK_BULK_FOLDER_ACTIONS, ...BOOKMARK_BULK_TAG_ACTIONS, "share"] as const;
 
 export type BookmarkBulkAction = (typeof BOOKMARK_BULK_ACTIONS)[number];
 
@@ -48,6 +50,26 @@ export interface BookmarkPreviewTag {
 export type BookmarkTagPreviewResult =
   | { readonly kind: "previewed"; readonly affected: number; readonly tags: readonly BookmarkPreviewTag[] }
   | { readonly kind: "target_not_found" };
+
+/** What a bulk share answers: how many bookmarks it reached, how many shares it made, and the name its target has; or that the target is no member or team of the workspace, with nothing written. */
+export type BookmarkShareManyResult =
+  | { readonly kind: "done"; readonly affected: number; readonly granted: number; readonly targetName: string }
+  | { readonly kind: "unknown_target" };
+
+/** Who the bookmarks of a bulk share are shared with afterwards. */
+export interface BookmarkSharePreviewAudience {
+  readonly kind: ShareTarget["kind"];
+  readonly id: string;
+  readonly name: string;
+  /** The members other than the owner who read the bookmarks through the target. */
+  readonly memberCount: number;
+  /** How many of the bookmarks reached the target is not shared with yet. */
+  readonly added: number;
+}
+
+export type BookmarkSharePreviewResult =
+  | { readonly kind: "previewed"; readonly affected: number; readonly audience: BookmarkSharePreviewAudience }
+  | { readonly kind: "unknown_target" };
 
 export interface BookmarkBulkStore {
   /** The identifiers of the bookmarks of the scope of `filter` (`filter.ownerId`'s own unless the filter says more) in the workspace of the transaction that match `filter` and are not plan-archived, newest first, at most `limit`. */
@@ -75,6 +97,14 @@ export interface BookmarkBulkStore {
   tag(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly tagIds: readonly string[]; readonly mode: BookmarkTaggingMode }): Promise<BookmarkLinkingResult>;
   /** What `tag` with `add` would leave on the same bookmarks, without writing: how many it reaches and the tag set they would carry. */
   previewTags(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly tagIds: readonly string[] }): Promise<BookmarkTagPreviewResult>;
+  /**
+   * Shares the bookmarks of `bookmarkIds` that `ownerId` owns and that are not plan-archived with `target`, one share for each that is not shared with it already, with
+   * identifiers from `newId`, and answers how many such bookmarks there are, whether or not they were shared already, and how many shares it made. A target that is no member
+   * or team of the workspace is `unknown_target`, with nothing written.
+   */
+  share(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly target: ShareTarget; readonly newId: () => string }): Promise<BookmarkShareManyResult>;
+  /** What `share` would leave on the same bookmarks, without writing: how many it reaches and who they are shared with afterwards. */
+  previewShare(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly target: ShareTarget }): Promise<BookmarkSharePreviewResult>;
 }
 
 export interface BookmarkIdsDependencies {
@@ -105,6 +135,8 @@ export interface BookmarkBulkDependencies {
   readonly store: BookmarkBulkStore;
   /** Writes the audit event in the same transaction. */
   readonly audit: AuditWriter;
+  /** Generates the identifier of a new share: a UUIDv7. */
+  readonly newId: () => string;
 }
 
 export type BookmarkBulkTarget =
@@ -137,6 +169,8 @@ export interface BookmarkBulkAsk {
   readonly folderId?: string | undefined;
   /** The caller's tags a tag action acts with; the contract requires them for those and refuses them for the rest. */
   readonly tagIds?: readonly string[] | undefined;
+  /** The member or team a share acts with; the contract requires it for that action and refuses it for the rest. */
+  readonly shareTarget?: ShareTarget | undefined;
 }
 
 export type BookmarkBulkOutcome =
@@ -156,7 +190,11 @@ export type BookmarkBulkOutcome =
   /** The selection holds a bookmark that is shared with the caller, whom a share gives read access only; nothing was written. */
   | { readonly kind: "forbidden" }
   /** The folder of a folder action or a tag of a tag action is not one the caller has (another member's, another workspace's or unknown); nothing was written. */
-  | { readonly kind: "target_not_found" };
+  | { readonly kind: "target_not_found" }
+  /** A share names the caller as the member to share with; nothing was written. */
+  | { readonly kind: "self" }
+  /** A share names an account that is no member of the workspace, or a team that is none of its teams; nothing was written. */
+  | { readonly kind: "unknown_target"; readonly field: "accountId" | "teamId" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -191,6 +229,17 @@ function requiredFolder(folderId: string | undefined): string {
   return folderId.toLowerCase();
 }
 
+function requiredShareTarget(target: ShareTarget | undefined): ShareTarget {
+  if (target === undefined) {
+    throw new RangeError("a share names a member or a team");
+  }
+  return target.kind === "member" ? { kind: "member", accountId: target.accountId.toLowerCase() } : { kind: "team", teamId: target.teamId.toLowerCase() };
+}
+
+const targetIdOf = (target: ShareTarget): string => (target.kind === "member" ? target.accountId : target.teamId);
+
+const targetFieldOf = (target: ShareTarget): "accountId" | "teamId" => (target.kind === "member" ? "accountId" : "teamId");
+
 function requiredTags(tagIds: readonly string[] | undefined): string[] {
   if (tagIds === undefined || tagIds.length === 0) {
     throw new RangeError("a tag action names tags");
@@ -199,12 +248,12 @@ function requiredTags(tagIds: readonly string[] | undefined): string[] {
 }
 
 /**
- * Deletes, pins, unpins, files or tags the bookmarks `ask.target` names, among the caller's own. A delete writes one `bookmark.bulk_deleted` audit event
- * with the number deleted when that is not zero. A pin, an unpin, a filing or a tagging counts a bookmark that already is in the wanted state as affected
+ * Deletes, pins, unpins, files, tags or shares the bookmarks `ask.target` names, among the caller's own. A delete writes one `bookmark.bulk_deleted` audit event
+ * with the number deleted when that is not zero, and a share one `share.bulk_granted` event with the number of shares made and the target when that is not zero. A pin, an unpin, a filing or a tagging counts a bookmark that already is in the wanted state as affected
  * and leaves it untouched, so its version stays; filing and tagging move no version at all. The folder or the tags are checked even when no bookmark is
  * reached, so the same request is refused whatever the bookmarks.
  */
-export async function bulkBookmarks({ store, audit }: BookmarkBulkDependencies, ask: BookmarkBulkAsk): Promise<BookmarkBulkOutcome> {
+export async function bulkBookmarks({ store, audit, newId }: BookmarkBulkDependencies, ask: BookmarkBulkAsk): Promise<BookmarkBulkOutcome> {
   const accountId = ask.accountId.toLowerCase();
   const target = await namedBookmarks(store, accountId, ask.target);
   if (target.kind !== "named") {
@@ -237,6 +286,25 @@ export async function bulkBookmarks({ store, audit }: BookmarkBulkDependencies, 
   } else if (ask.action === "pin" || ask.action === "unpin") {
     if (bookmarkIds.length > 0) {
       affected = await store.setPinned({ bookmarkIds, ownerId: accountId, pinned: ask.action === "pin" });
+    }
+  } else if (ask.action === "share") {
+    const shareTarget = requiredShareTarget(ask.shareTarget);
+    if (shareTarget.kind === "member" && shareTarget.accountId === accountId) {
+      return { kind: "self" };
+    }
+    const shared = await store.share({ bookmarkIds, ownerId: accountId, target: shareTarget, newId });
+    if (shared.kind === "unknown_target") {
+      return { kind: "unknown_target", field: targetFieldOf(shareTarget) };
+    }
+    affected = shared.affected;
+    if (shared.granted > 0) {
+      await audit.write({
+        action: "share.bulk_granted",
+        workspaceId: ask.workspaceId.toLowerCase(),
+        actor: ask.actor,
+        metadata: { count: String(shared.granted), targetKind: shareTarget.kind, targetId: targetIdOf(shareTarget), targetName: shared.targetName },
+        ipPrefix: ask.ipPrefix,
+      });
     }
   } else if (ask.action === "add_tags" || ask.action === "remove_tags") {
     const linked = await store.tag({ bookmarkIds, ownerId: accountId, tagIds: requiredTags(ask.tagIds), mode: TAGGING_MODES[ask.action] });
@@ -300,4 +368,58 @@ export async function previewBulkTags({ store }: BookmarkBulkPreviewDependencies
     return previewed;
   }
   return { kind: "previewed", requested, affected: previewed.affected, skipped: { not_owner: 0, not_found: requested - previewed.affected }, tags: previewed.tags };
+}
+
+export interface BookmarkBulkSharePreviewDependencies {
+  readonly store: Pick<BookmarkBulkStore, "ids" | "previewShare" | "sharedAmong">;
+}
+
+export interface BookmarkBulkSharePreviewAsk {
+  /** The member who asks; the only owner whose bookmarks the preview counts. */
+  readonly accountId: string;
+  readonly target: BookmarkBulkTarget;
+  /** The member or team `share` would share the bookmarks with. */
+  readonly shareTarget: ShareTarget;
+}
+
+export type BookmarkBulkSharePreviewOutcome =
+  | {
+      readonly kind: "previewed";
+      readonly requested: number;
+      readonly affected: number;
+      readonly skipped: { readonly not_owner: number; readonly not_found: number };
+      readonly audience: BookmarkSharePreviewAudience;
+    }
+  /** The request names more identifiers than `BOOKMARK_BULK_IDS_MAX` or its filter matches more than `BOOKMARK_SELECT_ALL_CAP`. */
+  | { readonly kind: "too_many"; readonly limit: number }
+  /** The `url` filter is not a URL a bookmark can have. */
+  | { readonly kind: "url_refused"; readonly reason: BookmarkUrlRefusal }
+  /** The selection holds a bookmark that is shared with the caller, who may not share it. */
+  | { readonly kind: "forbidden" }
+  /** The target is the caller. */
+  | { readonly kind: "self" }
+  /** The target is no member or team of the workspace. */
+  | { readonly kind: "unknown_target"; readonly field: "accountId" | "teamId" };
+
+/** What `bulkBookmarks` with `share` would do to the same target, counted the same way and without writing: who the bookmarks it reaches would be shared with. */
+export async function previewBulkShare({ store }: BookmarkBulkSharePreviewDependencies, ask: BookmarkBulkSharePreviewAsk): Promise<BookmarkBulkSharePreviewOutcome> {
+  const accountId = ask.accountId.toLowerCase();
+  const target = await namedBookmarks(store, accountId, ask.target);
+  if (target.kind !== "named") {
+    return target;
+  }
+  const requested = target.named.length;
+  const bookmarkIds = target.named.filter((id) => UUID.test(id));
+  if (bookmarkIds.length > 0 && (await store.sharedAmong({ bookmarkIds, accountId })).length > 0) {
+    return { kind: "forbidden" };
+  }
+  const shareTarget = requiredShareTarget(ask.shareTarget);
+  if (shareTarget.kind === "member" && shareTarget.accountId === accountId) {
+    return { kind: "self" };
+  }
+  const previewed = await store.previewShare({ bookmarkIds, ownerId: accountId, target: shareTarget });
+  if (previewed.kind === "unknown_target") {
+    return { kind: "unknown_target", field: targetFieldOf(shareTarget) };
+  }
+  return { kind: "previewed", requested, affected: previewed.affected, skipped: { not_owner: 0, not_found: requested - previewed.affected }, audience: previewed.audience };
 }

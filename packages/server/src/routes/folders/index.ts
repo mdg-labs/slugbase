@@ -10,18 +10,21 @@ import type { RequestTenant } from "../../http/tenant.ts";
 import { route } from "../register.ts";
 import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 
-// POST, GET /api/v1/folders and GET, PATCH, DELETE /api/v1/folders/{id} (doc 04 section 10.7, doc 02 section 7.1, doc 05 section 2.4, doc 10
+// POST, GET /api/v1/folders and GET, PATCH, DELETE /api/v1/folders/{id} (doc 04 section 10.7, doc 02 sections 7.1 and 8.2, doc 05 section 2.4, doc 10
 // T1 and T2). All five act in the workspace the request is bound to and name none; the authorization stage lets a member through (a
 // session, or a token of the matching scope: write to create, change and delete, read to list and get).
 //
-// A folder is its owner's alone. The statements of the repository name the owner as well as the workspace, so another member's folder, a
-// folder of another workspace and one that does not exist are the same `404 not_found` (doc 04 section 2.4). A name is 1 to 64 characters
+// A folder is its owner's to change and readable by the members it is shared with. The statements of the repository name the viewer or the owner as
+// well as the workspace, so another member's folder that is not shared with the caller, a folder of another workspace and one that does not exist are
+// the same `404 not_found` (doc 04 section 2.4); a change, a deletion or a filing into a folder that is shared with the caller, who can read it, is
+// `403 forbidden` and writes nothing (a share gives read access only, Q22). A name is 1 to 64 characters
 // after the whitespace around it is removed, stored as entered and unique per owner without regard to case: creating or renaming to a name
 // the caller already uses on another folder is `409 name_taken` and writes nothing. The icon is one of the list `@slugbase/contracts`
 // publishes (`folder` when left out) and the colour is 1 to 8 (1 when left out). Deleting a folder removes the associations of its
 // bookmarks, which stay; a hard delete keeps no tombstone, so the repeat is `404`.
 //
-// GET /api/v1/folders lists the caller's folders with the number of bookmarks filed in each, optionally those whose name contains `q`,
+// GET /api/v1/folders lists the folders of the scope (`mine`, `shared` with the caller, or `all`) with the number of bookmarks filed in each and, for a
+// folder of the caller's, how it is shared (`shareSummary`), for another member's, who owns it (`owner`), optionally those whose name contains `q`,
 // sorted by name, by that number or by the time of the last change, in pages of at most 100 that the `nextCursor` resumes (doc 04
 // section 6.1). The cursor is the sort key and identifier of the last item, signed with a subkey derived from the session secret for this
 // list, over the account, the workspace, the scope, the search and the sort it was issued for: a forged, altered or mismatched cursor is
@@ -39,7 +42,7 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_FOLDER = "No such resource.";
-const SHARED_READ_ONLY = "This bookmark is shared with you, and a share gives read access only.";
+const SHARED_READ_ONLY = "This folder or bookmark is shared with you, and a share gives read access only.";
 const NAME_TAKEN = "You already have a folder with this name.";
 const NAME_INVALID = "A folder name has 1 to 64 characters.";
 const STALE_VERSION = "The folder has changed since it was read; read it again and retry.";
@@ -84,6 +87,8 @@ function folderBody(folder: FolderRecord): z.input<typeof FolderSchema> {
   return {
     id: folder.id,
     ownerId: folder.ownerId,
+    owner: folder.owner,
+    shareSummary: folder.shareSummary === null ? null : { memberCount: folder.shareSummary.memberCount, teams: folder.shareSummary.teams.map(({ id, name }) => ({ id, name })) },
     name: folder.name,
     icon: folder.icon,
     color: folder.color,
@@ -164,6 +169,8 @@ export function folderRoutes({ cursorSecret }: FolderRoutesOptions): RouteBindin
           throw new ProblemError("name_taken", NAME_TAKEN, { errors: [{ path: "name", code: "name_taken" }] });
         case "stale":
           throw new ProblemError("precondition_failed", STALE_VERSION);
+        case "forbidden":
+          throw new ProblemError("forbidden", SHARED_READ_ONLY);
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
@@ -195,8 +202,11 @@ export function folderRoutes({ cursorSecret }: FolderRoutesOptions): RouteBindin
 
     route(deleteFolderOperation).handle(async ({ params }, context) => {
       const tenant = tenantOf(context);
-      const deleted = await tenant.withTenant((tx) => deleteFolder({ store: folderRepository(tx) }, { folderId: params.id, accountId: tenant.accountId }));
-      if (!deleted) {
+      const outcome = await tenant.withTenant((tx) => deleteFolder({ store: folderRepository(tx) }, { folderId: params.id, accountId: tenant.accountId }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", SHARED_READ_ONLY);
+      }
+      if (outcome.kind === "not_found") {
         throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
       return { status: 204 };

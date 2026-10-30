@@ -40,7 +40,10 @@
       "loading": "Die Ordnerliste wird geladen",
       "loadFailed": "Die Ordnerliste konnte nicht geladen werden.",
       "retry": "Ordner neu laden",
-      "empty": "Du hast noch keine Ordner"
+      "empty": "Du hast noch keine Ordner",
+      "shared": "Mit dir geteilt",
+      "sharedBy": "{name}, geteilt von {owner}",
+      "sharedLoadFailed": "Die mit dir geteilten Ordner konnten nicht geladen werden."
     }
   },
   "home": {
@@ -77,6 +80,11 @@
     "tags": {
       "title": "Häufigste Tags",
       "empty": "Hier erscheinen die Tags, die du Lesezeichen gibst."
+    },
+    "sharing": {
+      "title": "Teilen",
+      "withYou": "Mit dir geteilt",
+      "byYou": "Von dir geteilt"
     },
     "empty": {
       "title": "Speichere dein erstes Lesezeichen",
@@ -121,7 +129,11 @@
       "retry": "Erneut versuchen",
       "empty": {
         "title": "Noch keine Lesezeichen",
-        "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an."
+        "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an.",
+        "sharedWithMe": {
+          "title": "Bisher wurde nichts mit dir geteilt",
+          "description": "Lesezeichen, die andere Mitglieder mit dir teilen, direkt, über ein Team oder über einen Ordner, erscheinen hier."
+        }
       },
       "noMatch": "Keine Lesezeichen passen zu diesen Filtern",
       "search": {
@@ -177,7 +189,9 @@
       "scope": {
         "label": "Bereich",
         "all": "Alle",
-        "mine": "Meine"
+        "mine": "Meine",
+        "sharedWithMe": "Mit mir geteilt",
+        "sharedByMe": "Von mir geteilt"
       },
       "sort": {
         "label": "Sortieren nach",
@@ -211,6 +225,14 @@
       "opens": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
       "usage": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {when}",
       "edit": "Bearbeiten",
+      "open": "Öffnen",
+      "copyAddress": "Adresse kopieren",
+      "addressCopied": "Adresse kopiert.",
+      "addressCopyFailed": "Die Adresse konnte nicht kopiert werden. Kopiere sie stattdessen aus dem Link des Lesezeichens.",
+      "shared": {
+        "marker": "Geteilt",
+        "formerMember": "Ehemaliges Mitglied"
+      },
       "share": "Teilen",
       "unpin": "Anheftung lösen",
       "pin": {
@@ -240,6 +262,14 @@
       "label": "Ausgewählte Lesezeichen",
       "count": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
       "clear": "Auswahl aufheben",
+      "openAll": {
+        "action": "Alle öffnen",
+        "partial": "{opened, number} von {selected, number} geöffnet. Die übrigen sind in der Liste nicht geladen oder haben keine Webadresse."
+      },
+      "limited": {
+        "note": "{count, plural, one {# geteiltes Lesezeichen ist ausgewählt, daher steht nur Alle öffnen zur Verfügung.} other {# geteilte Lesezeichen sind ausgewählt, daher steht nur Alle öffnen zur Verfügung.}}",
+        "reason": "Mit dir geteilte Lesezeichen kannst du öffnen, aber nicht ändern. Hebe ihre Auswahl auf, um diese Aktion zu nutzen."
+      },
       "pin": "Anheften",
       "unpin": "Anheftung lösen",
       "addToFolder": "Zu Ordner hinzufügen",
@@ -269,7 +299,8 @@
         "removeFromFolder": "{count, plural, one {# Lesezeichen aus „{folder}“ entfernt.} other {# Lesezeichen aus „{folder}“ entfernt.}}",
         "addTags": "{count, plural, one {Tags zu # Lesezeichen hinzugefügt.} other {Tags zu # Lesezeichen hinzugefügt.}}",
         "removeTags": "{count, plural, one {Tags von # Lesezeichen entfernt.} other {Tags von # Lesezeichen entfernt.}}",
-        "undone": "{count, plural, one {# Lesezeichen wieder in „{folder}“ gelegt.} other {# Lesezeichen wieder in „{folder}“ gelegt.}}"
+        "undone": "{count, plural, one {# Lesezeichen wieder in „{folder}“ gelegt.} other {# Lesezeichen wieder in „{folder}“ gelegt.}}",
+        "share": "{count, plural, one {# Lesezeichen mit {name} geteilt.} other {# Lesezeichen mit {name} geteilt.}}"
       },
       "skipped": "{count, plural, one {# Lesezeichen wurde übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen wurden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
       "error": {
@@ -283,7 +314,9 @@
         "removeTags": "Die Tags konnten nicht entfernt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "folderGone": "Dieser Ordner existiert nicht mehr. Es wurde nichts geändert.",
         "tagsGone": "Einer dieser Tags existiert nicht mehr. Es wurde nichts geändert.",
-        "undo": "Die Lesezeichen konnten nicht wieder in den Ordner gelegt werden. Versuche es gleich noch einmal."
+        "undo": "Die Lesezeichen konnten nicht wieder in den Ordner gelegt werden. Versuche es gleich noch einmal.",
+        "share": "Die Lesezeichen konnten nicht geteilt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "shareTargetGone": "{name} gehört nicht mehr zum Workspace. Es wurde nichts geändert."
       },
       "link": {
         "close": "Schließen",
@@ -319,6 +352,31 @@
           "skipped": "{count, plural, one {# Lesezeichen wird übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen werden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
           "tagCount": "{bookmarkCount, plural, one {# Lesezeichen} other {# Lesezeichen}}, {added, number} neu"
         }
+      },
+      "share": {
+        "action": "Teilen",
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "title": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} teilen",
+        "description": "Wähle das Mitglied oder Team, das diese Lesezeichen lesen kann. Eine Freigabe gibt nur Lesezugriff.",
+        "label": "Teilen mit",
+        "placeholder": "Mitglieder und Teams suchen",
+        "empty": "Kein Mitglied und kein Team passt.",
+        "loading": "Mitglieder und Teams werden geladen",
+        "loadFailed": "Mitglieder und Teams konnten nicht geladen werden.",
+        "members": "Mitglieder",
+        "teams": "Teams",
+        "preview": {
+          "title": "Wer sie lesen kann",
+          "loading": "Es wird ermittelt, mit wem diese Lesezeichen geteilt werden",
+          "error": "Die Vorschau konnte nicht geladen werden.",
+          "summary": "{count, plural, one {# Lesezeichen wird mit {name} geteilt.} other {# Lesezeichen werden mit {name} geteilt.}}",
+          "added": "{added, plural, one {Es wird # neue Freigabe erstellt.} other {Es werden # neue Freigaben erstellt.}}",
+          "audience": "{count, plural, one {# Mitglied kann sie lesen.} other {# Mitglieder können sie lesen.}}",
+          "none": "Keines dieser Lesezeichen lässt sich teilen.",
+          "skipped": "{count, plural, one {# Lesezeichen wird übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen werden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}"
+        }
       }
     },
     "modal": {
@@ -327,6 +385,10 @@
       "save": "Speichern",
       "more": "Mehr",
       "loading": "Lesezeichen wird geladen",
+      "shared": {
+        "title": "Dieses Lesezeichen ist mit dir geteilt",
+        "description": "Nur sein Besitzer ändert es. Du kannst es in der Liste öffnen und seine Adresse kopieren."
+      },
       "retry": "Erneut versuchen",
       "saved": {
         "created": "Lesezeichen gespeichert.",
@@ -475,6 +537,11 @@
       "count": "Lesezeichen",
       "updated": "Zuletzt geändert"
     },
+    "scope": {
+      "label": "Anzuzeigende Ordner",
+      "mine": "Meine",
+      "shared": "Mit mir geteilt"
+    },
     "list": {
       "label": "Ordner",
       "loading": "Ordner werden geladen",
@@ -490,12 +557,17 @@
       "table": {
         "name": "Name",
         "bookmarks": "Lesezeichen",
+        "sharing": "Freigabe",
         "updated": "Geändert",
         "actions": "Aktionen"
       },
       "empty": {
         "title": "Noch keine Ordner",
-        "description": "Ordner fassen zusammengehörige Lesezeichen zusammen, etwa alles zu einem Projekt oder einem Thema. Ein Lesezeichen kann in mehreren Ordnern liegen, und das Löschen eines Ordners löscht nie die Lesezeichen darin."
+        "description": "Ordner fassen zusammengehörige Lesezeichen zusammen, etwa alles zu einem Projekt oder einem Thema. Ein Lesezeichen kann in mehreren Ordnern liegen, und das Löschen eines Ordners löscht nie die Lesezeichen darin.",
+        "shared": {
+          "title": "Bisher wurde nichts mit dir geteilt",
+          "description": "Ordner, die andere Mitglieder mit dir teilen, direkt oder über ein Team, erscheinen hier. Du kannst sie und die Lesezeichen darin lesen, aber nur ihr Besitzer kann sie ändern."
+        }
       }
     },
     "actions": {
@@ -504,6 +576,10 @@
       "restyle": "Symbol und Farbe ändern",
       "share": "Freigabe-Einstellungen",
       "delete": "Löschen"
+    },
+    "sharing": {
+      "received": "Mit dir geteilt",
+      "receivedBy": "Mit dir geteilt von {owner}"
     },
     "delete": {
       "title": "„{name}“ löschen?",
@@ -2096,6 +2172,7 @@
         "error": {
           "teamGone": "Ein Team, das du gewählt hast, gibt es nicht mehr. Entferne es und versuche es erneut.",
           "memberGone": "Diese Person ist kein Mitglied dieses Workspace mehr.",
+          "changedElsewhere": "Ein Team wurde woanders geändert, daher wurde darin nichts überschrieben. Speichere erneut, um deine Änderungen auf die neuesten Mitglieder anzuwenden.",
           "unavailable": "Die Teams konnten gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
           "partlySaved": "Ein Teil deiner Änderungen wurde gespeichert, aber nicht alle. Speichere erneut, um den Rest zu senden."
         }

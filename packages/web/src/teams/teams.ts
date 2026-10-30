@@ -31,6 +31,19 @@ export function teamListQuery(api: ApiClient) {
   });
 }
 
+const entityTagOf = (version: number): string => `"${String(version)}"`;
+
+/** A team's member set changed under a replacement that was made from a fresh read of it, so the person editing cannot tell which account is behind the refusal. */
+export class TeamMembersChangedError extends Error {
+  constructor() {
+    super("The members of a team changed while its member set was being replaced");
+    this.name = "TeamMembersChangedError";
+  }
+}
+
+const isUnknownMember = (caught: unknown): boolean =>
+  caught instanceof ApiProblemError && caught.status === 422 && caught.errors.some(({ path, code }) => path.startsWith("accountIds") && code === "unknown_member");
+
 async function readTeam(api: ApiClient, id: string, signal?: AbortSignal): Promise<TeamWithMembers> {
   const { data, error } = await api.GET("/api/v1/teams/{id}", { params: { path: { id } }, ...(signal === undefined ? {} : { signal }) });
   if (data === undefined) {
@@ -96,7 +109,7 @@ export async function saveTeam(
     applied(current);
   } else if (current.name !== draft.name || current.description !== draft.description) {
     const { data, error } = await api.PATCH("/api/v1/teams/{id}", {
-      params: { path: { id: current.id }, header: { "If-Match": `"${String(current.version)}"` } },
+      params: { path: { id: current.id }, header: { "If-Match": entityTagOf(current.version) } },
       body: { name: draft.name, description: draft.description },
     });
     if (data === undefined) {
@@ -110,7 +123,7 @@ export async function saveTeam(
     draft.memberIds,
   )) {
     const { data, error } = await api.PUT("/api/v1/teams/{id}/members", {
-      params: { path: { id: current.id } },
+      params: { path: { id: current.id }, header: { "If-Match": entityTagOf(current.version) } },
       body: { accountIds: [...new Set(draft.memberIds)] },
     });
     if (data === undefined) {
@@ -123,12 +136,54 @@ export async function saveTeam(
 }
 
 /**
+ * Puts the member into the team or takes them out of it, from a fresh read of the team and against the version of that read, so what
+ * other people put into the team since is kept and a change made in between is refused (`412`) instead of overwritten. A team to leave
+ * that is gone is `gone`. An account of the set that left the workspace after the read is `422`; the team is then read once more,
+ * since that account is dropped from it. Where the second `422` stays, a person who is being added may be the one who left, and for
+ * a person being taken out it can only be another member, which is told as a team that changed.
+ */
+async function replaceMembership(api: ApiClient, id: string, accountId: string, joins: boolean): Promise<"done" | "gone"> {
+  for (let attempt = 0; ; attempt += 1) {
+    let team: TeamWithMembers;
+    try {
+      team = await readTeam(api, id);
+    } catch (caught) {
+      if (!joins && caught instanceof ApiProblemError && caught.status === 404) {
+        return "gone";
+      }
+      throw caught;
+    }
+    const memberIds = team.members.map((member) => member.accountId);
+    if (memberIds.includes(accountId) === joins) {
+      // The team already holds the member as wanted: another admin made the change first.
+      return "done";
+    }
+    try {
+      const { data, error } = await api.PUT("/api/v1/teams/{id}/members", {
+        params: { path: { id }, header: { "If-Match": entityTagOf(team.version) } },
+        body: { accountIds: joins ? [...memberIds, accountId] : memberIds.filter((candidate) => candidate !== accountId) },
+      });
+      if (data === undefined) {
+        throw new Error("The team members did not answer with a document", { cause: error });
+      }
+      return "done";
+    } catch (caught) {
+      if (!isUnknownMember(caught)) {
+        throw caught;
+      }
+      if (attempt > 0) {
+        throw joins ? caught : new TeamMembersChangedError();
+      }
+    }
+  }
+}
+
+/**
  * Brings the teams of one member to `wanted`, given the teams `current` that the member is in as far as the caller knows. Each team
- * that changes is read again first, with its members, and then replaced through `PUT /teams/{id}/members` with that set plus or
- * minus the member, so what other people put into the team since the page was read is kept. The requests are sent one after the
- * other, the teams to leave before the teams to join, and `applied` is called with the member's teams after each one that went
- * through; a caller that keeps the latest set sends only what remains when it tries again. A step that fails throws and the steps
- * after it are not sent. A team to leave that is gone already is left; a team to join that is gone is a `404`.
+ * that changes is replaced through `PUT /teams/{id}/members` (see `replaceMembership`), the requests are sent one after the other,
+ * the teams to leave before the teams to join, and `applied` is called with the member's teams after each one that went through; a
+ * caller that keeps the latest set sends only what remains when it tries again. A step that fails throws and the steps after it are
+ * not sent. A team to leave that is gone already is left; a team to join that is gone is a `404`.
  */
 export async function saveMemberTeams(
   api: ApiClient,
@@ -142,31 +197,7 @@ export async function saveMemberTeams(
   const joining = wanted.filter((id) => !current.includes(id));
   for (const id of [...leaving, ...joining]) {
     const joins = joining.includes(id);
-    let team: TeamWithMembers;
-    try {
-      team = await readTeam(api, id);
-    } catch (caught) {
-      if (!joins && caught instanceof ApiProblemError && caught.status === 404) {
-        held = held.filter((candidate) => candidate !== id);
-        applied(held);
-        continue;
-      }
-      throw caught;
-    }
-    const memberIds = team.members.map((member) => member.accountId);
-    if (memberIds.includes(accountId) === joins) {
-      // The team already holds the member as wanted: another admin made the change first.
-      held = joins ? [...held, id] : held.filter((candidate) => candidate !== id);
-      applied(held);
-      continue;
-    }
-    const { data, error } = await api.PUT("/api/v1/teams/{id}/members", {
-      params: { path: { id } },
-      body: { accountIds: joins ? [...memberIds, accountId] : memberIds.filter((candidate) => candidate !== accountId) },
-    });
-    if (data === undefined) {
-      throw new Error("The team members did not answer with a document", { cause: error });
-    }
+    await replaceMembership(api, id, accountId, joins);
     held = joins ? [...held, id] : held.filter((candidate) => candidate !== id);
     applied(held);
   }
@@ -190,6 +221,9 @@ export type TeamFailure =
 export function teamFailureOf(error: unknown): TeamFailure | undefined {
   if (isSessionEnded(error)) {
     return undefined;
+  }
+  if (error instanceof TeamMembersChangedError) {
+    return { kind: "changedElsewhere" };
   }
   if (error instanceof ApiProblemError) {
     switch (error.status) {

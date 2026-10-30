@@ -59,4 +59,9 @@ export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "createFolderShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
   { operationId: "deleteFolderShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
   { operationId: "deleteFolderShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  // Only the `share` action of the bulk request and of its preview names a target, and so needs a sharing entitlement; the other actions need none.
+  { operationId: "bulkBookmarks", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "bulkBookmarks", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "previewBulkBookmarks", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "previewBulkBookmarks", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
 ];

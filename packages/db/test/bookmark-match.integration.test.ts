@@ -2,10 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { searchRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { seedTeam, shareBookmark, shareThroughFolder } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The matches of the text query of the bookmark list (doc 02 sections 5.7 and 9.1, doc 05 sections 2.4 and 3.3, doc 10 T1 and T2). The system operation `sys_bookmark_match` answers the identifiers
-// of the caller's own, not plan-archived bookmarks whose slug, title, host or description the text matches, as the search of `sys_search` matches them, and is the boundary of the list: it takes the
+// of the bookmarks the caller can read (their own and those shared with them) that are not plan-archived and whose slug, title, host or description the text matches, as the search of `sys_search` matches them, and is the boundary of the list: it takes the
 // workspace and the account from the transaction, never from an argument. The failure scenarios: a bookmark of another member, a plan-archived one, an ownerless one or one of another workspace
 // that is returned from a branch that left out its predicate, and a list whose matches are not those of the search.
 
@@ -303,3 +304,61 @@ describe("the matches of a text query and the search", () => {
 async function asSystemSearch(workspaceId: string, accountId: string, text: string): Promise<readonly { id: string }[]> {
   return db.tenant.withTenant({ accountId, workspaceId, requestId: "bookmark-match-test" }, (tx) => searchRepository(tx).bookmarks({ text, limit: 20 }));
 }
+
+describe("the matches of a text query for the bookmarks shared with the caller (T2, T12)", () => {
+  describe.each([
+    { form: "short", text: "zb", slug: "zb", title: "Zb planner" },
+    { form: "long", text: "zebra", slug: "zebra", title: "Zebra planner" },
+  ])("in the $form form", ({ text, slug, title }) => {
+    it("returns the caller's own and the bookmarks shared directly, through a team and through a folder, and no other", async () => {
+      const me = await account();
+      const owner = await account();
+      const teammate = await account();
+      const w = await workspace([me, owner, teammate]);
+      const team = await seedTeam(db, w, [owner, me]);
+      const otherTeam = await seedTeam(db, w, [owner, teammate]);
+      const mine = await bookmark(w, me, { title: `${title} mine`, slug });
+      const direct = await bookmark(w, owner, { title: `${title} direct`, slug: `${slug}-direct` });
+      const viaTeam = await bookmark(w, owner, { title: `${title} team`, slug: `${slug}-team` });
+      const viaFolder = await bookmark(w, owner, { title: `${title} folder`, slug: `${slug}-folder` });
+      const viaTeamFolder = await bookmark(w, owner, { title: `${title} team folder`, slug: `${slug}-team-folder` });
+      await bookmark(w, owner, { title: `${title} private`, slug: `${slug}-private` });
+      const toAnother = await bookmark(w, owner, { title: `${title} to another member`, slug: `${slug}-to-another-member` });
+      const toOtherTeam = await bookmark(w, owner, { title: `${title} to another team`, slug: `${slug}-to-another-team` });
+      const archived = await bookmark(w, owner, { title: `${title} archived`, slug: `${slug}-archived`, archived: true });
+      await shareBookmark(db, w, direct, owner, { accountId: me });
+      await shareBookmark(db, w, viaTeam, owner, { teamId: team });
+      await shareThroughFolder(db, w, viaFolder, owner, { accountId: me });
+      await shareThroughFolder(db, w, viaTeamFolder, owner, { teamId: team });
+      await shareBookmark(db, w, toAnother, owner, { accountId: teammate });
+      await shareBookmark(db, w, toOtherTeam, owner, { teamId: otherTeam });
+      await shareBookmark(db, w, archived, owner, { accountId: me });
+
+      expect(await found(w, me, text)).toEqual([mine, direct, viaTeam, viaFolder, viaTeamFolder].toSorted());
+    });
+  });
+
+  it("returns a bookmark shared in another workspace in that workspace alone", async () => {
+    const me = await account();
+    const owner = await account();
+    const here = await workspace([me, owner]);
+    const there = await workspace([me, owner]);
+    const elsewhere = await bookmark(there, owner, { title: "Okapi planner", slug: "okapi" });
+    await shareBookmark(db, there, elsewhere, owner, { accountId: me });
+
+    expect(await found(here, me, "okapi")).toEqual([]);
+    expect(await found(there, me, "okapi")).toEqual([elsewhere]);
+  });
+
+  it("matches a shared bookmark by a typo only when nothing else matches, as the search does", async () => {
+    const me = await account();
+    const owner = await account();
+    const w = await workspace([me, owner]);
+    const shared = await bookmark(w, owner, { title: "Ptarmigan", host: "example.com" });
+    await shareBookmark(db, w, shared, owner, { accountId: me });
+
+    expect(await found(w, me, "ptarmigam")).toEqual([shared]);
+    const own = await bookmark(w, me, { title: "Ptarmigam" });
+    expect(await found(w, me, "ptarmigam")).toEqual([own]);
+  });
+});

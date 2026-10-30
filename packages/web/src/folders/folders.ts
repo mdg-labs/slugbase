@@ -22,19 +22,27 @@ export type FolderSort = (typeof FOLDER_SORTS)[number];
 
 export const DEFAULT_FOLDER_SORT: FolderSort = "name";
 
+/** Whose folders a list holds: the member's own, or those other members shared with them (doc 03 section 6). The address leaves `mine` out, since it is the plain list. */
+export const FOLDER_LIST_SCOPES = ["mine", "shared"] as const;
+
+export type FolderListScope = (typeof FOLDER_LIST_SCOPES)[number];
+
+export const DEFAULT_FOLDER_SCOPE: FolderListScope = "mine";
+
 export const FOLDERS_QUERY_KEY = ["folders"] as const;
 
 /**
- * The caller's folders in the order `sort`, a page at a time. The next page is asked for with the cursor the last one
- * answered, which is valid only with the sort it was issued for, so the sort is part of the key.
+ * The folders of `scope` in the order `sort`, a page at a time: the caller's own, or those shared with them. The next page is
+ * asked for with the cursor the last one answered, which is valid only with the scope and the sort it was issued for, so both
+ * are part of the key.
  */
-export function folderListQuery(api: ApiClient, sort: FolderSort) {
+export function folderListQuery(api: ApiClient, sort: FolderSort, scope: FolderListScope) {
   return infiniteQueryOptions({
-    queryKey: [...FOLDERS_QUERY_KEY, "list", sort],
+    queryKey: [...FOLDERS_QUERY_KEY, "list", scope, sort],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }): Promise<FolderPage> => {
       const { data, error } = await api.GET("/api/v1/folders", {
-        params: { query: { sort, limit: FOLDER_LIST_DEFAULT_LIMIT, ...(pageParam === undefined ? {} : { cursor: pageParam }) } },
+        params: { query: { scope, sort, limit: FOLDER_LIST_DEFAULT_LIMIT, ...(pageParam === undefined ? {} : { cursor: pageParam }) } },
         signal,
       });
       if (data === undefined) {

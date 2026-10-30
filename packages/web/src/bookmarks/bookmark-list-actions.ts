@@ -5,8 +5,9 @@ import { feedbackToast } from "@slugbase/ui/patterns";
 import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ApiClient } from "../api/client.ts";
+import { ApiProblemError, type ApiClient } from "../api/client.ts";
 import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
+import { SHARES_QUERY_KEY } from "../sharing/index.ts";
 import { TAGS_QUERY_KEY } from "../tags/tags.ts";
 import type { BookmarkSelection } from "./bookmark-selection.ts";
 import {
@@ -172,6 +173,9 @@ function byName<Item extends { readonly name: string }>(items: readonly Item[]):
 
 /** The bookmark as the list shows it once the folder or tag action is done. */
 function relinked(bookmark: Bookmark, action: BulkRunAction, target: BulkTarget): Bookmark {
+  if ("shareWith" in target) {
+    return bookmark;
+  }
   if ("folder" in target) {
     const { folder } = target;
     if (action === "add_to_folder") {
@@ -228,6 +232,7 @@ async function membersOf(api: ApiClient, folderId: string, ids: readonly string[
 
 function doneTitle(t: TFunction, action: BulkRunAction, count: number, target: BulkTarget | undefined): string {
   const folder = target !== undefined && "folder" in target ? target.folder.name : "";
+  const name = target !== undefined && "shareWith" in target ? target.shareWith.name : "";
   switch (action) {
     case "delete":
       return t("bookmarks.bulk.done.delete", { count });
@@ -243,6 +248,8 @@ function doneTitle(t: TFunction, action: BulkRunAction, count: number, target: B
       return t("bookmarks.bulk.done.addTags", { count });
     case "remove_tags":
       return t("bookmarks.bulk.done.removeTags", { count });
+    case "share":
+      return t("bookmarks.bulk.done.share", { count, name });
   }
 }
 
@@ -262,6 +269,8 @@ function failureTitle(t: TFunction, action: BulkRunAction): string {
       return t("bookmarks.bulk.error.addTags");
     case "remove_tags":
       return t("bookmarks.bulk.error.removeTags");
+    case "share":
+      return t("bookmarks.bulk.error.share");
   }
 }
 
@@ -317,7 +326,7 @@ export function useBulkBookmarks(selection: BookmarkSelection): BulkBookmarks {
     mutationFn: ({ action, ids, target }) => bulkBookmarks(api, action, ids, target),
     onMutate: async ({ action, ids, target }) => {
       setAnnouncement("");
-      if (target === undefined) {
+      if (target === undefined || "shareWith" in target) {
         return undefined;
       }
       // A read that is on its way would bring back the old links over the change shown.
@@ -363,7 +372,11 @@ export function useBulkBookmarks(selection: BookmarkSelection): BulkBookmarks {
       if (partial) {
         selection.replace(error.remaining, scope);
         message = t("bookmarks.bulk.error.partial", { done: error.completed.affected, total: ids.length });
-      } else if (failure?.kind === "notFound" && target !== undefined) {
+      } else if (target !== undefined && "shareWith" in target && error instanceof ApiProblemError && error.status === 422) {
+        // The member left the workspace, or the team was deleted, since the list of targets was read.
+        void queryClient.invalidateQueries({ queryKey: SHARES_QUERY_KEY });
+        message = t("bookmarks.bulk.error.shareTargetGone", { name: target.shareWith.name });
+      } else if (failure?.kind === "notFound" && target !== undefined && !("shareWith" in target)) {
         // The folder or a tag was deleted since the list of them was read.
         void queryClient.invalidateQueries({ queryKey: "folder" in target ? FOLDERS_QUERY_KEY : TAGS_QUERY_KEY });
         message = "folder" in target ? t("bookmarks.bulk.error.folderGone") : t("bookmarks.bulk.error.tagsGone");
@@ -376,8 +389,12 @@ export function useBulkBookmarks(selection: BookmarkSelection): BulkBookmarks {
         setAnnouncement(message);
       }
     },
-    onSettled: () => {
+    onSettled: (_totals, _error, { action }) => {
       void queryClient.invalidateQueries({ queryKey: BOOKMARKS_QUERY_KEY });
+      if (action === "share") {
+        // A share dialog open later reads the shares the request made.
+        void queryClient.invalidateQueries({ queryKey: SHARES_QUERY_KEY });
+      }
     },
   });
   return {

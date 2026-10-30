@@ -1,4 +1,4 @@
-import { SEARCH_QUERY_MAX_LENGTH } from "@slugbase/contracts";
+import { BOOKMARK_SCOPES, SEARCH_QUERY_MAX_LENGTH } from "@slugbase/contracts";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useCachedAccount } from "../account/use-cached-account.ts";
@@ -15,7 +15,8 @@ export type BookmarkPageSize = (typeof BOOKMARK_PAGE_SIZES)[number];
 
 export type BookmarkView = "grid" | "table";
 
-export type BookmarkScope = "all" | "mine";
+/** Whose bookmarks the list holds (doc 02 section 5.7); the address leaves `all` out, since it is the plain list. */
+export type BookmarkScope = (typeof BOOKMARK_SCOPES)[number];
 
 export const DEFAULT_SORT: BookmarkSort = "recent";
 
@@ -58,6 +59,10 @@ function isTrue(value: unknown): boolean {
 
 function isSort(value: unknown): value is BookmarkSort {
   return (BOOKMARK_SORTS as readonly unknown[]).includes(value);
+}
+
+function isListedScope(value: unknown): value is Exclude<BookmarkScope, "all"> {
+  return value !== "all" && (BOOKMARK_SCOPES as readonly unknown[]).includes(value);
 }
 
 function identifierOf(value: unknown): string | undefined {
@@ -107,8 +112,8 @@ export function validateBookmarkListSearch(search: Record<string, unknown>): Boo
   if (tag.length > 0) {
     result.tag = tag;
   }
-  if (search.scope === "mine") {
-    result.scope = "mine";
+  if (isListedScope(search.scope)) {
+    result.scope = search.scope;
   }
   if (isSort(search.sort) && search.sort !== DEFAULT_SORT) {
     result.sort = search.sort;
@@ -158,7 +163,7 @@ export interface BookmarkFilterParams {
   readonly pinned?: "true";
   readonly hasSlug?: "true";
   readonly forwarding?: "true";
-  readonly scope?: "mine";
+  readonly scope?: Exclude<BookmarkScope, "all">;
   readonly folderId?: string;
   readonly q?: string;
   readonly tag?: string[];

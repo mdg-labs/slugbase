@@ -1,3 +1,4 @@
+import { BOOKMARK_SCOPES } from "@slugbase/contracts";
 import { Button, ToggleGroup, ToggleGroupItem } from "@slugbase/ui";
 import { FilterXIcon, LayoutGridIcon, MultiPick, Picker, SegmentedChoice, SelectField, TableIcon } from "@slugbase/ui/patterns";
 import type { ReactElement } from "react";
@@ -6,9 +7,10 @@ import { useCachedAccount } from "../account/use-cached-account.ts";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
 import { folderIconOf, folderTextClass } from "../folders/folder-glyph.tsx";
 import type { AllFolders } from "../folders/use-all-folders.ts";
+import { useSharingGranted } from "../sharing/index.ts";
 import type { AllTags } from "../tags/use-all-tags.ts";
 import { FilterChips, type FilterChip } from "./filter-chips.tsx";
-import { BOOKMARK_SORTS, BOOKMARK_TAG_FILTER_MAX, DEFAULT_SORT, hasActiveFilters, type BookmarkListControls, type BookmarkListSearch, type BookmarkSort, type BookmarkView } from "./list-search.ts";
+import { BOOKMARK_SORTS, BOOKMARK_TAG_FILTER_MAX, DEFAULT_SORT, hasActiveFilters, type BookmarkListControls, type BookmarkListSearch, type BookmarkScope, type BookmarkSort, type BookmarkView } from "./list-search.ts";
 import { SearchField } from "./search-field.tsx";
 
 export interface BookmarksToolbarProps {
@@ -17,15 +19,20 @@ export interface BookmarksToolbarProps {
   readonly controls: BookmarkListControls;
   /** The member's folders, which the folder filter offers and names the folder chip from. */
   readonly folders: AllFolders;
+  /** The folders other members shared with the member, which the folder filter offers and names the chip from after their own. */
+  readonly shared: AllFolders;
   /** The member's tags, which the tags filter offers. */
   readonly tags: AllTags;
 }
 
 const ALL_SCOPE = "all";
-const MINE_SCOPE = "mine";
 
 function isView(value: string): value is BookmarkView {
   return value === "grid" || value === "table";
+}
+
+function isScope(value: string): value is BookmarkScope {
+  return (BOOKMARK_SCOPES as readonly string[]).includes(value);
 }
 
 function isSort(value: string): value is BookmarkSort {
@@ -41,7 +48,7 @@ function isSort(value: string): value is BookmarkSort {
  * has stopped typing, with the history entry replaced, so the back button leaves the list rather than undoing each word.
  * Whatever narrows the list, the text of the search among it, is also a chip that takes it off.
  */
-export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksToolbarProps): ReactElement {
+export function BookmarksToolbar({ search, controls, folders, shared, tags }: BookmarksToolbarProps): ReactElement {
   const { t } = useTranslation();
   const account = useCachedAccount();
   const preferences = useUpdatePreferences();
@@ -67,12 +74,20 @@ export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksT
     { value: "most_used", label: t("bookmarks.list.sort.mostUsed") },
     { value: "recently_opened", label: t("bookmarks.list.sort.recentlyOpened") },
   ] as const satisfies readonly { value: BookmarkSort; label: string }[];
-  const scopeOptions = [
-    { value: ALL_SCOPE, label: t("bookmarks.list.scope.all") },
-    { value: MINE_SCOPE, label: t("bookmarks.list.scope.mine") },
-  ];
+  // Shared bookmarks exist only where the workspace may share (doc 03 section 3.1), so the scopes about them are offered there alone.
+  const sharingGranted = useSharingGranted();
+  const scopeLabels = {
+    all: t("bookmarks.list.scope.all"),
+    mine: t("bookmarks.list.scope.mine"),
+    shared_with_me: t("bookmarks.list.scope.sharedWithMe"),
+    shared_by_me: t("bookmarks.list.scope.sharedByMe"),
+  } as const satisfies Record<BookmarkScope, string>;
+  const offeredScopes: readonly BookmarkScope[] = sharingGranted ? BOOKMARK_SCOPES : ["all", "mine"];
+  const scopeOptions = offeredScopes.map((scope) => ({ value: scope, label: scopeLabels[scope] }));
   function changeScope(value: string): void {
-    controls.update({ scope: value === MINE_SCOPE ? MINE_SCOPE : undefined });
+    if (isScope(value)) {
+      controls.update({ scope: value === ALL_SCOPE ? undefined : value });
+    }
   }
   const filters = [
     { key: "pinned", label: t("bookmarks.list.filter.pinned") },
@@ -87,11 +102,12 @@ export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksT
       forwarding: active.includes("forwarding") ? true : undefined,
     });
   }
-  const folderOptions = folders.folders.map((folder) => {
+  const filterFolders = [...folders.folders, ...shared.folders];
+  const folderOptions = filterFolders.map((folder) => {
     const Icon = folderIconOf(folder.icon);
     return { value: folder.id, label: folder.name, icon: <Icon className={`size-4 ${folderTextClass(folder.color)}`} /> };
   });
-  const chosenFolder = folders.folders.find((folder) => folder.id === search.folderId);
+  const chosenFolder = filterFolders.find((folder) => folder.id === search.folderId);
   const tagIds = search.tag ?? [];
   // A tag of the address that the member's list lacks (deleted, or never theirs) still has its chip, so it can be taken off.
   const unlisted = tagIds.filter((id) => !tags.tags.some((tag) => tag.id === id));
@@ -144,7 +160,7 @@ export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksT
       : [
           {
             id: "scope",
-            label: t("bookmarks.list.scope.mine"),
+            label: scopeLabels[search.scope],
             onRemove: () => {
               controls.update({ scope: undefined });
             },

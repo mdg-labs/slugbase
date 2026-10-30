@@ -58,6 +58,20 @@ function workspaceLines(workspace: LargeWorkspace): string[] {
   for (const group of batches(workspace.folderBookmarks)) {
     lines.push(`INSERT INTO public.folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES ${group.map((link) => `(${id}, ${text(link.folderId)}, ${text(link.bookmarkId)})`).join(", ")};`);
   }
+  for (const team of workspace.teams) {
+    lines.push(`INSERT INTO public.teams (id, workspace_id, name) VALUES (${text(team.id)}, ${id}, ${text(team.name)});`);
+    lines.push(`INSERT INTO public.team_members (workspace_id, team_id, account_id) VALUES ${team.memberIds.map((accountId) => `(${id}, ${text(team.id)}, ${text(accountId)})`).join(", ")};`);
+  }
+  for (const [table, column, shares] of [
+    ["bookmark_shares", "bookmark_id", workspace.bookmarkShares],
+    ["folder_shares", "folder_id", workspace.folderShares],
+  ] as const) {
+    for (const group of batches(shares)) {
+      lines.push(
+        `INSERT INTO public.${table} (id, workspace_id, ${column}, target_account_id, target_team_id, granted_by) VALUES ${group.map((share) => `(${text(share.id)}, ${id}, ${text(share.subjectId)}, ${nullable(share.accountId)}, ${nullable(share.teamId)}, ${text(share.grantedBy)})`).join(", ")};`,
+      );
+    }
+  }
   lines.push(`UPDATE public.workspaces SET bookmark_count = (SELECT count(*) FROM public.bookmarks b WHERE b.workspace_id = ${id} AND b.plan_archived_at IS NULL) WHERE id = ${id};`);
   return lines;
 }

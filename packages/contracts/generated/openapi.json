@@ -584,7 +584,7 @@
         "additionalProperties": false,
         "properties": {
           "folderId": {
-            "description": "Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on",
+            "description": "Matches the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown matches nothing. Left out, folders are not filtered on",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
             "type": "string"
@@ -949,6 +949,17 @@
             "minimum": 0,
             "type": "integer"
           },
+          "audience": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BulkPreviewAudience"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For share, who the bookmarks the action would reach are shared with afterwards; null for add_tags"
+          },
           "requested": {
             "description": "How many bookmarks the request named (the distinct identifiers) or the filter matched",
             "maximum": 9007199254740991,
@@ -985,7 +996,7 @@
             "type": "object"
           },
           "tags": {
-            "description": "The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds",
+            "description": "For add_tags, the tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds; empty for share",
             "items": {
               "$ref": "#/components/schemas/BulkPreviewTag"
             },
@@ -997,16 +1008,26 @@
           "affected",
           "skipped",
           "skippedReasons",
-          "tags"
+          "tags",
+          "audience"
         ],
         "type": "object"
       },
       "BulkBookmarksPreviewRequest": {
         "additionalProperties": false,
         "properties": {
+          "accountId": {
+            "description": "The member the share action shares the bookmarks with; it must be a current member of the workspace other than the caller. share requires this or teamId, and not both; every other action refuses it",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
           "action": {
-            "const": "add_tags",
-            "description": "The action to preview; only add_tags has a preview",
+            "description": "The action to preview: add_tags, or share",
+            "enum": [
+              "add_tags",
+              "share"
+            ],
             "type": "string"
           },
           "filter": {
@@ -1025,7 +1046,7 @@
             "type": "array"
           },
           "tagIds": {
-            "description": "The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers. A tag that is another member's, another workspace's or unknown is refused with 404",
+            "description": "The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers; required for add_tags and refused for share. A tag that is another member's, another workspace's or unknown is refused with 404",
             "items": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -1034,19 +1055,30 @@
             "maxItems": 100,
             "minItems": 1,
             "type": "array"
+          },
+          "teamId": {
+            "description": "The team the share action shares the bookmarks with; it must be a team of the workspace. share requires this or accountId, and not both; every other action refuses it",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
           }
         },
         "required": [
-          "action",
-          "tagIds"
+          "action"
         ],
         "type": "object"
       },
       "BulkBookmarksRequest": {
         "additionalProperties": false,
         "properties": {
+          "accountId": {
+            "description": "The member the share action shares the bookmarks with; it must be a current member of the workspace other than the caller. share requires this or teamId, and not both; every other action refuses it",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
           "action": {
-            "description": "delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off",
+            "description": "delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off. share shares them with the member accountId or the team teamId, read-only; only the caller's own bookmarks are shared, it needs the sharing entitlement of the target's kind, and a bookmark the target is shared with already counts as affected",
             "enum": [
               "delete",
               "pin",
@@ -1055,7 +1087,8 @@
               "move_to_folder",
               "remove_from_folder",
               "add_tags",
-              "remove_tags"
+              "remove_tags",
+              "share"
             ],
             "type": "string"
           },
@@ -1090,6 +1123,12 @@
             "maxItems": 100,
             "minItems": 1,
             "type": "array"
+          },
+          "teamId": {
+            "description": "The team the share action shares the bookmarks with; it must be a team of the workspace. share requires this or accountId, and not both; every other action refuses it",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
           }
         },
         "required": [
@@ -1147,6 +1186,49 @@
           "affected",
           "skipped",
           "skippedReasons"
+        ],
+        "type": "object"
+      },
+      "BulkPreviewAudience": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "description": "How many of the bookmarks the action would reach are not shared with the target yet, so get a share from the action",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "description": "The account identifier of the member, or the identifier of the team",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What the bookmarks would be shared with: a member of the workspace, or one of its teams",
+            "enum": [
+              "member",
+              "team"
+            ],
+            "type": "string"
+          },
+          "memberCount": {
+            "description": "How many members other than the caller can read the bookmarks through this target: 1 for a member, the members of the team without the caller for a team",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "description": "The member's display name or the team's name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name",
+          "memberCount",
+          "added"
         ],
         "type": "object"
       },
@@ -1736,7 +1818,7 @@
             "type": "array"
           },
           "quickAccess": {
-            "description": "Up to 8 of the caller's own bookmarks that forward by a slug, the most opened first; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it",
+            "description": "Up to 8 of the bookmarks the caller can read, its own and those shared with it, that forward by a slug, the most opened first by the bookmark's total opens; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it",
             "items": {
               "$ref": "#/components/schemas/DashboardBookmark"
             },
@@ -1752,7 +1834,7 @@
                 "type": "null"
               }
             ],
-            "description": "The sharing counts; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements"
+            "description": "The sharing counts; null whenever the caller's workspace does not hold the sharing entitlements"
           },
           "topTags": {
             "description": "Up to 12 of the caller's own tags, the one on the most bookmarks first, then by name; another member's tags are never in it",
@@ -1849,7 +1931,7 @@
                 "type": "null"
               }
             ],
-            "description": "The bookmarks shared with the caller; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements"
+            "description": "The bookmarks other members shared with the caller, plan-archived ones not counted; null whenever the caller's workspace does not hold the sharing entitlements"
           },
           "tags": {
             "description": "The caller's own tags",
@@ -1908,7 +1990,7 @@
         "additionalProperties": false,
         "properties": {
           "sharedByYou": {
-            "description": "The caller's bookmarks that are shared with others",
+            "description": "The caller's bookmarks that are shared with others, plan-archived ones not counted",
             "maximum": 9007199254740991,
             "minimum": 0,
             "type": "integer"
@@ -2207,6 +2289,34 @@
             "description": "The folder's name, in the case it was entered in",
             "type": "string"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "description": "The owner's account",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "description": "The owner's display name, as a member of the workspace sees it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who owns a folder that is shared with the caller; null for the caller's own folder and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null"
+          },
           "ownerId": {
             "anyOf": [
               {
@@ -2219,6 +2329,17 @@
               }
             ],
             "description": "The account of the member who owns the folder; null once that member has left the workspace"
+          },
+          "shareSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FolderShareSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the caller's own folder is shared: with how many members directly and with which teams; no members and no teams for a private folder. Null for a folder that is another member's, whose recipient sees only who shared it. The server always sends it; a client reads an absent value as null"
           },
           "updatedAt": {
             "description": "When the folder last changed, RFC 3339 UTC",
@@ -2270,7 +2391,7 @@
         "additionalProperties": false,
         "properties": {
           "items": {
-            "description": "One page of the caller's folders in the workspace, in the order asked for; another member's folders are never listed",
+            "description": "One page of the folders the scope covers in the workspace, in the order asked for; another member's folder that is not shared with the caller is never listed. A folder of another member carries its owner, and the caller's own carries how it is shared",
             "items": {
               "$ref": "#/components/schemas/Folder"
             },
@@ -2401,6 +2522,46 @@
         "required": [
           "items",
           "audienceSize"
+        ],
+        "type": "object"
+      },
+      "FolderShareSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "memberCount": {
+            "description": "How many members the folder is shared with directly; the members of the teams it is shared with are not counted",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "teams": {
+            "description": "The teams the folder is shared with, in the order of their names",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "description": "The team's identifier",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The team's name",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "memberCount",
+          "teams"
         ],
         "type": "object"
       },
@@ -4873,13 +5034,13 @@
             "type": "string"
           },
           "updatedAt": {
-            "description": "When the team's name or description last changed, RFC 3339 UTC",
+            "description": "When the team's version last moved, RFC 3339 UTC",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
             "type": "string"
           },
           "version": {
-            "description": "Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back",
+            "description": "Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back",
             "maximum": 9007199254740991,
             "minimum": 1,
             "type": "integer"
@@ -4982,13 +5143,13 @@
             "type": "string"
           },
           "updatedAt": {
-            "description": "When the team's name or description last changed, RFC 3339 UTC",
+            "description": "When the team's version last moved, RFC 3339 UTC",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
             "type": "string"
           },
           "version": {
-            "description": "Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back",
+            "description": "Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back",
             "maximum": 9007199254740991,
             "minimum": 1,
             "type": "integer"
@@ -6694,7 +6855,7 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
+              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. The filter folderId reaches the bookmarks filed in the caller's own folder and those filed in a folder of another member that is shared with the caller, so shared_with_me with it lists the latter. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q reaches the bookmarks the caller can read, so with all or shared_with_me it also lists the shared bookmarks it matches and with mine only the caller's own",
               "enum": [
                 "all",
                 "mine",
@@ -6770,7 +6931,7 @@
             "name": "folderId",
             "required": false,
             "schema": {
-              "description": "Lists the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
@@ -7092,7 +7253,7 @@
                 }
               }
             },
-            "description": "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone"
+            "description": "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone. A share action grants a read-only share of each bookmark it reaches to the member or team, once for a target a bookmark is shared with already, and records one share.bulk_granted audit event with the number of shares it made and the target, none when it made none"
           },
           "400": {
             "content": {
@@ -7122,7 +7283,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden); nothing is changed"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden), or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed"
           },
           "404": {
             "content": {
@@ -7142,7 +7303,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written"
+            "description": "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a share without accountId and teamId or with both, an accountId or teamId on another action, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share action's target is the caller (cannot_share_with_self on accountId), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written"
           },
           "429": {
             "content": {
@@ -7176,7 +7337,7 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "Delete, pin, unpin, file or tag many bookmarks",
+        "summary": "Delete, pin, unpin, file, tag or share many bookmarks",
         "tags": [
           "bookmarks"
         ],
@@ -7207,7 +7368,7 @@
                 }
               }
             },
-            "description": "What add_tags with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards. Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist"
+            "description": "What add_tags or share with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards; share does the same for who the bookmarks would be shared with (audience). Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist"
           },
           "400": {
             "content": {
@@ -7237,7 +7398,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not tag it (forbidden)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not act on it (forbidden), or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable)"
           },
           "404": {
             "content": {
@@ -7257,7 +7418,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks"
+            "description": "The body did not pass validation (an action other than add_tags or share, neither or both of ids and filter, no identifier or more than 1 000, add_tags without tags or share with tags, more than 100 tags, a malformed identifier, a share without accountId and teamId or with both, an accountId or teamId on add_tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share target that is the caller, no current member of the workspace or no team of it"
           },
           "429": {
             "content": {
@@ -7291,7 +7452,7 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "Preview adding tags to many bookmarks",
+        "summary": "Preview adding tags to, or sharing, many bookmarks",
         "tags": [
           "bookmarks"
         ],
@@ -7310,7 +7471,7 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
+              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. The filter folderId reaches the bookmarks filed in the caller's own folder and those filed in a folder of another member that is shared with the caller, so shared_with_me with it lists the latter. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q reaches the bookmarks the caller can read, so with all or shared_with_me it also lists the shared bookmarks it matches and with mine only the caller's own",
               "enum": [
                 "all",
                 "mine",
@@ -7386,7 +7547,7 @@
             "name": "folderId",
             "required": false,
             "schema": {
-              "description": "Lists the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
@@ -8864,10 +9025,11 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose folders are listed. Only the caller's own folders exist until sharing arrives, so both name the same folders today",
+              "description": "Whose folders are listed: all (the caller's own and those shared with them), mine (the caller's own) or shared (other members' folders that are shared with the caller, directly or through a team). A folder that is shared with the caller more than once is listed once",
               "enum": [
                 "all",
-                "mine"
+                "mine",
+                "shared"
               ],
               "type": "string"
             }
@@ -8931,7 +9093,7 @@
                 }
               }
             },
-            "description": "One page of the caller's folders in the workspace in the order asked for, each with the number of bookmarks filed in it, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast)"
+            "description": "One page of the folders the scope covers in the workspace in the order asked for, each with the number of bookmarks filed in it and its owner or its share summary, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast)"
           },
           "400": {
             "content": {
@@ -9005,7 +9167,7 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "List my folders",
+        "summary": "List folders",
         "tags": [
           "folders"
         ],
@@ -9185,7 +9347,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted"
           },
           "404": {
             "content": {
@@ -9195,7 +9357,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
+            "description": "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
           },
           "422": {
             "content": {
@@ -9271,7 +9433,7 @@
                 }
               }
             },
-            "description": "The caller's folder with the number of bookmarks filed in it",
+            "description": "The caller's folder, or another member's folder that is shared with the caller, with the number of bookmarks filed in it and its owner or its share summary",
             "headers": {
               "ETag": {
                 "description": "The folder's version as an entity tag, for example \"3\"; the If-Match of the next change",
@@ -9310,7 +9472,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike"
+            "description": "The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike"
           },
           "422": {
             "content": {
@@ -9444,7 +9606,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not change it (forbidden); nothing is changed"
           },
           "404": {
             "content": {
@@ -9454,7 +9616,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike"
+            "description": "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike"
           },
           "409": {
             "content": {
@@ -9601,7 +9763,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not take it out of a folder (forbidden); none of the bookmarks is unfiled"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not take bookmarks out of it or take it out of a folder (forbidden); none of the bookmarks is unfiled"
           },
           "404": {
             "content": {
@@ -9611,7 +9773,7 @@
                 }
               }
             },
-            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled"
+            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled"
           },
           "422": {
             "content": {
@@ -9736,7 +9898,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not file it (forbidden); none of the bookmarks is filed"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not file into it or file it (forbidden); none of the bookmarks is filed"
           },
           "404": {
             "content": {
@@ -9746,7 +9908,7 @@
                 }
               }
             },
-            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed"
+            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed"
           },
           "422": {
             "content": {
@@ -17641,7 +17803,7 @@
             "name": "If-Match",
             "required": false,
             "schema": {
-              "description": "The ETag of the version the change is made against, for example \"3\". A team at another version answers 412 precondition_failed. Optional, so a caller may leave it out; `*` matches any version",
+              "description": "The ETag of the version the change is made against, for example \"3\". A team at another version answers 412 precondition_failed, and its version covers the name, the description and the member set. Optional, so a caller may leave it out; `*` matches any version",
               "type": "string"
             }
           }
@@ -17801,6 +17963,15 @@
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "description": "The ETag of the version the change is made against, for example \"3\". A team at another version answers 412 precondition_failed, and its version covers the name, the description and the member set. Optional, so a caller may leave it out; `*` matches any version",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -17822,7 +17993,7 @@
                 }
               }
             },
-            "description": "The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added; the team's version does not move, since it covers the name and the description",
+            "description": "The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added. A set that differs from the team's moves the version by one and the ETag is that of the new version; the set the team has already writes nothing and answers with the unchanged version",
             "headers": {
               "ETag": {
                 "description": "The team's version as an entity tag, for example \"3\"; the If-Match of the next change",
@@ -17872,6 +18043,16 @@
               }
             },
             "description": "The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, or the replacement adds an account that joined the workspace after that version was written; the member set is unchanged, and in the second case only the version has moved, so a new read of the team carries the version to send"
           },
           "422": {
             "content": {

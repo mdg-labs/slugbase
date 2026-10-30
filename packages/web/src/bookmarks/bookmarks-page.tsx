@@ -2,9 +2,9 @@ import { Button, Skeleton } from "@slugbase/ui";
 import { Banner, CardGrid, Confirm, EmptyState, FilterXIcon, InboxIcon, Loading, LoadMore, PlusIcon } from "@slugbase/ui/patterns";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { useAllFolders } from "../folders/use-all-folders.ts";
+import { useAllFolders, useSharedFolders } from "../folders/use-all-folders.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { ShareDialog, type ShareSubject } from "../sharing/index.ts";
 import { useAllTags } from "../tags/use-all-tags.ts";
@@ -15,7 +15,7 @@ import { useBulkBookmarks, usePendingPins, useDeleteBookmark, usePinBookmark } f
 import { useBookmarkSelection, useSelectionShortcuts } from "./bookmark-selection.ts";
 import { bookmarkFailureOf, bookmarkListQuery, type Bookmark } from "./bookmarks.ts";
 import { BookmarksToolbar } from "./bookmarks-toolbar.tsx";
-import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, withoutFolder, type BookmarkView } from "./list-search.ts";
+import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, withoutFolder, type BookmarkListSearch, type BookmarkView } from "./list-search.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 import { useListShortcuts } from "./use-list-shortcuts.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
@@ -24,6 +24,13 @@ import { usePasteToCreate } from "./use-paste-to-create.ts";
 const PAGE_FRAME = "flex w-full min-w-0 flex-col gap-4 p-4 md:p-6";
 
 const SKELETON_CARDS = ["a", "b", "c", "d", "e", "f"] as const;
+
+// Whether the scope is the only filter of the list.
+function onlyScope(search: BookmarkListSearch): boolean {
+  const rest = { ...search };
+  Reflect.deleteProperty(rest, "scope");
+  return !hasActiveFilters(rest);
+}
 
 function CardsLoading({ view }: { readonly view: BookmarkView }): ReactElement {
   const { t } = useTranslation();
@@ -60,13 +67,21 @@ export function BookmarksPage(): ReactElement {
   const modal = useBookmarkModal();
   usePasteToCreate(modal.openNew);
   const folders = useAllFolders();
+  const sharedFolders = useSharedFolders();
   const tags = useAllTags();
-  // A folder of the address is concluded not to be the member's only from a whole list; a list that failed or is still
-  // loading says nothing about it. The list held may predate the folder (made on another device, say), so a folder missing
-  // from it is looked for once more in a fresh read, and only a folder still missing then is taken for one that is gone.
-  const missingFolder = addressed.folderId !== undefined && folders.status === "ready" && !folders.folders.some((folder) => folder.id === addressed.folderId);
+  // A folder of the address is concluded not to be the member's, or shared with them, only from the whole lists of both; a list
+  // that failed or is still loading says nothing about it. The lists held may predate the folder (made on another device, say), so
+  // a folder missing from them is looked for once more in fresh reads, and only a folder still missing then is taken for one that is gone.
+  const missingFolder =
+    addressed.folderId !== undefined &&
+    folders.status === "ready" &&
+    sharedFolders.status === "ready" &&
+    !folders.folders.some((folder) => folder.id === addressed.folderId) &&
+    !sharedFolders.folders.some((folder) => folder.id === addressed.folderId);
   const [rereadFor, setRereadFor] = useState<string | undefined>(undefined);
-  const { reread } = folders;
+  const { reread: rereadOwn } = folders;
+  const { reread: rereadShared } = sharedFolders;
+  const reread = useCallback(() => Promise.all([rereadOwn(), rereadShared()]), [rereadOwn, rereadShared]);
   useEffect(() => {
     const folderId = addressed.folderId;
     if (!missingFolder || folderId === undefined || rereadFor === folderId) {
@@ -179,6 +194,21 @@ export function BookmarksPage(): ReactElement {
         }
         title={t("bookmarks.list.loadFailed")}
         variant="error"
+      />
+    );
+  } else if (items.length === 0 && !query.hasNextPage && search.scope === "shared_with_me" && onlyScope(search)) {
+    // The member has filtered nothing but the scope, so the list is empty because nothing has been shared with them (doc 03 section 3.5).
+    body = (
+      <EmptyState
+        actions={
+          <Button onClick={controls.clearFilters} variant="outline">
+            <FilterXIcon aria-hidden="true" />
+            {t("bookmarks.list.clearFilters")}
+          </Button>
+        }
+        description={t("bookmarks.list.empty.sharedWithMe.description")}
+        icon={<InboxIcon aria-hidden="true" />}
+        title={t("bookmarks.list.empty.sharedWithMe.title")}
       />
     );
   } else if (items.length === 0 && !query.hasNextPage) {
@@ -301,9 +331,9 @@ export function BookmarksPage(): ReactElement {
           variant="warning"
         />
       ) : null}
-      <BookmarksToolbar controls={controls} folders={folders} search={search} tags={tags} />
+      <BookmarksToolbar controls={controls} folders={folders} search={search} shared={sharedFolders} tags={tags} />
       {body}
-      <BookmarksBulkBar bulk={bulk} filters={filters} selection={selection} total={lastPage?.total ?? null} />
+      <BookmarksBulkBar bulk={bulk} filters={filters} items={items} selection={selection} total={lastPage?.total ?? null} />
       <p aria-live="polite" className="sr-only" role="status">
         {bulk.announcement}
       </p>

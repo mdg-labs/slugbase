@@ -27,10 +27,12 @@ describe("seeding the large instance into a harness database", () => {
     expect(counts).toEqual({ database: db.name, accounts: instance.accounts.length, workspaces: 7, bookmarks: 600 + 6 * 10, largestWorkspace: 600 });
     const rows = await db.owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
-      return tx<{ tags: number; folders: number; tagged: number; filed: number; slugged: number; forwarding: number; stale: number }[]>`
+      return tx<{ tags: number; folders: number; tagged: number; filed: number; slugged: number; forwarding: number; teams: number; teamMembers: number; bookmarkShares: number; folderShares: number; stale: number }[]>`
         SELECT (SELECT count(*)::int FROM tags) AS tags, (SELECT count(*)::int FROM folders) AS folders,
                (SELECT count(*)::int FROM bookmark_tags) AS tagged, (SELECT count(*)::int FROM folder_bookmarks) AS filed,
                (SELECT count(*)::int FROM bookmarks WHERE slug IS NOT NULL) AS slugged, (SELECT count(*)::int FROM bookmarks WHERE forwarding) AS forwarding,
+               (SELECT count(*)::int FROM teams) AS teams, (SELECT count(*)::int FROM team_members) AS "teamMembers", (SELECT count(*)::int FROM bookmark_shares) AS "bookmarkShares",
+               (SELECT count(*)::int FROM folder_shares) AS "folderShares",
                (SELECT count(*)::int FROM workspaces w WHERE bookmark_count <> (SELECT count(*) FROM bookmarks b WHERE b.workspace_id = w.id)) AS stale`;
     });
     const all = instance.workspaces;
@@ -41,8 +43,13 @@ describe("seeding the large instance into a harness database", () => {
       filed: all.reduce((sum, workspace) => sum + workspace.folderBookmarks.length, 0),
       slugged: all.reduce((sum, workspace) => sum + workspace.bookmarks.filter((bookmark) => bookmark.slug !== null).length, 0),
       forwarding: all.reduce((sum, workspace) => sum + workspace.bookmarks.filter((bookmark) => bookmark.forwarding).length, 0),
+      teams: 1,
+      teamMembers: 3,
+      bookmarkShares: large.bookmarkShares.length,
+      folderShares: large.folderShares.length,
       stale: 0,
     });
+    expect(large.bookmarkShares.length).toBeGreaterThan(0);
   });
 
   it("reads each workspace's own rows and no other's through row-level security", { timeout: HOOK_TIMEOUT_MS }, async () => {

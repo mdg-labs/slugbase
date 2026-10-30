@@ -1,9 +1,10 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { folderRepository, isFolderNameTaken, listRepositoryMethods, workspacePurgeOrder } from "../src/index.ts";
+import { bookmarkRepository, folderRepository, isFolderNameTaken, listRepositoryMethods, workspacePurgeOrder } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { seedTeam } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The folders of a member (doc 05 section 2.4, doc 02 section 7.1, doc 10 T2). The failure scenario: in one workspace member B lists,
@@ -262,14 +263,14 @@ describe("a folder is its owner's alone (T2)", () => {
 
     const outcome = await inTenant({ accountId: b, workspaceId: workspace.id }, async (tx) => {
       const repository = folderRepository(tx);
-      const page = (sort: "name" | "count" | "updated") => repository.list({ ownerId: b, search: undefined, sort, after: undefined, limit: 100 });
+      const page = (sort: "name" | "count" | "updated") => repository.list({ viewerId: b, scope: "mine", search: undefined, sort, after: undefined, limit: 100 });
       return {
         listed: (await page("name")).map((folder) => folder.id),
         listedByCount: (await page("count")).map((folder) => folder.id),
         listedByUpdate: (await page("updated")).map((folder) => folder.id),
-        searched: (await repository.list({ ownerId: b, search: "Private to A", sort: "name", after: undefined, limit: 100 })).map((folder) => folder.id),
-        counted: await repository.count({ ownerId: b, search: undefined, limit: 100 }),
-        found: await repository.find({ folderId: folderOfA, ownerId: b }),
+        searched: (await repository.list({ viewerId: b, scope: "mine", search: "Private to A", sort: "name", after: undefined, limit: 100 })).map((folder) => folder.id),
+        counted: await repository.count({ viewerId: b, scope: "mine", search: undefined, limit: 100 }),
+        found: await repository.find({ folderId: folderOfA, viewerId: b }),
         updated: await repository.update({ folderId: folderOfA, ownerId: b, changes: { name: "Taken over", icon: "star", color: 3 }, expectedVersions: undefined }),
         removed: await repository.remove({ folderId: folderOfA, ownerId: b }),
       };
@@ -296,8 +297,8 @@ describe("a folder is its owner's alone (T2)", () => {
     const outcome = await inTenant({ accountId: a, workspaceId: workspace.id }, async (tx) => {
       const repository = folderRepository(tx);
       return {
-        listed: await repository.list({ ownerId: a, search: undefined, sort: "name", after: undefined, limit: 100 }),
-        found: await repository.find({ folderId: ownerless, ownerId: a }),
+        listed: await repository.list({ viewerId: a, scope: "mine", search: undefined, sort: "name", after: undefined, limit: 100 }),
+        found: await repository.find({ folderId: ownerless, viewerId: a }),
         removed: await repository.remove({ folderId: ownerless, ownerId: a }),
       };
     });
@@ -325,7 +326,7 @@ describe("a folder is its owner's alone (T2)", () => {
       selected: await entry("select").invokeRlsOnly(tx),
       updated: await entry("update").invokeRlsOnly(tx, { set: { name: "Taken over" } }),
       deleted: await entry("delete").invokeRlsOnly(tx),
-      through: await folderRepository(tx).find({ folderId: folderOfA, ownerId: outsider }),
+      through: await folderRepository(tx).find({ folderId: folderOfA, viewerId: outsider }),
     }));
     const raw = await appAs({ accountId: outsider, workspaceId: second.id }, async (tx) => ({
       selected: await tx`SELECT id FROM folders`,
@@ -366,7 +367,7 @@ describe("a folder is its owner's alone (T2)", () => {
     const workspace = await workspaceOf(2);
     const [a, b] = [memberOf(workspace, 0), memberOf(workspace, 1)];
 
-    await expect(inTenant({ accountId: b, workspaceId: workspace.id }, (tx) => folderRepository(tx).list({ ownerId: a, search: undefined, sort: "name", after: undefined, limit: 100 }))).rejects.toThrow(
+    await expect(inTenant({ accountId: b, workspaceId: workspace.id }, (tx) => folderRepository(tx).list({ viewerId: a, scope: "mine", search: undefined, sort: "name", after: undefined, limit: 100 }))).rejects.toThrow(
       "the account of the transaction",
     );
   });
@@ -476,7 +477,7 @@ describe("a change of a folder", () => {
     const workspace = await workspaceOf(1);
     const owner = memberOf(workspace, 0);
     const folder = await seedFolder(workspace.id, owner, "Versioned");
-    const before = await inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => folderRepository(tx).find({ folderId: folder, ownerId: owner }));
+    const before = await inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => folderRepository(tx).find({ folderId: folder, viewerId: owner }));
     await sleep(20);
 
     const results = await inTenant({ accountId: owner, workspaceId: workspace.id }, async (tx) => {
@@ -548,10 +549,10 @@ describe("the list", () => {
     const outcome = await inTenant({ accountId: owner, workspaceId: workspace.id }, async (tx) => {
       const repository = folderRepository(tx);
       return {
-        byName: (await repository.list({ ownerId: owner, search: undefined, sort: "name", after: undefined, limit: 10 })).map((row) => [row.name, row.bookmarkCount]),
-        byCount: (await repository.list({ ownerId: owner, search: undefined, sort: "count", after: undefined, limit: 10 })).map((row) => [row.name, row.bookmarkCount]),
-        found: (await repository.find({ folderId: busy, ownerId: owner }))?.bookmarkCount,
-        emptyFound: (await repository.find({ folderId: empty, ownerId: owner }))?.bookmarkCount,
+        byName: (await repository.list({ viewerId: owner, scope: "mine", search: undefined, sort: "name", after: undefined, limit: 10 })).map((row) => [row.name, row.bookmarkCount]),
+        byCount: (await repository.list({ viewerId: owner, scope: "mine", search: undefined, sort: "count", after: undefined, limit: 10 })).map((row) => [row.name, row.bookmarkCount]),
+        found: (await repository.find({ folderId: busy, viewerId: owner }))?.bookmarkCount,
+        emptyFound: (await repository.find({ folderId: empty, viewerId: owner }))?.bookmarkCount,
       };
     });
 
@@ -568,8 +569,8 @@ describe("the list", () => {
       inTenant({ accountId: owner, workspaceId: workspace.id }, async (tx) => {
         const repository = folderRepository(tx);
         return {
-          names: (await repository.list({ ownerId: owner, search: text, sort: "name", after: undefined, limit: 10 })).map((row) => row.name),
-          count: await repository.count({ ownerId: owner, search: text, limit: 100 }),
+          names: (await repository.list({ viewerId: owner, scope: "mine", search: text, sort: "name", after: undefined, limit: 10 })).map((row) => row.name),
+          count: await repository.count({ viewerId: owner, scope: "mine", search: text, limit: 100 }),
         };
       });
 
@@ -589,8 +590,8 @@ describe("the list", () => {
     );
 
     const counts = await inTenant({ accountId: owner, workspaceId: workspace.id }, async (tx) => ({
-      capped: await folderRepository(tx).count({ ownerId: owner, search: undefined, limit: 10 }),
-      all: await folderRepository(tx).count({ ownerId: owner, search: undefined, limit: 100 }),
+      capped: await folderRepository(tx).count({ viewerId: owner, scope: "mine", search: undefined, limit: 10 }),
+      all: await folderRepository(tx).count({ viewerId: owner, scope: "mine", search: undefined, limit: 100 }),
     }));
 
     expect(counts).toEqual({ capped: 10, all: 25 });
@@ -618,7 +619,7 @@ describe("the list", () => {
         const seen: string[] = [];
         let after: Parameters<typeof repository.list>[0]["after"];
         for (let page = 0; page < 20; page += 1) {
-          const rows = await repository.list({ ownerId: owner, search: undefined, sort, after, limit: 5 });
+          const rows = await repository.list({ viewerId: owner, scope: "mine", search: undefined, sort, after, limit: 5 });
           seen.push(...rows.map((row) => row.id));
           const last = rows.at(-1);
           if (rows.length < 5 || last === undefined) {
@@ -626,7 +627,7 @@ describe("the list", () => {
           }
           after = { count: sort === "count" ? last.bookmarkCount : undefined, updated: sort === "updated" ? last.updatedKey : undefined, name: last.name, id: last.id };
         }
-        const whole = (await repository.list({ ownerId: owner, search: undefined, sort, after: undefined, limit: 100 })).map((row) => row.id);
+        const whole = (await repository.list({ viewerId: owner, scope: "mine", search: undefined, sort, after: undefined, limit: 100 })).map((row) => row.id);
         return { seen, whole };
       });
 
@@ -709,5 +710,286 @@ describe("the workspace purge", () => {
     expect(workspacePurgeOrder.indexOf("folder_bookmarks")).toBeLessThan(workspacePurgeOrder.indexOf("folders"));
     expect(workspacePurgeOrder.indexOf("folder_bookmarks")).toBeLessThan(workspacePurgeOrder.indexOf("bookmarks"));
     expect(workspacePurgeOrder.indexOf("folders")).toBeLessThan(workspacePurgeOrder.indexOf("workspace_members"));
+  });
+});
+
+// A folder shared with a member (doc 02 section 8.2, doc 04 section 10.7, doc 10 T2). The failure scenario: a member the folder is shared with changes,
+// deletes or files into it and the store must not write, while a member it is not shared with finds nothing at its identifier, in any scope.
+describe("a folder shared with a member (T2)", () => {
+  async function share(workspaceId: string, folderId: string, grantedBy: string, target: { accountId: string } | { teamId: string }): Promise<void> {
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, target_team_id, granted_by)
+        VALUES (${freshId()}, ${workspaceId}, ${folderId}, ${"accountId" in target ? target.accountId : null}, ${"teamId" in target ? target.teamId : null}, ${grantedBy})`,
+    );
+  }
+
+  const page = (viewerId: string, scope: "all" | "mine" | "shared") => (tx: Parameters<typeof folderRepository>[0]) =>
+    folderRepository(tx).list({ viewerId, scope, search: undefined, sort: "name", after: undefined, limit: 100 });
+
+  it("is listed, counted and read by the member it is shared with directly or through a team, as its owner's folder, and by no other member", async () => {
+    const workspace = await workspaceOf(4);
+    const owner = memberOf(workspace, 0);
+    const direct = memberOf(workspace, 1);
+    const viaTeam = memberOf(workspace, 2);
+    const stranger = memberOf(workspace, 3);
+    const own = await seedFolder(workspace.id, direct, "Direct's own");
+    const folder = await seedFolder(workspace.id, owner, "Shared by owner");
+    const unshared = await seedFolder(workspace.id, owner, "Not shared");
+    await share(workspace.id, folder, owner, { accountId: direct });
+    await share(workspace.id, folder, owner, { teamId: await seedTeam(db, workspace.id, [viaTeam]) });
+
+    const seenBy = async (accountId: string) =>
+      inTenant({ accountId, workspaceId: workspace.id }, async (tx) => ({
+        shared: (await page(accountId, "shared")(tx)).map((row) => row.id),
+        all: (await page(accountId, "all")(tx)).map((row) => row.id),
+        mine: (await page(accountId, "mine")(tx)).map((row) => row.id),
+        counted: [await folderRepository(tx).count({ viewerId: accountId, scope: "shared", search: undefined, limit: 100 }), await folderRepository(tx).count({ viewerId: accountId, scope: "all", search: undefined, limit: 100 })],
+        found: (await folderRepository(tx).find({ folderId: folder, viewerId: accountId }))?.id,
+        foundUnshared: (await folderRepository(tx).find({ folderId: unshared, viewerId: accountId }))?.id,
+      }));
+
+    expect(await seenBy(direct)).toEqual({ shared: [folder], all: [own, folder], mine: [own], counted: [1, 2], found: folder, foundUnshared: undefined });
+    expect(await seenBy(viaTeam)).toEqual({ shared: [folder], all: [folder], mine: [], counted: [1, 1], found: folder, foundUnshared: undefined });
+    expect(await seenBy(stranger)).toEqual({ shared: [], all: [], mine: [], counted: [0, 0], found: undefined, foundUnshared: undefined });
+    expect(await seenBy(owner)).toEqual({ shared: [], all: [unshared, folder], mine: [unshared, folder], counted: [0, 2], found: folder, foundUnshared: unshared });
+  });
+
+  it("carries its owner for a recipient and how it is shared for its owner, who sees the members directly and the teams by name", async () => {
+    const workspace = await workspaceOf(4);
+    const owner = memberOf(workspace, 0);
+    const ada = memberOf(workspace, 1);
+    const bob = memberOf(workspace, 2);
+    const cy = memberOf(workspace, 3);
+    const folder = await seedFolder(workspace.id, owner, "Reading");
+    const private_ = await seedFolder(workspace.id, owner, "Private");
+    await asSystem(db, (tx) => tx`UPDATE accounts SET display_name = 'Olive Owner' WHERE id = ${owner}`);
+    await share(workspace.id, folder, owner, { accountId: ada });
+    await share(workspace.id, folder, owner, { accountId: bob });
+    const design = await seedTeam(db, workspace.id, [cy]);
+    await share(workspace.id, folder, owner, { teamId: design });
+    await asSystem(db, (tx) => tx`UPDATE teams SET name = 'Design' WHERE id = ${design}`);
+
+    const asOwner = await inTenant({ accountId: owner, workspaceId: workspace.id }, async (tx) => folderRepository(tx).list({ viewerId: owner, scope: "mine", search: undefined, sort: "name", after: undefined, limit: 10 }));
+    const asRecipient = await inTenant({ accountId: ada, workspaceId: workspace.id }, async (tx) => folderRepository(tx).find({ folderId: folder, viewerId: ada }));
+
+    expect(asOwner.map((row) => [row.id, row.owner, row.shareSummary])).toEqual([
+      [private_, null, { memberCount: 0, teams: [] }],
+      [folder, null, { memberCount: 2, teams: [{ id: design, name: "Design" }] }],
+    ]);
+    expect(asRecipient).toMatchObject({ id: folder, ownerId: owner, owner: { accountId: owner, displayName: "Olive Owner" }, shareSummary: null });
+  });
+
+  it("counts the bookmarks filed in it that are not plan-archived, and leaves the owner of a folder whose owner left without a name", async () => {
+    const workspace = await workspaceOf(3);
+    const owner = memberOf(workspace, 0);
+    const recipient = memberOf(workspace, 1);
+    const leaver = memberOf(workspace, 2);
+    const folder = await seedFolder(workspace.id, owner, "Counted");
+    await file(workspace.id, folder, await seedBookmark(workspace.id, owner));
+    await file(workspace.id, folder, await seedBookmark(workspace.id, owner));
+    await file(workspace.id, folder, await seedBookmark(workspace.id, owner, true));
+    await share(workspace.id, folder, owner, { accountId: recipient });
+    const orphan = await seedFolder(workspace.id, leaver, "Orphaned");
+    await share(workspace.id, orphan, leaver, { accountId: recipient });
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspace.id} AND account_id = ${leaver}`);
+
+    const seen = await inTenant({ accountId: recipient, workspaceId: workspace.id }, (tx) => page(recipient, "shared")(tx));
+
+    expect(seen.map((row) => [row.id, row.bookmarkCount, row.ownerId, row.owner])).toEqual([
+      [folder, 2, owner, { accountId: owner, displayName: "Test account" }],
+      [orphan, 0, null, null],
+    ]);
+  });
+
+  it("is not changed, deleted or filed into by the member it is shared with: the store finds nothing of theirs to write, and says the folder is shared", async () => {
+    const workspace = await workspaceOf(3);
+    const owner = memberOf(workspace, 0);
+    const recipient = memberOf(workspace, 1);
+    const stranger = memberOf(workspace, 2);
+    const folder = await seedFolder(workspace.id, owner, "Read only");
+    const theirs = await seedBookmark(workspace.id, recipient);
+    await share(workspace.id, folder, owner, { accountId: recipient });
+    const before = await storedFolders(workspace.id);
+
+    const outcome = await inTenant({ accountId: recipient, workspaceId: workspace.id }, async (tx) => {
+      const repository = folderRepository(tx);
+      return {
+        updated: await repository.update({ folderId: folder, ownerId: recipient, changes: { name: "Mine now", icon: "star", color: 3 }, expectedVersions: undefined }),
+        filed: await repository.file({ folderId: folder, ownerId: recipient, bookmarkIds: [theirs] }),
+        unfiled: await repository.unfile({ folderId: folder, ownerId: recipient, bookmarkIds: [theirs] }),
+        removed: await repository.remove({ folderId: folder, ownerId: recipient }),
+        sharedWith: await repository.sharedWith({ folderId: folder, accountId: recipient }),
+      };
+    });
+    const strangers = await inTenant({ accountId: stranger, workspaceId: workspace.id }, async (tx) => ({
+      sharedWith: await folderRepository(tx).sharedWith({ folderId: folder, accountId: stranger }),
+      removed: await folderRepository(tx).remove({ folderId: folder, ownerId: stranger }),
+    }));
+    const owners = await inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => folderRepository(tx).sharedWith({ folderId: folder, accountId: owner }));
+
+    expect(outcome).toEqual({ updated: { kind: "not_found" }, filed: { kind: "not_found" }, unfiled: { kind: "not_found" }, removed: false, sharedWith: true });
+    expect(strangers).toEqual({ sharedWith: false, removed: false });
+    expect(owners).toBe(false);
+    expect(await storedFolders(workspace.id)).toEqual(before);
+    expect(await storedFilings(workspace.id)).toBe(0);
+  });
+
+  it("is no longer read once the share is revoked, the team is deleted or the member leaves the team", async () => {
+    const workspace = await workspaceOf(3);
+    const owner = memberOf(workspace, 0);
+    const direct = memberOf(workspace, 1);
+    const member = memberOf(workspace, 2);
+    const folder = await seedFolder(workspace.id, owner, "Revocable");
+    await share(workspace.id, folder, owner, { accountId: direct });
+    const team = await seedTeam(db, workspace.id, [member]);
+    await share(workspace.id, folder, owner, { teamId: team });
+    const sees = (accountId: string) => inTenant({ accountId, workspaceId: workspace.id }, async (tx) => (await page(accountId, "shared")(tx)).length);
+
+    expect([await sees(direct), await sees(member)]).toEqual([1, 1]);
+    await asSystem(db, (tx) => tx`DELETE FROM team_members WHERE team_id = ${team} AND account_id = ${member}`);
+    await asSystem(db, (tx) => tx`DELETE FROM folder_shares WHERE folder_id = ${folder} AND target_account_id = ${direct}`);
+
+    expect([await sees(direct), await sees(member)]).toEqual([0, 0]);
+  });
+
+  it("is not reached from another workspace the member belongs to, whatever scope is asked for (cross-tenant)", async () => {
+    const first = await workspaceOf(2);
+    const second = await workspaceOf(1);
+    const [owner, recipient] = [memberOf(first, 0), memberOf(first, 1)];
+    await seedMember(db, { workspaceId: second.id, accountId: recipient });
+    const folder = await seedFolder(first.id, owner, "Only in the first");
+    await share(first.id, folder, owner, { accountId: recipient });
+
+    const inSecond = await inTenant({ accountId: recipient, workspaceId: second.id }, async (tx) => ({
+      shared: await page(recipient, "shared")(tx),
+      all: await page(recipient, "all")(tx),
+      counted: await folderRepository(tx).count({ viewerId: recipient, scope: "shared", search: undefined, limit: 100 }),
+      found: await folderRepository(tx).find({ folderId: folder, viewerId: recipient }),
+      sharedWith: await folderRepository(tx).sharedWith({ folderId: folder, accountId: recipient }),
+    }));
+
+    expect(inSecond).toEqual({ shared: [], all: [], counted: 0, found: undefined, sharedWith: false });
+  });
+
+  it("is searched and paged like the member's own: by name, and by every sort without repeating or skipping a folder", async () => {
+    const workspace = await workspaceOf(2);
+    const [owner, recipient] = [memberOf(workspace, 0), memberOf(workspace, 1)];
+    const ids: string[] = [];
+    for (const name of ["Delta", "Alpha", "Charlie", "Bravo", "Echo"]) {
+      const id = await seedFolder(workspace.id, owner, name);
+      await share(workspace.id, id, owner, { accountId: recipient });
+      ids.push(id);
+    }
+    await seedFolder(workspace.id, owner, "Alpha two");
+
+    const walked = await inTenant({ accountId: recipient, workspaceId: workspace.id }, async (tx) => {
+      const repository = folderRepository(tx);
+      const seen: string[] = [];
+      let after: { count: undefined; updated: undefined; name: string; id: string } | undefined;
+      for (;;) {
+        const rows = await repository.list({ viewerId: recipient, scope: "shared", search: undefined, sort: "name", after, limit: 2 });
+        seen.push(...rows.map((row) => row.name));
+        const last = rows.at(-1);
+        if (rows.length < 2 || last === undefined) {
+          break;
+        }
+        after = { count: undefined, updated: undefined, name: last.name, id: last.id };
+      }
+      return { seen, searched: (await repository.list({ viewerId: recipient, scope: "shared", search: "alp", sort: "name", after: undefined, limit: 10 })).map((row) => row.name) };
+    });
+
+    expect(walked).toEqual({ seen: ["Alpha", "Bravo", "Charlie", "Delta", "Echo"], searched: ["Alpha"] });
+    expect(ids).toHaveLength(5);
+  });
+});
+
+describe("the bookmarks of a folder shared with a member (T2)", () => {
+  async function share(workspaceId: string, folderId: string, grantedBy: string, target: { accountId: string } | { teamId: string }): Promise<void> {
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, target_team_id, granted_by)
+        VALUES (${freshId()}, ${workspaceId}, ${folderId}, ${"accountId" in target ? target.accountId : null}, ${"teamId" in target ? target.teamId : null}, ${grantedBy})`,
+    );
+  }
+
+  const listed = (workspaceId: string, accountId: string, filter: { scope?: "all" | "mine" | "shared_with_me"; folderId: string }) =>
+    inTenant({ accountId, workspaceId }, async (tx) => {
+      const repository = bookmarkRepository(tx);
+      const request = { filter: { ownerId: accountId, ...filter }, sort: "recent" as const, after: undefined, limit: 100 };
+      return { ids: (await repository.list(request)).map((row) => row.bookmark.id).sort(), counted: await repository.count(request.filter, 100) };
+    });
+
+  it("are listed and counted for the member the folder is shared with, with the folder filter, in every scope that holds shared bookmarks, and for no other member", async () => {
+    const workspace = await workspaceOf(3);
+    const owner = memberOf(workspace, 0);
+    const recipient = memberOf(workspace, 1);
+    const stranger = memberOf(workspace, 2);
+    const folder = await seedFolder(workspace.id, owner, "Shared folder");
+    const inside = [await seedBookmark(workspace.id, owner), await seedBookmark(workspace.id, owner)].sort();
+    for (const id of inside) {
+      await file(workspace.id, folder, id);
+    }
+    await file(workspace.id, folder, await seedBookmark(workspace.id, owner, true));
+    await seedBookmark(workspace.id, owner);
+    await share(workspace.id, folder, owner, { accountId: recipient });
+
+    const both = { ids: inside, counted: 2 };
+    const none = { ids: [], counted: 0 };
+    expect(await listed(workspace.id, recipient, { folderId: folder })).toEqual(none);
+    expect(await listed(workspace.id, recipient, { scope: "mine", folderId: folder })).toEqual(none);
+    expect(await listed(workspace.id, recipient, { scope: "all", folderId: folder })).toEqual(both);
+    expect(await listed(workspace.id, recipient, { scope: "shared_with_me", folderId: folder })).toEqual(both);
+    expect(await listed(workspace.id, stranger, { scope: "all", folderId: folder })).toEqual(none);
+    expect(await listed(workspace.id, stranger, { scope: "shared_with_me", folderId: folder })).toEqual(none);
+    expect(await listed(workspace.id, owner, { scope: "shared_with_me", folderId: folder })).toEqual(none);
+    expect(await listed(workspace.id, owner, { scope: "all", folderId: folder })).toEqual(both);
+  });
+
+  it("are still listed and counted for the member after the owner of the folder leaves the workspace, as the folder's own count says", async () => {
+    const workspace = await workspaceOf(4);
+    const [owner, recipient, stranger] = [memberOf(workspace, 1), memberOf(workspace, 2), memberOf(workspace, 3)];
+    const folder = await seedFolder(workspace.id, owner, "Reading");
+    const inside = [await seedBookmark(workspace.id, owner), await seedBookmark(workspace.id, owner)].sort();
+    for (const id of inside) {
+      await file(workspace.id, folder, id);
+    }
+    await share(workspace.id, folder, owner, { accountId: recipient });
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspace.id} AND account_id = ${owner}`);
+
+    const row = await inTenant({ accountId: recipient, workspaceId: workspace.id }, async (tx) =>
+      (await folderRepository(tx).list({ viewerId: recipient, scope: "shared", search: undefined, sort: "name", after: undefined, limit: 10 })).find((candidate) => candidate.id === folder),
+    );
+    expect(row).toMatchObject({ ownerId: null, bookmarkCount: 2 });
+    expect(await listed(workspace.id, recipient, { scope: "all", folderId: folder })).toEqual({ ids: inside, counted: 2 });
+    expect(await listed(workspace.id, recipient, { scope: "shared_with_me", folderId: folder })).toEqual({ ids: inside, counted: 2 });
+    expect(await listed(workspace.id, stranger, { scope: "all", folderId: folder })).toEqual({ ids: [], counted: 0 });
+  });
+
+  it("do not leak into the filter of a folder the member cannot read: a bookmark shared directly is not listed under another folder it happens to be filed in", async () => {
+    const workspace = await workspaceOf(2);
+    const [owner, recipient] = [memberOf(workspace, 0), memberOf(workspace, 1)];
+    const private_ = await seedFolder(workspace.id, owner, "Private folder");
+    const bookmark = await seedBookmark(workspace.id, owner);
+    await file(workspace.id, private_, bookmark);
+    await asSystem(db, (tx) => tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspace.id}, ${bookmark}, ${recipient}, ${owner})`);
+
+    expect(await listed(workspace.id, recipient, { scope: "all", folderId: private_ })).toEqual({ ids: [], counted: 0 });
+    expect(await listed(workspace.id, recipient, { scope: "shared_with_me", folderId: private_ })).toEqual({ ids: [], counted: 0 });
+  });
+
+  it("are not listed through a folder of another workspace the member belongs to", async () => {
+    const first = await workspaceOf(2);
+    const second = await workspaceOf(1);
+    const [owner, recipient] = [memberOf(first, 0), memberOf(first, 1)];
+    await seedMember(db, { workspaceId: second.id, accountId: recipient });
+    const folder = await seedFolder(first.id, owner, "First only");
+    await file(first.id, folder, await seedBookmark(first.id, owner));
+    await share(first.id, folder, owner, { accountId: recipient });
+
+    expect(await listed(second.id, recipient, { scope: "all", folderId: folder })).toEqual({ ids: [], counted: 0 });
+    expect(await listed(first.id, recipient, { scope: "all", folderId: folder })).toMatchObject({ counted: 1 });
   });
 });

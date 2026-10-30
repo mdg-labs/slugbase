@@ -8,15 +8,22 @@ import { DEFAULT_LOCALE } from "../i18n/locales.ts";
 import { sharesQuery, type Share, type ShareSubject } from "./shares.ts";
 import { SharingGate } from "./sharing-gate.tsx";
 
-/** "Private", or "Shared with Platform team and 2 members": the teams by name, then the members by number. */
-export function summaryOf(t: TFunction, language: string, shares: readonly Share[]): string {
-  if (shares.length === 0) {
+/** The sentence for what something is shared with: "Private", or "Shared with Platform team and 2 members", the teams by name, then the members by number. */
+export function summaryOfParts(t: TFunction, language: string, parts: { readonly teams: readonly string[]; readonly members: number }): string {
+  if (parts.teams.length === 0 && parts.members === 0) {
     return t("sharing.summary.private");
   }
-  const teams = shares.filter(({ kind }) => kind === "team").map(({ name }) => t("sharing.summary.team", { name }));
-  const members = shares.filter(({ kind }) => kind === "member").length;
-  const parts = members === 0 ? teams : [...teams, t("sharing.summary.members", { count: members })];
-  return t("sharing.summary.shared", { with: new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(parts) });
+  const teams = parts.teams.map((name) => t("sharing.summary.team", { name }));
+  const named = parts.members === 0 ? teams : [...teams, t("sharing.summary.members", { count: parts.members })];
+  return t("sharing.summary.shared", { with: new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(named) });
+}
+
+/** "Private", or "Shared with Platform team and 2 members": the teams by name, then the members by number. */
+export function summaryOf(t: TFunction, language: string, shares: readonly Share[]): string {
+  return summaryOfParts(t, language, {
+    teams: shares.filter(({ kind }) => kind === "team").map(({ name }) => name),
+    members: shares.filter(({ kind }) => kind === "member").length,
+  });
 }
 
 function SharingSummaryContent({ subject, onManage }: { subject: Pick<ShareSubject, "kind" | "id">; onManage: () => void }): ReactElement {

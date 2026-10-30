@@ -46,6 +46,10 @@ interface Call {
 interface Answers {
   /** Replaces the answer to the list. */
   readonly list?: () => Promise<Response> | Response;
+  /** Whether the workspace may share (both sharing entitlements); not by default, so a workspace that cannot share shows no scopes. */
+  readonly sharing?: boolean;
+  /** Answers the list of the shared scope with a failure, as a server that is down for that read does. */
+  readonly failShared?: boolean;
   /** The status the change, creation or deletion is refused with, with the code of its problem. */
   readonly refuse?: { readonly method: "POST" | "PATCH" | "DELETE"; readonly status: number; readonly code: string };
 }
@@ -87,6 +91,14 @@ function stubServer(initial: readonly Folder[], answers: Answers = {}): Server {
         if (url.pathname === "/api/v1/bookmarks" && other.method === "GET") {
           return json({ items: [], nextCursor: null, total: 0 });
         }
+        if (url.pathname === "/api/v1/entitlements") {
+          const sharing = answers.sharing === true;
+          return json({
+            entitlements: { "bookmarks.max": "unlimited", "seats.max": "unlimited", "workspaces.ownMax": "unlimited", "ai.suggestions": true, "sharing.members": sharing, "sharing.teams": sharing, "members.invite": true, "teams.manage": true, "audit.log": true },
+            usage: { "bookmarks.used": 0, "seats.used": 1, "workspaces.owned": 1 },
+            upgradeAvailable: false,
+          });
+        }
         if (!isFolders) {
           return problem(404, "not_found", "req-404");
         }
@@ -105,7 +117,12 @@ function stubServer(initial: readonly Folder[], answers: Answers = {}): Server {
           }
           const limit = Number(url.searchParams.get("limit") ?? "50");
           const offset = Number(url.searchParams.get("cursor") ?? "0");
-          const all = sorted(folders, url.searchParams.get("sort") ?? "name");
+          const scope = url.searchParams.get("scope");
+          if (scope === "shared" && answers.failShared === true) {
+            return problem(503, "service_unavailable", "req-503");
+          }
+          const visible = folders.filter((candidate) => scope === null || scope === "all" || (scope === "mine") === (candidate.ownerId === OWNER));
+          const all = sorted(visible, url.searchParams.get("sort") ?? "name");
           const next = offset + limit;
           return json({ items: all.slice(offset, next), nextCursor: next < all.length ? String(next) : null, total: all.length });
         }
@@ -285,6 +302,7 @@ describe("reaching the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     for (const list of server.lists()) {
       expect(list.params.get("sort")).toBe("name");
       expect(list.params.get("limit")).toBe("50");
+      expect(list.params.get("scope")).toBe("mine");
     }
   });
 
@@ -440,7 +458,7 @@ describe("creating a folder", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "New folder" })).toBeNull();
     });
-    expect(window.location.search).toBe("?sort=count");
+    expect([...new URLSearchParams(window.location.search)]).toEqual([["sort", "count"]]);
   });
 
   it("drops the flag from the address once the folder is created", async () => {
@@ -820,3 +838,143 @@ describe("the icon set", () => {
     expect(Object.keys(FOLDER_ICON_COMPONENTS).sort()).toEqual([...FOLDER_ICONS].sort());
   });
 });
+
+const GRACE = "0192f3a0-bbbb-7000-8000-000000000002";
+
+/** A folder of another member that is shared with the signed-in member: it names its owner and carries no share summary. */
+function received(n: number, name: string, overrides: Partial<Folder> = {}): Folder {
+  return folder(n, { name, ownerId: GRACE, owner: { accountId: GRACE, displayName: "Grace Hopper" }, shareSummary: null, ...overrides });
+}
+
+/** A folder of the signed-in member's that is shared with a team and two members, or with nobody. */
+function own(n: number, name: string, shared: boolean): Folder {
+  return folder(n, { name, shareSummary: shared ? { memberCount: 2, teams: [{ id: "0192f3a0-eeee-7000-8000-000000000001", name: "Design" }] } : { memberCount: 0, teams: [] } });
+}
+
+describe("folders shared with the member", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  it("offers the Mine and Shared with me tabs and says how each own folder is shared", async () => {
+    const server = stubServer([own(1, "Notes", false), own(2, "Roadmap", true), received(3, "Reading")], { sharing: true });
+    await openApp("/folders");
+    await inPage.findByText("Notes");
+
+    expect(namesShown()).toEqual(["Notes", "Roadmap"]);
+    expect(within(rowOf("Notes")).getByText("Private")).toBeDefined();
+    expect(within(rowOf("Roadmap")).getByText("Shared with Design team and 2 members")).toBeDefined();
+    const tabs = screen.getByRole("tablist", { name: "Folders to show" });
+    expect(within(tabs).getByRole("tab", { name: "Mine" }).getAttribute("aria-selected")).toBe("true");
+    expect(within(tabs).getByRole("tab", { name: "Shared with me" }).getAttribute("aria-selected")).toBe("false");
+    expect(server.lists().filter((call) => call.params.get("scope") === "shared").length).toBeGreaterThan(0);
+  });
+
+  it("lists the folders shared with the member at ?scope=shared, read-only, with who shared them", async () => {
+    const server = stubServer([own(1, "Notes", false), received(3, "Reading", { bookmarkCount: 4 })], { sharing: true });
+    await openApp("/folders?scope=shared");
+    await inPage.findByText("Reading");
+
+    expect(namesShown()).toEqual(["Reading"]);
+    expect(within(rowOf("Reading")).getByText("Shared with you by Grace Hopper")).toBeDefined();
+    expect(within(rowOf("Reading")).getByText("4 bookmarks")).toBeDefined();
+    expect(screen.getByRole("tab", { name: "Shared with me" }).getAttribute("aria-selected")).toBe("true");
+    await press(screen.getByRole("button", { name: "Actions for Reading" }));
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Open in Bookmarks"]);
+    const pageLists = server.lists().filter((call) => call.params.get("scope") === "shared");
+    expect(pageLists.length).toBeGreaterThan(0);
+    expect(server.to("PATCH")).toEqual([]);
+    expect(server.to("DELETE")).toEqual([]);
+  });
+
+  it("moves between the tabs through the address, keeping the sort", async () => {
+    const server = stubServer([own(1, "Notes", false), received(3, "Reading")], { sharing: true });
+    await openApp("/folders?sort=count");
+    await inPage.findByText("Notes");
+
+    await press(screen.getByRole("tab", { name: "Shared with me" }));
+    await inPage.findByText("Reading");
+    expect([...new URLSearchParams(window.location.search)].sort()).toEqual([
+      ["scope", "shared"],
+      ["sort", "count"],
+    ]);
+    expect(namesShown()).toEqual(["Reading"]);
+    expect(server.lists().some((call) => call.params.get("scope") === "shared" && call.params.get("sort") === "count")).toBe(true);
+
+    await press(screen.getByRole("tab", { name: "Mine" }));
+    await inPage.findByText("Notes");
+    expect([...new URLSearchParams(window.location.search)]).toEqual([["sort", "count"]]);
+  });
+
+  it("has its own empty state on the shared tab, with no way to create a folder from it", async () => {
+    stubServer([own(1, "Notes", false)], { sharing: true });
+    await openApp("/folders?scope=shared");
+
+    await screen.findByRole("heading", { level: 2, name: "Nothing has been shared with you yet" });
+    expect(screen.queryByRole("heading", { name: "No folders yet" })).toBeNull();
+    expect(within(screen.getByRole("main")).getAllByRole("button", { name: "New folder" })).toHaveLength(1);
+  });
+
+  it("hides the tabs and the sharing column where the workspace may not share, and reads no shared folders for the sidebar", async () => {
+    const server = stubServer([own(1, "Notes", false), received(3, "Reading")]);
+    await openApp("/folders");
+    await inPage.findByText("Notes");
+
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Sharing" })).toBeNull();
+    expect(screen.queryByText("Private")).toBeNull();
+    expect(namesShown()).toEqual(["Notes"]);
+    expect(server.lists().filter((call) => call.params.get("scope") === "shared")).toEqual([]);
+  });
+
+  it("lists the shared folders in the sidebar after the member's own, under their own label, and filters the bookmarks by one", async () => {
+    stubServer([own(1, "Zeta", false), received(3, "Alpha shared")], { sharing: true });
+    await openApp("/");
+    const section = await waitForSidebarFolders();
+
+    await within(section).findByText("Alpha shared");
+    expect(within(section).getAllByRole("link").map((link) => link.textContent)).toEqual(["Zeta", "Alpha shared"]);
+    expect(within(section).getByText("Shared with you")).toBeDefined();
+    const link = within(section).getByRole("link", { name: "Alpha shared" });
+    expect(link.getAttribute("href")).toContain(`folderId=${received(3, "Alpha shared").id}`);
+  });
+
+  it("keeps the member's own folders when the shared ones cannot be read, says so and reads them again", async () => {
+    const server = stubServer([own(1, "Zeta", false), received(3, "Alpha shared")], { sharing: true, failShared: true });
+    await openApp("/");
+    const section = await waitForSidebarFolders();
+
+    await within(section).findByText("The folders shared with you could not be loaded.");
+    expect(within(section).getByRole("link", { name: "Zeta" })).toBeDefined();
+    expect(within(section).queryByText("You have no folders yet")).toBeNull();
+    const before = server.lists().length;
+    await press(within(section).getByRole("button", { name: "Reload folders" }));
+    await waitFor(() => {
+      expect(server.lists().length).toBeGreaterThan(before);
+    });
+  });
+
+  it("does not say the member has no folders while only shared ones exist", async () => {
+    stubServer([received(3, "Alpha shared")], { sharing: true });
+    await openApp("/");
+    const section = await waitForSidebarFolders();
+
+    await within(section).findByText("Alpha shared");
+    expect(within(section).queryByText("You have no folders yet")).toBeNull();
+  });
+
+  it("is in German with the account's language", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
+    stubServer([own(1, "Notizen", false), received(3, "Lesen")], { sharing: true });
+    await openApp("/folders?scope=shared");
+    await inPage.findByText("Lesen");
+
+    expect(within(rowOf("Lesen")).getByText("Mit dir geteilt von Grace Hopper")).toBeDefined();
+    expect(screen.getByRole("tab", { name: "Mit mir geteilt" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Meine" })).toBeDefined();
+  });
+});
+
+async function waitForSidebarFolders(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const section = document.querySelector<HTMLElement>("[data-slot='sidebar-folders']");
+    expect(section).not.toBeNull();
+    return section as HTMLElement;
+  });
+}

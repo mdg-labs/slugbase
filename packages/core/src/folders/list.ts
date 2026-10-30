@@ -1,8 +1,9 @@
-import type { FolderListRow, FolderPosition, FolderSort, FolderStore } from "./create.ts";
+import type { FolderListRow, FolderPosition, FolderScope, FolderSort, FolderStore } from "./create.ts";
 
-// Listing a member's folders (doc 02 section 7.1, doc 04 sections 6.1 and 10.7, Q42): the folders the account owns in the workspace, each
-// with the number of its bookmarks, by name, by that number or by the time they last changed, optionally only those whose name contains a
-// text. Another member's folders are not in the answer, whatever the store is asked for. A page is a slice of one ordering, resumed by an
+// Listing a member's folders (doc 02 section 7.1, doc 04 sections 6.1 and 10.7, Q42): the folders the account owns in the workspace (`mine`),
+// those of other members that are shared with it (`shared`) or both (`all`), each with the number of its bookmarks, by name, by that number or by
+// the time they last changed, optionally only those whose name contains a text. A folder of another member that is not shared with the account is
+// not in the answer, whatever the store is asked for. A page is a slice of one ordering, resumed by an
 // opaque cursor that carries the last folder's sort key and identifier (a keyset, never an offset). The cursor is signed for the account,
 // the workspace, the scope, the search and the sort it was issued for, so it opens nothing else. The total is the number of matching
 // folders, exact up to `FOLDER_LIST_TOTAL_CAP` and not counted beyond it.
@@ -26,8 +27,8 @@ export interface FolderListAsk {
   readonly workspaceId: string;
   /** The member whose folders are listed. */
   readonly accountId: string;
-  /** Whose folders: the caller's own are all there are until sharing arrives, so both name the same folders. */
-  readonly scope: "all" | "mine";
+  /** Whose folders: the account's own, those shared with it, or both. */
+  readonly scope: FolderScope;
   readonly search: string | undefined;
   readonly sort: FolderSort;
   /** 1 to 100. */
@@ -56,7 +57,7 @@ function fitsSort(position: FolderPosition, sort: FolderSort): boolean {
   return (sort === "count") === (position.count !== undefined) && (sort === "updated") === (position.updated !== undefined);
 }
 
-/** One page of `ask.accountId`'s folders in the workspace of the transaction, with the cursor of the next and the capped total. */
+/** One page of the folders of `ask.scope` for `ask.accountId` in the workspace of the transaction, with the cursor of the next and the capped total. */
 export async function listFolders({ store, cursors }: FolderListDependencies, ask: FolderListAsk): Promise<FolderListOutcome> {
   const scope = cursorScope(ask);
   let after: FolderPosition | undefined;
@@ -66,12 +67,12 @@ export async function listFolders({ store, cursors }: FolderListDependencies, as
       return { kind: "bad_cursor" };
     }
   }
-  const ownerId = ask.accountId.toLowerCase();
+  const viewerId = ask.accountId.toLowerCase();
   // One more than the page, to know whether another page follows.
-  const fetched = await store.list({ ownerId, search: ask.search, sort: ask.sort, after, limit: ask.limit + 1 });
+  const fetched = await store.list({ viewerId, scope: ask.scope, search: ask.search, sort: ask.sort, after, limit: ask.limit + 1 });
   const items = fetched.slice(0, ask.limit);
   const last = items.at(-1);
-  const counted = await store.count({ ownerId, search: ask.search, limit: FOLDER_LIST_TOTAL_CAP + 1 });
+  const counted = await store.count({ viewerId, scope: ask.scope, search: ask.search, limit: FOLDER_LIST_TOTAL_CAP + 1 });
   return {
     kind: "listed",
     items,

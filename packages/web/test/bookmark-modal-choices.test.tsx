@@ -539,7 +539,12 @@ describe("the lists behind the fields", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
     const cursors: string[] = [];
     stubServer({
       folders: (request) => {
-        const cursor = new URL(request.url).searchParams.get("cursor");
+        const { searchParams } = new URL(request.url);
+        // The sidebar also reads the folders shared with the member, which this test has none of.
+        if (searchParams.get("scope") === "shared") {
+          return json({ items: [], nextCursor: null, total: 0 });
+        }
+        const cursor = searchParams.get("cursor");
         cursors.push(cursor ?? "");
         return cursor === null
           ? json({ items: [folder(WORK_ID, "Work")], nextCursor: "next", total: 2 })
