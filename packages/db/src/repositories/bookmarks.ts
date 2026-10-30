@@ -535,7 +535,7 @@ export function countQuery(tx: TenantTx, filter: BookmarkListFilter, limit: numb
 //
 // The cost of the page depends on how many bookmarks match, and the statement does not know that before it runs, so it holds both plans and runs the one that is cheap for the
 // count it finds: up to `FEW_MATCHES` (the total a list counts exactly, Q42) the page probes each match by the primary key of `bookmarks` and sorts what survives the other predicates, which reads as many
-// rows as there are matches; above it the page walks the index of its sort in order, as a list without a text does, and tests each row against the set, which reads about as many rows as the page
+// rows as there are matches; above it the page walks the index of its sort in order, as a list without a text does (one walk for each part of the scope, see `matchedPageStatement`), and tests each row against the set, which reads about as many rows as the page
 // holds divided by the share of the workspace that matches, and at most the workspace. The branch that is not chosen is not run (its one-time filter reads the count). The probe is a lateral subquery
 // that the planner cannot flatten (`OFFSET 0`), so it is always a nested loop over the matches and never a scan of the table; the set is tested in the walk behind a term that the planner cannot fold
 // (`random() < 0`), so that it stays a filter of the walk and does not become a join that drives it. The page is read as identifiers and sort keys, and the rows are read in a second statement by
@@ -565,18 +565,39 @@ export function matchedPageStatement(tx: TenantTx, { filter, sort, after, limit 
   const { column, key, order, dir } = SORT_ORDERS[sort];
   const predicate = after === undefined ? filterPredicate(workspaceId, filter) : and(filterPredicate(workspaceId, filter), afterPosition(sort, after));
   const few = sql.raw(String(FEW_MATCHES));
+  // The walk of many matches has one leg for each part of the scope, as the page of a list without a text has (`pageStatement`): the caller's own bookmarks are walked in the order of the index
+  // of the sort, which is prefixed by the owner, and the shared ones are driven from the set of the grants to the caller. One walk over the whole scope has no index that serves its order, so it would read
+  // every bookmark of the workspace and sort them. A scope that reads no part walks nothing.
+  const branches = branchesOf(filter);
+  const grants = branches.includes("shared") ? sql`, shared AS MATERIALIZED (${sharedBookmarks(tx.accountId, workspaceId)})` : sql``;
+  const isMatch = sql`(${bookmarks.id} IN (SELECT id FROM m) OR random() < 0)`;
+  const legs = branches.map((branch) => {
+    const base = branchPredicate(workspaceId, filter, branch, branch === "shared");
+    const leg = after === undefined ? base : and(base, afterPosition(sort, after));
+    if (branch !== "shared") {
+      return sql`(SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks}
+       WHERE ${leg} AND ${isMatch} AND (SELECT n FROM c) > ${few}
+       ORDER BY ${order} LIMIT ${limit}::integer)`;
+    }
+    return sql`(SELECT probed.id, probed.ord, probed.sort_key FROM shared
+       CROSS JOIN LATERAL (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE ${bookmarks.id} = shared.bookmark_id AND ${leg} AND ${isMatch} OFFSET 0) probed
+       WHERE (SELECT n FROM c) > ${few}
+       ORDER BY probed.ord ${dir}, probed.id ${dir} LIMIT ${limit}::integer)`;
+  });
+  const walks =
+    legs.length === 0
+      ? sql`(SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE false LIMIT ${limit}::integer)`
+      : sql.join(legs, sql` UNION ALL `);
   return sql`
     WITH m AS MATERIALIZED (SELECT id FROM sys_bookmark_match(${filter.q}::text)),
-         c AS MATERIALIZED (SELECT count(*) AS n FROM m)
+         c AS MATERIALIZED (SELECT count(*) AS n FROM m)${grants}
     SELECT page.id, page.sort_key, c.n::int AS matched FROM c LEFT JOIN (
       (SELECT probed.id, probed.ord, probed.sort_key FROM m
        CROSS JOIN LATERAL (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE ${bookmarks.id} = m.id AND ${predicate} OFFSET 0) probed
        WHERE (SELECT n FROM c) <= ${few}
        ORDER BY probed.ord ${dir}, probed.id ${dir} LIMIT ${limit}::integer)
       UNION ALL
-      (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks}
-       WHERE ${predicate} AND (${bookmarks.id} IN (SELECT id FROM m) OR random() < 0) AND (SELECT n FROM c) > ${few}
-       ORDER BY ${order} LIMIT ${limit}::integer)
+      ${walks}
     ) page ON true
     ORDER BY page.ord ${dir}, page.id ${dir} LIMIT ${limit}::integer`;
 }
