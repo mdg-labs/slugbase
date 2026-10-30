@@ -12,7 +12,8 @@ import { uuidArray } from "./folder-links.ts";
 // from the same four statements (`grantsTo`), whether a statement asks about one bookmark (`bookmarkReadableBy`, a correlated `EXISTS`) or lists everything an account
 // is granted (`sharedBookmarks`, the set a list is driven from), so a row is readable through a route exactly when the list shows it. A route that two grants give counts
 // once. The fragment never reads a plan-archived bookmark out: that is the statement's own condition, as it is for the owner's bookmarks. The system operations
-// `sys_search`, `sys_go_suggest` and `sys_go_other_workspaces` run as `slugbase_system` and state the same rule in SQL (src/sql/580, 590 and 600); a change to the rules
+// `sys_search`, `sys_go_suggest` and `sys_go_other_workspaces` run as `slugbase_system` and state the same rule in SQL (src/sql/580, 590 and 600), and so does
+// `slug_preference_bookmark_readable` (src/sql/670), which the triggers that forget the remembered choices of a member who lost access judge by; a change to the rules
 // of reading is made there too.
 //
 // A row is named by the columns the rules read: its owner, its identifier and its workspace.

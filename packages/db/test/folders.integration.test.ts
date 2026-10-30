@@ -159,7 +159,7 @@ describe("the tables", () => {
 
     const constraints = await db.owner<{ conname: string; definition: string }[]>`
       SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint
-      WHERE conrelid IN ('public.folders'::regclass, 'public.folder_bookmarks'::regclass) AND contype <> 'n' ORDER BY conname`;
+      WHERE conrelid IN ('public.folders'::regclass, 'public.folder_bookmarks'::regclass) AND contype NOT IN ('n', 't') ORDER BY conname`;
     const byName = new Map(constraints.map((constraint) => [constraint.conname, constraint.definition]));
     expect([...byName.keys()]).toEqual([
       "folder_bookmarks_bookmark_fkey",
