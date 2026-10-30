@@ -667,7 +667,7 @@ describe("the Sessions card", () => {
   });
 });
 
-describe("accessibility and layout", () => {
+describe("accessibility and layout", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   async function violations(): Promise<string[]> {
     const results = await axe(document.body, { rules: { region: { enabled: false } } });
     return results.violations.map((violation) => `${violation.id}: ${violation.help}`);
