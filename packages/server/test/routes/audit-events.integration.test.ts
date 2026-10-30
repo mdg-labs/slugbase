@@ -389,6 +389,19 @@ describe("the filters", () => {
   );
 
   it(
+    "accept the earliest and the latest instant PostgreSQL stores as a time bound, and list nothing before the log's first event",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED });
+      const { owner } = await setup(world);
+      for (const query of ["?from=0001-01-01T00:00:00Z", "?to=0001-01-01T00:00:00Z", "?from=9999-12-31T23:59:59.999999Z", "?to=9999-12-31T23:59:59.999999Z", "?from=2026-01-20T00:00:00.123456789Z", "?to=2026-01-20T00:00:00.123456789Z"]) {
+        const response = await list(world, owner, query);
+        expect([query, response.status]).toEqual([query, 200]);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
     "refuse what is not a filter with 422 validation_failed: a malformed identifier, action, category or time, a limit out of range and a parameter the operation does not have",
     async () => {
       const world = harness.serve({ entitlements: GRANTED });
@@ -403,6 +416,17 @@ describe("the filters", () => {
         "?entityType=Bad%20Type",
         "?from=yesterday",
         "?to=2026-13-45T00:00:00Z",
+        "?from=0000-01-01T00:00:00Z",
+        "?to=0000-01-01T00:00:00Z",
+        "?from=0000-12-31T23:59:59.999999Z",
+        "?from=10000-01-01T00:00:00Z",
+        "?to=%2B10000-01-01T00:00:00Z",
+        "?from=-0001-01-01T00:00:00Z",
+        "?from=0001-01-01T00:00:00%2B01:00",
+        `?from=0001-01-01T00:00:00.${"0".repeat(130)}Z`,
+        `?to=0001-01-01T00:00:00.${"0".repeat(130)}Z`,
+        "?from=2026-01-20T00:00:00.1234567890Z",
+        "?to=2026-01-20T00:00:00.1234567890Z",
         "?limit=0",
         "?limit=101",
         "?limit=many",

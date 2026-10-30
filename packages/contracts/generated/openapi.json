@@ -6052,8 +6052,9 @@
             "name": "from",
             "required": false,
             "schema": {
-              "description": "Lists the events made at or after this instant, RFC 3339 UTC",
+              "description": "Lists the events made at or after this instant, RFC 3339 UTC, from year 0001 to 9999",
               "format": "date-time",
+              "maxLength": 30,
               "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
               "type": "string"
             }
@@ -6063,8 +6064,9 @@
             "name": "to",
             "required": false,
             "schema": {
-              "description": "Lists the events made before this instant, RFC 3339 UTC",
+              "description": "Lists the events made before this instant, RFC 3339 UTC, from year 0001 to 9999",
               "format": "date-time",
+              "maxLength": 30,
               "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
               "type": "string"
             }
@@ -6152,7 +6154,7 @@
                 }
               }
             },
-            "description": "The query did not pass validation (an identifier, an action name, a category or a time that is not one)"
+            "description": "The query did not pass validation (an identifier, an action name, a category or a time that is not one, or a time outside years 0001 to 9999)"
           },
           "429": {
             "content": {

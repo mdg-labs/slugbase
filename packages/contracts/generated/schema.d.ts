@@ -3754,7 +3754,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The query did not pass validation (an identifier, an action name, a category or a time that is not one) */
+            /** @description The query did not pass validation (an identifier, an action name, a category or a time that is not one, or a time outside years 0001 to 9999) */
             422: {
                 headers: {
                     [name: string]: unknown;

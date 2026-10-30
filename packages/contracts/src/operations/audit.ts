@@ -25,6 +25,16 @@ const AuditEntityTypeSchema = z
   .max(64)
   .regex(/^[a-z][a-z0-9_]*$/, "an entity type such as bookmark");
 
+// `z.iso.datetime()` takes a four-digit year and a `Z` suffix but any number of fractional-second digits. PostgreSQL refuses a `timestamptz`
+// in year 0000 (there is no year 0; the first year is 0001) and date/time input of more than about 150 characters, so the schema also refuses
+// year 0000 and caps the length at 30 characters: `YYYY-MM-DDTHH:MM:SS`, a point, up to nine fractional digits and `Z`. The year check is not in
+// the generated OpenAPI schema, which states the bound in the parameter's description instead.
+const AUDIT_TIME_BOUND_MAX_LENGTH = 30;
+const AuditTimeBoundSchema = z.iso
+  .datetime()
+  .max(AUDIT_TIME_BOUND_MAX_LENGTH)
+  .refine((value) => !value.startsWith("0000-"), "a time from year 0001 to 9999");
+
 export const AUDIT_ACTOR_TYPES = ["account", "api_token", "system"] as const;
 
 export const AuditEventActorSchema = z
@@ -75,8 +85,8 @@ export const AuditEventListQuerySchema = z.strictObject({
   category: z.enum(AUDIT_EVENT_CATEGORIES).optional().describe("Lists the events of the actions in this group"),
   entityType: AuditEntityTypeSchema.optional().describe("Lists the events about this kind of thing"),
   entityId: z.uuid().optional().describe("Lists the events about the thing with this identifier. One of another workspace, or an unknown one, lists nothing: an empty page, not an error"),
-  from: z.iso.datetime().optional().describe("Lists the events made at or after this instant, RFC 3339 UTC"),
-  to: z.iso.datetime().optional().describe("Lists the events made before this instant, RFC 3339 UTC"),
+  from: AuditTimeBoundSchema.optional().describe("Lists the events made at or after this instant, RFC 3339 UTC, from year 0001 to 9999"),
+  to: AuditTimeBoundSchema.optional().describe("Lists the events made before this instant, RFC 3339 UTC, from year 0001 to 9999"),
   limit: z.coerce.number().int().min(1).max(100).default(50).describe("The most events to return, at most 100"),
   cursor: z
     .string()
@@ -107,7 +117,7 @@ export const listAuditEvents = defineOperation({
       "The credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the audit.log entitlement (entitlement_required)",
     ),
     404: problemResponse("The request acts in no workspace"),
-    422: problemResponse("The query did not pass validation (an identifier, an action name, a category or a time that is not one)"),
+    422: problemResponse("The query did not pass validation (an identifier, an action name, a category or a time that is not one, or a time outside years 0001 to 9999)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable, or no entitlement source is configured"),
   },
