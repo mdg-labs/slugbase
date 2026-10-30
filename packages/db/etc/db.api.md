@@ -885,6 +885,19 @@ export interface LoginCandidate {
 
 // @public (undocumented)
 export interface MemberRepository extends MemberRoleStore {
+    applyDeparture(request: {
+        readonly departureId: string;
+        readonly content: "transfer" | "delete";
+        readonly recipientId: string;
+    }): Promise<{
+        readonly bookmarksMoved: number;
+        readonly foldersMoved: number;
+        readonly slugsCleared: number;
+        readonly foldersRenamed: number;
+        readonly bookmarksDeleted: number;
+        readonly foldersDeleted: number;
+        readonly leftOwnerless: number;
+    }>;
     enqueue(jobs: readonly QueuedJob[]): Promise<void>;
     list(afterAccountId: string | null, limit: number): Promise<readonly WorkspaceMember[]>;
     longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;

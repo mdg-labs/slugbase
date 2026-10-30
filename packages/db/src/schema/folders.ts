@@ -28,6 +28,10 @@ export const folders = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     ownerId: uuid(),
+    /** The `member.left` event whose departure released the folder; the same column and rule as `bookmarks.departure_id`. */
+    departureId: uuid(),
+    /** The name the departure's release took from the folder because an ownerless folder already had it (src/sql/530-folder-departure.sql); the same rule as `bookmarks.departure_slug`. */
+    departureName: citext(),
     name: citext().notNull(),
     icon: text().notNull().default("folder"),
     color: smallint().notNull().default(1),

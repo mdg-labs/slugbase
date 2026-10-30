@@ -771,6 +771,13 @@
       "when": 1793348663383,
       "tag": "20261030082423_add_instance_join_team_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1793356573113,
+      "tag": "20261030103613_add_member_departure",
+      "breakpoints": true
     }
   ]
 }

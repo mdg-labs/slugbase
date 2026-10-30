@@ -146,6 +146,8 @@ describe("the tables", () => {
       ["version", "int4", "NO"],
       ["created_at", "timestamptz", "NO"],
       ["updated_at", "timestamptz", "NO"],
+      ["departure_id", "uuid", "YES"],
+      ["departure_name", "citext", "YES"],
     ]);
     const defaults = Object.fromEntries(columns.filter((column) => column.table_name === "folders").map((column) => [column.column_name, column.column_default]));
     expect(defaults["icon"]).toContain("folder");

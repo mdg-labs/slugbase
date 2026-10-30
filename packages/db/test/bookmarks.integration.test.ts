@@ -177,10 +177,10 @@ describe("the table", () => {
 
     expect(columns.map((column) => column.column_name)).toEqual([
       "id", "workspace_id", "owner_id", "url", "url_canonical", "host", "title", "description", "slug", "forwarding", "pinned_at",
-      "plan_archived_at", "open_count", "last_opened_at", "version", "created_at", "updated_at", "search",
+      "plan_archived_at", "open_count", "last_opened_at", "version", "created_at", "updated_at", "search", "departure_id", "departure_slug", "departure_forwarding",
     ]);
     const nullable = columns.filter((column) => column.is_nullable === "YES").map((column) => column.column_name);
-    expect(nullable).toEqual(["owner_id", "description", "slug", "pinned_at", "plan_archived_at", "last_opened_at", "search"]);
+    expect(nullable).toEqual(["owner_id", "description", "slug", "pinned_at", "plan_archived_at", "last_opened_at", "search", "departure_id", "departure_slug", "departure_forwarding"]);
     expect(columns.filter((column) => column.is_generated === "ALWAYS").map((column) => column.column_name)).toEqual(["search"]);
   });
 

@@ -14,7 +14,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- is cut so that the result is at most 64 characters, and a space the cut leaves at the end of the base is dropped. Only the name
 -- changes: the icon, the colour, the filings of the folder and the bookmarks are not touched, and the version moves with the owner.
 -- Folders of one member that are released by one statement are judged one after the other, each against the ownerless folders the
--- ones before it have made.
+-- ones before it have made. The same update records the departure that released the folder (departure_id, from app_departure_id() of
+-- src/sql/680-member-departure.sql), which is null when the statement named none, so the worker can tell the folders of one departure
+-- from every other ownerless folder when it applies the content choice. When that departure's folder is renamed, the name it had is kept in
+-- departure_name, so a transfer to the recipient starts from that name and not from the one the ownerless namespace forced on it.
 --
 -- The names of the ownerless folders change only here, so two departures from one workspace that run at once would each read the
 -- ownerless folders without the other's rename and both choose the same name. The function therefore takes the lock of the
@@ -35,6 +38,8 @@ BEGIN
   IF OLD.owner_id IS NULL OR NEW.owner_id IS NOT NULL THEN
     RETURN NEW;
   END IF;
+  NEW.departure_id := public.app_departure_id();
+  NEW.departure_name := NULL;
   PERFORM 1 FROM public.workspaces w WHERE w.id = NEW.workspace_id FOR NO KEY UPDATE;
   IF NOT EXISTS (
     SELECT 1 FROM public.folders g
@@ -49,6 +54,9 @@ BEGIN
       WHERE g.workspace_id = NEW.workspace_id AND g.owner_id IS NULL AND g.id <> NEW.id AND g.name = v_candidate::citext);
     v_n := v_n + 1;
   END LOOP;
+  IF NEW.departure_id IS NOT NULL THEN
+    NEW.departure_name := NEW.name;
+  END IF;
   NEW.name := v_candidate;
   RETURN NEW;
 END

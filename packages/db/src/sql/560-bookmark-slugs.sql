@@ -23,7 +23,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- bookmarks_clear_slug_on_release(): the trigger function. It runs before a row of bookmarks is updated, and acts when the update takes the owner away
 -- (OLD.owner_id is set and NEW.owner_id is NULL) from a bookmark that has a slug: when an ownerless bookmark of the workspace has that slug, the
 -- slug is cleared and forwarding becomes false. A bookmark whose slug no ownerless bookmark holds keeps it, and so does its forwarding. The version
--- moves with the owner (bookmarks_bump_version).
+-- moves with the owner (bookmarks_bump_version). The same update records the departure that released the bookmark, with or without a slug (departure_id,
+-- from app_departure_id() of src/sql/680-member-departure.sql), which is null when the statement named none, so the worker can tell the bookmarks of one
+-- departure from every other ownerless bookmark when it applies the content choice. When that departure's bookmark loses its slug, the slug and the forwarding it
+-- had are kept in departure_slug and departure_forwarding, so a transfer to the recipient gives them back unless the recipient owns the slug.
 --
 -- The slugs of the ownerless bookmarks change only here, so two departures from one workspace that run at once would each read the ownerless
 -- bookmarks without the other's release and both keep a slug the other keeps, and the second would meet the unique key. The function therefore takes
@@ -37,13 +40,23 @@ CREATE OR REPLACE FUNCTION public.bookmarks_clear_slug_on_release() RETURNS trig
   SET search_path = pg_catalog, public, pg_temp
   AS $$
 BEGIN
-  IF OLD.owner_id IS NULL OR NEW.owner_id IS NOT NULL OR NEW.slug IS NULL THEN
+  IF OLD.owner_id IS NULL OR NEW.owner_id IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+  NEW.departure_id := public.app_departure_id();
+  NEW.departure_slug := NULL;
+  NEW.departure_forwarding := NULL;
+  IF NEW.slug IS NULL THEN
     RETURN NEW;
   END IF;
   PERFORM 1 FROM public.workspaces w WHERE w.id = NEW.workspace_id FOR NO KEY UPDATE;
   IF EXISTS (
     SELECT 1 FROM public.bookmarks g
     WHERE g.workspace_id = NEW.workspace_id AND g.owner_id IS NULL AND g.id <> NEW.id AND g.slug = NEW.slug) THEN
+    IF NEW.departure_id IS NOT NULL THEN
+      NEW.departure_slug := NEW.slug;
+      NEW.departure_forwarding := NEW.forwarding;
+    END IF;
     NEW.slug := NULL;
     NEW.forwarding := false;
   END IF;
