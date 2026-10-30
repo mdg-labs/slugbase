@@ -5,12 +5,14 @@ import { withoutNul } from "./text.ts";
 
 // The folders tag of doc 04 section 10.7: the operations that create, list, read, change and delete a member's folders. They act in
 // the workspace the request is bound to and name none (D11). A folder is its owner's to change (doc 02 section 7.1) and its recipients' to read
-// (doc 02 section 8.2): another member's folder that is shared with the caller, directly or through a team, is listed and read, and a change, a
-// deletion or a filing into it is answered 403 (a share gives read access only, Q22); another member's folder that is not shared with the caller
-// and any folder of another workspace are answered 404, like one that does not exist (doc 04 section 2.4, doc 10 T1 and T2). Only the owner of a
+// (doc 02 section 8.2): a folder that is shared with the caller, directly or through a team, and that they do not own (another member's, or one whose
+// owner has left the workspace, since a share stays) is listed and read, and a change, a deletion or a filing into it is answered 403 (a share gives
+// read access only, Q22); another member's folder that is not shared with the caller, an ownerless one that is not shared with the caller and any folder
+// of another workspace are answered 404, like one that does not exist (doc 04 section 2.4, doc 10 T1 and T2). Only the owner of a
 // bookmark files it, and only into a folder of their own (doc 02 sections 7.1 and 8.2, Q22; doc 04 section 10.7 says "visible to the caller" for the
-// read operations, which the ownership rule narrows): a folder or a bookmark that is another member's and not shared with the caller, another
-// workspace's or unknown is answered 404 and none of the bookmarks named is filed or unfiled. Sharing a folder is another operation.
+// read operations, which the ownership rule narrows): a folder or a bookmark that is shared with the caller, who does not own it, is answered 403 and
+// none of the bookmarks named is filed or unfiled, and a folder or a bookmark that is another member's or ownerless and not shared with the caller, another
+// workspace's or unknown is answered 404 with the same effect (a plan-archived bookmark is never counted as shared). Sharing a folder is another operation.
 
 /** The longest folder name, in characters (doc 05 section 2.4). */
 export const FOLDER_NAME_MAX_LENGTH = 64;
@@ -295,7 +297,7 @@ export const getFolder = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse(
-      "The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike",
+      "The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder whose owner has left the workspace and that is not shared with the caller, a folder of another workspace and one that never existed are answered alike",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -322,10 +324,10 @@ export const updateFolder = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not change it (forbidden); nothing is changed",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is shared with the caller, who does not own it, can read it and may not change it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; nothing is changed",
     ),
     404: problemResponse(
-      "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike",
+      "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder whose owner has left the workspace and that is not shared with the caller, a folder of another workspace and one that never existed are answered alike",
     ),
     409: problemResponse("The caller has another folder with this name, in any case (name_taken); nothing is written"),
     412: problemResponse("If-Match names a version other than the folder's current one (precondition_failed); the folder is unchanged"),
@@ -350,10 +352,10 @@ export const deleteFolder = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is shared with the caller, who does not own it, can read it and may not delete it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; nothing is deleted",
     ),
     404: problemResponse(
-      "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
+      "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder whose owner has left the workspace and that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -380,10 +382,10 @@ export const addFolderBookmarks = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not file into it or file it (forbidden); none of the bookmarks is filed",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is shared with the caller, who does not own it, can read it and may not file into it or file it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and none of the bookmarks is filed",
     ),
     404: problemResponse(
-      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed",
+      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, a folder or a bookmark whose owner has left the workspace and that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed",
     ),
     422: problemResponse("The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -410,10 +412,10 @@ export const removeFolderBookmarks = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not take bookmarks out of it or take it out of a folder (forbidden); none of the bookmarks is unfiled",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is shared with the caller, who does not own it, can read it and may not take bookmarks out of it or take it out of a folder (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and none of the bookmarks is unfiled",
     ),
     404: problemResponse(
-      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled",
+      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, a folder or a bookmark whose owner has left the workspace and that is not shared with the caller, one of another workspace, a plan-archived bookmark that is not the caller's and one that never existed are answered alike, and none of the bookmarks is unfiled",
     ),
     422: problemResponse("The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),

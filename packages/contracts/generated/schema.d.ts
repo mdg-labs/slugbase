@@ -1933,7 +1933,7 @@ export interface components {
             skipped: number;
             /** @description The skipped bookmarks by reason, as counts only */
             skippedReasons: {
-                /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
+                /** @description Bookmarks the caller owns none of in this workspace: another member's, one whose owner has left the workspace, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
                 not_found: number;
                 /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
@@ -2001,7 +2001,7 @@ export interface components {
             skipped: number;
             /** @description The skipped bookmarks by reason, as counts only */
             skippedReasons: {
-                /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
+                /** @description Bookmarks the caller owns none of in this workspace: another member's, one whose owner has left the workspace, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
                 not_found: number;
                 /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
@@ -4590,7 +4590,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden), or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is shared with the caller, who does not own it, can read it and may not act on it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared and is skipped as not_found; or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4679,7 +4679,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not act on it (forbidden), or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is shared with the caller, who does not own it and may not act on it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared and is skipped as not_found; or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4951,7 +4951,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a plan-archived one, a bookmark of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark whose owner has left the workspace and that is not shared with the caller, a plan-archived one, a bookmark of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5027,7 +5027,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is shared with the caller, who does not own it, can read it and may not delete it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and nothing is deleted */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5036,7 +5036,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark whose owner has left the workspace and that is not shared with the caller, a plan-archived one that is not the caller's, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5122,7 +5122,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not change it, tag it or file it (forbidden); nothing is changed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is shared with the caller, who does not own it, can read it and may not change it, tag it or file it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5131,7 +5131,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed and none shared with the caller: another member's bookmark that is not shared with them, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed and none shared with the caller: another member's bookmark that is not shared with them, a bookmark whose owner has left the workspace and that is not shared with them, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5236,7 +5236,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted */
+            /** @description The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark whose owner has left the workspace and that is not shared with the caller, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6000,7 +6000,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder whose owner has left the workspace and that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6076,7 +6076,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is shared with the caller, who does not own it, can read it and may not delete it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; nothing is deleted */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6085,7 +6085,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder whose owner has left the workspace and that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6171,7 +6171,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not change it (forbidden); nothing is changed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is shared with the caller, who does not own it, can read it and may not change it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6180,7 +6180,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder whose owner has left the workspace and that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6282,7 +6282,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not file into it or file it (forbidden); none of the bookmarks is filed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is shared with the caller, who does not own it, can read it and may not file into it or file it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and none of the bookmarks is filed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6291,7 +6291,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed */
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, a folder or a bookmark whose owner has left the workspace and that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6375,7 +6375,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not take bookmarks out of it or take it out of a folder (forbidden); none of the bookmarks is unfiled */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is shared with the caller, who does not own it, can read it and may not take bookmarks out of it or take it out of a folder (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and none of the bookmarks is unfiled */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6384,7 +6384,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled */
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, a folder or a bookmark whose owner has left the workspace and that is not shared with the caller, one of another workspace, a plan-archived bookmark that is not the caller's and one that never existed are answered alike, and none of the bookmarks is unfiled */
             404: {
                 headers: {
                     [name: string]: unknown;

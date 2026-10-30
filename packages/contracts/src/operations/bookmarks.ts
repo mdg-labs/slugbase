@@ -8,10 +8,11 @@ import { withoutNul } from "./text.ts";
 
 // The bookmarks tag of doc 04 section 10.6: the operations that create a bookmark, read it back, change it and delete it. They
 // act in the workspace the request is bound to and name none (D11), and a bookmark is its owner's: another member's bookmark of
-// the same workspace that is not shared with the caller and any bookmark of another workspace are answered 404, like one that does not
-// exist (doc 04 section 2.4, doc 10 T1 and T2). A bookmark that is shared with the caller, directly, through a team or through a folder, is one they can
-// read and open, and the list can be narrowed to those or to the caller's own; they may not change it, tag it, file it or share it, and a try is
-// answered 403 forbidden (doc 02 section 8.2, Q22). The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
+// the same workspace that is not shared with the caller, one whose owner has left the workspace and that is not shared with the caller, and any bookmark of
+// another workspace are answered 404, like one that does not exist (doc 04 section 2.4, doc 10 T1 and T2). A bookmark that is shared with the caller, directly,
+// through a team or through a folder, and that they do not own (another member's, or one whose owner has left the workspace, since a share stays), is one they
+// can read and open, and the list can be narrowed to those or to the caller's own; they may not change it, tag it, file it or share it, and a try is
+// answered 403 forbidden (doc 02 section 8.2, Q22); a plan-archived bookmark is never counted as shared, so a recipient's try on one is answered 404. The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
 // T13). The list pages through the bookmarks its scope covers by a signed keyset cursor (doc 04 section 6.1). An open records that the
 // caller used a bookmark and answers the destination to go to (doc 02 section 5.5). A bookmark is filed in the caller's own folders by
 // `folderIds` on a creation and a change, and the list can be narrowed to one folder; a folder that is another member's, another
@@ -390,7 +391,7 @@ const BulkSkippedReasonsSchema = z
       .number()
       .int()
       .min(0)
-      .describe("Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart"),
+      .describe("Bookmarks the caller owns none of in this workspace: another member's, one whose owner has left the workspace, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart"),
   })
   .describe("The skipped bookmarks by reason, as counts only");
 
@@ -620,7 +621,7 @@ export const getBookmark = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a plan-archived one, a bookmark of another workspace and one that never existed are answered alike",
+      "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark whose owner has left the workspace and that is not shared with the caller, a plan-archived one, a bookmark of another workspace and one that never existed are answered alike",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -647,10 +648,10 @@ export const updateBookmark = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not change it, tag it or file it (forbidden); nothing is changed",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is shared with the caller, who does not own it, can read it and may not change it, tag it or file it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and nothing is changed",
     ),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed and none shared with the caller: another member's bookmark that is not shared with them, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed",
+      "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed and none shared with the caller: another member's bookmark that is not shared with them, a bookmark whose owner has left the workspace and that is not shared with them, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed",
     ),
     409: problemResponse("The caller already uses the slug on another bookmark of the workspace (slug_taken, errors on slug), also when two requests set it at once; nothing is written"),
     412: problemResponse("If-Match names a version other than the bookmark's current one (precondition_failed); the bookmark is unchanged"),
@@ -679,10 +680,10 @@ export const deleteBookmark = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is shared with the caller, who does not own it, can read it and may not delete it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared, and nothing is deleted",
     ),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
+      "The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark whose owner has left the workspace and that is not shared with the caller, a plan-archived one that is not the caller's, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -709,7 +710,7 @@ export const openBookmark = defineOperation({
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted",
+      "The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark whose owner has left the workspace and that is not shared with the caller, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted",
     ),
     422: problemResponse("The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -759,7 +760,7 @@ export const bulkBookmarks = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden), or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is shared with the caller, who does not own it, can read it and may not act on it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared and is skipped as not_found; or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed",
     ),
     404: problemResponse(
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or the folder of a folder action or a tag of a tag action is not one the caller has in it (another member's, another workspace's or unknown), and nothing is changed",
@@ -790,7 +791,7 @@ export const previewBulkBookmarks = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not act on it (forbidden), or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable)",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is shared with the caller, who does not own it and may not act on it (forbidden): another member's, or one whose owner has left the workspace and that is still shared with them; a plan-archived bookmark is not counted as shared and is skipped as not_found; or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable)",
     ),
     404: problemResponse(
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown)",
