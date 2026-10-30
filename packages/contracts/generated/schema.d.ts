@@ -18,6 +18,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the active workspace's audit events */
+        get: operations["listAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1746,6 +1763,55 @@ export interface components {
         ApiTokenList: {
             /** @description One page of the account's tokens that are not revoked, newest first, across every workspace; no hash and no secret */
             items: components["schemas"]["ApiToken"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+        };
+        AuditEvent: {
+            /** @description The dotted name of the recorded action, such as member.removed */
+            action: string;
+            actor: components["schemas"]["AuditEventActor"];
+            /** @description The group the action belongs to; null for an action the catalog no longer holds */
+            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share") | null;
+            /**
+             * Format: date-time
+             * @description When the change was made, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description What the change is about; null for an event without a target */
+            entity: components["schemas"]["AuditEventEntity"] | null;
+            /**
+             * Format: uuid
+             * @description The event's identifier
+             */
+            id: string;
+            /** @description A few facts the action records, such as the old and the new name; the fields are fixed per action, never a secret, an address or a link */
+            metadata: {
+                [key: string]: string;
+            };
+        };
+        AuditEventActor: {
+            /** @description The account that made the change; null for the system, and null for an account that has been deleted since, whose event stays and keeps its label */
+            accountId: string | null;
+            /** @description The actor's display name at the time of the change; it is never rewritten, whatever the account is called now */
+            label: string;
+            /**
+             * @description Who made the change: an account, an API token of an account, or the system
+             * @enum {string}
+             */
+            type: "account" | "api_token" | "system";
+        };
+        AuditEventEntity: {
+            /**
+             * Format: uuid
+             * @description The identifier of the thing
+             */
+            id: string;
+            /** @description What kind of thing the change is about, such as workspace, member, team, bookmark or invitation */
+            type: string;
+        };
+        AuditEventList: {
+            /** @description One page of the workspace's audit events, newest first, with the identifier as the tiebreak */
+            items: components["schemas"]["AuditEvent"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
         };
@@ -3615,6 +3681,101 @@ export interface operations {
             };
             /** @description The request was malformed */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAuditEvents: {
+        parameters: {
+            query?: {
+                actorAccountId?: string;
+                action?: string | string[];
+                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share";
+                entityType?: string;
+                entityId?: string;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the workspace's audit events, newest first, each with its actor (the label it had at the time), action, what it is about and a small metadata object, and never the network the change was made from. Events of the deployment are not in the log of any workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this workspace issued for these filters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the audit.log entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an identifier, an action name, a category or a time that is not one) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

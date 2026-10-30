@@ -570,6 +570,29 @@ export type AuditActor = {
 // @public (undocumented)
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
+// @public
+export function auditCategoryOf(action: string): AuditCategory | null;
+
+// @public
+export interface AuditCursors {
+    open(cursor: string, scope: string): AuditEventPosition | undefined;
+    // (undocumented)
+    seal(position: AuditEventPosition, scope: string): string;
+}
+
+// @public
+export interface AuditEventFilter {
+    readonly actions?: readonly string[];
+    // (undocumented)
+    readonly actorAccountId?: string;
+    // (undocumented)
+    readonly entityId?: string;
+    // (undocumented)
+    readonly entityType?: string;
+    readonly from?: string;
+    readonly to?: string;
+}
+
 // @public (undocumented)
 export interface AuditEventInput<Name extends AuditAction = AuditAction> {
     // (undocumented)
@@ -585,6 +608,83 @@ export interface AuditEventInput<Name extends AuditAction = AuditAction> {
     readonly metadata: AuditMetadata<Name>;
     readonly workspaceId: string;
 }
+
+// @public
+export interface AuditEventPosition {
+    // (undocumented)
+    readonly createdAt: string;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public (undocumented)
+export interface AuditEventReader {
+    list(query: AuditEventFilter & {
+        readonly after: AuditEventPosition | undefined;
+        readonly limit: number;
+    }): Promise<readonly AuditEventRecord[]>;
+}
+
+// @public
+export interface AuditEventRecord {
+    // (undocumented)
+    readonly action: string;
+    readonly actorAccountId: string | null;
+    readonly actorLabel: string;
+    // (undocumented)
+    readonly actorType: "account" | "api_token" | "system";
+    readonly createdAt: string;
+    // (undocumented)
+    readonly entityId: string | null;
+    // (undocumented)
+    readonly entityType: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly metadata: Readonly<Record<string, string>>;
+}
+
+// @public (undocumented)
+export interface AuditListAsk {
+    // (undocumented)
+    readonly actions?: readonly string[] | undefined;
+    // (undocumented)
+    readonly actorAccountId?: string | undefined;
+    // (undocumented)
+    readonly category?: AuditCategory | undefined;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    // (undocumented)
+    readonly entityId?: string | undefined;
+    // (undocumented)
+    readonly entityType?: string | undefined;
+    // (undocumented)
+    readonly from?: string | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly to?: string | undefined;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface AuditListDependencies {
+    // (undocumented)
+    readonly cursors: AuditCursors;
+    // (undocumented)
+    readonly store: AuditEventReader;
+}
+
+// @public (undocumented)
+export type AuditListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly AuditEventRecord[];
+    readonly nextCursor: string | null;
+}
+/** The cursor was not issued by this server for this workspace and these filters; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
 
 // @public
 export type AuditMetadata<Name extends AuditAction = AuditAction> = {
@@ -4831,6 +4931,9 @@ export interface JoiningEntitlements {
     // (undocumented)
     readonly values: WorkspaceEntitlementValues;
 }
+
+// @public
+export function listAuditEvents(input: AuditListDependencies, ask: AuditListAsk): Promise<AuditListOutcome>;
 
 // @public
 export function listBookmarkIds(input: BookmarkIdsDependencies, ask: BookmarkIdsAsk): Promise<BookmarkIdsOutcome>;

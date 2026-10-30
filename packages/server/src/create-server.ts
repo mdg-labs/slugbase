@@ -47,6 +47,7 @@ import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
 import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
 import { faviconRoutes } from "./routes/favicons.ts";
+import { auditRoutes } from "./routes/audit/index.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
 import { teamRoutes } from "./routes/teams/index.ts";
@@ -635,6 +636,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationDefault: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail, ownedWorkspaces: ownedWorkspaceEntitlements }));
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
+  // So is the audit log of the active workspace: an admin or owner of a workspace that holds `audit.log` reads its events, filtered and paged by a keyset cursor.
+  builtInRoutes.push(...auditRoutes({ cursorSecret: config.SESSION_SECRET }));
   // So are the teams of the active workspace: every member lists them and reads their members, and an admin or owner holding `teams.manage` creates, renames, deletes them and replaces their members.
   builtInRoutes.push(...teamRoutes({ cursorSecret: config.SESSION_SECRET }));
   // So are the shares of a bookmark: its owner finds the members and teams to share with, grants, lists and revokes the shares, under `sharing.members` or `sharing.teams` decided with the check stage 9 uses.

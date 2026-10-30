@@ -349,6 +349,10 @@ export const FIXTURES: ContractFixtures = {
   // names a team that no workspace holds, the declared 404 whoever would hold it, and so is the team of workspace B that the matrix puts in the path. The
   // replacement also names members in its body: the walker's request is the empty set, and the matrix puts the members of workspace B in `accountIds`.
   listTeams: {},
+  // The audit log of the workspace of the request. Without a filter it names no identifier of any workspace and the valid request is the declared 200. Its filters take the
+  // identifier of an account and of an entity, and one of workspace B (a member, a bookmark) matches no event of the walker's log, so the request that names it is an
+  // empty 200 and not a 404, as for a slug: the matrix puts a member of B in `actorAccountId` and a bookmark of B in `entityId`.
+  listAuditEvents: { foreign: { query: { entityId: UNKNOWN_BOOKMARK_ID } }, foreignAnswer: { status: 200 } },
   createTeam: { body: { name: "Walker team" } },
   getTeam: { path: { id: UNKNOWN_TEAM_ID }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID } } },
   updateTeam: { path: { id: UNKNOWN_TEAM_ID }, body: { name: "Walker team" }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID }, body: { name: "Walker team" } } },

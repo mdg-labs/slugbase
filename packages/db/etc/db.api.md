@@ -5,6 +5,7 @@
 ```ts
 
 import type { AccountDeletionScope } from '@slugbase/core';
+import type { AuditEventReader } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import { BookmarkArchiveTransaction } from '@slugbase/core';
 import type { BookmarkBulkStore } from '@slugbase/core';
@@ -246,7 +247,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuditEventRepository {
+export interface AuditEventRepository extends AuditEventReader {
     insert(record: AuditRecord): Promise<void>;
 }
 

@@ -99,6 +99,8 @@ describe("PATH_PARAMETER_MAPPING", () => {
         "updateMember.accountId",
         "leaveWorkspace.transferTo",
         "transferWorkspaceOwnership.accountId",
+        "listAuditEvents.actorAccountId",
+        "listAuditEvents.entityId",
       ]),
     );
   });
@@ -172,6 +174,7 @@ describe("PATH_PARAMETER_MAPPING", () => {
       "updateMember.accountId": "member",
       "leaveWorkspace.transferTo": "member",
       "transferWorkspaceOwnership.accountId": "member",
+      "listAuditEvents.actorAccountId": "member",
     };
     for (const input of contractInputs()) {
       const kind = expected[input] ?? "bookmark";
