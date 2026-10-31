@@ -34,3 +34,15 @@ The CLA check must pass before a pull request can be merged. The CLA is currentl
 - Conventional Commits: `type(scope): imperative summary`, at most 72 characters; the body explains why.
 - One change per pull request, against `dev`. `main` only moves through the maintainer's promotion pull request.
 - Every user-facing string in English and German.
+
+## Writing documentation
+
+The documentation is English only and lives in three folders: `docs/user/` (end users), `docs/self-hosting/` (operators) and `docs/releases/<version>.md` (release notes). The full contract is [doc 09 §3.5](docs/internal/09-repo-architecture.md); in short:
+
+- **Files.** Only `.md` and `.mdx` pages and `png`, `jpg`, `jpeg`, `webp`, `gif` or `avif` images. Each page starts with frontmatter holding `title`, `description` and `edition` (`ce`, `cloud` or `both`), and optionally `since` (a version such as `1.0.0` or `1.2.0-rc.1`) and `order` (an integer). No other field is allowed.
+- **Release notes** are named `<version>.md`, and `since`, if present, equals that version.
+- **MDX is restricted.** No `import` or `export`, no JavaScript expressions, no raw HTML and no components beyond the allow-list (callout, tabs, steps, edition badge, screenshot).
+- **Routes.** A page under `docs/user/` may not start with the segment `cloud`, `self-hosting` or `releases`, and two pages may not produce the same route.
+- **Links and images.** Links are relative or to `/docs/...`; images sit next to the page that shows them. No scripts, iframes or third-party embeds.
+
+Run `pnpm docs:check` before you push. CI runs it as the `docs` job on every change under these folders.

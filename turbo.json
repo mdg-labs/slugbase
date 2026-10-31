@@ -36,6 +36,11 @@
       ],
       "outputs": ["coverage/**"]
     },
+    "@slugbase/tooling#typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/docs-check/**"],
+      "outputs": ["*.tsbuildinfo", ".tsbuildinfo/**"]
+    },
     "@slugbase/tooling#test:unit": {
       "dependsOn": ["^build"],
       "inputs": [
@@ -47,6 +52,7 @@
         "$TURBO_ROOT$/packages/*/api-extractor.json",
         "$TURBO_ROOT$/packages/*/etc/**",
         "$TURBO_ROOT$/scripts/perf/**",
+        "$TURBO_ROOT$/scripts/docs-check/**",
         "$TURBO_ROOT$/packages/**/*.ts",
         "$TURBO_ROOT$/packages/**/*.tsx",
         "$TURBO_ROOT$/apps/**/*.ts",

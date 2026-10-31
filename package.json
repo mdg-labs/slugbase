@@ -15,6 +15,7 @@
     "lint:forbidden-terms": "bash scripts/check-forbidden-terms.test.sh && bash scripts/check-forbidden-terms.sh",
     "lint:external-hosts": "bash scripts/check-external-hosts.test.sh && bash scripts/check-external-hosts.sh",
     "lint:workflow-triggers": "bash scripts/check-workflow-triggers.test.sh && bash scripts/check-workflow-triggers.sh",
+    "docs:check": "node scripts/docs-check/docs-check.ts",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
     "test:integration": "sh -c 'turbo run test:integration \"$@\" && pnpm --filter @slugbase/db run test:integration:quiet' sh",
@@ -49,7 +50,9 @@
     "turbo": "^2.11.7",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
   },
   "pnpm": {
     "auditConfig": {

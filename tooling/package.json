@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "lint": "eslint --max-warnings=0 . ../eslint.config.js ../vitest.shared.ts ../scripts",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test:unit": "vitest run --project unit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p ../scripts/docs-check/tsconfig.json",
+    "test:unit": "vitest run --project unit && vitest run --root ../scripts/docs-check --project unit",
     "test:integration": "vitest run --project integration",
     "i18n:check": "node vocabulary/check-catalogs.ts"
   }
