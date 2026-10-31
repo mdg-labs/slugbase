@@ -226,18 +226,24 @@ export async function workspaceChecksum(database: TestDatabase, workspaceId: str
   return digest;
 }
 
-export const LATENCY_ROUNDS = 21;
+/** Rounds per order in `medianLatencyRatio`; the reference-first and the probe-first rounds are the same in number. */
+export const LATENCY_ROUNDS = 11;
 
-/** How many times `medianLatencyRatio` calls each side: once unmeasured to warm up, then once per round. */
+/** How many times `medianLatencyRatio` calls each side: once unmeasured to warm up, then once per round of either order. */
 export function latencyCalls(rounds = LATENCY_ROUNDS): number {
-  return rounds + 1;
+  return 2 * rounds + 1;
 }
 
 /**
- * How many times longer `probe` takes than `reference`, as the median over
- * `rounds` of the per-round ratio. Each round times both back to back, and the
- * order alternates, so a burst of load on a shared runner lands on both sides of
- * a round and a single slow round moves one ratio of the many, not the median.
+ * How many times longer `probe` takes than `reference`. Each round times both
+ * back to back, so a burst of load on a shared runner lands on both sides of a
+ * round, and `rounds` rounds run with the reference first and `rounds` with the
+ * probe first. A call that follows another one is not timed like one that opens
+ * the pair (the work the first leaves behind, a scheduler slice spent), and on a
+ * loaded host the two orders' medians were seen to differ by a third. The median of each order
+ * is taken apart and the answer is their geometric mean, so a gap between the
+ * orders counts for neither side. One median over all the rounds would instead
+ * land in whichever order had more of them.
  * Both run once first, unmeasured, to warm caches and lazily made state. A
  * target with state made on its first use (an address has a limit bucket) costs
  * more the first time: a side that repeats one pays that once, a side that
@@ -254,23 +260,21 @@ export async function medianLatencyRatio(
     await run();
     return performance.now() - started;
   };
+  const median = (values: number[]): number => values.sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0;
   await reference();
   await probe();
-  const ratios: number[] = [];
-  for (let round = 0; round < rounds; round += 1) {
-    let referenceTime: number;
-    let probeTime: number;
+  const referenceFirst: number[] = [];
+  const probeFirst: number[] = [];
+  for (let round = 0; round < 2 * rounds; round += 1) {
     if (round % 2 === 0) {
-      referenceTime = await timed(reference);
-      probeTime = await timed(probe);
+      const referenceTime = await timed(reference);
+      referenceFirst.push((await timed(probe)) / referenceTime);
     } else {
-      probeTime = await timed(probe);
-      referenceTime = await timed(reference);
+      const probeTime = await timed(probe);
+      probeFirst.push(probeTime / (await timed(reference)));
     }
-    ratios.push(probeTime / referenceTime);
   }
-  ratios.sort((a, b) => a - b);
-  return ratios[Math.floor(ratios.length / 2)] ?? 0;
+  return Math.sqrt(median(referenceFirst) * median(probeFirst));
 }
 
 export const SESSION_COOKIE = "__Host-slugbase_session";
