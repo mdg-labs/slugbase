@@ -13,33 +13,49 @@ Template for the docs site's front page and, in a longer form, a
 | Deployment model | Only what `docs-config.md` § Product says. Never hint at, or compare with, an edition the product doesn't have. |
 | Audience | `docs-config.md` § Product: who it is for, and the problem it removes for them. |
 | Links | Only to pages that exist on the site, plus the source repository. Never link internal specs, roadmaps or checklists. Add links to guide or concept pages only once those pages exist. |
-| Base path | Links carry the site base path when the framework needs it (`docs-config.md` § Frontmatter). |
-| Not allowed | Tooling tag clouds, internal identifiers, env var names, pricing or roadmap promises, screenshots. |
+| Link form | Relative file paths between pages, or `/docs/...` routes (`docs-config.md` § Frontmatter); the source repository by its full `https://` address. |
+| Not allowed | Tooling tag clouds, internal identifiers, env var names, pricing or roadmap promises, screenshots, raw HTML. |
 | Language | English only. Short sentences. No hype. |
 
 ## Front page structure
 
-```
+The page goes at the landing path of `docs-config.md` § Customer doc layout (the content root's `index.md`). Fill every placeholder and delete none of the sections.
+
+```markdown
 ---
-<frontmatter per docs-config.md — the framework's landing/splash layout if it has one,
- with the product name, a one-sentence description, a one-sentence tagline, and two
- actions: "Get started" (primary) and "View the source" (secondary)>
+title: "{PRODUCT_NAME}"
+description: "{ONE_LINE — the tagline}"
+edition: both
+order: 0
 ---
 
-## What <product> is
-<what it connects or does, and how it runs — two or three sentences>
+{ONE_SENTENCE — the product in customer words.}
+
+## What {PRODUCT_NAME} is
+
+{What it connects or does, and how it runs — two or three sentences.}
 
 ## How it works
-<one picture in words: input → what the product does → outcome; then 3 numbered steps>
+
+{One picture in words: input, what the product does, outcome.}
+
+1. {Step 1.}
+2. {Step 2.}
+3. {Step 3.}
 
 ## Who it is for
-<the audience sentence plus the problem it removes>
+
+{The audience sentence plus the problem it removes.}
 
 ## What it is not
-<the spec's non-goals, one bullet each, in customer words>
+
+- {Non-goal 1, in customer words.}
+- {Non-goal 2.}
 
 ## Next steps
-<links to Getting started and the source repository>
+
+- [Get started]({getting-started-path})
+- [View the source]({SOURCE_REPOSITORY_URL})
 ```
 
 ## What to source from the spec
@@ -53,4 +69,4 @@ Template for the docs site's front page and, in a longer form, a
 
 ## Product overview page
 
-Same four topics (what it is, what it is not, who it is for, how it works), as a standard concept page with the framework's normal frontmatter — no landing layout, no hero. Link onward to guide pages once they exist.
+Same four topics (what it is, what it is not, who it is for, how it works), as a standard concept page ([concept-template.md](concept-template.md)) — no hero. Link onward to guide pages once they exist.

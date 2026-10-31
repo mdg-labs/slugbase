@@ -27,7 +27,7 @@ repo-owned config that the skill bootstraps on first run.
 | ---- | ---- |
 | This skill (vendored — never edit here) | `.claude/skills/customer-docs/SKILL.md` |
 | Style rules | `.claude/skills/customer-docs/style-guide.md` |
-| Templates | `.claude/skills/customer-docs/page-doc-template.md`, `getting-started-template.md`, `landing-page-template.md`, `docs-config-template.md` |
+| Templates | `.claude/skills/customer-docs/page-doc-template.md`, `getting-started-template.md`, `landing-page-template.md`, `concept-template.md`, `faq-template.md`, `docs-config-template.md` |
 | Repo config + glossary (repo-owned) | `.claude/customer-docs/docs-config.md` |
 | Coverage inventory (repo-owned, created on the first approved write) | `.claude/customer-docs/coverage.md` |
 | Spec docs | CLAUDE.md `### Design docs` |
@@ -53,12 +53,16 @@ Mode 1 if it doesn't.
 
 **No customer doc is written until the config exists.**
 
-1. **Scan read-only.** Find the docs site: framework config, content root,
-   sidebar file, deploy workflow. Also find the app's routes dir, navigation
-   source and UI label files, and the spec docs CLAUDE.md maps.
+1. **Scan read-only.** Find the docs contract and content root (a repo whose
+   site is built elsewhere states them in its design docs; its framework,
+   sidebar and deploy are the site's, so record none of them). Also find the
+   app's routes dir, navigation source and UI label files, and the spec docs
+   CLAUDE.md maps.
 2. **Propose the filled config.** Render `docs-config-template.md` with what
-   you found. Each value you could not determine becomes an explicit
-   question, never a guess. Cover:
+   you found. It records the content root, the build check (the same command
+   as `.claude/workflow.json` `docs.build`) and English only, and no
+   framework or sidebar setting. Each value you could not determine becomes
+   an explicit question, never a guess. Cover:
    - Product: use case, audience, deployment model, accounts and roles
    - screenshot policy
    - the doc layout
@@ -75,7 +79,7 @@ the route map without confirmation.
 ## Approval gate (mandatory — no exceptions)
 
 **Phase 1 — investigate and propose only.** Nothing is written in this phase:
-no doc pages, no sidebar edits, no synced-file sources, no `coverage.md`, no
+no doc pages, no synced-file sources, no `coverage.md`, no
 glossary changes.
 
 **Phase 2 — writes**, only after the user explicitly approves the proposal
@@ -101,22 +105,28 @@ glossary changes.
    files.
 3. **Read the spec.** Read the matching spec sections and do not invent
    behaviour.
-4. **Check the existing site:** its content root and sidebar. Link to pages
-   that already cover something instead of repeating them.
+4. **Check the existing content:** the content root. Link to pages that
+   already cover something instead of repeating them.
 5. **Post the proposal** (format below) and **stop**.
 
 ### Phase 2 — Write
 
 1. **Write pages batch by batch.** Use [page-doc-template.md](page-doc-template.md),
-   [getting-started-template.md](getting-started-template.md) and, for the
-   front page and product overview, [landing-page-template.md](landing-page-template.md).
-   Put each page at the path `docs-config.md` § Route → doc map gives it,
-   with its frontmatter.
-2. **Add sidebar entries** for each new page.
-3. **Run the build check.** On failure, fix the docs; never touch app code.
-4. **Update `coverage.md`:** route → doc path → last-synced SHA → status.
-5. **Add new terms** to `docs-config.md` § Glossary.
-6. **Report the handoff.**
+   [getting-started-template.md](getting-started-template.md),
+   [concept-template.md](concept-template.md), [faq-template.md](faq-template.md)
+   and, for the front page and product overview,
+   [landing-page-template.md](landing-page-template.md). Put each page at the
+   path `docs-config.md` § Route → doc map gives it, with the frontmatter its
+   template starts with; choose `edition` and `since` by the rules in
+   [style-guide.md](style-guide.md). A page needs no navigation entry: the
+   site orders pages by `order`.
+2. **Update `coverage.md`:** route → doc path → last-synced SHA → status.
+3. **Add new terms** to `docs-config.md` § Glossary.
+4. **Run the build check as the final step,** after every other write: the
+   command `docs-config.md` § Build check names (here `pnpm docs:check`).
+   On failure, fix the docs and run it again; never touch app code and never
+   work around the check. Report its output in the handoff.
+5. **Report the handoff.**
 
 ### Proposal format
 
@@ -130,7 +140,7 @@ glossary changes.
 | -------- | ----- | -------------------------- | -------- | ---- |
 | {path} | {title} | {route · components dir} | P0 | page doc |
 
-**Sidebar changes:** {file} — add {N} entries under {groups}
+**Frontmatter choices:** {edition and since per page, and the evidence for each}
 **Glossary additions:** {internal term → customer term, or "none"}
 **Open questions:** {flows that could not be verified read-only — or "none"}
 
@@ -158,7 +168,12 @@ approval ask, and nothing is written before approval.
      and read the diff read-only.
 3. **Flag doc text that contradicts the current spec**, for example a renamed
    setting or a removed option.
-4. **Post the drift proposal** and **stop**.
+4. **Compare only what the skill owns.** The frontmatter fields `title`,
+   `description` and `edition` are the skill's; `since` and `order` belong to
+   the maintainers (a release and the page order) and are never reported as
+   drift and never rewritten. A field the skill does not know is left as it
+   is, and a page whose only difference is such a field is `current`.
+5. **Post the drift proposal** and **stop**.
 
 ```markdown
 ## Docs drift report — {date}
@@ -177,11 +192,12 @@ approval ask, and nothing is written before approval.
 
 ### Phase 2 — Execute
 
-1. **Update or create pages,** and adjust the sidebar.
-2. **Run the build check.**
-3. **Refresh the SHAs** in `coverage.md`.
-4. **Remove pages** whose route is gone: delete the doc and its sidebar entry,
-   unless the user asks to keep a redirect note.
+1. **Update or create pages.**
+2. **Refresh the SHAs** in `coverage.md`.
+3. **Remove pages** whose route is gone: delete the doc, unless the user asks
+   to keep a redirect note.
+4. **Run the build check as the final step** (here `pnpm docs:check`) and
+   report its output in the handoff.
 
 ## Coverage inventory
 
@@ -243,8 +259,7 @@ replace it: stop it first (`TaskStop`), check what it wrote, then re-dispatch.
 
 ### Written
 - {doc paths}
-- Sidebar: {file} — {summary}
-- Build: {command} — {pass/fail}
+- Build: {command} — {its output, pass or fail}
 
 ### Coverage
 - {N} current · {N} updated · {N} new
@@ -264,7 +279,7 @@ replace it: stop it first (`TaskStop`), check what it wrote, then re-dispatch.
 
 ## Forbidden
 
-- **Writing before approval:** any doc, sidebar, synced-file source, coverage
+- **Writing before approval:** any doc, synced-file source, coverage
   or glossary write before the written proposal is explicitly approved.
 - **Skipping the proposal,** or moving to Phase 2 in the same turn as
   Phase 1.
@@ -276,6 +291,10 @@ replace it: stop it first (`TaskStop`), check what it wrote, then re-dispatch.
 - **Touching app code:** application code is read-only.
 - **Fabrication:** invented behaviour, UI labels or screenshots, or capturing
   screenshots.
+- **Content the docs contract refuses:** raw HTML (an HTML comment included),
+  `import` or `export`, JavaScript expressions, a component outside the
+  allow-list (style guide § Components), a framework or sidebar setting in
+  the config, or a page under a content root other than the config's.
 - **Internal details:** exposing internal table or column names, code
   identifiers, env var names (outside an install guide), secrets or internal
   URLs.

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -46,7 +46,7 @@ describe("the command passes", () => {
   it("on the valid tree", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const result = runCli(join(FIXTURES, "valid"));
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("12 pages checked");
+    expect(result.stdout).toContain("13 pages checked");
   });
 });
 
@@ -474,6 +474,86 @@ describe("image sources", () => {
     const withShot = contextFor("docs/user/a/b.md", { images: new Set([target]) });
     expect(checkImage(`shot.${extension.toUpperCase()}`, withShot)).not.toBeNull();
     expect(checkImage(`shot.${extension}`, withShot)).toBeNull();
+  });
+});
+
+// The customer-docs skill writes its pages from these templates. Filling every
+// placeholder must give a page the contract accepts; the skill's own checks are
+// the only guard on what it writes into docs/user.
+describe("a page written from a customer-docs template", () => {
+  const SKILL = resolve(import.meta.dirname, "../../.claude/skills/customer-docs");
+  const TEMPLATES = [
+    ["page-doc-template.md", "page.mdx"],
+    ["getting-started-template.md", "getting-started.mdx"],
+    ["landing-page-template.md", "index.md"],
+    ["concept-template.md", "concepts/concept.md"],
+    ["faq-template.md", "faq.md"],
+  ] as const;
+
+  /** The page a template holds: the whole file, or the markdown fence of one that wraps its page in rules. */
+  function pageOf(template: string): string {
+    const text = readFileSync(join(SKILL, template), "utf8");
+    return /^```markdown\n([\s\S]*?)\n```$/m.exec(text)?.[1] ?? text;
+  }
+
+  /** Replaces each `{PLACEHOLDER}` with text, or with a target that resolves when it is a link. */
+  function fill(page: string): string {
+    return page
+      .replace(/\(\{[^{}]*URL\}\)/g, "(https://example.com/source)")
+      .replace(/\(\{[^{}]*path\}\)/g, "(more.md)")
+      .replace(/\{[^{}]+\}/g, "Filled");
+  }
+
+  function treeWith(template: string, target: string): string {
+    const root = tempTree();
+    mkdirSync(join(root, "docs/user/concepts"), { recursive: true });
+    writeFileSync(join(root, "docs/user/more.md"), PAGE);
+    writeFileSync(join(root, "docs/user/concepts/more.md"), PAGE);
+    writeFileSync(join(root, "docs/user", target), fill(pageOf(template)));
+    return root;
+  }
+
+  it.each(TEMPLATES)("passes docs:check: %s", (template, target) => {
+    expect(checkDocs(treeWith(template, target)).violations).toEqual([]);
+  });
+
+  it.each(TEMPLATES)("starts with the frontmatter fields of the contract: %s", (template) => {
+    const [, block = ""] = /^---\n([\s\S]*?)\n---\n/.exec(pageOf(template)) ?? [];
+    const keys = block.split("\n").map((line) => /^([a-z]+):/.exec(line)?.[1]);
+    expect(keys).toEqual(expect.arrayContaining(["title", "description", "edition"]));
+    expect(keys.filter((key) => key !== undefined)).toEqual(expect.not.arrayContaining(["sidebar_position", "slug"]));
+  });
+
+  it("uses every allowed component somewhere, so that a rename of one fails here", () => {
+    const used = TEMPLATES.map(([template]) => pageOf(template)).join("\n");
+    for (const name of ["Screenshot", "Callout", "EditionBadge", "Steps", "Step"]) expect(used).toContain(`<${name}`);
+  });
+
+  it("is laid out in the config template with the extension its components need", () => {
+    const layout = readFileSync(join(SKILL, "docs-config-template.md"), "utf8");
+    const ROWS = [
+      ["landing-page-template.md", "Landing page"],
+      ["getting-started-template.md", "Getting started"],
+      ["page-doc-template.md", "Page docs"],
+      ["concept-template.md", "Concept pages"],
+      ["faq-template.md", "FAQ"],
+    ] as const;
+    for (const [template, label] of ROWS) {
+      const row = layout.split("\n").find((line) => line.startsWith(`| ${label}`));
+      const extension = /`docs\/user\/[^`]*\.(mdx?)`/.exec(row ?? "")?.[1];
+      const usesComponent = /<[A-Z]/.test(pageOf(template));
+      expect(extension, template).toBe(usesComponent ? "mdx" : "md");
+    }
+  });
+
+  it("never writes the HTML comment placeholder", () => {
+    for (const [template] of TEMPLATES) expect(pageOf(template)).not.toContain("<!--");
+  });
+
+  it("is refused when it carries the old screenshot comment", () => {
+    const root = treeWith("page-doc-template.md", "page.mdx");
+    writeFileSync(join(root, "docs/user/page.mdx"), `${fill(pageOf("page-doc-template.md"))}\n<!-- SCREENSHOT: x -->\n`);
+    expect(checkDocs(root).violations.length).toBeGreaterThan(0);
   });
 });
 

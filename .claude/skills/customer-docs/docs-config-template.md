@@ -15,15 +15,14 @@ Configuration for the `customer-docs` skill in this repo, written by its bootstr
 
 ## Docs site
 
+The content is published by a site that is built elsewhere and owns its framework, sidebar and navigation. This repo holds only the content and its contract (doc 09 §3.5), so no framework, base URL, deploy or sidebar setting is recorded here, and the skill never writes one.
+
 | Field | Value |
 | ----- | ----- |
-| Framework | {{Starlight, Docusaurus, VitePress, Mintlify, plain Markdown, …}} |
-| Published URL | {{URL, and the base path if any}} |
-| Deploy | {{workflow file or manual}} |
-| Build check | {{command — the same as workflow.json `docs.build`}} |
-| Content root | `{{path/}}` |
-| Sidebar / nav file | `{{path}}` |
+| Content root | `docs/user` |
+| Build check | `pnpm docs:check` (the same command as `.claude/workflow.json` `docs.build`) |
 | Language | English only |
+| Other roots | `docs/self-hosting/` and `docs/releases/` are outside the content root; the skill neither writes nor reports on them |
 
 ### Synced files — never hand-edit
 
@@ -34,23 +33,29 @@ Configuration for the `customer-docs` skill in this repo, written by its bootstr
 
 ### Customer doc layout
 
-| Doc type | Path | Sidebar group |
-| -------- | ---- | ------------- |
-| Landing page | `{{path}}` | {{group or none}} |
-| Getting started / first steps | `{{path}}` | {{group}} |
-| Page docs (one per in-app page) | `{{dir}}/<page>.md` | {{group}} |
-| Concept pages | `{{dir}}/<concept>.md` | {{group}} |
-| FAQ | `{{path}}` | {{group}} |
+A page that uses a component (`Callout`, `EditionBadge`, `Screenshot` and the rest of the allow-list) is an `.mdx` file; any other page is `.md`. The route is the path below the content root without the extension, so the choice does not change it.
 
-File names: kebab-case. {{How a new page is added to the sidebar.}}
+| Doc type | Path | Folder |
+| -------- | ---- | ------ |
+| Landing page | `docs/user/index.md` | content root |
+| Getting started / first steps | `docs/user/getting-started.mdx` | content root |
+| Page docs (one per in-app page) | `docs/user/<page>.mdx` | {{folder, or the content root}} |
+| Concept pages | `docs/user/concepts/<concept>.md` | `concepts/` |
+| FAQ | `docs/user/faq.md` | content root |
+
+File names: kebab-case. The first path segment is never `cloud`, `self-hosting` or `releases`, in any case. A new page needs no navigation entry: the site orders pages by the `order` field.
 
 ### Frontmatter
 
 ```yaml
-{{the framework's frontmatter, with required fields marked}}
+title: "Page title"     # required
+description: "One line" # required
+edition: both           # required: ce, cloud or both
+since: 1.0.0            # optional: the first version that has it
+order: 10               # optional: an integer
 ```
 
-{{Whether the framework renders `title` as the H1 (then the body has none), and how links between pages are written so they survive the base path.}}
+No other field is allowed. {{Whether the site renders `title` as the H1 (then the body has none, as the templates assume) — ask the maintainer, because doc 09 §3.5 does not say.}} Links between pages are relative file paths (`../concepts/slugs.md`) or `/docs/...` routes; the skill never writes a base path or a root-absolute link outside `/docs/`.
 
 ## App page inventory
 
@@ -73,8 +78,8 @@ Re-scan the routes dir on every run: a route without a row here is a new page (m
 
 | Field | Value |
 | ----- | ----- |
-| Policy | {{PLACEHOLDERS or NONE}} |
-| Format | `<!-- SCREENSHOT: short description -->` — the skill never captures images |
+| Policy | PLACEHOLDERS |
+| Format | `<Screenshot alt="short description" />` without a `src`, in an `.mdx` page — the skill never captures images, and never writes an HTML comment, which the docs contract refuses |
 
 ## Glossary (internal term → customer term)
 
@@ -92,5 +97,5 @@ File: `.claude/customer-docs/coverage.md` (created on the first approved write; 
 | Field | Value |
 | ----- | ----- |
 | Subject | `docs(<scope>): <summary>` |
-| Scope | `{{the repo's docs scope}}` |
+| Scope | `docs` |
 | Trailer | `Fixes #<n>` when the work belongs to a tracked item (its trailer number — see `.claude/trackers/`), otherwise none |
