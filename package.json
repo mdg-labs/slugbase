@@ -60,7 +60,8 @@
     "overrides": {
       "@esbuild-kit/core-utils>esbuild": "^0.25.0",
       "@ai-sdk/provider-utils": "^4.0.33",
-      "@ladle/react>vite": "^6.4.5"
+      "@ladle/react>vite": "^6.4.5",
+      "minimatch@<11.0.1": "^11.0.1"
     },
     "patchedDependencies": {
       "postgres@3.4.9": "patches/postgres@3.4.9.patch"
