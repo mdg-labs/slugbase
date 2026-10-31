@@ -30,8 +30,7 @@ import { expect, test } from "../support/test.ts";
 // page is then in. The toggle saves the theme to the account; a dialog is closed for the switch and opened again over the same shares, because the toggle is out of
 // reach behind it. Each scan of the two helpers below (`scan`, `scanPage`) names its theme, and the class of the document is asserted before it.
 //
-// Mia and Lee are invited and accepted once, as before: accepting an invitation is limited to 10 an hour for the address of the stack (doc 02 section 16, doc 04
-// section 7) and the other journeys use the same limit; the journey accepts exactly 2. The avatar of a member or a team
+// Mia and Lee are invited and accepted once, as before; the journey accepts exactly 2. The avatar of a member or a team
 // (packages/ui/src/patterns/account-avatar.tsx) draws initials in the page colour on one of eight fills chosen by the identifier of the account, so which
 // fills a page shows depends on the identifiers the run happened to draw; the fills are the --avatar-N tokens, each at least 4.5:1 against the page colour in
 // both themes (packages/ui/test/patterns/account-avatar-contrast.test.tsx checks all eight), and no allow-list entry stands for them.
@@ -193,7 +192,6 @@ test.describe("sharing journey", () => {
 
     let finished = false;
     try {
-      // The two invitations of the journey are accepted once: `POST /invitations/accept` is limited to 10 an hour for the address of the stack, which every journey shares.
       const mia = await provisionMember(browser, request, "Mia", token);
       members.push(mia);
       const lee = await provisionMember(browser, request, "Lee", token);
