@@ -37,9 +37,13 @@ export interface SplitPage {
 
 const BLOCK = /^---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
+export function stripBom(text: string): string {
+  return text.startsWith("\uFEFF") ? text.slice(1) : text;
+}
+
 /** Splits the frontmatter block off a page; null when the page does not start with one. */
 export function splitFrontmatter(text: string): SplitPage | null {
-  const source = text.startsWith("﻿") ? text.slice(1) : text;
+  const source = stripBom(text);
   const match = BLOCK.exec(source);
   if (match === null) return null;
   const block = match[0];

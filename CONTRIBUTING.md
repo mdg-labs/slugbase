@@ -41,7 +41,7 @@ The documentation is English only and lives in three folders: `docs/user/` (end 
 
 - **Files.** Only `.md` and `.mdx` pages and `png`, `jpg`, `jpeg`, `webp`, `gif` or `avif` images. Each page starts with frontmatter holding `title`, `description` and `edition` (`ce`, `cloud` or `both`), and optionally `since` (a version such as `1.0.0` or `1.2.0-rc.1`) and `order` (an integer). No other field is allowed.
 - **Release notes** are named `<version>.md`, and `since`, if present, equals that version.
-- **MDX is restricted.** No `import` or `export`, no JavaScript expressions, no raw HTML and no components beyond the allow-list (callout, tabs, steps, edition badge, screenshot).
+- **MDX is restricted.** No `import` or `export`, no JavaScript expressions, no spread attributes and no raw HTML (a link, an image or a comment is not written as `<a>`, `<img>` or `<!-- -->`). The only components are `Callout`, `Tabs`, `Tab`, `Steps`, `Step`, `EditionBadge` and `Screenshot` (the `ALLOWED_COMPONENTS` constant in `scripts/docs-check/mdx.ts`), and their attributes take string, number or boolean literals only. Code fences may hold any text.
 - **Routes.** A page under `docs/user/` may not start with the segment `cloud`, `self-hosting` or `releases`, and two pages may not produce the same route.
 - **Links and images.** Links are relative or to `/docs/...`; images sit next to the page that shows them. No scripts, iframes or third-party embeds.
 

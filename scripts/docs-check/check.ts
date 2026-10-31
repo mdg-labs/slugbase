@@ -1,6 +1,7 @@
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
-import { isVersion, splitFrontmatter, validateFrontmatter } from "./frontmatter.ts";
+import { isVersion, splitFrontmatter, stripBom, validateFrontmatter } from "./frontmatter.ts";
+import { lintBody } from "./mdx.ts";
 
 /** The content roots of the docs contract (doc 09 section 3.5), relative to the repository root. */
 export const CONTENT_ROOTS = ["docs/user", "docs/self-hosting", "docs/releases"] as const;
@@ -70,18 +71,24 @@ function checkReleaseName(path: string, since: string | undefined, violations: V
 }
 
 function checkPage(repoRoot: string, path: string, violations: Violation[]): void {
-  const split = splitFrontmatter(readFileSync(join(repoRoot, path), "utf8"));
+  const text = readFileSync(join(repoRoot, path), "utf8");
+  const split = splitFrontmatter(text);
   const isRelease = path.startsWith("docs/releases/");
+  let since: string | undefined;
   if (split === null) {
     violations.push({ file: path, message: "the page has no frontmatter; it must start with a --- block" });
-    if (isRelease) checkReleaseName(path, undefined, violations);
-    return;
+  } else {
+    const result = validateFrontmatter(split.yaml);
+    if (result.ok) since = result.data.since;
+    else for (const problem of result.problems) violations.push({ file: path, line: 1, message: problem });
   }
-  const result = validateFrontmatter(split.yaml);
-  if (!result.ok) {
-    for (const problem of result.problems) violations.push({ file: path, line: 1, message: problem });
+  if (isRelease) checkReleaseName(path, since, violations);
+
+  const offset = split?.frontmatterLines ?? 0;
+  const extension = path.endsWith(".mdx") ? ".mdx" : ".md";
+  for (const finding of lintBody(split?.body ?? stripBom(text), extension)) {
+    violations.push({ file: path, line: finding.line + offset, message: finding.message });
   }
-  if (isRelease) checkReleaseName(path, result.ok ? result.data.since : undefined, violations);
 }
 
 /** Reads the three content roots under `repoRoot` and returns every violation of the docs contract. */

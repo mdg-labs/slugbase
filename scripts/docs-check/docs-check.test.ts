@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../vitest.shared.ts";
 import { checkDocs } from "./check.ts";
 import { isVersion } from "./frontmatter.ts";
+import { ALLOWED_COMPONENTS, lintBody } from "./mdx.ts";
 
 const CLI = resolve(import.meta.dirname, "docs-check.ts");
 const FIXTURES = resolve(import.meta.dirname, "fixtures");
@@ -44,7 +45,7 @@ describe("the command passes", () => {
   it("on the valid tree", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const result = runCli(join(FIXTURES, "valid"));
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("6 pages checked");
+    expect(result.stdout).toContain("9 pages checked");
   });
 });
 
@@ -72,6 +73,28 @@ const INVALID: [fixture: string, expected: string[]][] = [
   ["release-extension", ["docs/releases/1.0.0.mdx", "<version>.md"]],
   ["release-nested", ["docs/releases/archive/1.0.0.md", "<version>.md"]],
   ["release-since-mismatch", ["docs/releases/1.0.0.md", '"since"', "1.1.0", "1.0.0"]],
+  ["mdx-import", ["docs/user/mdx-import.mdx:9:", "import and export"]],
+  ["mdx-export", ["docs/user/mdx-export.mdx:9:", "import and export"]],
+  ["mdx-expression-text", ["docs/user/page.mdx:7:", "JavaScript expression"]],
+  ["mdx-expression-flow", ["docs/user/page.mdx:9:", "JavaScript expression"]],
+  ["mdx-expression-attribute", ["docs/user/page.mdx:9:", 'attribute "kind"', "JavaScript expression"]],
+  ["mdx-spread-attribute", ["docs/user/page.mdx:9:", "spread attribute"]],
+  ["mdx-component-unknown", ["docs/user/page.mdx:9:", "<Chart>", "not an allowed component"]],
+  ["mdx-fragment", ["docs/user/page.mdx:9:", "a fragment"]],
+  ["mdx-html-script", ["docs/user/page.mdx:9:", "<script>"]],
+  ["mdx-html-iframe", ["docs/user/page.mdx:9:", "<iframe>"]],
+  ["mdx-html-style", ["docs/user/page.mdx:9:", "<style>"]],
+  ["mdx-html-img", ["docs/user/page.mdx:7:", "<img>"]],
+  ["mdx-html-anchor", ["docs/user/page.mdx:7:", "<a>"]],
+  ["mdx-html-comment", ["docs/user/page.mdx:9:", "not valid MDX"]],
+  ["mdx-parse-error", ["docs/user/page.mdx:", "not valid MDX"]],
+  ["md-html-script", ["docs/user/page.md:9:", "raw HTML"]],
+  ["md-html-iframe", ["docs/user/page.md:9:", "raw HTML"]],
+  ["md-html-style", ["docs/user/page.md:9:", "raw HTML"]],
+  ["md-html-img", ["docs/user/page.md:7:", "raw HTML"]],
+  ["md-html-anchor", ["docs/user/page.md:7:", "raw HTML"]],
+  ["md-html-comment", ["docs/user/page.md:9:", "raw HTML"]],
+  ["md-html-allowed-name", ["docs/user/page.md:9:", "raw HTML"]],
 ];
 
 describe("the command fails", () => {
@@ -122,4 +145,35 @@ describe("versions", () => {
       expect(isVersion(version)).toBe(false);
     },
   );
+});
+
+describe("the component allow-list", () => {
+  it("is exactly the components the site mirrors", () => {
+    expect([...ALLOWED_COMPONENTS]).toEqual(["Callout", "Tabs", "Tab", "Steps", "Step", "EditionBadge", "Screenshot"]);
+  });
+
+  it.each(ALLOWED_COMPONENTS)("accepts <%s> with literal attributes", (name) => {
+    expect(lintBody(`<${name} a="x" b={2} c={true} d={-1.5} e />\n`, ".mdx")).toEqual([]);
+  });
+
+  it.each(["Callout2", "callout", "Chart", "div", "Tabs.Tab"])("refuses <%s>", (name) => {
+    expect(lintBody(`<${name} />\n`, ".mdx")).toHaveLength(1);
+  });
+
+  it("refuses an expression that only looks like a literal", () => {
+    expect(lintBody("<Tab a={1 + 1} />\n", ".mdx")).toHaveLength(1);
+    expect(lintBody("<Tab a={null} />\n", ".mdx")).toHaveLength(1);
+    expect(lintBody("<Tab a={'x'} />\n", ".mdx")).toHaveLength(1);
+  });
+
+  it("reports the line within the whole file, frontmatter included", () => {
+    const root = tempTree();
+    mkdirSync(join(root, "docs/user"), { recursive: true });
+    writeFileSync(join(root, "docs/user/page.mdx"), `${PAGE}\n<Chart />\n`);
+    expect(checkDocs(root).violations).toEqual([expect.objectContaining({ file: "docs/user/page.mdx", line: 9 })]);
+  });
+
+  it("finds nothing in a page that uses every allowed component and in code fences", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    expect(checkDocs(join(FIXTURES, "valid")).violations).toEqual([]);
+  });
 });
