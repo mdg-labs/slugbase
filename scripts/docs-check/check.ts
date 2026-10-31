@@ -2,7 +2,7 @@ import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix } from "node:path";
 import { isVersion, splitFrontmatter, stripBom, validateFrontmatter } from "./frontmatter.ts";
 import { CONTENT_ROOTS, IMAGE_EXTENSIONS, MAX_IMAGE_BYTES, PAGE_EXTENSIONS } from "./contract.ts";
-import { checkImage, checkLink, collectRefs, type LinkContext, type PageRefs } from "./links.ts";
+import { checkImage, checkLink, collectRefs, type LinkContext, type PageRefs, type Ref } from "./links.ts";
 import { lintTree, parseBody } from "./mdx.ts";
 import { firstUserSegment, RESERVED_SEGMENTS, routeOf } from "./routes.ts";
 
@@ -102,25 +102,36 @@ function checkPage(repoRoot: string, path: string, violations: Violation[]): Che
 
 /** The reserved first segments and the routes two pages share; returns the routes that exist. */
 function checkRoutes(pages: readonly string[], violations: Violation[]): Set<string> {
-  const byRoute = new Map<string, string[]>();
+  const byFoldedRoute = new Map<string, string[]>();
+  const routes = new Set<string>();
   for (const page of pages) {
     const segment = firstUserSegment(page);
-    if ((RESERVED_SEGMENTS as readonly (string | null)[]).includes(segment)) {
+    if ((RESERVED_SEGMENTS as readonly (string | null)[]).includes(segment?.toLowerCase() ?? null)) {
       violations.push({
         file: page,
-        message: `the route starts with the reserved segment "${segment ?? ""}"; ${RESERVED_SEGMENTS.join(", ")} belong to other parts of the site`,
+        message: `the route starts with the reserved segment "${segment ?? ""}"; ${RESERVED_SEGMENTS.join(", ")} belong to other parts of the site (compared without regard to case)`,
       });
     }
     const route = routeOf(page);
-    if (route !== null) byRoute.set(route, [...(byRoute.get(route) ?? []), page]);
+    if (route === null) continue;
+    routes.add(route);
+    // A file system or a site may fold case, so two routes that differ only in case are one,
+    // and a page named INDEX is an index page.
+    const folded = (routeOf(page, true) ?? route).toLowerCase();
+    byFoldedRoute.set(folded, [...(byFoldedRoute.get(folded) ?? []), page]);
   }
-  for (const [route, sharing] of byRoute) {
+  for (const sharing of byFoldedRoute.values()) {
     for (const page of sharing) {
       const others = sharing.filter((other) => other !== page);
-      if (others.length > 0) violations.push({ file: page, message: `produces the route ${route}, which ${others.join(" and ")} also produces` });
+      if (others.length > 0) {
+        violations.push({
+          file: page,
+          message: `produces the route ${routeOf(page, true) ?? ""}, which ${others.join(" and ")} also produces (routes are compared without regard to case)`,
+        });
+      }
     }
   }
-  return new Set(byRoute.keys());
+  return routes;
 }
 
 function checkImageSizes(repoRoot: string, images: readonly string[], violations: Violation[]): void {
@@ -130,6 +141,15 @@ function checkImageSizes(repoRoot: string, images: readonly string[], violations
       violations.push({ file: image, message: `the image is ${String(size)} bytes; the limit is ${String(MAX_IMAGE_BYTES)} (1 MiB)` });
     }
   }
+}
+
+/** Adds to a refused link what a writer needs when the link is an address written bare in the text. */
+function refMessage(ref: Ref, reason: string): string {
+  if (ref.bare !== true) return reason;
+  if (ref.url.toLowerCase().startsWith("mailto:")) {
+    return `${reason} (an email address written in the text becomes a mailto: link; links to an email address are not allowed, so spell the address out in words or leave it out)`;
+  }
+  return `${reason} (a bare address in the text becomes a link; write it as https://...)`;
 }
 
 /** Reads the three content roots under `repoRoot` and returns every violation of the docs contract. */
@@ -157,8 +177,9 @@ export function checkDocs(repoRoot: string): { violations: Violation[]; pages: n
   for (const page of checked) {
     const context: LinkContext = { page: page.path, files, images, routes, headings: page.headings };
     for (const ref of page.refs) {
-      const message = ref.kind === "link" ? checkLink(ref.url, context) : checkImage(ref.url, context);
-      if (message !== null) violations.push({ file: page.path, line: ref.line + page.offset, message });
+      const reason = ref.kind === "link" ? checkLink(ref.url, context) : checkImage(ref.url, context);
+      if (reason === null) continue;
+      violations.push({ file: page.path, line: ref.line + page.offset, message: refMessage(ref, reason) });
     }
   }
   violations.sort((a, b) => (a.file === b.file ? (a.line ?? 0) - (b.line ?? 0) : a.file < b.file ? -1 : 1));

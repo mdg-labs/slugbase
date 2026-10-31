@@ -10,7 +10,7 @@ Relative: [getting started](getting-started.md), [a folder page](guides/sharing.
 
 By route: [home](/docs), [a page](/docs/getting-started), [nested](/docs/guides/sharing), [a folder](/docs/guides/), [operators](/docs/self-hosting/install), [notes](/docs/releases/1.0.0), [cloud](/docs/cloud/billing/plans).
 
-Elsewhere: [another site](https://example.com/page?q=1#top) and <https://example.com/auto>.
+Elsewhere: [another site](https://example.com/page?q=1#top) <https://example.com/auto> and a bare https://example.com/bare address.
 
 Anchors: [this heading](#links-and-anchors), [the second](#second-heading), [the repeat](#second-heading-1) and [with code](#the-code-heading).
 

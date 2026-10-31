@@ -15,12 +15,17 @@ function pagePath(file: string, root: string): string {
   return relative.slice(0, relative.length - posix.extname(relative).length);
 }
 
-/** The route the site serves a page at, or null for a file outside the content roots. */
-export function routeOf(file: string): string | null {
+/**
+ * The route the site serves a page at, or null for a file outside the content roots.
+ * With `indexAnyCase`, a page named `INDEX` counts as an index page, as it does on a
+ * file system or a site that folds case.
+ */
+export function routeOf(file: string, indexAnyCase = false): string | null {
   for (const [root, prefix] of ROOT_ROUTES) {
     if (!file.startsWith(`${root}/`)) continue;
     const segments = pagePath(file, root).split("/");
-    if (segments[segments.length - 1] === "index") segments.pop();
+    const last = segments[segments.length - 1] ?? "";
+    if ((indexAnyCase ? last.toLowerCase() : last) === "index") segments.pop();
     return [prefix, ...segments].join("/");
   }
   return null;

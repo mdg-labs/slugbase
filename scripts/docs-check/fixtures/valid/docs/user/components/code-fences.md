@@ -12,11 +12,12 @@ export const value = {{ nested }};
 <script>alert(1)</script>
 ```
 
-So does `<script>` or `{inline}` code, and a ~~~ fence:
+So does `<script>` or `{inline}` or `http://example.com` code, and a ~~~ fence:
 
 ~~~html
 <iframe src="https://example.com"></iframe>
 <!-- comment -->
+http://example.com/in-a-fence
 ~~~
 
 Markdown links and images: [the guide](../getting-started.md) and ![A shot](./shot.png).

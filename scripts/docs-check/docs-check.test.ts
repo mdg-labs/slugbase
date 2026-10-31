@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../vitest.shared.ts";
 import { checkDocs } from "./check.ts";
 import { isVersion } from "./frontmatter.ts";
-import { checkImage, checkLink, type LinkContext, slugify } from "./links.ts";
-import { ALLOWED_COMPONENTS, lintBody } from "./mdx.ts";
+import { checkImage, checkLink, collectRefs, type LinkContext, slugify } from "./links.ts";
+import { ALLOWED_COMPONENTS, lintBody, parseBody } from "./mdx.ts";
 
 const CLI = resolve(import.meta.dirname, "docs-check.ts");
 const FIXTURES = resolve(import.meta.dirname, "fixtures");
@@ -102,6 +102,10 @@ const INVALID: [fixture: string, expected: string[]][] = [
   ["link-javascript", ["docs/user/page.md:7:", "javascript: scheme"]],
   ["link-mailto", ["docs/user/page.md:7:", "mailto: scheme"]],
   ["link-root-absolute", ["docs/user/page.md:7:", '"/pricing"', "root-absolute"]],
+  ["link-cloud-traversal", ["docs/user/page.md:7:", '"/docs/cloud/../../pricing"', "climbs out"]],
+  ["link-cloud-traversal-encoded", ["docs/user/page.md:7:", "/docs/cloud/%2E%2E/%2E%2E/pricing", "climbs out"]],
+  ["link-bare-http", ["docs/user/page.md:7:", '"http://example.com"', "http: scheme", "bare address"]],
+  ["link-bare-www", ["docs/user/page.md:7:", '"http://www.example.com"', "bare address"]],
   ["link-fragment-missing", ["docs/user/page.md:9:", '"#absent"', "matches no heading"]],
   ["link-reference-missing", ["docs/user/page.md:9:", '"missing.md"']],
   ["image-missing", ["docs/user/page.md:7:", '"shot.png"', "not a file next to the page"]],
@@ -113,6 +117,7 @@ const INVALID: [fixture: string, expected: string[]][] = [
   ["route-reserved-cloud", ["docs/user/cloud/page.md", 'reserved segment "cloud"']],
   ["route-reserved-self-hosting", ["docs/user/self-hosting.md", 'reserved segment "self-hosting"']],
   ["route-reserved-releases", ["docs/user/releases/page.md", 'reserved segment "releases"']],
+  ["route-reserved-case", ["docs/user/Cloud/page.md", 'reserved segment "Cloud"']],
   ["route-duplicate-index", ["docs/user/a.md", "docs/user/a/index.md", "route /docs/a"]],
   ["route-duplicate-extension", ["docs/user/b.md", "docs/user/b.mdx", "route /docs/b"]],
 ];
@@ -122,6 +127,56 @@ describe("the command fails", () => {
     const result = runCli(join(FIXTURES, "invalid", fixture));
     expect(result.status).toBe(1);
     for (const text of expected) expect(result.stderr).toContain(text);
+  });
+
+  it("on two pages whose routes differ only in case", () => {
+    const root = tempTree();
+    mkdirSync(join(root, "docs/user/Guide"), { recursive: true });
+    writeFileSync(join(root, "docs/user/A.md"), PAGE);
+    writeFileSync(join(root, "docs/user/a.md"), PAGE);
+    writeFileSync(join(root, "docs/user/Guide/index.md"), PAGE);
+    writeFileSync(join(root, "docs/user/guide.mdx"), PAGE);
+    const messages = checkDocs(root).violations.map((violation) => `${violation.file}: ${violation.message}`);
+    expect(messages).toEqual([
+      expect.stringContaining("docs/user/A.md: produces the route /docs/A, which docs/user/a.md also produces"),
+      expect.stringContaining("docs/user/Guide/index.md: produces the route /docs/Guide, which docs/user/guide.mdx also produces"),
+      expect.stringContaining("docs/user/a.md: produces the route /docs/a, which docs/user/A.md also produces"),
+      expect.stringContaining("docs/user/guide.mdx: produces the route /docs/guide, which docs/user/Guide/index.md also produces"),
+    ]);
+  });
+
+  it("on a page named INDEX that shares its route with another page", () => {
+    const root = tempTree();
+    mkdirSync(join(root, "docs/user/a"), { recursive: true });
+    writeFileSync(join(root, "docs/user/a.md"), PAGE);
+    writeFileSync(join(root, "docs/user/a/INDEX.md"), PAGE);
+    const messages = checkDocs(root).violations.map((violation) => `${violation.file}: ${violation.message}`);
+    expect(messages).toEqual([
+      expect.stringContaining("docs/user/a.md: produces the route /docs/a, which docs/user/a/INDEX.md also produces"),
+      expect.stringContaining("docs/user/a/INDEX.md: produces the route /docs/a, which docs/user/a.md also produces"),
+    ]);
+  });
+
+  it("on a bare email address, with a message that does not ask for https://", () => {
+    const root = tempTree();
+    mkdirSync(join(root, "docs/user"), { recursive: true });
+    writeFileSync(join(root, "docs/user/page.md"), `${PAGE}\nWrite to someone@example.com for help.\n`);
+    const messages = checkDocs(root).violations.map((violation) => violation.message);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("mailto: scheme");
+    expect(messages[0]).toContain("email address");
+    expect(messages[0]).not.toContain("write it as https://");
+  });
+
+  it("on a reserved first segment in any case", () => {
+    const root = tempTree();
+    mkdirSync(join(root, "docs/user"), { recursive: true });
+    for (const name of ["CLOUD.md", "Self-Hosting.md", "Releases.md"]) writeFileSync(join(root, "docs/user", name), PAGE);
+    expect(checkDocs(root).violations.map((violation) => violation.file)).toEqual([
+      "docs/user/CLOUD.md",
+      "docs/user/Releases.md",
+      "docs/user/Self-Hosting.md",
+    ]);
   });
 
   it("on a symbolic link in a content root", () => {
@@ -208,7 +263,7 @@ describe("a renamed page", () => {
     expect(result.status).toBe(1);
     const reported = result.stderr.split("\n").filter((line) => line.includes("getting-started"));
     expect(reported).toEqual([
-      expect.stringContaining('docs/user/components/code-fences.md:22: "../getting-started.md" does not resolve'),
+      expect.stringContaining('docs/user/components/code-fences.md:23: "../getting-started.md" does not resolve'),
       expect.stringContaining('docs/user/components/every-component-2.mdx:7: "../getting-started.md" does not resolve'),
       expect.stringContaining('docs/user/links.md:9: "getting-started.md" does not resolve'),
       expect.stringContaining('docs/user/links.md:11: "/docs/getting-started" matches no page'),
@@ -262,6 +317,10 @@ describe("link targets", () => {
     "/docs/self-hosting/install",
     "/docs/cloud",
     "/docs/cloud/anything/else",
+    "/docs/cloud/a..b/c...",
+    "/docs/cloud/100%25",
+    "/docs/cloud/a%20b",
+    "/docs/cloud/%25/a",
     "#intro",
     "#intro-1",
     "%2E%2E/index.md",
@@ -291,6 +350,31 @@ describe("link targets", () => {
     "/docs/missing",
     "/docs/../etc/passwd",
     "/docs/cloudy",
+    "/docs/cloud/../../pricing",
+    "/docs/cloud/..",
+    "/docs/cloud/%2E%2E/%2e%2e/pricing",
+    "/docs/cloud/..%2F..%2Fpricing",
+    "/docs/cloud/%2E%2E%5C%2E%2E%5Cpricing",
+    "/docs/cloud/%252e%252e/pricing",
+    "/docs/cloud/%25252e%25252e/pricing",
+    "/docs/cloud/%25/%252e%252e/pricing",
+    "/docs/cloud/%25zz/%252e%252e/pricing",
+    "/docs/cloud/%2525zz/%25252e%25252e/pricing",
+    "/docs/cloud/..%252f../pricing",
+    "/docs/cloud/%252e%252e%255cpricing",
+    "/docs/cloud/%2525252525252e/pricing",
+    "/docs/cloud/%25zz%252f..%252fx",
+    "/docs/cloud/%2525zz%25252f..%25252fx",
+    "/docs/cloud/%zz%2f..%2fx",
+    "/docs/cloud/%25zz%2f..%2fx",
+    "/docs/cloud/%2E%2e/x",
+    "/docs/cloud/%2e./x",
+    "/docs/cloud/.%2e/x",
+    "/docs/cloud/..%5cx",
+    "/docs/cloud/..%255cx",
+    "/docs/cloud/%zz",
+    "/docs/cloud/a/../../../x?y=1",
+    "/docs/a/b/../../../pricing",
     "missing.md",
     "../missing.md",
     "../../../outside.md",
@@ -303,6 +387,58 @@ describe("link targets", () => {
     "?query-only",
   ])("refuses %j", (url) => {
     expect(checkLink(url, context)).not.toBeNull();
+  });
+});
+
+describe("what a GFM renderer links", () => {
+  const refsOf = (body: string): { url: string; bare: boolean }[] => {
+    const parsed = parseBody(body, ".md");
+    if (!parsed.ok) throw new Error(parsed.finding.message);
+    return collectRefs(parsed.tree).refs.map((ref) => ({ url: ref.url, bare: ref.bare === true }));
+  };
+
+  it.each([
+    ["See http://example.com now.", "http://example.com"],
+    ["See HTTP://EXAMPLE.COM/a?b=1 now.", "HTTP://EXAMPLE.COM/a?b=1"],
+    ["See www.example.com now.", "http://www.example.com"],
+    ["Mail a@example.com now.", "mailto:a@example.com"],
+    ["- a list http://example.com/x item\n", "http://example.com/x"],
+    ["| a |\n| - |\n| http://example.com |\n", "http://example.com"],
+    ["> **http://example.com**\n", "http://example.com"],
+  ])("finds a bare address in %j", (body, url) => {
+    expect(refsOf(body)).toEqual([{ url, bare: true }]);
+  });
+
+  it("finds a bare https address and leaves it to the link rules", () => {
+    expect(refsOf("See https://example.com/a.")).toEqual([{ url: "https://example.com/a", bare: true }]);
+  });
+
+  it.each([
+    "Inline `http://example.com` code.",
+    "```\nhttp://example.com\n```\n",
+    "~~~sh\ncurl http://example.com\n~~~\n",
+    "    http://example.com\n",
+  ])("does not read code in %j as a link", (body) => {
+    expect(refsOf(body)).toEqual([]);
+  });
+
+  it("does not call an explicit link bare", () => {
+    expect(refsOf("[a site](https://example.com) and <https://example.com/b>")).toEqual([
+      { url: "https://example.com", bare: false },
+      { url: "https://example.com/b", bare: false },
+    ]);
+  });
+});
+
+describe("a Markdown file", () => {
+  it("is never compiled as MDX: import, export and braces have no meaning in it", () => {
+    const findings = lintBody("import x from 'y'\n\nexport const a = 1\n\nText {1 + 1} and <Callout />.\n", ".md");
+    expect(findings.map((finding) => finding.message)).toEqual(["raw HTML is not allowed; use Markdown syntax for links and images"]);
+    expect(lintBody("import x from 'y'\n\nexport const a = 1\n\nText {1 + 1}.\n", ".md")).toEqual([]);
+  });
+
+  it("is not the MDX of the same text", () => {
+    expect(lintBody("import x from 'y'\n", ".mdx")).toHaveLength(1);
   });
 });
 

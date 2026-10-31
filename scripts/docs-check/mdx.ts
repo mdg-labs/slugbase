@@ -1,3 +1,4 @@
+import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
@@ -23,7 +24,7 @@ export interface Attribute {
 
 export interface AstNode {
   type: string;
-  position?: { start: { line: number } };
+  position?: { start: { line: number; offset?: number }; end: { offset?: number } };
   children?: AstNode[];
   name?: string | null;
   attributes?: Attribute[];
@@ -39,8 +40,10 @@ export interface AstNode {
   depth?: number;
 }
 
-const markdownParser = unified().use(remarkParse);
-const mdxParser = unified().use(remarkParse).use(remarkMdx);
+// Both parsers read GFM, as the site that renders the pages does: a bare
+// address in the text becomes a link there, so it is a link here.
+const markdownParser = unified().use(remarkParse).use(remarkGfm);
+const mdxParser = unified().use(remarkParse).use(remarkGfm).use(remarkMdx);
 
 // What `{...}` may hold in an attribute: one number or boolean literal.
 const LITERAL = /^(?:true|false|-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/;
@@ -105,7 +108,7 @@ export type Parsed = { ok: true; tree: AstNode } | { ok: false; finding: Finding
 
 /**
  * Parses a page body (the page without its frontmatter) as MDX for a `.mdx`
- * file and as Markdown for a `.md` file.
+ * file and as Markdown, never as MDX, for a `.md` file (doc 09 section 3.5).
  */
 export function parseBody(body: string, extension: ".md" | ".mdx"): Parsed {
   try {
@@ -118,8 +121,9 @@ export function parseBody(body: string, extension: ".md" | ".mdx"): Parsed {
 /**
  * Returns what the contract refuses in a parsed page. Code fences and inline
  * code are not parsed as MDX, so they may hold any text. A Markdown file is not
- * scanned for `import`, `export` or `{...}`: Markdown gives them no meaning,
- * only raw HTML is refused there.
+ * scanned for `import`, `export` or `{...}`: the contract has the site compile
+ * a `.md` file as plain Markdown, which gives them no meaning, so only raw HTML
+ * is refused there.
  */
 export function lintTree(tree: AstNode): Finding[] {
   const findings: Finding[] = [];

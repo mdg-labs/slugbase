@@ -6,12 +6,28 @@ export interface Ref {
   kind: "link" | "image";
   url: string;
   line: number;
+  /** A link a GFM renderer makes of an address written in the text, without brackets or angle brackets. */
+  bare?: boolean;
 }
 
 export interface PageRefs {
   refs: Ref[];
   /** The fragment each heading of the page answers to. */
   headings: Set<string>;
+}
+
+/** True for a link whose only content is the characters that make it: a bare address. */
+function isBareAddress(node: AstNode): boolean {
+  const [only, ...rest] = node.children ?? [];
+  if (only === undefined || rest.length > 0 || only.type !== "text") return false;
+  const outer = node.position;
+  const inner = only.position;
+  return (
+    outer?.start.offset !== undefined &&
+    outer.start.offset === inner?.start.offset &&
+    outer.end.offset !== undefined &&
+    outer.end.offset === inner.end.offset
+  );
 }
 
 function textOf(node: AstNode): string {
@@ -40,7 +56,7 @@ export function collectRefs(tree: AstNode): PageRefs {
     const line = node.position?.start.line ?? 1;
     switch (node.type) {
       case "link":
-        refs.push({ kind: "link", url: node.url ?? "", line });
+        refs.push({ kind: "link", url: node.url ?? "", line, ...(isBareAddress(node) ? { bare: true } : {}) });
         break;
       case "image":
         refs.push({ kind: "image", url: node.url ?? "", line });
@@ -114,6 +130,48 @@ function decode(text: string): string | null {
   }
 }
 
+/** The most often a path is percent-decoded; a link encoded more often than that is refused. */
+const MAX_DECODE_ROUNDS = 4;
+
+/** The percent sequences that can make or hide a `..` segment: a dot, either separator, a percent sign. */
+const SIGNIFICANT_ESCAPE = /%(2e|2f|5c|25)/gi;
+
+function unescapeSignificant(text: string): string {
+  return text.replace(SIGNIFICANT_ESCAPE, (_, hex: string) => {
+    switch (hex.toLowerCase()) {
+      case "2e":
+        return ".";
+      case "2f":
+        return "/";
+      case "5c":
+        return "\\";
+      default:
+        return "%";
+    }
+  });
+}
+
+/**
+ * True when a path holds a `..` segment once percent-decoding is undone, however
+ * many times it was applied, and whether the separator is `/` or `\`. A browser
+ * resolves such a segment, so `/docs/cloud/../../pricing` leaves /docs/.
+ *
+ * Each round decodes only the well-formed sequences above and leaves every other
+ * byte, including a malformed `%`, as it is, so nothing in the path can stop the
+ * rest of it from being judged.
+ */
+function leavesItsFolder(path: string): boolean {
+  let current = path;
+  for (let round = 0; round <= MAX_DECODE_ROUNDS; round++) {
+    if (current.split(/[/\\]/).includes("..")) return true;
+    const next = unescapeSignificant(current);
+    if (next === current) return false;
+    current = next;
+  }
+  // Encoded more often than any page needs: refuse it rather than guess.
+  return true;
+}
+
 function pathPart(url: string): string {
   const end = url.search(/[?#]/);
   return end === -1 ? url : url.slice(0, end);
@@ -147,6 +205,9 @@ export function checkLink(url: string, context: LinkContext): string | null {
   if (url.startsWith("/")) {
     if (path !== "/docs" && !path.startsWith("/docs/")) {
       return `"${url}" is a root-absolute link that is not /docs/...; write the full https:// address of the public site`;
+    }
+    if (leavesItsFolder(pathPart(url))) {
+      return `"${url}" climbs out of its path with ".."; write the route of the page without ".." segments`;
     }
     const route = path.replace(/\/+$/, "");
     if (route === "/docs/cloud" || route.startsWith("/docs/cloud/")) return null;
