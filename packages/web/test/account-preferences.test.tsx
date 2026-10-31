@@ -152,6 +152,18 @@ describe("the preferences page", () => {
     expect(screen.getByRole("switch", { name: "Don't use AI suggestions for me" }).getAttribute("aria-checked")).toBe("true");
   });
 
+  it("takes the AI opt-out back, with a field error and the error toast, when it cannot be saved", async () => {
+    const server = stubServer({ ai: true, patch: () => Promise.resolve(problem(500, "internal_error", "req-ai")) });
+    await openPreferences();
+
+    await toggle("Don't use AI suggestions for me");
+
+    expect(await screen.findByText("This change was not saved.")).toBeTruthy();
+    expect((await screen.findAllByRole("alert")).map((alert) => alert.textContent).join(" ")).toContain("The change was not saved");
+    expect(screen.getByRole("switch", { name: "Don't use AI suggestions for me" }).getAttribute("aria-checked")).toBe("false");
+    expect(await server.patches()).toEqual([{ aiOptOut: true }]);
+  });
+
   it("is reachable from the settings navigation of the profile page", async () => {
     stubServer();
     await openApp("/settings/account");

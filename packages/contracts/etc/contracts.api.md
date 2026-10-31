@@ -247,6 +247,7 @@ export const ApiConfigSchema: z.ZodObject<{
     features: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
+        aiProvider: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>;
     signIn: z.ZodOptional<z.ZodObject<{
         registration: z.ZodBoolean;
@@ -1195,6 +1196,7 @@ export interface ComponentTypes {
             docsBaseUrl: string;
             features: {
                 ai: boolean;
+                aiProvider?: string;
                 mail: boolean;
             };
             instance?: {
@@ -3727,6 +3729,7 @@ export const getApiConfig: {
         features: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
+        aiProvider: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>;
         signIn: z.ZodOptional<z.ZodObject<{
         registration: z.ZodBoolean;

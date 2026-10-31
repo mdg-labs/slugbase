@@ -450,7 +450,7 @@ Team list (name, description, member `avatar-stack`, count) with Create, Edit (n
 
 ### 11.10 `/settings/workspace/ai` — AI suggestions
 
-`setting-switch` card "Enable AI suggestions for this workspace" with the provider's display name and what is sent (doc 02 §14) in an `inline-note`. When the adapter is not configured: an `inline-note` "Not available on this server" (CE) — no controls. Gated by `ai.suggestions`.
+`setting-switch` card "Enable AI suggestions for this workspace" with the provider's display name (`features.aiProvider` of `GET /api/config`, doc 04 §9.1, so it is readable by any member) and what is sent (doc 02 §14) in an `inline-note`; the page is listed for admins and owners, who alone can read the setting (`GET /workspace/settings`). The switch shows a change at once, is disabled while it is saved and goes back, with an error toast, when the save fails. When the adapter is not configured: an `inline-note` "Not available on this server" (CE) — no controls. Gated by `ai.suggestions`.
 
 **Components:** `setting-switch` (`p-switch-4`), `inline-note`, `entitlement-gate`.
 

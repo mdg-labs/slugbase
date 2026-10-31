@@ -1,9 +1,11 @@
 import { vi } from "vitest";
-import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_ID, json, problem } from "./support.tsx";
+import { ACCOUNT_BODY, ACTIVE_WORKSPACE_PATH, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_ID, json, problem } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
 
 export const WORKSPACE_PATH = "/api/v1/workspace";
+
+export const WORKSPACE_SETTINGS_PATH = "/api/v1/workspace/settings";
 
 export type Role = "owner" | "admin" | "member";
 
@@ -68,12 +70,24 @@ export interface WorkspaceSettingsServerOptions {
   readonly invitationLink?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers `DELETE /invitations/{id}` instead of revoking; `call` counts from 1. */
   readonly invitationDelete?: (call: number, request: Request) => Response | Promise<Response>;
+  /** The server has an AI port, and `/api/config` names the operator's display name for its provider. */
+  readonly ai?: { readonly provider: string };
+  /** The workspace's AI toggle as stored; on by default. */
+  readonly aiEnabled?: boolean;
+  /** A second workspace of the caller, named `SECOND_WORKSPACE_NAME`, that the session can switch to; its AI toggle is as given. */
+  readonly second?: { readonly aiEnabled: boolean };
+  /** Answers `GET /workspace/settings` instead of the settings; `call` counts from 1, and `workspaceId` is the workspace the session acts in. */
+  readonly settingsGet?: (call: number, workspaceId: string) => Response | Promise<Response>;
+  /** Answers `PATCH /workspace/settings` instead of applying the change; `call` counts from 1. */
+  readonly settingsPatch?: (call: number, request: Request) => Response | Promise<Response>;
   /** The caller's role in the workspace. */
   readonly role?: Role;
   readonly name?: string;
   readonly version?: number;
-  /** Answers `GET /workspace` instead of the workspace; `call` counts from 1. */
-  readonly get?: (call: number) => Response | Promise<Response>;
+  /** Answers `GET /me` instead of the account, or leaves it to the server with undefined; `call` counts from 1. */
+  readonly meGet?: (call: number) => Response | Promise<Response> | undefined;
+  /** Answers `GET /workspace` instead of the workspace, or leaves it to the server with undefined; `call` counts from 1. */
+  readonly get?: (call: number) => Response | Promise<Response> | undefined;
   /** Answers `PATCH /workspace` instead of renaming; `call` counts from 1. */
   readonly patch?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers every other call, such as the members operations. */
@@ -101,6 +115,8 @@ export interface WorkspaceSettingsServerOptions {
 
 export const OTHER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-000000000009";
 
+export const SECOND_WORKSPACE_NAME = "Second Workspace";
+
 export interface Received {
   readonly method: string;
   readonly path: string;
@@ -118,6 +134,11 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   let name = options.name ?? "Ada's Workspace";
   let members: TestMember[] = [...(options.members ?? [{ ...SELF, role: options.role ?? "owner" }, GRACE])];
   let version = options.version ?? 3;
+  let activeId = WORKSPACE_ID;
+  const aiEnabled = new Map<string, boolean>([
+    [WORKSPACE_ID, options.aiEnabled ?? true],
+    [OTHER_WORKSPACE_ID, options.second?.aiEnabled ?? true],
+  ]);
   let invitations: TestInvitation[] = [...(options.invitations ?? [])];
   let issued = 0;
   let left = false;
@@ -125,14 +146,14 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   const counts = new Map<string, number>();
 
   const workspace = () => ({
-    id: WORKSPACE_ID,
-    name,
+    id: activeId,
+    name: activeId === WORKSPACE_ID ? name : SECOND_WORKSPACE_NAME,
     role,
     memberCount: 2,
     createdAt: "2026-09-01T08:00:00.000Z",
     version,
   });
-  const other = { workspaceId: OTHER_WORKSPACE_ID, name: "Second Workspace", role: "member" as const };
+  const other = { workspaceId: OTHER_WORKSPACE_ID, name: SECOND_WORKSPACE_NAME, role: "member" as const };
   const me = () =>
     left
       ? {
@@ -142,8 +163,11 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
         }
       : {
           account: ACCOUNT_BODY,
-          memberships: [{ workspaceId: WORKSPACE_ID, name, role }],
-          activeWorkspaceId: options.noWorkspace === true ? null : WORKSPACE_ID,
+          memberships: [
+            { workspaceId: WORKSPACE_ID, name, role },
+            ...(options.second === undefined ? [] : [{ workspaceId: OTHER_WORKSPACE_ID, name: SECOND_WORKSPACE_NAME, role }]),
+          ],
+          activeWorkspaceId: options.noWorkspace === true ? null : activeId,
         };
   const FAR = "2026-12-01T10:00:00.000Z";
   const invitationBody = (invitation: TestInvitation) => ({
@@ -245,7 +269,14 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   const transport = vi.fn<Transport>(async (request) => {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/config") {
-      return json({ ...CONFIG_BODY, features: { ...CONFIG_BODY.features, mail: options.mail === true } });
+      return json({
+        ...CONFIG_BODY,
+        features: {
+          ...CONFIG_BODY.features,
+          mail: options.mail === true,
+          ...(options.ai === undefined ? {} : { ai: true, aiProvider: options.ai.provider }),
+        },
+      });
     }
     if (pathname === SESSION_PATH) {
       return json(SESSION_BODY);
@@ -268,7 +299,7 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       }
     }
     if (pathname === ME_PATH && request.method === "GET") {
-      return json(me());
+      return options.meGet?.(call) ?? json(me());
     }
     if (pathname === WORKSPACES_PATH && request.method === "GET") {
       if (left) {
@@ -277,13 +308,19 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
           canCreate: false,
         });
       }
-      return json({ items: [{ id: WORKSPACE_ID, name, role, memberCount: 2 }], canCreate: false });
+      return json({
+        items: [
+          { id: WORKSPACE_ID, name, role, memberCount: 2 },
+          ...(options.second === undefined ? [] : [{ id: OTHER_WORKSPACE_ID, name: SECOND_WORKSPACE_NAME, role, memberCount: 2 }]),
+        ],
+        canCreate: false,
+      });
     }
     if (pathname === WORKSPACE_PATH && request.method === "GET") {
       if (left) {
         return problem(404, "not_found", "req-404");
       }
-      return options.get === undefined ? json(workspace(), { headers: { ETag: `"${String(version)}"` } }) : options.get(call);
+      return options.get?.(call) ?? json(workspace(), { headers: { ETag: `"${String(version)}"` } });
     }
     if (pathname === WORKSPACE_PATH && request.method === "DELETE") {
       const answer = options.workspaceDelete === undefined ? new Response(null, { status: 202 }) : await options.workspaceDelete(call, request);
@@ -304,6 +341,20 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       name = ((JSON.parse(text) as { name: string }).name);
       version += 1;
       return json(workspace(), { headers: { ETag: `"${String(version)}"` } });
+    }
+    if (pathname === ACTIVE_WORKSPACE_PATH && request.method === "PUT" && options.second !== undefined) {
+      activeId = (JSON.parse(text) as { workspaceId: string }).workspaceId;
+      return new Response(null, { status: 204 });
+    }
+    if (pathname === WORKSPACE_SETTINGS_PATH && request.method === "GET") {
+      return options.settingsGet === undefined ? json({ aiEnabled: aiEnabled.get(activeId) }) : options.settingsGet(call, activeId);
+    }
+    if (pathname === WORKSPACE_SETTINGS_PATH && request.method === "PATCH") {
+      if (options.settingsPatch !== undefined) {
+        return options.settingsPatch(call, request);
+      }
+      aiEnabled.set(activeId, (JSON.parse(text) as { aiEnabled?: boolean }).aiEnabled ?? aiEnabled.get(activeId) ?? true);
+      return json({ aiEnabled: aiEnabled.get(activeId) });
     }
     if (pathname === MEMBERS_PATH && request.method === "GET") {
       if (options.membersGet !== undefined) {
@@ -381,6 +432,18 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   return {
     fetch: transport,
     received: (method: string, path: string): Received[] => received.filter((call) => call.method === method && call.path === path),
+    /** The workspace's AI toggle changes without the page knowing, as when a save is applied but its answer is lost. */
+    setAiEnabled: (workspaceId: string, value: boolean): void => {
+      aiEnabled.set(workspaceId, value);
+    },
+    /** The workspace is deleted, or the caller removed from it, in another tab: the account acts in no workspace from the next read of it on. */
+    leaveElsewhere: (): void => {
+      left = true;
+    },
+    /** The caller's role changes without the page knowing. */
+    setRole: (next: Role): void => {
+      role = next;
+    },
     /** Another client renames the workspace: its version moves on without this page knowing. */
     renameElsewhere: (next: string): void => {
       name = next;
