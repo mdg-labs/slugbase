@@ -1,4 +1,5 @@
 export * from "./accounts/index.ts";
+export * from "./ai/index.ts";
 export * from "./audit/index.ts";
 export * from "./auth/index.ts";
 export * from "./bookmarks/index.ts";

@@ -77,6 +77,7 @@ describe("the package entry point", () => {
         "accountDeletionRepository",
         "accountIdentityRepository",
         "accountProfileRepository",
+        "aiSuggestionRepository",
         "apiTokenRepository",
         "auditEventRepository",
         "bookmarkArchiveTransaction",

@@ -186,6 +186,34 @@ export interface AddressJobs {
     readonly onUnknown: readonly QueuedJob[];
 }
 
+// @public
+export interface AiSuggestionRecord {
+    // (undocumented)
+    readonly model: string;
+    // (undocumented)
+    readonly provider: string;
+    // (undocumented)
+    readonly result: StoredAiSuggestion;
+}
+
+// @public (undocumented)
+export interface AiSuggestionRepository {
+    current(urlCanonical: string, locale: string): Promise<AiSuggestionRecord | undefined>;
+    holdMember(): Promise<boolean>;
+    recordUsage(request: {
+        readonly id: string;
+        readonly bookmarkId: string | null;
+        readonly fields: readonly string[];
+    }): Promise<void>;
+    store(entry: {
+        readonly urlCanonical: string;
+        readonly locale: string;
+    } & AiSuggestionRecord): Promise<boolean>;
+}
+
+// @public (undocumented)
+export function aiSuggestionRepository(tx: TenantTx): AiSuggestionRepository;
+
 // @public (undocumented)
 export type AnalyticsConsent = "unset" | "granted" | "denied";
 
@@ -1523,6 +1551,18 @@ export type SignInCompletionOutcome =
 | "replayed"
 /** The account has no such partial session, or its MFA is no longer on; nothing was written. */
 | "no_session";
+
+// @public
+export interface StoredAiSuggestion {
+    // (undocumented)
+    readonly confidence: number;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+}
 
 // @public
 export interface StoredResponse {

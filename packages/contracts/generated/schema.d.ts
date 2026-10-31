@@ -18,6 +18,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suggest a title, a slug and tags for a page */
+        post: operations["suggestBookmarkDetails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-events": {
         parameters: {
             query?: never;
@@ -1672,6 +1689,29 @@ export interface components {
              */
             theme: "light" | "dark" | "system";
         };
+        AiSuggestion: {
+            /** @description How sure the provider is, from 0 to 1 */
+            confidence: number;
+            /** @description The suggested slug, in the grammar of a slug; null when the provider's slug was outside the grammar or is one the caller already uses on a bookmark in the workspace. The server never applies it */
+            slug: string | null;
+            /** @description At most 5 suggested tag names, without repeats; the names of the caller's own tags that fit come first, in the spelling the caller uses. The server never applies them */
+            tags: string[];
+            /** @description The suggested title, plain text of 1 to 300 characters */
+            title: string;
+        };
+        AiSuggestionRequest: {
+            /** @description The language the suggestion is written in, a language tag such as en or de-AT of at most 35 characters. The cache is kept for each language, in lower case */
+            locale: string;
+            /** @description What the page says about itself, as the metadata operation answers it, sent to the provider as data. It is not part of the cache key: a suggestion cached for the address and language is served whatever metadata a later request sends */
+            metadata?: {
+                /** @description The page's description as the metadata operation read it, at most 1 000 characters */
+                description?: string;
+                /** @description The page's title as the metadata operation read it, at most 300 characters */
+                title?: string;
+            };
+            /** @description The address of the page to suggest details for: an http or https URL of at most 2 048 characters, judged as a bookmark's URL is, and sent to the provider in its canonical form. Any other scheme is refused with 422 url_not_allowed */
+            url: string;
+        };
         ApiConfig: {
             /**
              * @description The API version the server speaks
@@ -2142,6 +2182,8 @@ export interface components {
             workspaceId?: string;
         };
         CreateBookmarkRequest: {
+            /** @description The fields (title, slug, tags) the caller took from an AI suggestion, at most 3 and a field named twice counts once. They only feed the count of accepted suggestions of the workspace, which holds which fields and never what they held; they change nothing about the bookmark, nothing is checked against a suggestion and the count is written in the same transaction as the bookmark. Sending them when AI is off or not configured is not an error. Left out, nothing is counted */
+            aiFields?: ("title" | "slug" | "tags")[];
             /** @description The bookmark's description, 0 to 1 000 characters; surrounding whitespace is removed and an empty one is stored as none */
             description?: string;
             /** @description The caller's folders to file the bookmark in, at most 100 identifiers; one named twice counts once. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is created. Filed in none when left out */
@@ -3498,6 +3540,8 @@ export interface components {
             theme?: "light" | "dark" | "system";
         };
         UpdateBookmarkRequest: {
+            /** @description The fields (title, slug, tags) of this patch the caller took from an AI suggestion, at most 3 and a field named twice counts once. They are counted once when the patch is written (a patch that changes nothing counts nothing), in the same transaction, and they change nothing about the bookmark. They are not a change: a patch with only aiFields writes nothing. Sending them when AI is off or not configured is not an error */
+            aiFields?: ("title" | "slug" | "tags")[];
             /** @description The new description, 0 to 1 000 characters; surrounding whitespace is removed, and an empty one and null clear it. Left out, the description is left as it is */
             description?: string | null;
             /** @description The caller's folders the bookmark is filed in afterwards, at most 100 identifiers: the list replaces the folders it is in, and an empty list takes it out of all of them. Filing moves no version. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is changed. Left out, the folders are left as they are */
@@ -3681,6 +3725,104 @@ export interface operations {
             };
             /** @description The request was malformed */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    suggestBookmarkDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiSuggestionRequest"];
+            };
+        };
+        responses: {
+            /** @description The suggestion, from the cache kept for the caller, the workspace, the address and the language for 30 days, or from the provider, which is asked for at most 5 seconds and is not asked while the cache holds the suggestion. The cache is never shared with another member or another workspace. A suggestion the provider could not give, or that did not pass the checks, is not an answer and is not cached. Nothing of any bookmark is changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiSuggestion"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), the workspace has the AI toggle off or the caller has opted out of AI suggestions (forbidden), or the workspace does not hold the ai.suggestions entitlement (entitlement_required). The provider is not asked */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, the workspace is being deleted, or the caller left the workspace while the provider was asked */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a missing, empty, over-long or malformed URL, a language that is not a language tag, a title or description that holds a NUL character or is over-long, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). The provider is not asked */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The provider failed, did not answer within 5 seconds or answered what cannot be used (upstream_failed). Nothing is cached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No AI provider is configured on this instance (ai_unavailable), the service is temporarily unavailable, or no entitlement source is configured */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

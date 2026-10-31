@@ -27,6 +27,7 @@ const SEATS = "seat-limit.integration.test.ts";
 const OIDC_INVITATIONS = "../auth/oidc-invitation.integration.test.ts";
 const BOOKMARK_LIMIT = "bookmark-limit.integration.test.ts";
 const SHARING = "sharing-enforcement.integration.test.ts";
+const AI_SUGGESTIONS = "../routes/ai-suggestions.integration.test.ts";
 // Seating the first owner of a workspace is not the feature `members.invite` names (doc 01 section 7.5). The seat limit still applies.
 const OWNER_INVITATION = "the owner invitation an instance admin issues";
 
@@ -40,6 +41,7 @@ export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "deleteTeam", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },
   { operationId: "replaceTeamMembers", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },
   { operationId: "listAuditEvents", entitlement: "audit.log", decidedBy: "stage-9", test: DECLARED },
+  { operationId: "suggestBookmarkDetails", entitlement: "ai.suggestions", decidedBy: "stage-9", test: AI_SUGGESTIONS },
   { operationId: "acceptInvitation", entitlement: "members.invite", decidedBy: "handler", test: INVITATIONS, exemption: OWNER_INVITATION },
   { operationId: "acceptInvitation", entitlement: "seats.max", decidedBy: "handler", test: SEATS },
   { operationId: "completeOidcSignIn", entitlement: "members.invite", decidedBy: "handler", test: OIDC_INVITATIONS, exemption: OWNER_INVITATION },

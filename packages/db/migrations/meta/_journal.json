@@ -806,6 +806,13 @@
       "when": 1793386749665,
       "tag": "20261030185912_index_audit_events_account_4",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1793431086077,
+      "tag": "20261031071806_add_ai_suggestions",
+      "breakpoints": true
     }
   ]
 }

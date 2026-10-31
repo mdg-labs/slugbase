@@ -58,6 +58,11 @@ const BookmarkTagIdsSchema = z.array(z.uuid()).max(BOOKMARK_TAGS_MAX);
 
 const BookmarkTagNamesSchema = z.array(withoutNul(z.string().trim().min(1).max(TAG_NAME_MAX_LENGTH))).max(BOOKMARK_TAGS_MAX);
 
+/** The fields of a bookmark that can come from an AI suggestion (doc 02 section 14). */
+export const BOOKMARK_AI_FIELDS = ["title", "slug", "tags"] as const;
+
+const BookmarkAiFieldsSchema = z.array(z.enum(BOOKMARK_AI_FIELDS)).max(BOOKMARK_AI_FIELDS.length);
+
 export const CreateBookmarkRequestSchema = z
   .strictObject({
     url: z
@@ -90,6 +95,9 @@ export const CreateBookmarkRequestSchema = z
     ),
     tagNames: BookmarkTagNamesSchema.optional().describe(
       "The names of the tags to put on the bookmark, at most 100, each 1 to 40 characters after the whitespace around it is removed. The caller's tag of that name is used, whatever the case it is written in, and a name the caller has no tag of creates one in the same transaction; two spellings of one name count once",
+    ),
+    aiFields: BookmarkAiFieldsSchema.optional().describe(
+      "The fields (title, slug, tags) the caller took from an AI suggestion, at most 3 and a field named twice counts once. They only feed the count of accepted suggestions of the workspace, which holds which fields and never what they held; they change nothing about the bookmark, nothing is checked against a suggestion and the count is written in the same transaction as the bookmark. Sending them when AI is off or not configured is not an error. Left out, nothing is counted",
     ),
   })
   .meta({ id: "CreateBookmarkRequest" });
@@ -129,6 +137,9 @@ export const UpdateBookmarkRequestSchema = z
     ),
     tagNames: BookmarkTagNamesSchema.optional().describe(
       "The names of the tags the bookmark carries afterwards, at most 100, each 1 to 40 characters after the whitespace around it is removed. The caller's tag of that name is used, whatever the case it is written in, and a name the caller has no tag of creates one in the same transaction. With tagIds they name the union, which replaces the tags the bookmark has",
+    ),
+    aiFields: BookmarkAiFieldsSchema.optional().describe(
+      "The fields (title, slug, tags) of this patch the caller took from an AI suggestion, at most 3 and a field named twice counts once. They are counted once when the patch is written (a patch that changes nothing counts nothing), in the same transaction, and they change nothing about the bookmark. They are not a change: a patch with only aiFields writes nothing. Sending them when AI is off or not configured is not an error",
     ),
   })
   .meta({ id: "UpdateBookmarkRequest" });

@@ -201,6 +201,49 @@ describe("createBookmark", () => {
   });
 });
 
+describe("createBookmark counting the fields taken from an AI suggestion", () => {
+  function recorder() {
+    const recorded: { bookmarkId: string; fields: readonly string[] }[] = [];
+    // A creation holds nothing before its bookmark: the insert of the bookmark takes the owner's membership row itself.
+    const hold = () => Promise.reject<boolean>(new Error("a creation holds nothing"));
+    return { recorded, aiUsage: { hold, record: (request: { bookmarkId: string; fields: readonly string[] }) => { recorded.push(request); return Promise.resolve(); } } };
+  }
+
+  it("counts the fields named once, in the order title, slug, tags, for the bookmark it created", async () => {
+    const { requests, dependencies } = world();
+    const { recorded, aiUsage } = recorder();
+
+    await createBookmark({ ...dependencies, aiUsage }, { ...ASKING, aiFields: ["tags", "title", "tags"] });
+
+    expect(recorded).toEqual([{ bookmarkId: requests[0]?.bookmark.id, fields: ["title", "tags"] }]);
+  });
+
+  it("counts nothing when no field is named, for an empty list, and when there is no recorder, and changes nothing about the creation", async () => {
+    const { requests, dependencies } = world();
+    const { recorded, aiUsage } = recorder();
+
+    await createBookmark({ ...dependencies, aiUsage }, ASKING);
+    await createBookmark({ ...dependencies, aiUsage }, { ...ASKING, aiFields: [] });
+    const outcome = await createBookmark(dependencies, { ...ASKING, aiFields: ["slug"] });
+
+    expect(recorded).toEqual([]);
+    expect(outcome.kind).toBe("created");
+    expect(requests).toHaveLength(3);
+  });
+
+  it.each([
+    ["a refused URL", { ...ASKING, url: "javascript:alert(1)" }, undefined],
+    ["a store that refuses the bookmark", ASKING, { kind: "unavailable" } as const],
+  ])("counts nothing for %s", async (_name, ask, answer) => {
+    const { dependencies } = world(answer === undefined ? undefined : () => answer);
+    const { recorded, aiUsage } = recorder();
+
+    await createBookmark({ ...dependencies, aiUsage }, { ...ask, aiFields: ["title"] });
+
+    expect(recorded).toEqual([]);
+  });
+});
+
 describe("readBookmark", () => {
   const record = (ownerId: string | null): BookmarkRecord => ({ ...recordOf({ bookmark: { id: "0192f3a0-aaaa-7000-8000-000000000009", ownerId: ACCOUNT, url: "https://example.com/", urlCanonical: "https://example.com", host: "example.com", title: "Docs", description: null, pinned: false }, ceiling: "unlimited", events: [], folderIds: [], tags: { ids: [], names: [] } }), ownerId });
 

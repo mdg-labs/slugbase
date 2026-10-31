@@ -1,8 +1,8 @@
-import type { BookmarkTagName } from "@slugbase/core";
+import { updateBookmark, type BookmarkTagName } from "@slugbase/core";
 import { sql } from "drizzle-orm";
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { accountDeletionRepository, bookmarkRepository, memberRepository, tagRepository } from "../src/index.ts";
+import { accountDeletionRepository, aiSuggestionRepository, bookmarkRepository, memberRepository, tagRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { tenantHandle, type TenantTx } from "../src/tenant.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
@@ -642,6 +642,70 @@ describe("a change that creates a tag by name against the departure of its owner
 
     expect([await created, await removed]).toEqual(["created", true]);
     expect(await storedOf(as)).toEqual({ tags: [], links: 0, owners: [null, null] });
+  }, TEST_TIMEOUT_MS);
+});
+
+// A save that names the fields it took from an AI suggestion counts them in a row that names the owner's membership through a foreign key (doc 05 section 2.8). The
+// departure of a member holds the workspace row, deletes the membership row and then clears the owner of the member's bookmarks, so a save that locked its bookmark
+// first and inserted the count after it would wait for a departure that waits for the bookmark. `updateBookmark` holds the member's place (`holdMember`) before the store locks
+// the bookmark; the save below is held after its change is written and before the count is inserted, with the removal started in that window.
+
+/** `updateBookmark` over the repositories, as a request does it, held at the count until `proceed` opens; `reached` opens when the change is written. */
+function savingWithAiFields(as: Scene, bookmark: string, gates: { readonly reached: () => void; readonly proceed: Promise<void> }): Promise<string> {
+  return settle(
+    inTenant(as, async (tx) => {
+      const repository = bookmarkRepository(tx);
+      const usage = aiSuggestionRepository(tx);
+      const outcome = await updateBookmark(
+        {
+          store: { update: (request) => repository.update(request), sharedWith: (request) => repository.sharedWith(request) },
+          newId: freshId,
+          aiUsage: {
+            hold: () => usage.holdMember(),
+            async record({ bookmarkId, fields }) {
+              gates.reached();
+              await gates.proceed;
+              await usage.recordUsage({ id: freshId(), bookmarkId, fields });
+            },
+          },
+        },
+        { bookmarkId: bookmark, accountId: as.owner, patch: { title: "Retitled" }, aiFields: ["title"], expectedVersions: undefined },
+      );
+      return outcome.kind;
+    }),
+  );
+}
+
+async function countedUsage(as: Scene): Promise<number> {
+  return asSystem(db, async (tx) => (await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM ai_suggestion_usage WHERE workspace_id = ${as.workspaceId}`)[0]?.n ?? -1);
+}
+
+describe("a save that counts accepted AI fields against the removal of the member who owns it", () => {
+  it("queues the removal behind the save, which commits its change and its count, and then removes the member", async () => {
+    const { of, member, as, bookmark } = await memberScene();
+    const reached = gate();
+    const proceed = gate();
+    const saving = savingWithAiFields(as, bookmark, { reached: reached.open, proceed: proceed.opened });
+    await Promise.race([reached.opened, saving]);
+    let removed: Promise<boolean | string> | undefined;
+    try {
+      removed = removing(of, member);
+      await waitUntilWaiting(1, "the removal");
+    } finally {
+      proceed.open();
+    }
+
+    expect([await saving, await removed]).toEqual(["updated", true]);
+    expect(await storedOf(as)).toEqual({ tags: [], links: 0, owners: [null] });
+  }, TEST_TIMEOUT_MS);
+
+  it("answers not_found, changing and counting nothing, for a member who was removed before the save", async () => {
+    const { of, member, as, bookmark } = await memberScene();
+    expect(await removing(of, member)).toBe(true);
+
+    expect(await savingWithAiFields(as, bookmark, { reached: () => undefined, proceed: Promise.resolve() })).toBe("not_found");
+    expect(await countedUsage(as)).toBe(0);
+    expect(await asSystem(db, async (tx) => (await tx<{ title: string }[]>`SELECT title FROM bookmarks WHERE id = ${bookmark}`)[0]?.title)).toBe("Seed");
   }, TEST_TIMEOUT_MS);
 });
 

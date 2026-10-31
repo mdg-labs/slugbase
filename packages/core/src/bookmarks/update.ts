@@ -1,3 +1,4 @@
+import { aiFieldsOf, type AiField, type AiUsageRecorder } from "../ai/usage.ts";
 import { parseSlug } from "../go/slug.ts";
 import type { BookmarkRecord, BookmarkStore } from "./create.ts";
 import { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH } from "./create.ts";
@@ -75,6 +76,8 @@ export interface BookmarkUpdateDependencies {
   readonly store: Pick<BookmarkStore, "update" | "sharedWith">;
   /** A fresh UUIDv7, for a tag a name of the patch creates. */
   readonly newId: () => string;
+  /** Counts the fields that came from a suggestion, in the transaction of the change, when the change is written; a change that names none counts nothing, and so does one without a recorder. */
+  readonly aiUsage?: AiUsageRecorder;
 }
 
 export interface BookmarkUpdateAsk {
@@ -82,6 +85,8 @@ export interface BookmarkUpdateAsk {
   /** The member who changes the bookmark. */
   readonly accountId: string;
   readonly patch: BookmarkPatch;
+  /** The fields of the patch that the member took from an AI suggestion (doc 02 section 14); they feed the count of accepted fields and change nothing else. */
+  readonly aiFields?: readonly AiField[] | undefined;
   readonly expectedVersions: readonly number[] | undefined;
 }
 
@@ -107,7 +112,7 @@ function checkLength(field: string, value: string, min: number, max: number): vo
  * an empty description is stored as none. A slug is trimmed and lower-cased and then held to the grammar before anything is written; a
  * bookmark never forwards without a slug, which the store judges against the slug the bookmark has when the patch leaves it out.
  */
-export async function updateBookmark({ store, newId }: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome> {
+export async function updateBookmark({ store, newId, aiUsage }: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome> {
   const { patch } = ask;
   let url: BookmarkUrl | undefined;
   if (patch.url !== undefined) {
@@ -143,6 +148,11 @@ export async function updateBookmark({ store, newId }: BookmarkUpdateDependencie
   }
   const tags = bookmarkTagSelection(patch.tagIds, patch.tagNames, newId);
   const accountId = ask.accountId.toLowerCase();
+  const aiFields = aiFieldsOf(ask.aiFields);
+  // The count of a save inserts a row that names the member's membership through a foreign key, so the member's place is held before the bookmark is locked, in the order a departure locks them.
+  if (aiFields.length > 0 && aiUsage !== undefined && !(await aiUsage.hold())) {
+    return { kind: "not_found" };
+  }
   const result = await store.update({
     bookmarkId: ask.bookmarkId,
     ownerId: accountId,
@@ -160,6 +170,9 @@ export async function updateBookmark({ store, newId }: BookmarkUpdateDependencie
   });
   if (result.kind === "not_found" && (await store.sharedWith({ bookmarkId: ask.bookmarkId, accountId }))) {
     return { kind: "forbidden" };
+  }
+  if (result.kind === "updated" && aiFields.length > 0) {
+    await aiUsage?.record({ bookmarkId: ask.bookmarkId, fields: aiFields });
   }
   return result;
 }

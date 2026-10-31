@@ -78,8 +78,8 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events, `idempotencyKeys` idempotency keys, `invitations` invitations and `urlMetadata` cached page metadata and `favicons` cached favicons, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0, invitations = 0, urlMetadata = 0, favicons = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events, `idempotencyKeys` idempotency keys, `invitations` invitations, `urlMetadata` cached page metadata, `favicons` cached favicons, `aiSuggestions` cached AI suggestions and `aiUsage` counts of accepted fields, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0, invitations = 0, urlMetadata = 0, favicons = 0, aiSuggestions = 0, aiUsage = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
@@ -89,6 +89,8 @@ function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialToke
     { table: "idempotency_keys", deleted: idempotencyKeys },
     { table: "url_metadata", deleted: urlMetadata },
     { table: "favicons", deleted: favicons },
+    { table: "ai_suggestions", deleted: aiSuggestions },
+    { table: "ai_suggestion_usage", deleted: aiUsage },
     { table: "audit_events", deleted: auditEvents },
   ];
 }
@@ -734,6 +736,103 @@ describe("purging expired favicons", () => {
 
   it("gives slugbase_app no DELETE on favicons: the purge is the only way it removes a row", async () => {
     await expect(db.app.unsafe("DELETE FROM public.favicons")).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+describe("purging expired AI suggestions and old counts of accepted fields", () => {
+  let workspaceId: string;
+  let accountId: string;
+
+  beforeAll(async () => {
+    workspaceId = await seedWorkspace(db, { name: "AI purge" });
+    accountId = freshId();
+    await seedAccount(db, { id: accountId, email: "ai-purge@example.test", passwordHash: "$argon2id$stub", emailVerified: true });
+    await seedMember(db, { workspaceId, accountId, role: "owner" });
+  });
+
+  /** Seeds a suggestion that expires `expiresIn` milliseconds from now (negative is in the past). */
+  async function seedSuggestion(url: string, expiresIn: number): Promise<void> {
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO ai_suggestions (workspace_id, account_id, url_canonical, locale, result, provider, model, created_at, expires_at)
+        VALUES (${workspaceId}, ${accountId}, ${url}, 'en', '{}'::jsonb, 'Example AI', 'model-1', now() - interval '31 days', now() + ${expiresIn} * interval '1 millisecond')`,
+    );
+  }
+
+  /** Seeds a count made `ageMs` milliseconds ago. */
+  async function seedUsage(ageMs: number): Promise<string> {
+    const id = freshId();
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO ai_suggestion_usage (id, workspace_id, account_id, fields_used, created_at)
+        VALUES (${id}, ${workspaceId}, ${accountId}, ARRAY['title'], now() - ${ageMs} * interval '1 millisecond')`,
+    );
+    return id;
+  }
+
+  const remainingSuggestions = async (): Promise<string[]> =>
+    (await asSystem(db, (tx) => tx<{ url_canonical: string }[]>`SELECT url_canonical FROM ai_suggestions`)).map((row) => row.url_canonical).sort();
+
+  const remainingUsage = async (): Promise<string[]> => (await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM ai_suggestion_usage`)).map((row) => row.id).sort();
+
+  async function clear(): Promise<void> {
+    await clearSessions();
+    await asSystem(db, (tx) => tx`DELETE FROM ai_suggestions`);
+    await asSystem(db, (tx) => tx`DELETE FROM ai_suggestion_usage`);
+  }
+
+  it("deletes a suggestion past its expiry and keeps a current one, counting what it deleted", async () => {
+    await clear();
+    await seedSuggestion("https://example.com/gone", -HOUR_MS);
+    await seedSuggestion("https://example.com/also-gone", -DAY_MS);
+    await seedSuggestion("https://example.com/kept", HOUR_MS);
+    await seedSuggestion("https://example.com/kept-too", 29 * DAY_MS);
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 2));
+    expect(await remainingSuggestions()).toEqual(["https://example.com/kept", "https://example.com/kept-too"]);
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("deletes a count made more than 90 days ago and keeps a younger one", async () => {
+    await clear();
+    await seedUsage(91 * DAY_MS);
+    await seedUsage(200 * DAY_MS);
+    const kept = await seedUsage(89 * DAY_MS);
+    const fresh = await seedUsage(0);
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2));
+    expect(await remainingUsage()).toEqual([kept, fresh].sort());
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("deletes one batch of 5 000 of each per call and finishes the rest on the next calls", async () => {
+    await clear();
+    const extra = 3;
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO ai_suggestions (workspace_id, account_id, url_canonical, locale, result, provider, model, created_at, expires_at)
+        SELECT ${workspaceId}, ${accountId}, 'https://example.com/batch/' || n, 'en', '{}'::jsonb, 'p', 'm', now() - interval '31 days', now() - interval '1 hour'
+        FROM generate_series(1, ${BATCH + extra}::int) AS n`,
+    );
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO ai_suggestion_usage (id, workspace_id, account_id, fields_used, created_at)
+        SELECT gen_random_uuid(), ${workspaceId}, ${accountId}, ARRAY['tags'], now() - interval '100 days'
+        FROM generate_series(1, ${BATCH + extra}::int)`,
+    );
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 0, BATCH, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 0, extra, extra));
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("gives slugbase_app no DELETE on either table: the purge is the only way it removes a row", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.ai_suggestions")).rejects.toMatchObject({ code: "42501" });
+    await expect(db.app.unsafe("DELETE FROM public.ai_suggestion_usage")).rejects.toMatchObject({ code: "42501" });
   });
 });
 

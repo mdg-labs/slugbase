@@ -16,6 +16,8 @@ export { bookmarkShares, folderShares } from "./shares.ts";
 export { slugPreferences } from "./slug-preferences.ts";
 export { favicons } from "./favicons.ts";
 export type { FaviconStatus } from "./favicons.ts";
+export { aiSuggestions, aiSuggestionUsage } from "./ai.ts";
+export type { StoredAiSuggestion } from "./ai.ts";
 export { urlMetadata } from "./url-metadata.ts";
 export type { UrlMetadataStatus } from "./url-metadata.ts";
 export { workspaceInvitations } from "./invitations.ts";

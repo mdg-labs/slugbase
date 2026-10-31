@@ -279,6 +279,10 @@ export const FIXTURES: ContractFixtures = {
   // walker's server has the unconfigured egress port, which refuses every request, so its valid request is the declared 502; the lookup itself, its cache
   // and its refusals are walked by the metadata tests.
   fetchBookmarkMetadata: { body: { url: "https://example.com/walker" }, status: 502 },
+  // The AI suggestion names no workspace or account identifier: it acts in the workspace of the request and reads and writes the caller's own cache. The walker's
+  // server has the unconfigured AI port, so its valid request is the declared 503 ai_unavailable; the suggestion itself, its cache and its refusals are walked by the
+  // tests of the operation.
+  suggestBookmarkDetails: { body: { url: "https://example.com/walker", locale: "en" }, status: 503 },
   // The icon of a host names a host the caller writes and not the identifier of a row. A host nothing of the caller's is on, the walker's own and one that only workspace B has
   // a bookmark on alike, is answered the placeholder, 202, and queues no fetch; the matrix puts the hosts of B in the path.
   getFavicon: { path: { host: "walker.example.test" }, status: 202, foreign: { path: { host: "walker.example.test" } }, foreignAnswer: { status: 202 } },

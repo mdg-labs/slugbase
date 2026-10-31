@@ -1,4 +1,4 @@
-import { bookmarkRepository, folderRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
+import { aiSuggestionRepository, bookmarkRepository, folderRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useTestDatabase } from "../src/db.ts";
@@ -159,6 +159,27 @@ async function seedMetadataRows(database: TestDatabase, fixture: TenantFixture):
 }
 
 /**
+ * The cached AI suggestions and the counts of accepted fields the RLS-only mode runs against: a member's own, so the owner of A holds a suggestion and a count in A (the update of the registry has no
+ * predicate and sets the model of every suggestion it can see) and the owner of B holds the same in B, which the methods must not reach.
+ */
+async function seedAiRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  const sides = [
+    { workspaceId: fixture.a.id, owner: fixture.a.owner.accountId, usageId: "0192f3a0-2222-7000-8000-00000000a0f2" },
+    { workspaceId: fixture.b.id, owner: fixture.b.owner.accountId, usageId: "0192f3a0-2222-7000-8000-00000000b0f2" },
+  ];
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    for (const { workspaceId, owner, usageId } of sides) {
+      await tx`
+        INSERT INTO ai_suggestions (workspace_id, account_id, url_canonical, locale, result, provider, model, expires_at)
+        VALUES (${workspaceId}, ${owner}, 'https://example.com/matrix-ai-seed', 'en', '{"title": "seed", "slug": null, "tags": [], "confidence": 0.5}'::jsonb, 'matrix', 'matrix-model', now() + interval '30 days')
+        ON CONFLICT DO NOTHING`;
+      await tx`INSERT INTO ai_suggestion_usage (id, workspace_id, account_id, fields_used) VALUES (${usageId}, ${workspaceId}, ${owner}, ARRAY['title']) ON CONFLICT DO NOTHING`;
+    }
+  });
+}
+
+/**
  * The teams the RLS-only mode runs against: a team is the workspace's, so A holds exactly one (the update of the registry has no predicate and gives every team it
  * can see one name) with a member of A in it, which the delete of the registry removes and the insert of the sample leaves in place (the sample adds the owner of A, whose
  * account and membership `seedTagRows` made); B holds the same of its own, the team and the membership the methods must not reach. The member is the admin of the side.
@@ -299,18 +320,18 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
-    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the page-metadata lookup, the creation, the list and the statistics of tags, the creation and the list of folders, the creation and the list of teams, the list of remembered choices and the dashboard read act in the workspace of the request and take no identifier of B;
+    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the page-metadata lookup, the AI suggestion, the creation, the list and the statistics of tags, the creation and the list of folders, the creation and the list of teams, the list of remembered choices and the dashboard read act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
     // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder, and the read, the change, the deletion and the replacement of the members of a team name a team (the replacement also the members of B in `accountIds`), and the list, the grant and the revocation of the shares of a bookmark name a bookmark of B in the path (the grant also a member and a team of B, the revocation also a share of B), and the list, the grant and the revocation of the shares of a folder name a folder of B in the path (with the same members, team and share); the search for share targets and the invitation list take no identifier.
     // The audit log's list names an account in `actorAccountId` and an entity in `entityId`, and answers an empty 200 for those of B.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(62);
-    // Three sessions and six tokens of A, once on each of the nineteen operations that name no member other than the creation of a bookmark and twice on the creation of a bookmark (once for each of the two bookmarks of B put in its `slug`, which is mapped to a bookmark and judged with the folder and the tag of B in the same call), once for each of the three members of B on the role
+    expect(report.classified.byKind["tenant-scoped"]).toBe(63);
+    // Three sessions and six tokens of A, once on each of the twenty operations (the AI suggestion among them, which names no row of any workspace and reads and writes only the caller's own cache) that name no member other than the creation of a bookmark and twice on the creation of a bookmark (once for each of the two bookmarks of B put in its `slug`, which is mapped to a bookmark and judged with the folder and the tag of B in the same call), once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
     // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for the team of B on each of the read, the change and the deletion of a team and once for each of the three members of B with the team of B on the replacement of its members, and once for each of the two bookmarks of B on the list of the shares of a bookmark, once for each of the two bookmarks of B with each of the three members of B and the team of B on the grant of a share, and once for each of the two bookmarks of B with the share of B on its revocation, and once for the folder of B on the list of the shares of a folder, once for the folder of B with each of the three members of B and the team of B on the grant of a share of a folder, and once for the folder of B with the share of B on its revocation, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice, and once for each of the two hosts of B on the favicon (answered the placeholder, 202, by a principal that reaches the handler).
     // The bulk request and its preview name each pair of a bookmark of B in `ids` and one in `filter.hasSlug` once for each of the three members of B in `accountId`: twelve calls each, the four they had before being in the sum above and the further eight each added at its end.
-    expect(report.attempts).toBe(9 * 23 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2)));
+    expect(report.attempts).toBe(9 * 24 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2)));
     assertMatrixPassed(report);
   });
 
@@ -326,6 +347,7 @@ describe("the matrix over the committed contract and the repository registry", (
     await seedTagLinkRows(database(), scoped.fixture);
     await seedPreferenceRows(database(), scoped.fixture);
     await seedMetadataRows(database(), scoped.fixture);
+    await seedAiRows(database(), scoped.fixture);
     await seedTeamRows(database(), scoped.fixture);
     await seedShareRows(database(), scoped.fixture);
     await seedFolderShareRows(database(), scoped.fixture);
@@ -344,6 +366,10 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(methods.filter((entry) => entry.repository === "slug_preferences").map((entry) => entry.method)).toEqual(["select", "insert", "update", "delete"]);
     // the repository of the cached page metadata is in the registry with the three methods the application role may run on the table: it reads, inserts a result and updates the columns of one, and deletes none
     expect(methods.filter((entry) => entry.repository === "url_metadata").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
+    // the repository of the cached AI suggestions is in the registry with the three methods the application role may run on the table: it reads, inserts a row and updates the columns of a result, and deletes none
+    expect(methods.filter((entry) => entry.repository === "ai_suggestions").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
+    // the repository of the counts of accepted fields is in the registry with the two methods the application role may run on the table: it reads and inserts a row, and neither changes nor deletes one
+    expect(methods.filter((entry) => entry.repository === "ai_suggestion_usage").map((entry) => entry.method)).toEqual(["select", "insert"]);
     // the teams repository is in the registry with all four methods: the application role may insert, change, delete and read a team, and the policies keep it to the workspace
     expect(methods.filter((entry) => entry.repository === "teams").map((entry) => entry.method).sort()).toEqual(["delete", "insert", "select", "update"]);
     // the repository of the team members is in the registry with the three methods the application role may run on the table: it reads, inserts the columns of a membership and deletes, and updates none
@@ -1149,5 +1175,127 @@ describe("the shared scope of folders across workspaces", () => {
     // The share is real in B, so a refusal in A is the workspace's and not an absent fixture.
     expect(inB).toEqual({ shared: [FOLDER_OF_B], bookmarks: 1 });
     expect(inA).toEqual({ shared: [], all: [FOLDER_OF_A], counted: 0, found: undefined, sharedWith: false, bookmarksAll: [], bookmarksShared: [] });
+  });
+});
+
+// The cache of AI suggestions locks the workspace row and the member's membership row before it writes (`holdMember`, which an update that counts accepted fields calls first,
+// and `store`): two rows of tables that no scoped repository covers, taken through the raw handle of the transaction, so the registry walk above cannot see them. This runs both
+// methods as shipped, through the repository, inside withTenant(A), as an account that is no member of A (it belongs to B) and as one that belongs to both, against the rows of B.
+describe("the member lock and the cache write across workspaces", () => {
+  const ONLY_IN_B = "0192f3a0-3333-7000-8000-00000000a0a7";
+  const IN_BOTH = "0192f3a0-3333-7000-8000-00000000a0a8";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0b7";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0b7";
+  const URL = "https://example.com/matrix-member-lock";
+  const SUGGESTION = { title: "matrix", slug: null, tags: [], confidence: 0.5 };
+
+  interface Cached {
+    readonly account_id: string;
+    readonly url_canonical: string;
+    readonly locale: string;
+    readonly provider: string;
+    readonly model: string;
+    readonly result: unknown;
+  }
+
+  async function cachedIn(workspaceId: string): Promise<readonly Cached[]> {
+    return database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<Cached[]>`
+        SELECT account_id, url_canonical, locale, provider, model, result FROM ai_suggestions WHERE workspace_id = ${workspaceId} ORDER BY account_id, url_canonical, locale`;
+    });
+  }
+
+  async function membersOf(workspaceId: string): Promise<readonly string[]> {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ account_id: string }[]>`SELECT account_id FROM workspace_members WHERE workspace_id = ${workspaceId} ORDER BY account_id`;
+    });
+    return rows.map((row) => row.account_id);
+  }
+
+  /** Whether another transaction is refused the row for update right now, which a `FOR KEY SHARE` held by the transaction under test does. */
+  async function isHeld(row: { readonly workspaceId: string; readonly accountId?: string }): Promise<boolean> {
+    try {
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        const found =
+          row.accountId === undefined
+            ? await tx`SELECT 1 FROM workspaces WHERE id = ${row.workspaceId} FOR UPDATE NOWAIT`
+            : await tx`SELECT 1 FROM workspace_members WHERE workspace_id = ${row.workspaceId} AND account_id = ${row.accountId} FOR UPDATE NOWAIT`;
+        if (found.length !== 1) {
+          throw new Error("the row to probe for a lock does not exist");
+        }
+      });
+      return false;
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "55P03") {
+        return true;
+      }
+      throw error;
+    }
+  }
+
+  it("holds and writes only the rows of the workspace of the transaction, and answers false and writes nothing for an account that is no member of it", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${ONLY_IN_B}, 'member-lock-b@example.test', 'Matrix member'), (${IN_BOTH}, 'member-lock-both@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        VALUES (${PROBE_WORKSPACE_B}, ${ONLY_IN_B}, 'member'), (${PROBE_WORKSPACE_A}, ${IN_BOTH}, 'member'), (${PROBE_WORKSPACE_B}, ${IN_BOTH}, 'member') ON CONFLICT DO NOTHING`;
+      // Both accounts hold a suggestion in B, which the methods must not reach.
+      await tx`
+        INSERT INTO ai_suggestions (workspace_id, account_id, url_canonical, locale, result, provider, model, expires_at)
+        VALUES (${PROBE_WORKSPACE_B}, ${ONLY_IN_B}, ${URL}, 'en', '{"title": "matrix", "slug": null, "tags": [], "confidence": 0.5}'::jsonb, 'matrix', 'matrix-model', now() + interval '30 days'),
+               (${PROBE_WORKSPACE_B}, ${IN_BOTH}, ${URL}, 'en', '{"title": "matrix", "slug": null, "tags": [], "confidence": 0.5}'::jsonb, 'matrix', 'matrix-model', now() + interval '30 days')
+        ON CONFLICT DO NOTHING`;
+    });
+    const before = { cachedA: await cachedIn(PROBE_WORKSPACE_A), cachedB: await cachedIn(PROBE_WORKSPACE_B), membersA: await membersOf(PROBE_WORKSPACE_A), membersB: await membersOf(PROBE_WORKSPACE_B) };
+    expect(before.cachedB.map((row) => row.account_id)).toEqual(expect.arrayContaining([IN_BOTH, ONLY_IN_B]));
+    expect(before.membersB).toEqual(expect.arrayContaining([ONLY_IN_B, IN_BOTH]));
+    expect(before.membersA).not.toContain(ONLY_IN_B);
+    const entry = { urlCanonical: URL, locale: "de", result: SUGGESTION, provider: "matrix", model: "matrix-model" };
+
+    // An account that belongs to B only, acting in A: no membership of A to hold, so nothing is held in B, nothing is written, and its suggestion in B is as it was.
+    const outsider = await database().tenant.withTenant({ accountId: ONLY_IN_B, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-member-lock-outsider" }, async (tx) => {
+      const repository = aiSuggestionRepository(tx);
+      return {
+        held: await repository.holdMember(),
+        stored: await repository.store(entry),
+        current: await repository.current(URL, "en"),
+        heldInB: { workspace: await isHeld({ workspaceId: PROBE_WORKSPACE_B }), member: await isHeld({ workspaceId: PROBE_WORKSPACE_B, accountId: ONLY_IN_B }) },
+      };
+    });
+    expect(outsider).toEqual({ held: false, stored: false, current: undefined, heldInB: { workspace: false, member: false } });
+    expect({ cachedA: await cachedIn(PROBE_WORKSPACE_A), cachedB: await cachedIn(PROBE_WORKSPACE_B), membersA: await membersOf(PROBE_WORKSPACE_A), membersB: await membersOf(PROBE_WORKSPACE_B) }).toEqual(before);
+
+    // An account that belongs to both holds the rows of A and none of B, and writes its suggestion in A only.
+    const insider = await database().tenant.withTenant({ accountId: IN_BOTH, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-member-lock-insider" }, async (tx) => {
+      const repository = aiSuggestionRepository(tx);
+      const held = await repository.holdMember();
+      return {
+        held,
+        heldInA: { workspace: await isHeld({ workspaceId: PROBE_WORKSPACE_A }), member: await isHeld({ workspaceId: PROBE_WORKSPACE_A, accountId: IN_BOTH }) },
+        heldInB: { workspace: await isHeld({ workspaceId: PROBE_WORKSPACE_B }), member: await isHeld({ workspaceId: PROBE_WORKSPACE_B, accountId: IN_BOTH }) },
+        stored: await repository.store(entry),
+        current: await repository.current(URL, "en"),
+      };
+    });
+    expect(insider).toEqual({ held: true, heldInA: { workspace: true, member: true }, heldInB: { workspace: false, member: false }, stored: true, current: undefined });
+    const cachedA = await cachedIn(PROBE_WORKSPACE_A);
+    expect(cachedA.filter((row) => row.account_id === IN_BOTH).map((row) => row.locale)).toEqual(["de"]);
+    expect(cachedA.filter((row) => row.account_id !== IN_BOTH)).toEqual(before.cachedA);
+    expect({ cachedB: await cachedIn(PROBE_WORKSPACE_B), membersA: await membersOf(PROBE_WORKSPACE_A), membersB: await membersOf(PROBE_WORKSPACE_B) }).toEqual({
+      cachedB: before.cachedB,
+      membersA: before.membersA,
+      membersB: before.membersB,
+    });
   });
 });

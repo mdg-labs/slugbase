@@ -185,6 +185,7 @@ export function createServer(options: CreateServerOptions): Server;
 export interface CreateServerOptions {
     // (undocumented)
     readonly adapters: Adapters;
+    readonly aiBudgetMs?: number;
     readonly allowWorkspaceCreation?: boolean;
     readonly authStore?: AuthStore;
     readonly buildInfo?: BuildInfo;

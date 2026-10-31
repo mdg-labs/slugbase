@@ -182,6 +182,11 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * The cache of page metadata is the workspace's: the `url_metadata` repository has the three methods the application role may run on the table (it reads, inserts a row and
  * updates the columns of a result, and deletes none), the sample inserts a `failed` result, which holds no field, and its update sets the title, which only an `ok` row may hold, so
  * the fixture must hold an `ok` result in A for the update to touch, and one in B, which the methods must not reach.
+ * The cache of AI suggestions and the count of accepted fields are a member's own in the workspace: the policies of `ai_suggestions` and `ai_suggestion_usage` name the workspace and the account of
+ * the transaction. The `ai_suggestions` repository has the three methods the application role may run on the table (it reads, inserts a row and updates the columns of a result, and deletes none), the
+ * sample names the owner of A and its update sets the model, so the fixture must hold a suggestion of the owner of A in A, which the update touches, and one of the owner of B in B, which the methods must
+ * not reach. The `ai_suggestion_usage` repository has the two methods the role may run (it reads and inserts a row and never changes or deletes one), the sample names the owner of A, and the fixture must hold a
+ * row of the owner of A in A and one of the owner of B in B, which the select must not mix. The policy names the account too, so the owner of A sees its own rows only.
  * A team is the workspace's and no member's: the policies of `teams` and `team_members` name the workspace only. The update and the delete of the registry have no predicate,
  * so they touch every team of A the policy shows, and the update gives them all one name: the fixture must hold exactly one team in A (and one in B, which the methods must
  * not reach). The `team_members` sample names that team (`...a0e1`) and the owner of A, who is no member of it yet; the fixture must hold another member of A in the team, which
@@ -228,6 +233,22 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
   url_metadata: {
     values: { urlCanonical: "https://example.com/matrix-metadata", status: "failed", fetchedAt: new Date("2026-01-01T00:00:00Z"), expiresAt: new Date("2026-01-08T00:00:00Z") },
     set: { title: "matrix-metadata-updated" },
+  },
+  ai_suggestions: {
+    values: (fixture) => ({
+      accountId: fixture.a.owner.accountId,
+      urlCanonical: "https://example.com/matrix-ai",
+      locale: "en",
+      result: { title: "matrix", slug: null, tags: [], confidence: 0.5 },
+      provider: "matrix",
+      model: "matrix-model",
+      expiresAt: new Date("2026-02-01T00:00:00Z"),
+    }),
+    set: { model: "matrix-model-updated" },
+  },
+  ai_suggestion_usage: {
+    values: (fixture) => ({ id: "0192f3a0-2222-7000-8000-00000000b013", accountId: fixture.a.owner.accountId, bookmarkId: null, fieldsUsed: ["title"] }),
+    set: {},
   },
   bookmark_shares: {
     values: (fixture) => ({

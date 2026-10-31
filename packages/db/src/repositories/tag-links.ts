@@ -16,9 +16,13 @@ import { defineScopedRepository } from "./scoped.ts";
 //  - a creation locks the workspace row (`sys_bookmark_count_take`), inserts its bookmark (a row that is not committed is nobody else's to hold; the insert takes the
 //    owner's membership row through its foreign key) and then locks its tags; a change that names a tag by name locks the workspace row and the owner's membership
 //    row (`FOR KEY SHARE`, `lockTaggingOwner`) before its bookmark (`FOR UPDATE`), because the insert of the new tag takes both through its foreign keys, and then
-//    locks its tags. A change that names tags by identifier only takes neither. Both lock every tag they name that exists, the ones named by identifier and the
+//    locks its tags. A change that names tags by identifier only takes neither, unless it names `aiFields` (below). Both lock every tag they name that exists, the ones named by identifier and the
 //    existing ones named by name, in one statement (`lockTaggingTags`, `FOR KEY SHARE`), and insert the tags they create by name in the order of the lower-cased
 //    names (`resolveTagNames`), so that two taggings which create the same names cannot wait for each other at the unique index of the owner's tag names;
+//  - a save that names `aiFields` counts them in `ai_suggestion_usage`, whose insert takes the owner's membership row through its foreign key. A creation has locked the
+//    workspace row and inserted its bookmark (which took the membership row) by then, so its count takes nothing new; an update that names them takes the workspace row and
+//    the owner's membership row (`FOR KEY SHARE`, `AiSuggestionRepository.holdMember`) before its bookmark, and a member who has left is answered `not_found`.
+//    The write of a cached suggestion (`AiSuggestionRepository.store`) takes the same two rows in that order and holds no bookmark;
 //  - a merge of two tags locks the bookmarks of the source's links (`FOR KEY SHARE`) and then both tags (`FOR UPDATE`) (`lockTagsForMerge`);
 //  - the departure of a member (the foreign keys of `bookmarks` and `tags` to `workspace_members`) locks the workspace row, deletes the membership row, clears the
 //    owner of the member's bookmarks and then deletes the member's tags, and the deletion of an account locks the account's workspaces before anything else

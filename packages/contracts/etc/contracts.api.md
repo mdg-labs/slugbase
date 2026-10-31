@@ -197,6 +197,33 @@ export const addInstanceAdminMembership: {
     };
 };
 
+// @public
+export const AI_LOCALE_MAX_LENGTH = 35;
+
+// @public
+export const AI_LOCALE_PATTERN: RegExp;
+
+// @public
+export const AI_SUGGESTION_TAGS_MAX = 5;
+
+// @public (undocumented)
+export const AiSuggestionRequestSchema: z.ZodObject<{
+    url: z.ZodString;
+    locale: z.ZodString;
+    metadata: z.ZodOptional<z.ZodObject<{
+        title: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const AiSuggestionSchema: z.ZodObject<{
+    title: z.ZodString;
+    slug: z.ZodNullable<z.ZodString>;
+    tags: z.ZodArray<z.ZodString>;
+    confidence: z.ZodNumber;
+}, z.core.$strict>;
+
 // @public (undocumented)
 export const ANALYTICS_CONSENTS: readonly ["unset", "granted", "denied"];
 
@@ -420,6 +447,9 @@ export interface BinaryResponse<H extends ResponseHeaders = ResponseHeaders> {
 
 // @public
 export function binaryResponse<H extends ResponseHeaders = ResponseHeaders>(description: string, mediaType: string, options?: JsonResponseOptions<H>): BinaryResponse<H>;
+
+// @public
+export const BOOKMARK_AI_FIELDS: readonly ["title", "slug", "tags"];
 
 // @public
 export const BOOKMARK_BULK_IDS_MAX = 1000;
@@ -1145,6 +1175,20 @@ export interface ComponentTypes {
             singleKeyShortcuts: boolean;
             theme: "light" | "dark" | "system";
         };
+        AiSuggestion: {
+            confidence: number;
+            slug: string | null;
+            tags: string[];
+            title: string;
+        };
+        AiSuggestionRequest: {
+            locale: string;
+            metadata?: {
+                description?: string;
+                title?: string;
+            };
+            url: string;
+        };
         ApiConfig: {
             apiVersion: "v1";
             defaultLocale: string;
@@ -1362,6 +1406,7 @@ export interface ComponentTypes {
             workspaceId?: string;
         };
         CreateBookmarkRequest: {
+            aiFields?: ("title" | "slug" | "tags")[];
             description?: string;
             folderIds?: string[];
             forwarding?: boolean;
@@ -1999,6 +2044,7 @@ export interface ComponentTypes {
             theme?: "light" | "dark" | "system";
         };
         UpdateBookmarkRequest: {
+            aiFields?: ("title" | "slug" | "tags")[];
             description?: string | null;
             folderIds?: string[];
             forwarding?: boolean;
@@ -2227,6 +2273,11 @@ export const createBookmark: {
             folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            aiFields: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+                title: "title";
+                slug: "slug";
+                tags: "tags";
+            }>>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -2287,6 +2338,11 @@ export const CreateBookmarkRequestSchema: z.ZodObject<{
     folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    aiFields: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        title: "title";
+        slug: "slug";
+        tags: "tags";
+    }>>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -14133,6 +14189,95 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    suggestBookmarkDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["AiSuggestionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["AiSuggestion"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     suggestSlugs: {
         parameters: {
             query: {
@@ -15234,6 +15379,23 @@ export interface paths {
         get: OperationTypes["getApiConfig"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/ai/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["suggestBookmarkDetails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18274,6 +18436,45 @@ export const startOidcSignIn: {
 };
 
 // @public (undocumented)
+export const suggestBookmarkDetails: {
+    readonly method: "post";
+    readonly path: "/api/v1/ai/suggestions";
+    readonly operationId: "suggestBookmarkDetails";
+    readonly tag: "ai";
+    readonly summary: "Suggest a title, a slug and tags for a page";
+    readonly auth: "member";
+    readonly rate: "ai";
+    readonly scope: "write";
+    readonly entitlement: "ai.suggestions";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            url: z.ZodString;
+            locale: z.ZodString;
+            metadata: z.ZodOptional<z.ZodObject<{
+                title: z.ZodOptional<z.ZodString>;
+                description: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        title: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        tags: z.ZodArray<z.ZodString>;
+        confidence: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 502: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const suggestSlugs: {
     readonly method: "get";
     readonly path: "/api/v1/go/suggest";
@@ -18609,6 +18810,11 @@ export const updateBookmark: {
             folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            aiFields: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+                title: "title";
+                slug: "slug";
+                tags: "tags";
+            }>>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -18675,6 +18881,11 @@ export const UpdateBookmarkRequestSchema: z.ZodObject<{
     folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    aiFields: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        title: "title";
+        slug: "slug";
+        tags: "tags";
+    }>>>;
 }, z.core.$strict>;
 
 // @public (undocumented)

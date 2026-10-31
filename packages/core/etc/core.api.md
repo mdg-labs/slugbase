@@ -171,6 +171,21 @@ export function addInstanceAdminMembership(input: InstanceWorkspaceDependencies,
 }): Promise<InstanceMembershipOutcome>;
 
 // @public
+export const AI_CONTEXT_TAGS_MAX = 200;
+
+// @public
+export const AI_FIELDS: readonly ["title", "slug", "tags"];
+
+// @public
+export const AI_SUGGEST_BUDGET_MS = 5000;
+
+// @public (undocumented)
+export type AiField = (typeof AI_FIELDS)[number];
+
+// @public
+export function aiFieldsOf(fields: readonly AiField[] | undefined): readonly AiField[];
+
+// @public
 export class AiSuggestError extends Error {
     constructor(code: AiSuggestErrorCode, options?: {
         readonly cause?: unknown;
@@ -194,6 +209,96 @@ export interface AiSuggestion {
     readonly title: string;
 }
 
+// @public (undocumented)
+export interface AiSuggestionAsk {
+    readonly locale: string;
+    // (undocumented)
+    readonly metadata?: {
+        readonly title?: string | undefined;
+        readonly description?: string | undefined;
+    } | undefined;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export interface AiSuggestionCacheEntry {
+    // (undocumented)
+    readonly locale: string;
+    // (undocumented)
+    readonly model: string;
+    // (undocumented)
+    readonly provider: string;
+    // (undocumented)
+    readonly result: AiSuggestionResult;
+    // (undocumented)
+    readonly urlCanonical: string;
+}
+
+// @public (undocumented)
+export interface AiSuggestionDependencies {
+    // (undocumented)
+    readonly ai: AiSuggestPort;
+    // (undocumented)
+    readonly model: string;
+    readonly onProviderFailure?: (error: unknown) => void;
+    readonly provider: string;
+    readonly timeoutMs?: number;
+    readonly withStore: <T>(work: (store: AiSuggestionStore) => Promise<T>) => Promise<T>;
+}
+
+// @public (undocumented)
+export type AiSuggestionOutcome = {
+    readonly kind: "suggested";
+    readonly suggestion: AiSuggestionResult;
+    readonly cached: boolean;
+}
+/** The AI port is not configured; nothing was read or sent. */
+| {
+    readonly kind: "unavailable";
+}
+/** The workspace toggle is off, or the member opted out; nothing was sent. */
+| {
+    readonly kind: "disabled";
+    readonly reason: "workspace" | "member";
+}
+/** The workspace or the member cannot be reached, or the member left the workspace while the provider answered; nothing was cached. */
+| {
+    readonly kind: "not_found";
+}
+/** The URL is refused as a bookmark's is; nothing was sent. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** The provider failed, ran out of time or answered what cannot be used; nothing was cached. */
+| {
+    readonly kind: "failed";
+};
+
+// @public
+export interface AiSuggestionResult {
+    readonly confidence: number;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface AiSuggestionStore {
+    availability(): Promise<{
+        readonly workspaceEnabled: boolean;
+        readonly memberOptedOut: boolean;
+    } | undefined>;
+    cache(entry: AiSuggestionCacheEntry): Promise<boolean>;
+    cached(urlCanonical: string, locale: string): Promise<unknown>;
+    slugTaken(slug: string): Promise<boolean>;
+    tagNames(limit: number): Promise<readonly string[]>;
+}
+
 // @public
 export interface AiSuggestPort extends Port {
     // (undocumented)
@@ -212,6 +317,15 @@ export interface AiSuggestRequest {
     readonly tags: readonly string[];
     // (undocumented)
     readonly url: string;
+}
+
+// @public
+export interface AiUsageRecorder {
+    hold(): Promise<boolean>;
+    record(request: {
+        readonly bookmarkId: string;
+        readonly fields: readonly AiField[];
+    }): Promise<void>;
 }
 
 // @public (undocumented)
@@ -1461,6 +1575,7 @@ export interface BookmarkChanges {
 // @public (undocumented)
 export interface BookmarkCreationAsk {
     readonly accountId: string;
+    readonly aiFields?: readonly AiField[] | undefined;
     readonly ceiling: EntitlementLimit;
     // (undocumented)
     readonly description: string | undefined;
@@ -1482,6 +1597,7 @@ export interface BookmarkCreationAsk {
 
 // @public (undocumented)
 export interface BookmarkCreationDependencies {
+    readonly aiUsage?: AiUsageRecorder;
     readonly newId: () => string;
     // (undocumented)
     readonly store: Pick<BookmarkStore, "create">;
@@ -2154,6 +2270,7 @@ export function bookmarkTagSelection(tagIds: readonly string[] | undefined, tagN
 // @public (undocumented)
 export interface BookmarkUpdateAsk {
     readonly accountId: string;
+    readonly aiFields?: readonly AiField[] | undefined;
     // (undocumented)
     readonly bookmarkId: string;
     // (undocumented)
@@ -2164,6 +2281,7 @@ export interface BookmarkUpdateAsk {
 
 // @public (undocumented)
 export interface BookmarkUpdateDependencies {
+    readonly aiUsage?: AiUsageRecorder;
     readonly newId: () => string;
     // (undocumented)
     readonly store: Pick<BookmarkStore, "update" | "sharedWith">;
@@ -2303,6 +2421,14 @@ export function changeMemberRole(input: MemberRoleDependencies, ask: MemberRoleA
 
 // @public
 export function changeWorkspaceSettings(input: WorkspaceAdministrationDependencies, ask: WorkspaceSettingsAsk): Promise<WorkspaceSettingsOutcome>;
+
+// @public
+export function checkSuggestion(value: {
+    readonly title?: unknown;
+    readonly slug?: unknown;
+    readonly tags?: unknown;
+    readonly confidence?: unknown;
+}): AiSuggestionResult | undefined;
 
 // @public (undocumented)
 export function chooseSlugBookmark(input: GoChooseDependencies, ask: GoChooseAsk): Promise<GoChooseOutcome>;
@@ -5935,6 +6061,9 @@ export interface StoredOnboarding {
 
 // @public
 export function suggestSlugs(input: GoSuggestDependencies, ask: GoSuggestAsk): Promise<readonly GoSuggestion[]>;
+
+// @public (undocumented)
+export function suggestWithAi(dependencies: AiSuggestionDependencies, ask: AiSuggestionAsk): Promise<AiSuggestionOutcome>;
 
 // @public
 export const TAG_LIST_TOTAL_CAP = 10000;
