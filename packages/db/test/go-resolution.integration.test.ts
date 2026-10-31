@@ -317,8 +317,9 @@ describe("the candidates of a slug that others share with the caller (T12)", () 
     expect((await candidatesOf(workspace, workspace.other)).candidates).toEqual([like({ id: theirs, access: "owner" })]);
 
     await asSystem(db, (tx) => tx`DELETE FROM bookmark_shares WHERE bookmark_id = ${theirs}`);
-    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: theirs, accountId: workspace.me }))).toBe(true);
+    // The share's deletion forgot the choice in its own transaction (src/sql/670-slug-preference-cleanup.sql), so the resolution has no stale choice left to forget.
     expect(await preferences(workspace.id)).toEqual([]);
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: theirs, accountId: workspace.me }))).toBe(false);
   });
 
   it("name the shared bookmark's title, host and owner in the summaries, and none of an unshared one", async () => {

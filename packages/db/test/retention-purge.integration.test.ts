@@ -880,6 +880,25 @@ describe("purging audit events", () => {
     }
   });
 
+  it("removes only the event one day outside a 30-day retention, keeps the one a day inside, and removes nothing with 0", async () => {
+    await clearAuditEvents();
+    const inside = await seedAuditEvent({ ageDays: 29 });
+    const outside = await seedAuditEvent({ ageDays: 31 });
+
+    const forever = createRetentionStore({ url: appUrl(db), poolSize: 1, auditRetentionDays: 0 });
+    const monthly = createRetentionStore({ url: appUrl(db), poolSize: 1, auditRetentionDays: 30 });
+    try {
+      expect(await forever.purge()).toEqual(counts(0, 0, 0, 0, 0));
+      expect(await remainingAuditEvents()).toEqual([inside, outside].sort());
+
+      expect(await monthly.purge()).toEqual(counts(0, 0, 0, 0, 1));
+      expect(await remainingAuditEvents()).toEqual([inside]);
+    } finally {
+      await forever.close();
+      await monthly.close();
+    }
+  });
+
   it("deletes one batch of 5 000 per call and finishes the rest on the next calls", async () => {
     await clearAuditEvents();
     const extra = 7;

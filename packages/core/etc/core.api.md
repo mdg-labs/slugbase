@@ -570,6 +570,29 @@ export type AuditActor = {
 // @public (undocumented)
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
+// @public
+export function auditCategoryOf(action: string): AuditCategory | null;
+
+// @public
+export interface AuditCursors {
+    open(cursor: string, scope: string): AuditEventPosition | undefined;
+    // (undocumented)
+    seal(position: AuditEventPosition, scope: string): string;
+}
+
+// @public
+export interface AuditEventFilter {
+    readonly actions?: readonly string[];
+    // (undocumented)
+    readonly actorAccountId?: string;
+    // (undocumented)
+    readonly entityId?: string;
+    // (undocumented)
+    readonly entityType?: string;
+    readonly from?: string;
+    readonly to?: string;
+}
+
 // @public (undocumented)
 export interface AuditEventInput<Name extends AuditAction = AuditAction> {
     // (undocumented)
@@ -585,6 +608,83 @@ export interface AuditEventInput<Name extends AuditAction = AuditAction> {
     readonly metadata: AuditMetadata<Name>;
     readonly workspaceId: string;
 }
+
+// @public
+export interface AuditEventPosition {
+    // (undocumented)
+    readonly createdAt: string;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public (undocumented)
+export interface AuditEventReader {
+    list(query: AuditEventFilter & {
+        readonly after: AuditEventPosition | undefined;
+        readonly limit: number;
+    }): Promise<readonly AuditEventRecord[]>;
+}
+
+// @public
+export interface AuditEventRecord {
+    // (undocumented)
+    readonly action: string;
+    readonly actorAccountId: string | null;
+    readonly actorLabel: string;
+    // (undocumented)
+    readonly actorType: "account" | "api_token" | "system";
+    readonly createdAt: string;
+    // (undocumented)
+    readonly entityId: string | null;
+    // (undocumented)
+    readonly entityType: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly metadata: Readonly<Record<string, string>>;
+}
+
+// @public (undocumented)
+export interface AuditListAsk {
+    // (undocumented)
+    readonly actions?: readonly string[] | undefined;
+    // (undocumented)
+    readonly actorAccountId?: string | undefined;
+    // (undocumented)
+    readonly category?: AuditCategory | undefined;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    // (undocumented)
+    readonly entityId?: string | undefined;
+    // (undocumented)
+    readonly entityType?: string | undefined;
+    // (undocumented)
+    readonly from?: string | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly to?: string | undefined;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface AuditListDependencies {
+    // (undocumented)
+    readonly cursors: AuditCursors;
+    // (undocumented)
+    readonly store: AuditEventReader;
+}
+
+// @public (undocumented)
+export type AuditListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly AuditEventRecord[];
+    readonly nextCursor: string | null;
+}
+/** The cursor was not issued by this server for this workspace and these filters; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
 
 // @public
 export type AuditMetadata<Name extends AuditAction = AuditAction> = {
@@ -3028,6 +3128,8 @@ export interface FolderShareAsk {
 export interface FolderShareDependencies {
     // (undocumented)
     readonly audit: AuditWriter;
+    // (undocumented)
+    readonly folders: Pick<FolderStore, "sharedWith">;
     readonly newId: () => string;
     // (undocumented)
     readonly store: Pick<FolderShareStore, "ownedFolder" | "grant" | "revoke">;
@@ -3061,6 +3163,10 @@ export type FolderShareGrantOutcome = {
 } | {
     readonly kind: "existing";
     readonly share: FolderShareRecord;
+}
+/** The folder is shared with the caller, who may not share it further. */
+| {
+    readonly kind: "forbidden";
 } | {
     readonly kind: "not_found";
 }
@@ -3084,6 +3190,8 @@ export type FolderShareListOutcome = {
     readonly kind: "listed";
     readonly list: FolderShareList;
 } | {
+    readonly kind: "forbidden";
+} | {
     readonly kind: "not_found";
 };
 
@@ -3096,6 +3204,8 @@ export interface FolderShareReadAsk {
 
 // @public (undocumented)
 export interface FolderShareReadDependencies {
+    // (undocumented)
+    readonly folders: Pick<FolderStore, "sharedWith">;
     // (undocumented)
     readonly store: Pick<FolderShareStore, "ownedFolder" | "list">;
 }
@@ -3128,6 +3238,8 @@ export interface FolderShareRevocationAsk extends FolderShareAsk {
 export type FolderShareRevocationOutcome = {
     readonly kind: "revoked";
     readonly share: FolderShareRecord;
+} | {
+    readonly kind: "forbidden";
 } | {
     readonly kind: "not_found";
 };
@@ -4821,6 +4933,9 @@ export interface JoiningEntitlements {
 }
 
 // @public
+export function listAuditEvents(input: AuditListDependencies, ask: AuditListAsk): Promise<AuditListOutcome>;
+
+// @public
 export function listBookmarkIds(input: BookmarkIdsDependencies, ask: BookmarkIdsAsk): Promise<BookmarkIdsOutcome>;
 
 // @public
@@ -5591,7 +5706,7 @@ export function restoreBookmarks(tx: BookmarkArchiveTransaction, request: Bookma
 export function revokeBookmarkShare(input: Pick<BookmarkShareDependencies, "store" | "audit">, ask: BookmarkShareRevocationAsk): Promise<BookmarkShareRevocationOutcome>;
 
 // @public (undocumented)
-export function revokeFolderShare(input: Pick<FolderShareDependencies, "store" | "audit">, ask: FolderShareRevocationAsk): Promise<FolderShareRevocationOutcome>;
+export function revokeFolderShare(input: Pick<FolderShareDependencies, "store" | "folders" | "audit">, ask: FolderShareRevocationAsk): Promise<FolderShareRevocationOutcome>;
 
 // @public
 export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;
@@ -6194,8 +6309,7 @@ export type TeamMembersReplacement =
     readonly team: TeamDetail;
 }
 /**
-* The version of the team, read under its lock, is none of the accepted ones (nothing was written), or the set adds an account that joined the
-* workspace after that version was written (the team's version moved once and no membership was written).
+* The version of the team, read under its lock, is none of the accepted ones; nothing was written.
 */
 | {
     readonly kind: "stale";

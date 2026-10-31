@@ -27,11 +27,11 @@ describe("avatarColour", () => {
     }
   });
 
-  it("spreads identifiers over all eight colours of the folder set", () => {
+  it("spreads identifiers over all eight avatar colours", () => {
     const colours = new Set(SEEDS.map((seed) => avatarColour(seed)));
     expect(colours.size).toBe(8);
     for (const colour of colours) {
-      expect(colour).toMatch(/^bg-folder-[1-8]$/);
+      expect(colour).toMatch(/^bg-avatar-[1-8]$/);
     }
   });
 });

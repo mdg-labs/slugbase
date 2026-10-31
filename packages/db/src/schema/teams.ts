@@ -24,7 +24,7 @@ export const teams = pgTable(
     version: integer().notNull().default(1),
     /** How many times the member set was replaced with another one. The application role writes it to say that the set changed; the trigger moves it by one and moves `version` with it. */
     membersVersion: integer().notNull().default(0),
-    /** When the transaction that wrote the current `version` began. The trigger sets it with every move of `version`, and no role writes it; replacing the members compares it with `workspace_members.joined_at` of the accounts it adds. */
+    /** When the transaction that wrote the current `version` began. The trigger sets it with every move of `version`, and no role writes it. The application no longer reads it; it stays for the replicas of the release before, and a later release drops it. */
     versionedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

@@ -135,6 +135,14 @@ describe("theme.css tokens", () => {
     expect(themes[name].names().filter((token) => token.startsWith("--folder-"))).toHaveLength(8);
   });
 
+  it("keeps the avatar colours on the folder colours in the dark theme and gives each its own fill in the light theme", () => {
+    for (let index = 1; index <= 8; index += 1) {
+      expect(themes.dark.resolve(`avatar-${String(index)}`)).toBe(themes.dark.resolve(`folder-${String(index)}`));
+      expect(themes.systemLight.resolve(`avatar-${String(index)}`)).toBe(themes.light.resolve(`avatar-${String(index)}`));
+    }
+    expect(themes.light.names().filter((token) => token.startsWith("--avatar-"))).toHaveLength(8);
+  });
+
   it("names no colour outside the two themes and no external host", () => {
     expect(css).not.toMatch(/https?:\/\//);
   });

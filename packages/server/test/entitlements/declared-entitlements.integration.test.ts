@@ -50,6 +50,7 @@ const REQUESTS: Readonly<Record<string, (fixture: Fixture) => Promise<Response>>
   listInvitations: ({ world, admin }) => send(world, "GET", INVITATIONS, { cookie: admin.cookie }),
   resendInvitation: ({ world, admin, invitationId }) => send(world, "POST", `${INVITATIONS}/${invitationId}/resend`, { cookie: admin.cookie }),
   createInvitationLink: ({ world, admin, invitationId }) => send(world, "POST", `${INVITATIONS}/${invitationId}/link`, { cookie: admin.cookie }),
+  listAuditEvents: ({ world, admin }) => send(world, "GET", "/api/v1/audit-events", { cookie: admin.cookie }),
   createTeam: ({ world, admin }) => send(world, "POST", TEAMS, { cookie: admin.cookie }, { name: `Team ${crypto.randomUUID()}` }),
   updateTeam: ({ world, admin, teamId }) => send(world, "PATCH", `${TEAMS}/${teamId}`, { cookie: admin.cookie }, { description: crypto.randomUUID() }),
   // Each request deletes a team of its own, since the one it deletes is gone for the next.

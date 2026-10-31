@@ -276,11 +276,13 @@ async function indexState(name: string): Promise<{ oid: number; valid: boolean }
 
 // Creating the second database and waiting for the decoy to show in `pg_stat_activity` take as long as the cluster is loaded by the other integration
 // suites of a full run, so the wait is bounded by the condition it waits for, with room for that, and the test by that wait plus the setup and teardown.
+// The same holds for a test that sets a database back a version, runs the upgrade, and waits for the state of that run: its bound is the sum of those
+// steps and polls, not the 5 s default.
 const DECOY_VISIBLE_TIMEOUT_MS = 60_000;
-const DECOY_TEST_TIMEOUT_MS = 120_000;
+const UPGRADE_TEST_TIMEOUT_MS = 120_000;
 
 describe("the lookup of the index build of an upgrade", () => {
-  it("ignores the same step running in another database", { timeout: DECOY_TEST_TIMEOUT_MS }, async () => {
+  it("ignores the same step running in another database", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await withTestDatabase(async (other) => {
       const decoy = await other.owner.reserve();
       let sleeping: Promise<unknown> | undefined;
@@ -354,7 +356,7 @@ describe("the index builds of an upgrade that stopped", () => {
     expect((await runMigrations({ url: migratorUrl() })).applied).toEqual([]);
   });
 
-  it("resume at the build that did not finish and leave the valid indexes of the ones before it alone", async () => {
+  it("resume at the build that did not finish and leave the valid indexes of the ones before it alone", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     await rows(`SELECT ${PGBOSS_SCHEMA}.create_queue('partitioned', '{"partition": true, "policy": "standard"}'::jsonb)`);
     const [queue] = await rows<{ table_name: string }>(`SELECT table_name FROM ${PGBOSS_SCHEMA}.queue WHERE name = 'partitioned'`);
@@ -402,7 +404,7 @@ async function recordPending(target: number, statements: string[]): Promise<void
 }
 
 describe("the record of the index builds still owed", () => {
-  it("does not hold a run on a build whose table has since been dropped", async () => {
+  it("does not hold a run on a build whose table has since been dropped", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(0);
     await recordPending(expected, [`CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS jgone_i13 ON ${PGBOSS_SCHEMA}.jgone (name, singleton_key)`]);
     const result = await runMigrations({ url: migratorUrl() });

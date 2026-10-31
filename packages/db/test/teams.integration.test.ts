@@ -124,6 +124,35 @@ async function storedMembers(teamId: string): Promise<string[]> {
 
 const sorted = (ids: readonly string[]): string[] => [...ids].sort();
 
+const gateOf = (): { readonly open: () => void; readonly opened: Promise<void> } => {
+  let open: () => void = () => undefined;
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { open, opened };
+};
+
+async function waitingPids(): Promise<number[]> {
+  const rows = await db.app<{ pid: number }[]>`
+    SELECT DISTINCT l.pid FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
+    WHERE NOT l.granted AND s.datname = current_database() ORDER BY l.pid`;
+  return rows.map((row) => row.pid);
+}
+
+async function waitUntilSomeoneWaits(what: string): Promise<number> {
+  const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+  let waiting = await waitingPids();
+  while (waiting.length < 1) {
+    if (Date.now() > deadline) {
+      throw new Error(`${what} never waited for a lock`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    waiting = await waitingPids();
+  }
+  expect(waiting, `${what}: only one backend should wait`).toHaveLength(1);
+  return waiting[0] ?? 0;
+}
+
 describe("the tables", () => {
   it("has the columns, keys, checks and index of doc 05 section 2.3", async () => {
     const columns = await db.owner<{ table_name: string; column_name: string; is_nullable: string; udt_name: string; column_default: string | null }[]>`
@@ -412,79 +441,172 @@ describe("the version of a team", () => {
     expect((await stampOf()).getTime()).toBeGreaterThan(renamed.getTime());
   });
 
-  describe("when an account that joined the workspace after the version was written is added", () => {
+  describe("when an instance admin adds themselves to the workspace", () => {
     interface Scene {
       readonly workspace: Workspace;
       readonly owner: string;
-      readonly returning: string;
-      readonly teamId: string;
+      readonly member: string;
+      readonly admin: string;
+      readonly design: string;
+      readonly ops: string;
     }
 
-    /** An instance admin with a second factor, who is a member of a workspace and of its team Design with its owner. */
+    /** A workspace with two teams and an instance admin with a second factor who is not a member of it. */
     async function sceneOfAnInstanceAdmin(): Promise<Scene> {
       const workspace = await workspaceOf(["owner", "member"]);
       emailNumber += 1;
-      const returning = freshId();
-      await seedAccount(db, { id: returning, email: `teams${String(emailNumber)}@example.test`, passwordHash: "$argon2id$stub", isInstanceAdmin: true, emailVerified: true });
+      const admin = freshId();
+      await seedAccount(db, { id: admin, email: `teams${String(emailNumber)}@example.test`, passwordHash: "$argon2id$stub", isInstanceAdmin: true, emailVerified: true });
       await db.owner.begin(async (tx) => {
-        await tx`SELECT set_config('app.account_id', ${returning}, true)`;
-        await tx`UPDATE accounts SET mfa_enabled_at = now(), mfa_secret = ${Buffer.from("sealed")}, mfa_secret_key_id = 'key-1' WHERE id = ${returning}`;
+        await tx`SELECT set_config('app.account_id', ${admin}, true)`;
+        await tx`UPDATE accounts SET mfa_enabled_at = now(), mfa_secret = ${Buffer.from("sealed")}, mfa_secret_key_id = 'key-1' WHERE id = ${admin}`;
       });
-      await seedMember(db, { workspaceId: workspace.id, accountId: returning, role: "member", joinedAt: new Date(Date.now() - 60_000) });
       const owner = memberOf(workspace, 0);
-      const teamId = await seedTeam(workspace.id, "Design", [owner, returning]);
-      return { workspace, owner, returning, teamId };
+      const design = await seedTeam(workspace.id, "Design", [owner]);
+      const ops = await seedTeam(workspace.id, "Ops");
+      return { workspace, owner, member: memberOf(workspace, 1), admin, design, ops };
     }
 
-    /** The admin leaves the workspace and adds themselves again through the instance operation, which writes no invitation and moves no version. */
-    async function leaveAndAddAgain({ workspace, returning }: Scene): Promise<void> {
-      await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspace.id} AND account_id = ${returning}`);
-      const added = await inTenant({ accountId: returning }, (tx) =>
+    const join = ({ admin, workspace }: Scene) =>
+      inTenant({ accountId: admin }, (tx) =>
         instanceRepository(tx).addMembership({ workspaceId: workspace.id, eventIds: { workspace: freshId(), instance: freshId() } }, null, []),
       );
-      expect(added).toEqual({ kind: "added" });
-    }
 
-    const replace = ({ workspace, owner, teamId }: Scene, accountIds: string[], expectedVersions: readonly number[]) =>
+    const replace = ({ workspace, owner }: Scene, teamId: string, accountIds: string[], expectedVersions: readonly number[] | undefined) =>
       inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds, expectedVersions }));
 
-    it("refuses a replacement read before the account left and added themselves again, leaves the set as it was and moves only the version", async () => {
+    const versionOf = async ({ workspace }: Scene, teamId: string): Promise<number | undefined> =>
+      (await storedTeams(workspace.id)).find((team) => team.id === teamId)?.version;
+
+    it("moves the version of every team of the workspace by one, and of no other workspace", async () => {
       const scene = await sceneOfAnInstanceAdmin();
-      const read = 1;
-      await leaveAndAddAgain(scene);
-      expect(await storedMembers(scene.teamId)).toEqual([scene.owner]);
-      expect((await storedTeams(scene.workspace.id)).find((team) => team.id === scene.teamId)?.version).toBe(read);
+      const other = await workspaceOf(["owner"]);
+      const elsewhere = await seedTeam(other.id, "Elsewhere");
+      const bare = await workspaceOf(["owner"]);
 
-      expect(await replace(scene, [scene.owner, scene.returning], [read])).toEqual({ kind: "stale" });
+      expect(await join(scene)).toEqual({ kind: "added" });
 
-      expect(await storedMembers(scene.teamId)).toEqual([scene.owner]);
-      expect((await storedTeams(scene.workspace.id)).find((team) => team.id === scene.teamId)?.version).toBe(read + 1);
-      // The same request made again against the version it read is refused for the version.
-      expect(await replace(scene, [scene.owner, scene.returning], [read])).toEqual({ kind: "stale" });
-      expect(await storedMembers(scene.teamId)).toEqual([scene.owner]);
+      expect(await versionOf(scene, scene.design)).toBe(2);
+      expect(await versionOf(scene, scene.ops)).toBe(2);
+      expect(await storedMembersVersion(scene.design)).toBe(1);
+      expect(await storedMembersVersion(scene.ops)).toBe(1);
+      expect((await storedTeams(other.id)).find((team) => team.id === elsewhere)?.version).toBe(1);
+      // A workspace without teams has nothing to move, and a second join by a member answers already_member and moves nothing.
+      expect(await inTenant({ accountId: scene.admin }, (tx) => instanceRepository(tx).addMembership({ workspaceId: bare.id, eventIds: { workspace: freshId(), instance: freshId() } }, null, []))).toEqual({ kind: "added" });
+      expect(await join(scene)).toEqual({ kind: "already_member" });
+      expect(await versionOf(scene, scene.design)).toBe(2);
     });
 
-    it("applies a replacement read after the account was added again, once the refusal has moved the version", async () => {
+    it("applies at once a replacement read after the join that adds the admin to a team", async () => {
       const scene = await sceneOfAnInstanceAdmin();
-      await leaveAndAddAgain(scene);
-      expect(await replace(scene, [scene.owner, scene.returning], [1])).toEqual({ kind: "stale" });
+      await join(scene);
+      const read = await versionOf(scene, scene.design);
+      expect(read).toBe(2);
 
-      expect(await replace(scene, [scene.owner, scene.returning], [2])).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 3 } });
-      expect(await storedMembers(scene.teamId)).toEqual(sorted([scene.owner, scene.returning]));
+      expect(await replace(scene, scene.design, [scene.owner, scene.admin], [2])).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 3 } });
+      expect(await replace(scene, scene.ops, [scene.admin], [2])).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 3 } });
+      expect(await storedMembers(scene.design)).toEqual(sorted([scene.owner, scene.admin]));
+      expect(await storedMembers(scene.ops)).toEqual([scene.admin]);
     });
 
-    it("does not refuse a replacement that does not add that account, and one without a precondition applies as it did", async () => {
+    it("refuses a replacement read before the join, which leaves the set as it was", async () => {
       const scene = await sceneOfAnInstanceAdmin();
-      const member = memberOf(scene.workspace, 1);
-      await leaveAndAddAgain(scene);
+      await join(scene);
 
-      expect(await replace(scene, [scene.owner], [1])).toMatchObject({ kind: "unchanged", team: { version: 1 } });
-      expect(await replace(scene, [scene.owner, member], [1])).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 2 } });
-      const unconditional = await inTenant({ accountId: scene.owner, workspaceId: scene.workspace.id }, (tx) =>
-        teamRepository(tx).replaceMembers({ teamId: scene.teamId, accountIds: [scene.owner, member, scene.returning], expectedVersions: undefined }),
-      );
-      expect(unconditional).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 3 } });
+      expect(await replace(scene, scene.design, [scene.owner, scene.admin], [1])).toEqual({ kind: "stale" });
+
+      expect(await storedMembers(scene.design)).toEqual([scene.owner]);
+      expect(await versionOf(scene, scene.design)).toBe(2);
     });
+
+    it("refuses a replacement read before the admin left and added themselves again", async () => {
+      const scene = await sceneOfAnInstanceAdmin();
+      await join(scene);
+      expect(await replace(scene, scene.design, [scene.owner, scene.admin], [2])).toMatchObject({ kind: "replaced" });
+      await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${scene.workspace.id} AND account_id = ${scene.admin}`);
+      expect(await join(scene)).toEqual({ kind: "added" });
+
+      expect(await replace(scene, scene.design, [scene.owner, scene.admin], [3])).toEqual({ kind: "stale" });
+
+      expect(await storedMembers(scene.design)).toEqual([scene.owner]);
+      expect(await versionOf(scene, scene.design)).toBe(4);
+    });
+
+    it("refuses a replacement read after a join whose transaction began before the version it read was written", async () => {
+      const scene = await sceneOfAnInstanceAdmin();
+      const started = gateOf();
+      const release = gateOf();
+      // The join's transaction begins here, before the version below is written, and commits after a client has read that version.
+      const joining = inTenant({ accountId: scene.admin }, async (tx) => {
+        started.open();
+        await release.opened;
+        return instanceRepository(tx).addMembership({ workspaceId: scene.workspace.id, eventIds: { workspace: freshId(), instance: freshId() } }, null, []);
+      });
+      try {
+        await Promise.race([started.opened, joining]);
+        expect(await replace(scene, scene.design, [scene.owner, scene.member], [1])).toMatchObject({ kind: "replaced", team: { version: 2 } });
+        expect(await versionOf(scene, scene.design)).toBe(2);
+      } finally {
+        release.open();
+      }
+      expect(await joining).toEqual({ kind: "added" });
+
+      expect(await replace(scene, scene.design, [scene.owner, scene.member, scene.admin], [2])).toEqual({ kind: "stale" });
+
+      expect(await storedMembers(scene.design)).toEqual(sorted([scene.owner, scene.member]));
+      expect(await versionOf(scene, scene.design)).toBe(3);
+    }, TEST_TIMEOUT_MS);
+
+    it("waits for a replacement that holds a team, and ends without a deadlock, with each version moved once", async () => {
+      const scene = await sceneOfAnInstanceAdmin();
+      const held = gateOf();
+      const release = gateOf();
+      const replacing = inTenant({ accountId: scene.owner, workspaceId: scene.workspace.id }, async (tx) => {
+        const result = await teamRepository(tx).replaceMembers({ teamId: scene.design, accountIds: [scene.owner, scene.member], expectedVersions: [1] });
+        held.open();
+        await release.opened;
+        return result;
+      });
+      await Promise.race([held.opened, replacing]);
+      let joining: ReturnType<typeof join> | undefined;
+      try {
+        joining = join(scene);
+        await waitUntilSomeoneWaits("the join");
+      } finally {
+        release.open();
+      }
+      expect(await replacing).toMatchObject({ kind: "replaced", team: { version: 2 } });
+      expect(await joining).toEqual({ kind: "added" });
+
+      expect(await versionOf(scene, scene.design)).toBe(3);
+      expect(await versionOf(scene, scene.ops)).toBe(2);
+      expect(await storedMembers(scene.design)).toEqual(sorted([scene.owner, scene.member]));
+    }, TEST_TIMEOUT_MS);
+
+    it("makes a replacement wait for a join that holds the teams, and refuses it for the version the join moved", async () => {
+      const scene = await sceneOfAnInstanceAdmin();
+      const held = gateOf();
+      const release = gateOf();
+      const joining = inTenant({ accountId: scene.admin }, async (tx) => {
+        const result = await instanceRepository(tx).addMembership({ workspaceId: scene.workspace.id, eventIds: { workspace: freshId(), instance: freshId() } }, null, []);
+        held.open();
+        await release.opened;
+        return result;
+      });
+      await Promise.race([held.opened, joining]);
+      let replacing: ReturnType<typeof replace> | undefined;
+      try {
+        replacing = replace(scene, scene.design, [scene.owner, scene.member], [1]);
+        await waitUntilSomeoneWaits("the replacement");
+      } finally {
+        release.open();
+      }
+      expect(await joining).toEqual({ kind: "added" });
+      expect(await replacing).toEqual({ kind: "stale" });
+
+      expect(await storedMembers(scene.design)).toEqual([scene.owner]);
+      expect(await replace(scene, scene.design, [scene.owner, scene.admin], [2])).toMatchObject({ kind: "replaced", added: 1, team: { version: 3 } });
+    }, TEST_TIMEOUT_MS);
   });
 
   it("is judged before the accounts: a stale request for an account that is no member is stale, and a current one for it is unknown_members", async () => {
@@ -603,35 +725,6 @@ describe("the memberships of a team", () => {
 });
 
 describe("a member who leaves the workspace while the member set of a team is replaced", () => {
-  const gateOf = (): { readonly open: () => void; readonly opened: Promise<void> } => {
-    let open: () => void = () => undefined;
-    const opened = new Promise<void>((resolve) => {
-      open = resolve;
-    });
-    return { open, opened };
-  };
-
-  async function waitingPids(): Promise<number[]> {
-    const rows = await db.app<{ pid: number }[]>`
-      SELECT DISTINCT l.pid FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
-      WHERE NOT l.granted AND s.datname = current_database() ORDER BY l.pid`;
-    return rows.map((row) => row.pid);
-  }
-
-  async function waitUntilSomeoneWaits(what: string): Promise<number> {
-    const deadline = Date.now() + BLOCKED_DEADLINE_MS;
-    let waiting = await waitingPids();
-    while (waiting.length < 1) {
-      if (Date.now() > deadline) {
-        throw new Error(`${what} never waited for a lock`);
-      }
-      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-      waiting = await waitingPids();
-    }
-    expect(waiting, `${what}: only one backend should wait`).toHaveLength(1);
-    return waiting[0] ?? 0;
-  }
-
   it("answers unknown_members, and not a foreign-key error, for a member whose removal the replacement waits for", async () => {
     const workspace = await workspaceOf();
     const teamId = await seedTeam(workspace.id, "Racing");

@@ -294,6 +294,113 @@ export type Audience = (typeof AUDIENCES)[number];
 export const AUDIENCES: readonly ["machine", "marketing-form"];
 
 // @public
+export const AUDIT_ACTION_FILTER_MAX = 20;
+
+// @public (undocumented)
+export const AUDIT_ACTOR_TYPES: readonly ["account", "api_token", "system"];
+
+// @public
+export const AUDIT_EVENT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share"];
+
+// @public (undocumented)
+export const AuditEventActorSchema: z.ZodObject<{
+    type: z.ZodEnum<{
+        account: "account";
+        system: "system";
+        api_token: "api_token";
+    }>;
+    accountId: z.ZodNullable<z.ZodUUID>;
+    label: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const AuditEventEntitySchema: z.ZodObject<{
+    type: z.ZodString;
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const AuditEventListQuerySchema: z.ZodObject<{
+    actorAccountId: z.ZodOptional<z.ZodUUID>;
+    action: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+    category: z.ZodOptional<z.ZodEnum<{
+        member: "member";
+        invitation: "invitation";
+        team: "team";
+        bookmark: "bookmark";
+        share: "share";
+        workspace: "workspace";
+    }>>;
+    entityType: z.ZodOptional<z.ZodString>;
+    entityId: z.ZodOptional<z.ZodUUID>;
+    from: z.ZodOptional<z.ZodISODateTime>;
+    to: z.ZodOptional<z.ZodISODateTime>;
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const AuditEventListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        createdAt: z.ZodISODateTime;
+        actor: z.ZodObject<{
+            type: z.ZodEnum<{
+                account: "account";
+                system: "system";
+                api_token: "api_token";
+            }>;
+            accountId: z.ZodNullable<z.ZodUUID>;
+            label: z.ZodString;
+        }, z.core.$strict>;
+        action: z.ZodString;
+        category: z.ZodNullable<z.ZodEnum<{
+            member: "member";
+            invitation: "invitation";
+            team: "team";
+            bookmark: "bookmark";
+            share: "share";
+            workspace: "workspace";
+        }>>;
+        entity: z.ZodNullable<z.ZodObject<{
+            type: z.ZodString;
+            id: z.ZodUUID;
+        }, z.core.$strict>>;
+        metadata: z.ZodRecord<z.ZodString, z.ZodString>;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const AuditEventSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    createdAt: z.ZodISODateTime;
+    actor: z.ZodObject<{
+        type: z.ZodEnum<{
+            account: "account";
+            system: "system";
+            api_token: "api_token";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        label: z.ZodString;
+    }, z.core.$strict>;
+    action: z.ZodString;
+    category: z.ZodNullable<z.ZodEnum<{
+        member: "member";
+        invitation: "invitation";
+        team: "team";
+        bookmark: "bookmark";
+        share: "share";
+        workspace: "workspace";
+    }>>;
+    entity: z.ZodNullable<z.ZodObject<{
+        type: z.ZodString;
+        id: z.ZodUUID;
+    }, z.core.$strict>>;
+    metadata: z.ZodRecord<z.ZodString, z.ZodString>;
+}, z.core.$strict>;
+
+// @public
 export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "machine"];
 
 // @public (undocumented)
@@ -1079,6 +1186,30 @@ export interface ComponentTypes {
         };
         ApiTokenList: {
             items: ComponentTypes["schemas"]["ApiToken"][];
+            nextCursor: string | null;
+        };
+        AuditEvent: {
+            action: string;
+            actor: ComponentTypes["schemas"]["AuditEventActor"];
+            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share") | null;
+            createdAt: string;
+            entity: ComponentTypes["schemas"]["AuditEventEntity"] | null;
+            id: string;
+            metadata: {
+                [key: string]: string;
+            };
+        };
+        AuditEventActor: {
+            accountId: string | null;
+            label: string;
+            type: "account" | "api_token" | "system";
+        };
+        AuditEventEntity: {
+            id: string;
+            type: string;
+        };
+        AuditEventList: {
+            items: ComponentTypes["schemas"]["AuditEvent"][];
             nextCursor: string | null;
         };
         Bookmark: {
@@ -4939,6 +5070,77 @@ export const listApiTokens: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listAuditEvents: {
+    readonly method: "get";
+    readonly path: "/api/v1/audit-events";
+    readonly operationId: "listAuditEvents";
+    readonly tag: "audit";
+    readonly summary: "List the active workspace's audit events";
+    readonly auth: "admin";
+    readonly rate: "read";
+    readonly entitlement: "audit.log";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            actorAccountId: z.ZodOptional<z.ZodUUID>;
+            action: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+            category: z.ZodOptional<z.ZodEnum<{
+                member: "member";
+                invitation: "invitation";
+                team: "team";
+                bookmark: "bookmark";
+                share: "share";
+                workspace: "workspace";
+            }>>;
+            entityType: z.ZodOptional<z.ZodString>;
+            entityId: z.ZodOptional<z.ZodUUID>;
+            from: z.ZodOptional<z.ZodISODateTime>;
+            to: z.ZodOptional<z.ZodISODateTime>;
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        createdAt: z.ZodISODateTime;
+        actor: z.ZodObject<{
+        type: z.ZodEnum<{
+        account: "account";
+        system: "system";
+        api_token: "api_token";
+        }>;
+        accountId: z.ZodNullable<z.ZodUUID>;
+        label: z.ZodString;
+        }, z.core.$strict>;
+        action: z.ZodString;
+        category: z.ZodNullable<z.ZodEnum<{
+        member: "member";
+        invitation: "invitation";
+        team: "team";
+        bookmark: "bookmark";
+        share: "share";
+        workspace: "workspace";
+        }>>;
+        entity: z.ZodNullable<z.ZodObject<{
+        type: z.ZodString;
+        id: z.ZodUUID;
+        }, z.core.$strict>>;
+        metadata: z.ZodRecord<z.ZodString, z.ZodString>;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
@@ -10494,6 +10696,93 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listAuditEvents: {
+        parameters: {
+            query?: {
+                actorAccountId?: string;
+                action?: string | string[];
+                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share";
+                entityType?: string;
+                entityId?: string;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["AuditEventList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listBookmarkIds: {
         parameters: {
             query?: {
@@ -14943,6 +15232,23 @@ export interface paths {
             cookie?: never;
         };
         get: OperationTypes["getApiConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listAuditEvents"];
         put?: never;
         post?: never;
         delete?: never;

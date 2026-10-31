@@ -70,6 +70,9 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   The shares of a folder are mapped the same way: the path parameter `id` of `listFolderShares`, `createFolderShare` and `deleteFolderShare` takes a folder identifier, the body
  *   inputs `accountId` and `teamId` of `createFolderShare` a member and a team identifier, and the path parameter `shareId` of `deleteFolderShare` a share identifier.
  *
+ * - Audit log: the query parameter `actorAccountId` of `listAuditEvents` takes a member identifier and `entityId` a bookmark identifier. The operation lists the events of the workspace of the
+ *   request and filters them, so an identifier of workspace B in either matches no event of A's log: the answer is an empty `200` and not `404`, which `runApiMatrix` is told by its `emptyAnswers` option.
+ *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
  * `bookmark` rows, so a caller that runs these operations adds `team` and `invitation` identifiers to workspace B, or the matrix reports
@@ -155,6 +158,8 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "updateMember.accountId": "member",
   "leaveWorkspace.transferTo": "member",
   "transferWorkspaceOwnership.accountId": "member",
+  "listAuditEvents.actorAccountId": "member",
+  "listAuditEvents.entityId": "bookmark",
 };
 
 /**
@@ -188,6 +193,8 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * A share of a folder is written the same way, by the owner of its folder: the `folder_shares` sample names the folder (`...a0d2`) that the owner of A owns in A, the admin of A as the
  * target and the owner of A as the author; the fixture must hold that folder and another share of the owner's on it, with the team `seedTeamRows` made, which the delete of the registry
  * removes; B holds the same of its own. The repository has no update, so its `set` is empty.
+ * The audit log is the workspace's: the application role may read and insert an event and never change or delete one, so the `audit_events` repository has the two methods and no update.
+ * The sample inserts an event of the system, which names no account and no entity; the fixture holds an event of A and of B, which the select must not mix.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -246,6 +253,10 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
   },
   team_members: {
     values: (fixture) => ({ teamId: "0192f3a0-2222-7000-8000-00000000a0e1", accountId: fixture.a.owner.accountId }),
+    set: {},
+  },
+  audit_events: {
+    values: { id: "0192f3a0-2222-7000-8000-00000000b012", actorType: "system", actorLabel: "matrix", action: "workspace.created" },
     set: {},
   },
   tags: {

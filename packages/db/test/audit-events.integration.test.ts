@@ -127,6 +127,27 @@ describe("the privileges of the application role on audit_events", () => {
     expect(row).toEqual({ can_select: true, can_insert: true, can_update: false, can_delete: false, can_truncate: false, can_trigger: false, can_update_column: false });
   });
 
+  it("is granted exactly INSERT and SELECT on the table and no privilege on any column, so an UPDATE or a DELETE added to the grant fails this test", async () => {
+    const grants = await db.owner<{ privilege_type: string }[]>`
+      SELECT privilege_type FROM information_schema.role_table_grants
+      WHERE grantee = 'slugbase_app' AND table_schema = 'public' AND table_name = 'audit_events' ORDER BY privilege_type`;
+    expect(grants.map((grant) => grant.privilege_type)).toEqual(["INSERT", "SELECT"]);
+    const columnGrants = await db.owner<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.column_privileges
+      WHERE grantee = 'slugbase_app' AND table_schema = 'public' AND table_name = 'audit_events' AND privilege_type IN ('UPDATE', 'DELETE', 'TRUNCATE')`;
+    expect(columnGrants).toEqual([]);
+  });
+
+  it("has the three indexes the log is read by, on the workspace and the time, the actor and the entity", async () => {
+    const indexes = await db.owner<{ indexname: string; indexdef: string }[]>`
+      SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'audit_events' AND indexname LIKE 'audit_events_workspace_id_%' ORDER BY indexname`;
+    expect(indexes.map((index) => [index.indexname, index.indexdef.slice(index.indexdef.indexOf("(")).replaceAll('"', "")])).toEqual([
+      ["audit_events_workspace_id_actor_account_id_idx", "(workspace_id, actor_account_id, created_at DESC NULLS LAST)"],
+      ["audit_events_workspace_id_created_at_idx", "(workspace_id, created_at DESC NULLS LAST, id DESC NULLS LAST)"],
+      ["audit_events_workspace_id_entity_idx", "(workspace_id, entity_type, entity_id)"],
+    ]);
+  });
+
   it("refuses an UPDATE and a DELETE of the workspace's own event and leaves the event as it was", async () => {
     const a = await tenantWith("Workspace A");
     const event = record(a.workspaceId, a.accountId);

@@ -39,6 +39,7 @@ export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "updateTeam", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },
   { operationId: "deleteTeam", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },
   { operationId: "replaceTeamMembers", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },
+  { operationId: "listAuditEvents", entitlement: "audit.log", decidedBy: "stage-9", test: DECLARED },
   { operationId: "acceptInvitation", entitlement: "members.invite", decidedBy: "handler", test: INVITATIONS, exemption: OWNER_INVITATION },
   { operationId: "acceptInvitation", entitlement: "seats.max", decidedBy: "handler", test: SEATS },
   { operationId: "completeOidcSignIn", entitlement: "members.invite", decidedBy: "handler", test: OIDC_INVITATIONS, exemption: OWNER_INVITATION },

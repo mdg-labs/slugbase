@@ -12,10 +12,11 @@
 -- description or the member set and stays for one that writes the values the row has. The name is compared as text: `citext` calls "Design"
 -- and "design" equal, but a change of the case is a change a member sees. A replacement of the member set says so by writing members_version
 -- (the memberships are rows of another table, so the team's row would otherwise not change), which a replacement of the member set does itself
--- and the acceptance of an invitation does, for every team of its workspace, through workspace_invitations_touch_teams below; the trigger moves
--- it by one whatever value was written, and a change of the name or the description made with it moves the version once. Every move of the
--- version also sets versioned_at to now(), the start of the transaction that moved it: the replacement of the member set compares it with
--- workspace_members.joined_at, which is the start of the transaction that joined the account (see replaceMembers in src/repositories/teams.ts).
+-- and every join of an account to the workspace does, for every team of the workspace: the acceptance of an invitation through
+-- workspace_invitations_touch_teams below and an instance admin adding themselves in sys_instance_add_membership; the trigger moves it by one
+-- whatever value was written, and a change of the name or the description made with it moves the version once. Every move of the version also
+-- sets versioned_at to now(), the start of the transaction that moved it; the application no longer reads it, and it stays for the replicas of
+-- the release before, which compare it with workspace_members.joined_at, until a later release drops the column (Q52).
 -- The trigger overwrites whatever the statement wrote to version and versioned_at, so no role sets either. It runs with the privileges of the
 -- session that writes the row.
 CREATE OR REPLACE FUNCTION public.teams_bump_version() RETURNS trigger
@@ -86,20 +87,21 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.team_members TO slugbase_sy
 -- workspace_invitations_touch_teams(): an invitation that becomes accepted moves the version of every team of its workspace by one, once per
 -- team, in the transaction that accepts it (sys_invitation_accept and sys_invitation_accept_new_account insert the memberships and then mark
 -- the invitation). The accepted account has joined the workspace, and the teams it names; a form of the member set that was read before the
--- acceptance, for any team, is stale afterwards, so a member who is added to a team straight after joining by invitation meets no refusal
--- from the joined_at comparison of replaceMembers (the version was written by the transaction that joined them). An invitation that names no
+-- acceptance, for any team, is stale afterwards, so a replacement made from it cannot put the account into a team, and one read after the
+-- acceptance is not refused. An invitation that names no
 -- team moves the versions as well, although it changes no member set; a team of another workspace moves nothing. The application role
 -- cannot write status 'accepted' (the policy of workspace_invitations), so the trigger runs for the two functions, as slugbase_system. The
 -- other writers of memberships say what they change themselves: a replacement writes members_version. A member who leaves the workspace
 -- takes its memberships without moving the version of its teams: a trigger on their deletion would take the team's row after the departing
--- member's row while a replacement holds the team's row and waits for the member's, and the two would deadlock. An account that joins without
--- an invitation (an instance admin adding themselves, sys_instance_add_membership) moves no version either; a replacement that adds an
--- account whose joined_at is later than the team's versioned_at is refused instead, and moves the version (replaceMembers).
+-- member's row while a replacement holds the team's row and waits for the member's, and the two would deadlock. The other way an account
+-- joins a workspace without an invitation, an instance admin adding themselves (sys_instance_add_membership), moves the versions of the
+-- teams itself, in the same way and in the same order. A member who leaves and joins again therefore moves them with the join.
 -- Lock order: all the teams of the workspace are locked in the order of their identifiers before any is updated. The acceptance functions
 -- have locked the teams the invitation names (FOR KEY SHARE, in that order) and inserted the memberships by then. A replacement holds the row
 -- of one team (FOR UPDATE) and then takes KEY SHARE on the workspace_members rows of the accounts it names; the acceptance holds no lock on a
 -- row that statement can see (the membership it inserted is invisible until it commits), so the replacement never waits for the acceptance
--- while holding a team the trigger needs, and the trigger only waits for replacements. Two acceptances lock the teams in the same order.
+-- while holding a team the trigger needs, and the trigger only waits for replacements. Two acceptances, and an acceptance and an instance
+-- admin joining, lock the teams in the same order.
 CREATE OR REPLACE FUNCTION public.workspace_invitations_touch_teams() RETURNS trigger
   LANGUAGE plpgsql
   AS $$

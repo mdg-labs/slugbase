@@ -61,9 +61,33 @@ export interface MemberRepository extends MemberRoleStore {
    * Deletes the membership of `accountId` in the workspace of the transaction and queues `jobs`, in the open
    * transaction. The API tokens bound to the membership are deleted with it by their foreign key. False,
    * with nothing queued, when the account is no member. The commit is refused when the membership was the
-   * last owner's (`isLastOwnerViolation`). Needs a transaction opened with a workspace.
+   * last owner's (`isLastOwnerViolation`). When `jobs` holds the `member.left` event of this member, the
+   * deletion names that event as its departure, so the bookmarks and folders it releases carry the event's
+   * identifier (`departure_id`) for `applyDeparture`. Needs a transaction opened with a workspace.
    */
   remove(accountId: string, jobs: readonly QueuedJob[]): Promise<boolean>;
+  /**
+   * Applies the content choice of the departure `departureId` (the identifier of its `member.left` event) to the
+   * bookmarks and folders that departure released in the workspace of the transaction, through
+   * `sys_member_departure_apply`, in the open transaction: `transfer` gives them to `recipientId` when that is a
+   * member (a bookmark whose slug the recipient already owns loses its slug, a folder whose name the recipient
+   * already has is renamed `<name> (<n>)`; with no member as the recipient the content stays ownerless), `delete`
+   * deletes them with their shares. Only the rows of that departure change, so a second call, a member who joined
+   * again and a workspace being deleted change nothing. Needs a transaction opened with a workspace.
+   */
+  applyDeparture(request: {
+    readonly departureId: string;
+    readonly content: "transfer" | "delete";
+    readonly recipientId: string;
+  }): Promise<{
+    readonly bookmarksMoved: number;
+    readonly foldersMoved: number;
+    readonly slugsCleared: number;
+    readonly foldersRenamed: number;
+    readonly bookmarksDeleted: number;
+    readonly foldersDeleted: number;
+    readonly leftOwnerless: number;
+  }>;
   /**
    * Gives the full session `sessionId` of the account of the transaction a new token (`tokenHash`, the SHA-256
    * of 32 random bytes) through `sys_session_rotate`, in the open transaction, so the new token exists exactly
@@ -77,6 +101,9 @@ export interface MemberRepository extends MemberRoleStore {
    */
   enqueue(jobs: readonly QueuedJob[]): Promise<void>;
 }
+
+/** The queue of the `member.left` event, which `remove` finds among the jobs it queues. */
+const MEMBER_LEFT_QUEUE = "event.member.left";
 
 /** The name of the constraint trigger that keeps an owner in every workspace; the commit it refuses names it. */
 export const OWNER_REQUIRED_CONSTRAINT = "workspace_members_owner_required";
@@ -119,6 +146,16 @@ interface OwnerRow extends Record<string, unknown> {
 
 interface FlagRow extends Record<string, unknown> {
   done: boolean;
+}
+
+interface DepartureRow extends Record<string, unknown> {
+  bookmarks_moved: number;
+  folders_moved: number;
+  slugs_cleared: number;
+  folders_renamed: number;
+  bookmarks_deleted: number;
+  folders_deleted: number;
+  left_ownerless: number;
 }
 
 function workspaceOf(tx: TenantTx, what: string): string {
@@ -225,10 +262,21 @@ export function memberRepository(tx: TenantTx): MemberRepository {
 
     async remove(accountId, jobs) {
       const workspaceId = workspaceOf(tx, "removing a member");
-      const removed = await tenantHandle(tx)
+      const handle = tenantHandle(tx);
+      // The deletion's foreign keys release the member's bookmarks and folders; the setting tells their triggers which departure it is.
+      const departure = jobs.find(
+        (job) => job.queue === MEMBER_LEFT_QUEUE && job.data.workspaceId === workspaceId && String(job.data.accountId).toLowerCase() === accountId.toLowerCase(),
+      );
+      if (departure !== undefined) {
+        await handle.execute(sql`SELECT set_config('app.departure_id', ${departure.id}::uuid::text, true)`);
+      }
+      const removed = await handle
         .delete(workspaceMembers)
         .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.accountId, accountId)))
         .returning({ accountId: workspaceMembers.accountId });
+      if (departure !== undefined) {
+        await handle.execute(sql`SELECT set_config('app.departure_id', '', true)`);
+      }
       if (removed.length !== 1) {
         return false;
       }
@@ -236,6 +284,26 @@ export function memberRepository(tx: TenantTx): MemberRepository {
         await enqueueInTenantTransaction(tx, job);
       }
       return true;
+    },
+
+    async applyDeparture({ departureId, content, recipientId }) {
+      const workspaceId = workspaceOf(tx, "applying a departure");
+      const rows = await tenantHandle(tx).execute<DepartureRow>(sql`
+        SELECT bookmarks_moved, folders_moved, slugs_cleared, folders_renamed, bookmarks_deleted, folders_deleted, left_ownerless
+        FROM public.sys_member_departure_apply(${workspaceId}::uuid, ${departureId}::uuid, ${content}::text, ${recipientId}::uuid)`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_member_departure_apply did not return exactly one row");
+      }
+      return {
+        bookmarksMoved: row.bookmarks_moved,
+        foldersMoved: row.folders_moved,
+        slugsCleared: row.slugs_cleared,
+        foldersRenamed: row.folders_renamed,
+        bookmarksDeleted: row.bookmarks_deleted,
+        foldersDeleted: row.folders_deleted,
+        leftOwnerless: row.left_ownerless,
+      };
     },
 
     async enqueue(jobs) {

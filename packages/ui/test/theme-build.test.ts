@@ -82,6 +82,7 @@ describe("theme.css compiled with Tailwind", () => {
       "bg-destructive-button",
       "text-destructive-button-foreground",
       "bg-folder-8",
+      "bg-avatar-8",
       "text-sm",
       "text-micro",
       "font-mono",
@@ -97,6 +98,7 @@ describe("theme.css compiled with Tailwind", () => {
     expect(output).toContain("background-color: var(--destructive-button)");
     expect(output).toContain("color: var(--destructive-button-foreground)");
     expect(output).toContain("background-color: var(--folder-8)");
+    expect(output).toContain("background-color: var(--avatar-8)");
     expect(output).toContain("font-size: var(--text-micro)");
     expect(output).toContain("font-family: var(--font-mono)");
     expect(output).toContain("font-family: var(--font-heading)");

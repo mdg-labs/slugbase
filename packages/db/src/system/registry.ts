@@ -115,6 +115,8 @@ export const systemOperations: readonly string[] = [
   "sys_bookmark_match",
   "sys_favicon_get",
   "sys_favicon_put",
+  "slug_preferences_forget_unreadable",
+  "sys_member_departure_apply",
 ];
 
 /**

@@ -847,6 +847,41 @@ describe("an upgrade from the level before the title and slug search index", () 
   }, 120_000);
 });
 
+describe("an upgrade from the level before the audit event account indexes", () => {
+  const INDEXES = ["audit_events_actor_account_id_idx", "audit_events_entity_id_idx", "audit_events_transfer_to_idx", "audit_events_target_id_idx"];
+
+  it("builds each index concurrently on a table that holds events, each in a step of its own, and every one is valid", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const accountIndexes = journal.entries.filter((entry) => entry.tag.includes("index_audit_events_account"));
+    expect(accountIndexes).toHaveLength(INDEXES.length);
+    for (const entry of accountIndexes) {
+      expect(readFileSync(join(CE_CHAIN.folder, `${entry.tag}.sql`), "utf8").startsWith("-- slugbase:non-transactional\n")).toBe(true);
+    }
+    for (const index of INDEXES) {
+      await owner.unsafe(`DROP INDEX public.${index}`);
+    }
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${accountIndexes.map((entry) => String(entry.when)).join(", ")})`);
+    await owner.unsafe(`
+      INSERT INTO audit_events (id, workspace_id, actor_type, actor_label, action, metadata)
+      SELECT gen_random_uuid(), NULL, 'system', 'SlugBase', 'share.granted', jsonb_build_object('targetId', gen_random_uuid()::text) FROM generate_series(1, 100)`);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(accountIndexes.map((entry) => entry.tag));
+    expect((await indexes(owner, INDEXES)).map((index) => [index.name, index.valid])).toEqual([...INDEXES].sort().map((index) => [index, true]));
+    const definitions = await owner<{ name: string; definition: string }[]>`
+      SELECT indexname AS name, indexdef AS definition FROM pg_indexes WHERE tablename = 'audit_events' AND indexname IN ${owner(INDEXES)} ORDER BY indexname`;
+    expect(definitions.map((row) => row.definition)).toEqual([
+      expect.stringContaining("(actor_account_id) WHERE (actor_account_id IS NOT NULL)"),
+      expect.stringContaining("(entity_id) WHERE (entity_id IS NOT NULL)"),
+      expect.stringContaining("(lower((metadata ->> 'targetId'::text))) WHERE ((metadata ->> 'targetId'::text) IS NOT NULL)"),
+      expect.stringContaining("(lower((metadata ->> 'transferTo'::text))) WHERE ((metadata ->> 'transferTo'::text) IS NOT NULL)"),
+    ]);
+  }, 120_000);
+});
+
 describe("an upgrade from the level before the bookmark match migration", () => {
   const WORKSPACE = "0190a000-0000-7000-8000-000000000031";
   const ACCOUNT = "0190a000-0000-7000-8000-000000000032";

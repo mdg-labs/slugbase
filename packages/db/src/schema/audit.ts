@@ -40,5 +40,17 @@ export const auditEvents = pgTable(
     index("audit_events_workspace_id_entity_idx").on(table.workspaceId, table.entityType, table.entityId),
     // The retention purge selects by age across workspaces.
     index("audit_events_created_at_idx").on(table.createdAt),
+    // The account deletion (`sys_delete_account`, doc 05 section 7.1) finds an account's events across every workspace: the
+    // `actor_account_id` foreign-key action and the update of `ip_prefix` by the actor, the update of `entity_id` where it names the
+    // account, and the removal of the `transferTo` and `targetId` metadata fields where they name it. Each index holds only the rows
+    // that carry the column or field, and its expression is the one the statement compares.
+    index("audit_events_actor_account_id_idx").on(table.actorAccountId).where(sql`${table.actorAccountId} IS NOT NULL`),
+    index("audit_events_entity_id_idx").on(table.entityId).where(sql`${table.entityId} IS NOT NULL`),
+    index("audit_events_transfer_to_idx")
+      .on(sql`lower(${table.metadata} ->> 'transferTo')`)
+      .where(sql`${table.metadata} ->> 'transferTo' IS NOT NULL`),
+    index("audit_events_target_id_idx")
+      .on(sql`lower(${table.metadata} ->> 'targetId')`)
+      .where(sql`${table.metadata} ->> 'targetId' IS NOT NULL`),
   ],
 );

@@ -146,6 +146,8 @@ describe("the tables", () => {
       ["version", "int4", "NO"],
       ["created_at", "timestamptz", "NO"],
       ["updated_at", "timestamptz", "NO"],
+      ["departure_id", "uuid", "YES"],
+      ["departure_name", "citext", "YES"],
     ]);
     const defaults = Object.fromEntries(columns.filter((column) => column.table_name === "folders").map((column) => [column.column_name, column.column_default]));
     expect(defaults["icon"]).toContain("folder");
@@ -159,7 +161,7 @@ describe("the tables", () => {
 
     const constraints = await db.owner<{ conname: string; definition: string }[]>`
       SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint
-      WHERE conrelid IN ('public.folders'::regclass, 'public.folder_bookmarks'::regclass) AND contype <> 'n' ORDER BY conname`;
+      WHERE conrelid IN ('public.folders'::regclass, 'public.folder_bookmarks'::regclass) AND contype NOT IN ('n', 't') ORDER BY conname`;
     const byName = new Map(constraints.map((constraint) => [constraint.conname, constraint.definition]));
     expect([...byName.keys()]).toEqual([
       "folder_bookmarks_bookmark_fkey",

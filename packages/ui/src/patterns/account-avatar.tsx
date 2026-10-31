@@ -12,17 +12,17 @@ export interface AccountAvatarProps {
   className?: string;
 }
 
-// The fixed colour set of the folders (doc 03 "Theme tokens"): eight tokens that hold in both themes.
-// `text-background` is the page colour, which reads on a fill in either theme.
+// The fixed colour set of the avatars (doc 03 "Theme tokens"): eight tokens that follow the folder colours, and in the
+// light theme are their darker variants, so that the initials in `text-background` (the page colour) reach 4.5:1 on each.
 const COLOURS = [
-  "bg-folder-1",
-  "bg-folder-2",
-  "bg-folder-3",
-  "bg-folder-4",
-  "bg-folder-5",
-  "bg-folder-6",
-  "bg-folder-7",
-  "bg-folder-8",
+  "bg-avatar-1",
+  "bg-avatar-2",
+  "bg-avatar-3",
+  "bg-avatar-4",
+  "bg-avatar-5",
+  "bg-avatar-6",
+  "bg-avatar-7",
+  "bg-avatar-8",
 ] as const;
 
 const FNV_OFFSET = 0x81_1c_9d_c5;

@@ -32,6 +32,18 @@ export const bookmarks = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     ownerId: uuid(),
+    /**
+     * The `member.left` event whose departure released the bookmark: set, together with clearing `owner_id`, by the release trigger when the
+     * statement that deleted the membership named a departure (src/sql/680-member-departure.sql), and cleared when the departure's content
+     * choice is applied. Null for every bookmark that has an owner, and for ownerless bookmarks that no departure released (an account deletion).
+     */
+    departureId: uuid(),
+    /**
+     * The slug and forwarding the departure's release took from the bookmark because an ownerless bookmark already held the slug (src/sql/560-bookmark-slugs.sql), so a transfer
+     * can give them back to the recipient. Null for a bookmark whose slug the release left, and for every bookmark no departure released; cleared with `departure_id`.
+     */
+    departureSlug: text(),
+    departureForwarding: boolean(),
     url: text().notNull(),
     urlCanonical: text().notNull(),
     host: text().notNull(),

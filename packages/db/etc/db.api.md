@@ -5,6 +5,7 @@
 ```ts
 
 import type { AccountDeletionScope } from '@slugbase/core';
+import type { AuditEventReader } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import { BookmarkArchiveTransaction } from '@slugbase/core';
 import type { BookmarkBulkStore } from '@slugbase/core';
@@ -246,7 +247,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuditEventRepository {
+export interface AuditEventRepository extends AuditEventReader {
     insert(record: AuditRecord): Promise<void>;
 }
 
@@ -885,6 +886,19 @@ export interface LoginCandidate {
 
 // @public (undocumented)
 export interface MemberRepository extends MemberRoleStore {
+    applyDeparture(request: {
+        readonly departureId: string;
+        readonly content: "transfer" | "delete";
+        readonly recipientId: string;
+    }): Promise<{
+        readonly bookmarksMoved: number;
+        readonly foldersMoved: number;
+        readonly slugsCleared: number;
+        readonly foldersRenamed: number;
+        readonly bookmarksDeleted: number;
+        readonly foldersDeleted: number;
+        readonly leftOwnerless: number;
+    }>;
     enqueue(jobs: readonly QueuedJob[]): Promise<void>;
     list(afterAccountId: string | null, limit: number): Promise<readonly WorkspaceMember[]>;
     longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
