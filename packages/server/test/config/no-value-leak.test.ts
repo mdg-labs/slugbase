@@ -44,6 +44,7 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "SMTP_SECURITY", value: "security-qx73" },
   { key: "SMTP_FROM", value: "from-qx74" },
   { key: "AI_BASE_URL", value: "https://user:pw-qx75@ai.example.com/v1" },
+  { key: "AI_BASE_URL", value: "http://qx80.example.com/v1" },
   { key: "AI_API_KEY", value: "key with space qx76" },
   { key: "AI_MODEL", value: "model qx77" },
   { key: "AI_PROVIDER_NAME", value: "name\nqx78" },

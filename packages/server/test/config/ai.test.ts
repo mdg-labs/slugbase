@@ -95,11 +95,46 @@ describe("the AI keys", () => {
   });
 });
 
+describe("a plain-http AI endpoint", () => {
+  const PUBLIC_HTTP = { ...AI, AI_BASE_URL: "http://provider.example.com/v1" };
+  const LAN = { ...AI, AI_BASE_URL: "http://llm.lan:11434/v1" };
+
+  it("is refused on a public host, naming AI_BASE_URL and no value", () => {
+    const found = issues(PUBLIC_HTTP);
+    expect(found).toEqual([{ key: "AI_BASE_URL", message: "must be an https URL unless AI_ALLOWED_PRIVATE_HOST names its host" }]);
+    expect(JSON.stringify(found)).not.toContain("provider.example.com");
+  });
+
+  it("is refused on a public host with no API key too: the suggestion requests are in clear either way", () => {
+    expect(keysOf({ ...PUBLIC_HTTP, AI_API_KEY: undefined })).toEqual(["AI_BASE_URL"]);
+  });
+
+  it("is refused on a private host the operator has not named", () => {
+    expect(keysOf(LAN)).toEqual(["AI_BASE_URL"]);
+    expect(keysOf({ ...AI, AI_BASE_URL: "http://127.0.0.1:11434/v1" })).toEqual(["AI_BASE_URL"]);
+  });
+
+  it("is accepted on the named private host, with or without an API key", () => {
+    expect(issues({ ...LAN, AI_ALLOWED_PRIVATE_HOST: "llm.lan" })).toEqual([]);
+    expect(issues({ ...LAN, AI_API_KEY: undefined, AI_ALLOWED_PRIVATE_HOST: "llm.lan" })).toEqual([]);
+  });
+
+  it("is refused when the named host is another host, and the refusal names only the allowance", () => {
+    expect(keysOf({ ...PUBLIC_HTTP, AI_ALLOWED_PRIVATE_HOST: "llm.lan" })).toEqual(["AI_ALLOWED_PRIVATE_HOST"]);
+  });
+
+  it("leaves an https endpoint unchanged, on a public or a private host", () => {
+    expect(issues(AI)).toEqual([]);
+    expect(issues({ ...AI, AI_BASE_URL: "https://llm.lan:11434/v1" })).toEqual([]);
+    expect(issues({ ...AI, AI_BASE_URL: "https://llm.lan:11434/v1", AI_ALLOWED_PRIVATE_HOST: "llm.lan" })).toEqual([]);
+  });
+});
+
 describe("AI_ALLOWED_PRIVATE_HOST", () => {
   const LAN = { ...AI, AI_BASE_URL: "http://llm.lan:11434/v1" };
 
-  it("is optional and, when set to the host of AI_BASE_URL, is accepted", () => {
-    expect(loadConfig("server", productionEnv(LAN)).config.AI_ALLOWED_PRIVATE_HOST).toBeUndefined();
+  it("is optional for an https endpoint and, when set to the host of AI_BASE_URL, is accepted", () => {
+    expect(loadConfig("server", productionEnv({ ...LAN, AI_BASE_URL: "https://llm.lan:11434/v1" })).config.AI_ALLOWED_PRIVATE_HOST).toBeUndefined();
     expect(loadConfig("server", productionEnv({ ...LAN, AI_ALLOWED_PRIVATE_HOST: "llm.lan" })).config.AI_ALLOWED_PRIVATE_HOST).toBe("llm.lan");
   });
 

@@ -273,8 +273,9 @@ export const AI_KEYS = ["AI_BASE_URL", "AI_API_KEY", "AI_MODEL", "AI_PROVIDER_NA
  * All keys unset leaves AI suggestions unavailable. `AI_BASE_URL`, `AI_MODEL` and `AI_PROVIDER_NAME` (the name members see)
  * are required together; `AI_API_KEY` is optional, for an endpoint that takes no credential. `AI_ALLOWED_PRIVATE_HOST`
  * is the operator's allowance for an endpoint on a private address (Q90): one bare host that must be the host of
- * `AI_BASE_URL`, so a changed `AI_BASE_URL` never keeps an allowance meant for the old host. A violation refuses to start
- * and names the keys, never a value.
+ * `AI_BASE_URL`, so a changed `AI_BASE_URL` never keeps an allowance meant for the old host. A plain `http:` endpoint is
+ * accepted only on that named host, with or without an API key, so no other request leaves the process in clear (Q90).
+ * A violation refuses to start and names the keys, never a value.
  */
 export const aiFragment = envFragment({
   shape: {
@@ -293,8 +294,14 @@ export const aiFragment = envFragment({
       context.issue(key, `is required because ${set.join(", ")} ${set.length === 1 ? "is" : "are"} set`);
     }
     const { AI_BASE_URL: baseUrlValue, AI_ALLOWED_PRIVATE_HOST: allowed } = values;
-    if (baseUrlValue !== undefined && allowed !== undefined && new URL(baseUrlValue).hostname !== allowed) {
+    if (baseUrlValue === undefined) {
+      return;
+    }
+    const url = new URL(baseUrlValue);
+    if (allowed !== undefined && url.hostname !== allowed) {
       context.issue("AI_ALLOWED_PRIVATE_HOST", "must be the host of AI_BASE_URL");
+    } else if (allowed === undefined && url.protocol === "http:") {
+      context.issue("AI_BASE_URL", "must be an https URL unless AI_ALLOWED_PRIVATE_HOST names its host");
     }
   },
 });

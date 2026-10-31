@@ -89,10 +89,10 @@ describe("the egress instance of the AI adapter", () => {
   });
 
   // An endpoint on loopback: the sink answers 200 with `{}`, which the adapter refuses as an answer, but it records the request.
-  async function endpoint(): Promise<{ sink: HttpSink; env: Record<string, string> }> {
+  async function endpoint(scheme: "http" | "https" = "http"): Promise<{ sink: HttpSink; env: Record<string, string> }> {
     const sink = await startHttpSink();
     sinks.push(sink);
-    return { sink, env: { ...ai, AI_BASE_URL: `http://127.0.0.1:${new URL(sink.dsn).port}/v1` } };
+    return { sink, env: { ...ai, AI_BASE_URL: `${scheme}://127.0.0.1:${new URL(sink.dsn).port}/v1` } };
   }
 
   async function failureOf(work: Promise<unknown>): Promise<unknown> {
@@ -102,8 +102,8 @@ describe("the egress instance of the AI adapter", () => {
     );
   }
 
-  it("refuses an endpoint on a private address when the operator names no host: no connection is made", async () => {
-    const { sink, env } = await endpoint();
+  it("refuses an https endpoint on a private address when the operator names no host: no connection is made", async () => {
+    const { sink, env } = await endpoint("https");
     const adapters = composeAdapters(loadConfig("server", { ...environment, ...env }).config, logger);
     const error = await failureOf(adapters.ai.suggest(request));
     expect(error).toBeInstanceOf(AiSuggestError);
