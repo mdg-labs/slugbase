@@ -235,6 +235,14 @@ beforeAll(async () => {
 const document = loadOpenApiDocument();
 const classification = classifyOperations(document);
 
+/**
+ * The API-mode test calls every tenant-scoped operation once for each principal and target of workspace B, and takes a checksum of workspace B
+ * after each call: 1206 sequential database round trips for the 62 tenant-scoped operations when this was measured, 2.5 s idle, 4.1 s with `taskset -c 2,3` and six busy
+ * loops on those cores, and up to 16.8 s with sixteen (a run at that load timed out at 5 s). Its cost grows with the operations (a new one adds at least nine calls), so the bound is a
+ * budget per tenant-scoped operation, about 25 times the idle cost of each, and not a fixed number the next operation would eat into.
+ */
+const MATRIX_TIMEOUT_MS = 1_000 * classification.summary.byKind["tenant-scoped"];
+
 describe("the matrix over the committed contract and the repository registry", () => {
   // This package-level test exercises the runner with no server. The API mode
   // over the real middleware chain, through an in-process createServer, runs in
@@ -264,7 +272,7 @@ describe("the matrix over the committed contract and the repository registry", (
     return Promise.resolve({ status: refused ? 403 : resolvesToNothing ? 200 : placeholder ? 202 : 404 });
   };
 
-  it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, async () => {
+  it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, { timeout: MATRIX_TIMEOUT_MS }, async () => {
     // The probe fixture holds a team of workspace B, which the matrix puts in the invitation's `teamIds` and in the path of the team operations, and no
     // invitation, so workspace B is given one for the path of the operations that resend, link and revoke one.
     const fixture = {

@@ -34,6 +34,12 @@ import { attemptLogin, freshSessionCookie, postJson, seedAccount, serveAuth, sto
 // credential flows (routes/invitation-acceptance, routes/invitation-signup and
 // routes/invitation-management assert them under explicit limits).
 
+// A login or setup attempt that gets past the limiter verifies or hashes one argon2id password, about 10 ms of CPU each, which is the shipped
+// cost and not something to lower here, and a test makes up to 42 of them to reach its denial; the credential-flow tests spend theirs on
+// database writes and queued mail. Measured with `taskset -c 2,3` and sixteen busy loops on those two cores, the longest test took up to 5.3 s
+// (idle: 0.4 s), so vitest's default of 5 s fails on a loaded runner with nothing wrong. The bound leaves several times that and still ends a hang.
+const ATTEMPTS_TIMEOUT_MS = 30_000;
+
 const database = useTestDatabase();
 let store: AuthStore;
 
@@ -108,7 +114,7 @@ async function accountCount(): Promise<number> {
   return rows[0]?.count ?? -1;
 }
 
-describe("the login limits as shipped (T9)", () => {
+describe("the login limits as shipped (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   it("allows 10 attempts a minute per IP, answers the 11th with 429 and a Retry-After that works, and leaves another IP alone", async () => {
     const world = serveAuth(database(), store, { env: { TRUSTED_PROXY_HOPS: "1" }, openLimits: false });
     const retryAfter = await exhaust(10, async (client) => strangerAttempt(world, `198.51.100.${String(client)}`), '"login";q=10;w=60', 60);
@@ -144,7 +150,7 @@ describe("the login limits as shipped (T9)", () => {
   });
 });
 
-describe("the setup limit as shipped (T9)", () => {
+describe("the setup limit as shipped (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   it("allows 10 attempts an hour per IP, wrong ones included, answers the 11th with 429 and a Retry-After, creates no account, and leaves another IP and the login bucket alone", async () => {
     const world = serveAuth(database(), store, { env: { SETUP_TOKEN_REQUIRED: "true", TRUSTED_PROXY_HOPS: "1" }, openLimits: false });
     const accounts = await accountCount();
@@ -160,7 +166,7 @@ describe("the setup limit as shipped (T9)", () => {
   });
 });
 
-describe("the client address is taken only across the trusted hops (T9)", () => {
+describe("the client address is taken only across the trusted hops (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   interface Case {
     readonly name: string;
     readonly hops: number;
@@ -207,7 +213,7 @@ describe("the client address is taken only across the trusted hops (T9)", () => 
   });
 });
 
-describe("the IP bucket of an IPv6 address is its /64, and an IPv4-mapped one is its IPv4 address (T9)", () => {
+describe("the IP bucket of an IPv6 address is its /64, and an IPv4-mapped one is its IPv4 address (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   async function limitedAfterThree(forwardedFor: readonly string[]): Promise<number[]> {
     const world = serveAuth(database(), store, { env: { TRUSTED_PROXY_HOPS: "1", RATE_LIMIT_LOGIN_IP: "3/min" }, openLimits: false });
     const statuses: number[] = [];
@@ -255,7 +261,7 @@ async function sessionFor(world: AuthWorld, flow: RequestFlow): Promise<string |
   return freshSessionCookie(world, await seedAccount(database(), { emailVerified: true }), "198.51.100.250");
 }
 
-describe("the register limit as shipped (T9)", () => {
+describe("the register limit as shipped (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   const [register] = requestFlows;
   if (register === undefined) {
     throw new Error("the register flow is missing");
@@ -286,7 +292,7 @@ describe("the register limit as shipped (T9)", () => {
   });
 });
 
-describe("the reset limits as shipped (T9)", () => {
+describe("the reset limits as shipped (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   const resetFlows = requestFlows.filter((flow) => flow.bucket === "reset");
 
   it.each(resetFlows.map((flow) => [flow.name, flow] as const))(
@@ -366,7 +372,7 @@ describe("the reset limits as shipped (T9)", () => {
   });
 });
 
-describe("the token_redeem limit as shipped (T9)", () => {
+describe("the token_redeem limit as shipped (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   const unknownToken = "A".repeat(43);
 
   it.each(redeemFlows.map((flow) => [flow.name, flow] as const))(
@@ -398,7 +404,7 @@ describe("the token_redeem limit as shipped (T9)", () => {
   });
 });
 
-describe("the invitation operations in the token_redeem and reset buckets as shipped (T9)", () => {
+describe("the invitation operations in the token_redeem and reset buckets as shipped (T9)", { timeout: ATTEMPTS_TIMEOUT_MS }, () => {
   const harness = workspaceHarness(database);
   const setup = () => serveAuth(database(), store, { entitlements: GRANTED, mail });
   let owner: { readonly workspaceId: string; readonly admin: Person; readonly invitee: Person } | undefined;
