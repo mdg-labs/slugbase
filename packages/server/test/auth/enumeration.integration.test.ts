@@ -5,6 +5,7 @@ import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
+import { hashPassword } from "../../src/auth/password.ts";
 import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { urlOf } from "../migrate/support.ts";
@@ -13,7 +14,9 @@ import { HOOK_TIMEOUT_MS, workspaceHarness } from "../workspaces/support.ts";
 import { CREDENTIAL_ENV, requestFlows, type RequestFlow } from "./credential-flows.ts";
 import {
   attemptLogin,
+  fastLatencyRatios,
   freshSessionCookie,
+  LATENCY_ROUNDS,
   latencyCalls,
   medianLatencyRatio,
   seedAccount,
@@ -203,9 +206,16 @@ describe("POST /api/v1/auth/login (T8)", () => {
 // worker then sends, and to whom, is its decision and not visible to the requester.
 const EMAIL_LIMIT_KEY = /^[0-9a-f]{64}$/;
 
+// Rounds per order of the latency tests of the requests that take a few milliseconds (every one but the registration).
+// A host that is busy delays most of the calls of a stretch several times over; the more calls a side makes, the surer
+// the fastest of them is one that nothing delayed.
+const SHORT_REQUEST_LATENCY_ROUNDS = 30;
+
 describe("the requests for an emailed link (T8)", () => {
   const mail = new InMemoryMail();
   let tag = 0;
+  // The latency tests seed hundreds of accounts they never sign in to, each with a password hash as a real account has one.
+  const fixtureHash = hashPassword("a long password for the accounts seeded in bulk");
 
   async function mailJobCount(): Promise<number> {
     const rows = await database().app<{ count: number }[]>`SELECT count(*)::int AS count FROM pgboss.job WHERE name = 'mail.send'`;
@@ -219,7 +229,7 @@ describe("the requests for an emailed link (T8)", () => {
 
   /** An account that moved away from `address`, whose unused "this wasn't me" link reserves it: no account holds the address. */
   async function reserve(address: string, movedTo: string): Promise<void> {
-    const mover = await seedAccount(database(), { emailVerified: true, email: movedTo });
+    const mover = await seedAccount(database(), { emailVerified: true, email: movedTo, passwordHash: await fixtureHash });
     await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
       await tx`
@@ -256,8 +266,8 @@ describe("the requests for an emailed link (T8)", () => {
     const suffix = String(tag);
     const indexes = Array.from({ length: count }, (_unused, index) => String(index));
     const [verified, unverified, reserved] = await Promise.all([
-      Promise.all(indexes.map(async (index) => (await seedAccount(database(), { emailVerified: true, email: `latency.verified.${suffix}.${index}@example.test` })).email)),
-      Promise.all(indexes.map(async (index) => (await seedAccount(database(), { email: `latency.unverified.${suffix}.${index}@example.test` })).email)),
+      Promise.all(indexes.map(async (index) => (await seedAccount(database(), { emailVerified: true, email: `latency.verified.${suffix}.${index}@example.test`, passwordHash: await fixtureHash })).email)),
+      Promise.all(indexes.map(async (index) => (await seedAccount(database(), { email: `latency.unverified.${suffix}.${index}@example.test`, passwordHash: await fixtureHash })).email)),
       Promise.all(
         indexes.map(async (index) => {
           const address = `latency.reserved.${suffix}.${index}@example.test`;
@@ -312,17 +322,29 @@ describe("the requests for an emailed link (T8)", () => {
       async () => {
         const world = serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, RATE_LIMIT_REGISTER_IP: "1000/hour" }, mail });
         const cookie = await sessionFor(world, flow);
-        const calls = latencyCalls();
+        // The registration spends its time hashing the password, ten or more milliseconds of CPU work whose fastest calls
+        // under load are far below its usual ones, so its pairs are compared by their median; the other requests are a
+        // few database round trips, which the host delays call by call, and are compared by their fastest call and
+        // their 25th percentile.
+        const hashes = flow.bucket === "register";
+        const rounds = hashes ? LATENCY_ROUNDS : SHORT_REQUEST_LATENCY_ROUNDS;
+        const calls = latencyCalls(rounds);
         const kinds = await latencyTargets(calls);
         // Every call names an address of its own, on the reference side and on the probe side: the per-address limit
         // makes a bucket on an address's first use, and a side that repeats an address would not pay that again.
+        const accepted = async (response: Promise<Response>): Promise<Response> => {
+          const answer = await response;
+          expect(answer.status).toBe(202);
+          return answer;
+        };
         let unknown = 0;
         const reference = () => {
           unknown += 1;
-          return flow.call(world, `latency.unknown.${String(tag)}.${String(unknown)}@example.test`, {}, cookie);
+          return accepted(flow.call(world, `latency.unknown.${String(tag)}.${String(unknown)}@example.test`, {}, cookie));
         };
-        // A path that skipped the account lookup or the hashing would answer in a small fraction of the time: the
-        // bounds are far wider than the noise of a loaded runner, and the ratio is a median over many back-to-back pairs.
+        // A path that skipped the account lookup or the hashing would answer in a small fraction of the time, and one that
+        // does for one kind of address on more than three quarters of the calls as much again as the request takes would
+        // answer in at least twice as long: the bounds are far wider than the noise the ratios keep.
         for (const { name, addresses } of kinds) {
           const taken = world.limiter.takes.length;
           let drawn = 0;
@@ -332,17 +354,21 @@ describe("the requests for an emailed link (T8)", () => {
             if (address === undefined) {
               throw new Error(`the latency probe for ${name} ran out of addresses`);
             }
-            return flow.call(world, address, {}, cookie);
+            return accepted(flow.call(world, address, {}, cookie));
           };
-          const ratio = await medianLatencyRatio(reference, probe);
+          const ratios = hashes
+            ? { median: await medianLatencyRatio(reference, probe, rounds) }
+            : await fastLatencyRatios(reference, probe, rounds);
           const keys = world.limiter.takes.slice(taken).map((take) => take.key).filter((key) => EMAIL_LIMIT_KEY.test(key));
           expect(drawn, name).toBe(calls);
           expect(new Set(keys).size, name).toBe(keys.length);
           if (flow.bucket === "reset") {
             expect(keys, name).toHaveLength(2 * calls);
           }
-          expect(ratio, name).toBeGreaterThan(0.5);
-          expect(ratio, name).toBeLessThan(2);
+          for (const [reading, ratio] of Object.entries(ratios)) {
+            expect(ratio, `${name} ${reading}`).toBeGreaterThan(0.5);
+            expect(ratio, `${name} ${reading}`).toBeLessThan(2);
+          }
         }
       },
     );
