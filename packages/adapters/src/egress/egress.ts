@@ -13,7 +13,7 @@ import {
   type EgressRequest,
   type EgressResponse,
 } from "@slugbase/core";
-import { formatAddress, isPublicAddress, parseAddress, type ParsedAddress } from "./address.ts";
+import { formatAddress, isOperatorPrivateAddress, isPublicAddress, parseAddress, type ParsedAddress } from "./address.ts";
 
 /** Resolves a host name to the addresses a connection to it could use. */
 export type EgressResolver = (hostname: string) => Promise<readonly string[]>;
@@ -23,6 +23,14 @@ export interface CreateEgressOptions {
   readonly nodeEnv: string;
   /** Replaces the system resolver. Its answers are validated like any other. */
   readonly resolve?: EgressResolver;
+  /**
+   * The one origin (scheme, host and port) whose loopback, private, CGNAT and unique-local addresses may be
+   * connected to, which the operator names for the AI endpoint (Q90). Every other origin is checked as without it,
+   * link-local, unspecified, multicast and reserved addresses stay refused for this one too, and a redirect to any
+   * other origin is an ordinary target. Unlike `testOnly` it is accepted in production; only the composition root
+   * sets it, on an instance that is handed to the AI adapter alone.
+   */
+  readonly privateOrigin?: string;
   /**
    * Allowances for tests that talk to a local server. The constructor throws when
    * any is given and `nodeEnv` is `production`.
@@ -141,6 +149,25 @@ function parseTarget(text: string): Target {
   return { url, hostname, literal };
 }
 
+// The origin of `privateOrigin` as `URL.origin` writes it, so the scheme, the case, the notation of the host and a default port compare
+// as they do for a target; text that is more than an http or https origin is a programming error.
+function parsePrivateOrigin(text: string): string {
+  const url = URL.canParse(text) ? new URL(text) : undefined;
+  if (
+    url === undefined ||
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.hostname === "" ||
+    url.pathname !== "/" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    url.username !== "" ||
+    url.password !== ""
+  ) {
+    throw new Error("The egress private origin needs an http or https origin");
+  }
+  return url.origin;
+}
+
 function raceDeadline<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const onAbort = (): void => {
@@ -244,13 +271,15 @@ function decodersFor(header: string | undefined): Readable[] | undefined {
  * the request body. One deadline covers every
  * hop's resolving, connecting and reading, and the decoded body is cut off at
  * `maxBytes`. A response outside the caller's content-type allowlist is refused
- * once its headers arrive.
+ * once its headers arrive. An instance built with `privateOrigin` also connects to
+ * the loopback, private, CGNAT and unique-local addresses of that one origin.
  */
 export class HttpEgress implements EgressPort {
   readonly available = true;
   readonly #resolve: EgressResolver;
   readonly #allowNonPublic: boolean;
   readonly #allowedAddresses: ReadonlySet<string>;
+  readonly #privateOrigin: string | undefined;
   readonly #ca: string | Buffer | undefined;
 
   constructor(options: CreateEgressOptions) {
@@ -272,6 +301,7 @@ export class HttpEgress implements EgressPort {
         return formatAddress(parsed);
       }),
     );
+    this.#privateOrigin = options.privateOrigin === undefined ? undefined : parsePrivateOrigin(options.privateOrigin);
     this.#ca = options.testOnly?.ca;
   }
 
@@ -374,8 +404,11 @@ export class HttpEgress implements EgressPort {
     } else {
       answers = [target.literal];
     }
+    const exempt = this.#privateOrigin !== undefined && target.url.origin === this.#privateOrigin;
     const permitted = (address: ParsedAddress): boolean =>
-      isPublicAddress(address) || this.#allowedAddresses.has(formatAddress(address));
+      isPublicAddress(address) ||
+      this.#allowedAddresses.has(formatAddress(address)) ||
+      (exempt && isOperatorPrivateAddress(address));
     if (!this.#allowNonPublic && !answers.every(permitted)) {
       throw new EgressBlocked();
     }

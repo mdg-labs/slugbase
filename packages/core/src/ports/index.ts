@@ -1,5 +1,6 @@
 export type { Adapters } from "./adapters.ts";
-export type { AiSuggestPort, AiSuggestRequest, AiSuggestion } from "./ai-suggest.ts";
+export { AiSuggestError } from "./ai-suggest.ts";
+export type { AiSuggestErrorCode, AiSuggestPort, AiSuggestRequest, AiSuggestion } from "./ai-suggest.ts";
 export type { AnalyticsEvent, AnalyticsPort } from "./analytics.ts";
 export { BILLING_ERROR_CODES, BillingError, toBillingErrorCode } from "./billing.ts";
 export type {

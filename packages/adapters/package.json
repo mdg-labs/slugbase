@@ -28,7 +28,8 @@
     "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*",
     "nodemailer": "^10.1.0",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@slugbase/testing": "workspace:*"

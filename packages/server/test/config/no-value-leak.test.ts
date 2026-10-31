@@ -43,6 +43,11 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "SMTP_PORT", value: "port-qx72" },
   { key: "SMTP_SECURITY", value: "security-qx73" },
   { key: "SMTP_FROM", value: "from-qx74" },
+  { key: "AI_BASE_URL", value: "https://user:pw-qx75@ai.example.com/v1" },
+  { key: "AI_API_KEY", value: "key with space qx76" },
+  { key: "AI_MODEL", value: "model qx77" },
+  { key: "AI_PROVIDER_NAME", value: "name\nqx78" },
+  { key: "AI_ALLOWED_PRIVATE_HOST", value: "qx79.example.com:11434" },
 ];
 
 // The message, the stack, the cause and every own property, however they are rendered.

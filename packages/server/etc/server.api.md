@@ -35,6 +35,21 @@ import { VersionInfoSchema } from '@slugbase/contracts';
 import type { WorkspaceRole } from '@slugbase/core';
 import { z } from 'zod';
 
+// @public (undocumented)
+export const AI_KEYS: readonly ["AI_BASE_URL", "AI_API_KEY", "AI_MODEL", "AI_PROVIDER_NAME", "AI_ALLOWED_PRIVATE_HOST"];
+
+// @public
+export const AI_REQUIRED_KEYS: readonly ["AI_BASE_URL", "AI_MODEL", "AI_PROVIDER_NAME"];
+
+// @public
+export const aiFragment: EnvFragment<    {
+AI_BASE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>, unknown>;
+AI_API_KEY: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+AI_MODEL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+AI_PROVIDER_NAME: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string | undefined, string>> & z.ZodType<string, string, z.core.$ZodTypeInternals<string, string>>>, unknown>;
+}, object>;
+
 // @public
 export interface ApiTokenPrincipal extends Extract<TenantPrincipal, {
     readonly kind: "api-token";
@@ -377,6 +392,12 @@ export const envSchemas: {
         SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
         SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
         SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
+        AI_BASE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>, unknown>;
+        AI_API_KEY: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        AI_MODEL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        AI_PROVIDER_NAME: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string | undefined, string>> & z.ZodType<string, string, z.core.$ZodTypeInternals<string, string>>>, unknown>;
     } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object & {
         readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
     }>;
@@ -1207,6 +1228,12 @@ export const serverEnvSchema: EnvSchema<{
     SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
+    AI_BASE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>, unknown>;
+    AI_API_KEY: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    AI_MODEL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    AI_PROVIDER_NAME: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string | undefined, string>> & z.ZodType<string, string, z.core.$ZodTypeInternals<string, string>>>, unknown>;
 } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object & {
     readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
 }>;
@@ -1274,7 +1301,13 @@ SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }, object>, EnvFragment<    {}, {
 readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
-}>];
+}>, EnvFragment<    {
+AI_BASE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>, unknown>;
+AI_API_KEY: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+AI_MODEL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+AI_PROVIDER_NAME: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string | undefined, string>> & z.ZodType<string, string, z.core.$ZodTypeInternals<string, string>>>, unknown>;
+}, object>];
 
 // @public
 export interface ServerHooks {

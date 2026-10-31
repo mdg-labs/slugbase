@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { composeEnvSchema, type EnvSchema } from "./fragment.ts";
 import {
+  aiFragment,
   databaseFragment,
   errorReportFragment,
   httpFragment,
@@ -46,6 +47,7 @@ export const serverFragments = [
   errorReportFragment,
   smtpFragment,
   oidcFragment,
+  aiFragment,
 ] as const;
 
 /** The worker never receives the migrator URL (doc 01 section 2.1). */

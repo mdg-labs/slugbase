@@ -150,6 +150,11 @@ services:
       EMAIL_VERIFICATION_REQUIRED:
       BREACHED_PASSWORD_CHECK:
       TOTP_ISSUER:
+      AI_BASE_URL:
+      AI_API_KEY:
+      AI_MODEL:
+      AI_PROVIDER_NAME:
+      AI_ALLOWED_PRIVATE_HOST:
       DOCS_BASE_URL:
       MIGRATE_ON_START:
     # Published on the loopback address unless SLUGBASE_BIND says otherwise; the

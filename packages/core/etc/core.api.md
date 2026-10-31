@@ -170,6 +170,18 @@ export function addInstanceAdminMembership(input: InstanceWorkspaceDependencies,
     readonly accountId: string;
 }): Promise<InstanceMembershipOutcome>;
 
+// @public
+export class AiSuggestError extends Error {
+    constructor(code: AiSuggestErrorCode, options?: {
+        readonly cause?: unknown;
+    });
+    // (undocumented)
+    readonly code: AiSuggestErrorCode;
+}
+
+// @public (undocumented)
+export type AiSuggestErrorCode = "ai_failed" | "ai_timeout" | "ai_invalid_response";
+
 // @public (undocumented)
 export interface AiSuggestion {
     // (undocumented)
@@ -197,6 +209,7 @@ export interface AiSuggestRequest {
         readonly title?: string;
         readonly description?: string;
     };
+    readonly tags: readonly string[];
     // (undocumented)
     readonly url: string;
 }

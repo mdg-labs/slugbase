@@ -11,8 +11,11 @@ import {
 import { envBoolean } from "./env-boolean.ts";
 import {
   KEY_ID_PATTERN,
+  aiBaseUrl,
+  bareHost,
   base64Key,
   baseUrl,
+  displayName,
   envInteger,
   mailbox,
   optional,
@@ -22,6 +25,7 @@ import {
   relayHost,
   sentryDsn,
   totpIssuer,
+  visibleToken,
 } from "./fields.ts";
 import { envFragment, requireAllOrNone, type RefineContext } from "./fragment.ts";
 
@@ -255,6 +259,42 @@ export const smtpFragment = envFragment({
     }
     for (const key of SMTP_REQUIRED_KEYS.filter((candidate) => values[candidate] === undefined)) {
       context.issue(key, `is required because ${set.join(", ")} ${set.length === 1 ? "is" : "are"} set`);
+    }
+  },
+});
+
+/** The endpoint and the model: required together as soon as any AI key is set. */
+export const AI_REQUIRED_KEYS = ["AI_BASE_URL", "AI_MODEL", "AI_PROVIDER_NAME"] as const;
+
+export const AI_KEYS = ["AI_BASE_URL", "AI_API_KEY", "AI_MODEL", "AI_PROVIDER_NAME", "AI_ALLOWED_PRIVATE_HOST"] as const;
+
+/**
+ * The OpenAI-compatible endpoint of the AI adapter (doc 01 sections 6 and 11, doc 02 section 14, Q8), for the server.
+ * All keys unset leaves AI suggestions unavailable. `AI_BASE_URL`, `AI_MODEL` and `AI_PROVIDER_NAME` (the name members see)
+ * are required together; `AI_API_KEY` is optional, for an endpoint that takes no credential. `AI_ALLOWED_PRIVATE_HOST`
+ * is the operator's allowance for an endpoint on a private address (Q90): one bare host that must be the host of
+ * `AI_BASE_URL`, so a changed `AI_BASE_URL` never keeps an allowance meant for the old host. A violation refuses to start
+ * and names the keys, never a value.
+ */
+export const aiFragment = envFragment({
+  shape: {
+    AI_BASE_URL: optional(aiBaseUrl()),
+    AI_API_KEY: optional(visibleToken(512)),
+    AI_MODEL: optional(visibleToken(200)),
+    AI_PROVIDER_NAME: optional(displayName()),
+    AI_ALLOWED_PRIVATE_HOST: optional(bareHost()),
+  },
+  refine(values, context) {
+    const set = AI_KEYS.filter((key) => values[key] !== undefined);
+    if (set.length === 0) {
+      return;
+    }
+    for (const key of AI_REQUIRED_KEYS.filter((candidate) => values[candidate] === undefined)) {
+      context.issue(key, `is required because ${set.join(", ")} ${set.length === 1 ? "is" : "are"} set`);
+    }
+    const { AI_BASE_URL: baseUrlValue, AI_ALLOWED_PRIVATE_HOST: allowed } = values;
+    if (baseUrlValue !== undefined && allowed !== undefined && new URL(baseUrlValue).hostname !== allowed) {
+      context.issue("AI_ALLOWED_PRIVATE_HOST", "must be the host of AI_BASE_URL");
     }
   },
 });

@@ -455,3 +455,264 @@ describe("the caps", () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 });
+
+// Q90: the operator names the host of the AI endpoint, and the instance the AI adapter holds connects to that one origin even though
+// it is on a loopback, private, CGNAT or unique-local address. Loopback stands in for the private address here. Link-local, unspecified,
+// multicast and reserved addresses stay refused for it, and the instances built without the allowance (`strict`, the shared one) cannot
+// reach it at all.
+describe("an allowlisted AI origin", () => {
+  /** The AI adapter's instance: `origin` is allowed; 127.0.0.1 also stands in for a public address. */
+  const ai = (origin: string, publicIsLoopbackToo = false) =>
+    new HttpEgress({
+      nodeEnv: "test",
+      privateOrigin: origin,
+      testOnly: { dnsServers: [dns.server], ...(publicIsLoopbackToo ? { allowAddresses: ["127.0.0.1"] } : {}) },
+    });
+
+  it("reaches the origin: resolved once, pinned, with the host name in Host; the same request through an instance without the allowance is refused", async () => {
+    const server = await serve(ok);
+    dns.set("llm.test", ["127.0.0.1"]);
+    const url = `http://llm.test:${String(server.port)}/v1/chat/completions`;
+    const response = await ai(`http://llm.test:${String(server.port)}`).request(get(url));
+    expect(response.status).toBe(200);
+    expect(questionsFor("llm.test").sort()).toEqual(["A", "AAAA"]);
+    expect(attempts()).toEqual([`127.0.0.1:${String(server.port)}`]);
+    expect(server.requests[0]?.headers["host"]).toBe(`llm.test:${String(server.port)}`);
+
+    const before = server.connections();
+    expect(await rejection(strict(), get(url))).toBeInstanceOf(EgressBlocked);
+    expect(server.connections()).toBe(before);
+    expect(attempts()).toHaveLength(1);
+  });
+
+  it("reaches an IP-literal origin without asking the DNS", async () => {
+    const server = await serve(ok);
+    const origin = `http://127.0.0.1:${String(server.port)}`;
+    expect((await ai(origin).request(get(`${origin}/`))).status).toBe(200);
+    expect(dns.questions).toEqual([]);
+  });
+
+  it("is accepted when NODE_ENV is production, unlike the test allowances", () => {
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: "http://llm.lan:11434" })).not.toThrow();
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: "http://llm.lan:11434", testOnly: {} })).toThrow();
+  });
+
+  it("refuses the same host on another port, another scheme and another private host, without a connection", async () => {
+    const allowed = await serve(ok);
+    const other = await serve(ok);
+    dns.set("llm.test", ["127.0.0.1"]);
+    dns.set("other.test", ["127.0.0.1"]);
+    const egress = ai(`http://llm.test:${String(allowed.port)}`);
+    for (const url of [
+      `http://llm.test:${String(other.port)}/`,
+      `https://llm.test:${String(allowed.port)}/`,
+      `http://other.test:${String(allowed.port)}/`,
+      `http://127.0.0.1:${String(allowed.port)}/`,
+    ]) {
+      expect(await rejection(egress, get(url)), url).toBeInstanceOf(EgressBlocked);
+    }
+    expect(other.connections()).toBe(0);
+    expect(allowed.connections()).toBe(0);
+    expect(attempts()).toEqual([]);
+  });
+
+  const refused: [string, string[]][] = [
+    ["link-local", ["169.254.1.1"]],
+    ["the metadata address", ["169.254.169.254"]],
+    ["the unspecified address", ["0.0.0.0"]],
+    ["multicast", ["224.0.0.1"]],
+    ["a reserved address", ["240.0.0.1"]],
+    ["a documentation address", ["192.0.2.1"]],
+    ["IPv6 link-local", ["fe80::1"]],
+    ["the IPv6 unspecified address", ["::"]],
+    ["IPv6 multicast", ["ff02::1"]],
+    ["the IPv4-mapped metadata address", ["::ffff:169.254.169.254"]],
+    ["the IPv4-mapped metadata address in hexadecimal", ["::ffff:a9fe:a9fe"]],
+    ["a private address and the metadata address", ["127.0.0.1", "169.254.169.254"]],
+    ["the metadata address and a private address", ["169.254.169.254", "127.0.0.1"]],
+    ["a private address and an IPv6 link-local address", ["127.0.0.1", "fe80::1"]],
+    ["a private address and a public-looking multicast address", ["127.0.0.1", "ff02::1"]],
+  ];
+
+  it.each(refused)("refuses the allowlisted name when it answers %s, without a connection", async (_label, answers) => {
+    const trap = await serve(ok);
+    dns.set("llm.test", answers);
+    const error = await rejection(ai(`http://llm.test:${String(trap.port)}`), get(`http://llm.test:${String(trap.port)}/`));
+    expect(error).toBeInstanceOf(EgressBlocked);
+    expect(trap.connections()).toBe(0);
+    expect(attempts()).toEqual([]);
+  });
+
+  it.each([["169.254.169.254"], ["169.254.1.1"], ["0.0.0.0"], ["[fe80::1]"], ["[::ffff:169.254.169.254]"]])(
+    "refuses an allowlisted literal origin %s",
+    async (host) => {
+      const origin = `http://${host}:9`;
+      expect(await rejection(ai(origin), get(`${origin}/`))).toBeInstanceOf(EgressBlocked);
+      expect(attempts()).toEqual([]);
+    },
+  );
+
+  it("validates the answer of every request afresh: a name that moves to another private address is followed, one that moves to the metadata address is refused", async () => {
+    const [first, second] = await servePair(ok, ok);
+    dns.set("moving.test", (type, ordinal) => (type === "A" ? [["127.0.0.1", "127.0.0.2", "169.254.169.254"][ordinal - 1] ?? "169.254.169.254"] : []));
+    const egress = ai(`http://moving.test:${String(first.port)}`);
+    const url = `http://moving.test:${String(first.port)}/`;
+    expect((await egress.request(get(url))).status).toBe(200);
+    expect((await egress.request(get(url))).status).toBe(200);
+    expect(await rejection(egress, get(url))).toBeInstanceOf(EgressBlocked);
+    expect(first.connections()).toBe(1);
+    expect(second.connections()).toBe(1);
+    expect(attempts()).toEqual([`127.0.0.1:${String(first.port)}`, `127.0.0.2:${String(first.port)}`]);
+  });
+
+  describe("redirects", () => {
+    async function allowed(handler: Handler): Promise<{ server: LocalServer; origin: string }> {
+      const server = await serve(handler);
+      dns.set("llm.test", ["127.0.0.1"]);
+      return { server, origin: `http://llm.test:${String(server.port)}` };
+    }
+
+    it("refuses a redirect from the origin to another private port, another private host and the metadata address, without a connection", async () => {
+      const trap = await serve(ok);
+      dns.set("other.test", ["127.0.0.1"]);
+      for (const location of [
+        `http://llm.test:${String(trap.port)}/`,
+        `http://other.test:${String(trap.port)}/`,
+        `http://127.0.0.1:${String(trap.port)}/`,
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::ffff:169.254.169.254]/",
+      ]) {
+        const { server, origin } = await allowed(redirect(location));
+        expect(await rejection(ai(origin), get(`${origin}/`)), location).toBeInstanceOf(EgressBlocked);
+        expect(server.requests).toHaveLength(1);
+      }
+      expect(trap.connections()).toBe(0);
+      expect(attempts().filter((target) => target.startsWith("169.254."))).toEqual([]);
+    });
+
+    it("follows a redirect to the same origin on another path", async () => {
+      const server = await serve((request, socket) => {
+        if (request.target === "/start") {
+          respond(socket, 302, { location: "/v1/models" });
+        } else {
+          respond(socket, 200, { "content-type": "text/plain" }, request.target);
+        }
+      });
+      dns.set("llm.test", ["127.0.0.1"]);
+      const origin = `http://llm.test:${String(server.port)}`;
+      const response = await ai(origin).request(get(`${origin}/start`));
+      expect(new TextDecoder().decode(response.body)).toBe("/v1/models");
+      expect(server.requests.map((request) => request.target)).toEqual(["/start", "/v1/models"]);
+    });
+
+    it("follows a redirect to a public host without the Authorization header", async () => {
+      const publicServer = await serve(ok);
+      dns.set("pub.test", ["127.0.0.1"]);
+      const { origin } = await (async () => {
+        const server = await serve(redirect(`http://pub.test:${String(publicServer.port)}/answer`), "127.0.0.2");
+        dns.set("llm.test", ["127.0.0.2"]);
+        return { origin: `http://llm.test:${String(server.port)}` };
+      })();
+      const response = await ai(origin, true).request(
+        get(`${origin}/`, { headers: { authorization: "Bearer provider-key-qx82", accept: "application/json", "x-api-key": "provider-key-qx83" } }),
+      );
+      expect(response.status).toBe(200);
+      expect(publicServer.requests[0]?.headers["authorization"]).toBeUndefined();
+      expect(publicServer.requests[0]?.headers["x-api-key"]).toBeUndefined();
+      expect(publicServer.requests[0]?.headers["accept"]).toBe("application/json");
+    });
+
+    it("follows a redirect from a public host to the origin, which is exempt again at that hop", async () => {
+      const llm = await serve(ok, "127.0.0.2");
+      dns.set("llm.test", ["127.0.0.2"]);
+      dns.set("pub.test", ["127.0.0.1"]);
+      const hop = await serve(redirect(`http://llm.test:${String(llm.port)}/v1`));
+      const response = await ai(`http://llm.test:${String(llm.port)}`, true).request(get(`http://pub.test:${String(hop.port)}/`));
+      expect(response.status).toBe(200);
+      expect(llm.requests).toHaveLength(1);
+    });
+
+    it.each([307, 308])("refuses a %s that would carry the body to another origin", async (status) => {
+      const publicServer = await serve(ok);
+      dns.set("pub.test", ["127.0.0.1"]);
+      const server = await serve(redirect(`http://pub.test:${String(publicServer.port)}/`, status), "127.0.0.2");
+      dns.set("llm.test", ["127.0.0.2"]);
+      const origin = `http://llm.test:${String(server.port)}`;
+      const error = await rejection(
+        ai(origin, true),
+        get(`${origin}/`, { method: "POST", body: new TextEncoder().encode("{}"), headers: { authorization: "Bearer provider-key-qx84" } }),
+      );
+      expect(error).toBeInstanceOf(EgressError);
+      expect(publicServer.connections()).toBe(0);
+    });
+  });
+
+  describe("the origin is matched as URL.origin writes it", () => {
+    it("ignores case, an IPv4 notation and an IDNA name, and elides the default port", async () => {
+      const server = await serve(ok);
+      const port = String(server.port);
+      dns.set("llm.test", ["127.0.0.1"]);
+      dns.set("xn--bcher-kva.test", ["127.0.0.1"]);
+      const cases: [string, string][] = [
+        [`http://LLM.Test:${port}`, `http://llm.test:${port}/`],
+        [`http://llm.test:${port}`, `http://LLM.TEST:${port}/`],
+        [`http://0x7f.1:${port}`, `http://127.0.0.1:${port}/`],
+        [`http://127.0.0.1:${port}`, `http://2130706433:${port}/`],
+        [`http://bücher.test:${port}`, `http://xn--bcher-kva.test:${port}/`],
+        [`http://xn--bcher-kva.test:${port}`, `http://BÜCHER.test:${port}/`],
+      ];
+      for (const [origin, url] of cases) {
+        expect((await ai(origin).request(get(url))).status, `${origin} ${url}`).toBe(200);
+      }
+    });
+
+    it("elides the default port of the scheme on both sides", async () => {
+      const error = await rejection(ai("http://127.0.0.1:80"), get("http://127.0.0.1/"));
+      expect(error).not.toBeInstanceOf(EgressBlocked);
+      expect(attempts()).toEqual(["127.0.0.1:80"]);
+      connect.mockClear();
+      expect(await rejection(ai("http://127.0.0.1:81"), get("http://127.0.0.1/"))).toBeInstanceOf(EgressBlocked);
+      expect(attempts()).toEqual([]);
+    });
+
+    it("does not fold a trailing dot: the host with it is another host", async () => {
+      const server = await serve(ok);
+      dns.set("llm.test", ["127.0.0.1"]);
+      const origin = `http://llm.test:${String(server.port)}`;
+      expect(await rejection(ai(origin), get(`http://llm.test.:${String(server.port)}/`))).toBeInstanceOf(EgressBlocked);
+      expect(await rejection(ai(`http://llm.test.:${String(server.port)}`), get(`${origin}/`))).toBeInstanceOf(EgressBlocked);
+      expect(server.connections()).toBe(0);
+    });
+  });
+
+  describe("the caps hold", () => {
+    async function origin(handler: Handler): Promise<string> {
+      const server = await serve(handler);
+      dns.set("llm.test", ["127.0.0.1"]);
+      return `http://llm.test:${String(server.port)}`;
+    }
+
+    it("refuses a body over the limit", async () => {
+      const base = await origin((_request, socket) => {
+        respond(socket, 200, { "content-type": "application/json" }, "x".repeat(5_000));
+      });
+      expect(await rejection(ai(base), get(`${base}/`, { maxBytes: 1_000 }))).toBeInstanceOf(EgressTooLarge);
+    });
+
+    it("cuts a slow answer at the deadline", async () => {
+      const base = await origin(() => undefined);
+      const started = Date.now();
+      expect(await rejection(ai(base), get(`${base}/`, { timeoutMs: 250 }))).toBeInstanceOf(EgressTimeout);
+      expect(Date.now() - started).toBeLessThan(1_500);
+    });
+
+    it("refuses a content type outside the list", async () => {
+      const base = await origin((_request, socket) => {
+        respond(socket, 200, { "content-type": "text/html" }, "<html></html>");
+      });
+      const error = await rejection(ai(base), get(`${base}/`, { acceptContentTypes: ["application/json"] }));
+      expect(error).toBeInstanceOf(EgressError);
+      expect(error).not.toBeInstanceOf(EgressBlocked);
+    });
+  });
+});

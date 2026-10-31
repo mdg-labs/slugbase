@@ -4,6 +4,7 @@
 
 ```ts
 
+import { AiSuggestPort } from '@slugbase/core';
 import { EgressPort } from '@slugbase/core';
 import { EgressRequest } from '@slugbase/core';
 import { EgressResponse } from '@slugbase/core';
@@ -20,6 +21,15 @@ import { ReencodedIcon } from '@slugbase/core';
 import type { SecretBoxPort } from '@slugbase/core';
 
 // @public
+export const AI_REQUEST_TIMEOUT_MS = 5000;
+
+// @public
+export const AI_RESPONSE_MAX_BYTES = 65536;
+
+// @public
+export const AI_SUGGESTED_TAGS_MAX = 5;
+
+// @public
 export interface BucketLimit {
     // (undocumented)
     readonly capacity: number;
@@ -30,6 +40,7 @@ export interface BucketLimit {
 // @public (undocumented)
 export interface CreateEgressOptions {
     readonly nodeEnv: string;
+    readonly privateOrigin?: string;
     readonly resolve?: EgressResolver;
     readonly testOnly?: {
         readonly allowNonPublicAddresses?: boolean;
@@ -60,6 +71,18 @@ export interface CreateOidcIdentityOptions {
     readonly logger: OidcIdentityLogger;
     readonly now?: () => number;
     readonly providers: readonly IdentityProviderConfig[];
+}
+
+// @public
+export function createOpenAiCompatibleAi(options: CreateOpenAiCompatibleAiOptions): AiSuggestPort;
+
+// @public (undocumented)
+export interface CreateOpenAiCompatibleAiOptions {
+    readonly apiKey?: string;
+    readonly baseUrl: string;
+    readonly egress: EgressPort;
+    // (undocumented)
+    readonly model: string;
 }
 
 // @public
