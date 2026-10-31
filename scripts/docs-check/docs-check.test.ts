@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../vitest.shared.ts";
 import { checkDocs } from "./check.ts";
 import { isVersion } from "./frontmatter.ts";
+import { checkImage, checkLink, type LinkContext, slugify } from "./links.ts";
 import { ALLOWED_COMPONENTS, lintBody } from "./mdx.ts";
 
 const CLI = resolve(import.meta.dirname, "docs-check.ts");
@@ -45,7 +46,7 @@ describe("the command passes", () => {
   it("on the valid tree", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const result = runCli(join(FIXTURES, "valid"));
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("9 pages checked");
+    expect(result.stdout).toContain("12 pages checked");
   });
 });
 
@@ -95,6 +96,25 @@ const INVALID: [fixture: string, expected: string[]][] = [
   ["md-html-anchor", ["docs/user/page.md:7:", "raw HTML"]],
   ["md-html-comment", ["docs/user/page.md:9:", "raw HTML"]],
   ["md-html-allowed-name", ["docs/user/page.md:9:", "raw HTML"]],
+  ["link-relative-missing", ["docs/user/page.md:7:", '"missing.md"', "does not resolve"]],
+  ["link-route-missing", ["docs/user/page.md:7:", '"/docs/nope"', "route /docs/nope"]],
+  ["link-http", ["docs/user/page.md:7:", "http: scheme"]],
+  ["link-javascript", ["docs/user/page.md:7:", "javascript: scheme"]],
+  ["link-mailto", ["docs/user/page.md:7:", "mailto: scheme"]],
+  ["link-root-absolute", ["docs/user/page.md:7:", '"/pricing"', "root-absolute"]],
+  ["link-fragment-missing", ["docs/user/page.md:9:", '"#absent"', "matches no heading"]],
+  ["link-reference-missing", ["docs/user/page.md:9:", '"missing.md"']],
+  ["image-missing", ["docs/user/page.md:7:", '"shot.png"', "not a file next to the page"]],
+  ["image-remote", ["docs/user/page.md:7:", "absolute or remote"]],
+  ["image-absolute", ["docs/user/page.md:7:", "absolute or remote"]],
+  ["image-parent", ["docs/user/sub/page.md:7:", '"../shot.png"', "leaves the page's folder"]],
+  ["image-extension", ["docs/user/page.md:7:", 'extension ".tiff"']],
+  ["image-screenshot-missing", ["docs/user/page.mdx:7:", '"shot.png"']],
+  ["route-reserved-cloud", ["docs/user/cloud/page.md", 'reserved segment "cloud"']],
+  ["route-reserved-self-hosting", ["docs/user/self-hosting.md", 'reserved segment "self-hosting"']],
+  ["route-reserved-releases", ["docs/user/releases/page.md", 'reserved segment "releases"']],
+  ["route-duplicate-index", ["docs/user/a.md", "docs/user/a/index.md", "route /docs/a"]],
+  ["route-duplicate-extension", ["docs/user/b.md", "docs/user/b.mdx", "route /docs/b"]],
 ];
 
 describe("the command fails", () => {
@@ -175,5 +195,160 @@ describe("the component allow-list", () => {
 
   it("finds nothing in a page that uses every allowed component and in code fences", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(checkDocs(join(FIXTURES, "valid")).violations).toEqual([]);
+  });
+});
+
+describe("a renamed page", () => {
+  it("fails the command and names every link that still points to the old name", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    const root = tempTree();
+    cpSync(join(FIXTURES, "valid"), root, { recursive: true });
+    renameSync(join(root, "docs/user/getting-started.md"), join(root, "docs/user/started.md"));
+
+    const result = runCli(root);
+    expect(result.status).toBe(1);
+    const reported = result.stderr.split("\n").filter((line) => line.includes("getting-started"));
+    expect(reported).toEqual([
+      expect.stringContaining('docs/user/components/code-fences.md:22: "../getting-started.md" does not resolve'),
+      expect.stringContaining('docs/user/components/every-component-2.mdx:7: "../getting-started.md" does not resolve'),
+      expect.stringContaining('docs/user/links.md:9: "getting-started.md" does not resolve'),
+      expect.stringContaining('docs/user/links.md:11: "/docs/getting-started" matches no page'),
+    ]);
+    expect(result.stderr).toContain("docs:check failed: 4 problems");
+  });
+});
+
+describe("an image over 1 MiB", () => {
+  const png = Buffer.from("iVBORw0KGgo=", "base64");
+
+  it("fails, and one of exactly 1 MiB passes", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    const root = tempTree();
+    mkdirSync(join(root, "docs/user"), { recursive: true });
+    writeFileSync(join(root, "docs/user/page.md"), `${PAGE}\n![Fits](fits.png)\n`);
+    writeFileSync(join(root, "docs/user/fits.png"), Buffer.concat([png, Buffer.alloc(1024 * 1024 - png.length)]));
+    expect(runCli(root).status).toBe(0);
+
+    writeFileSync(join(root, "docs/user/big.png"), Buffer.concat([png, Buffer.alloc(1024 * 1024 + 1 - png.length)]));
+    const result = runCli(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("docs/user/big.png: the image is 1048577 bytes");
+    expect(result.stderr).not.toContain("fits.png");
+  });
+});
+
+function contextFor(page: string, extra: Partial<LinkContext> = {}): LinkContext {
+  return {
+    page,
+    files: new Set(["docs/user/index.md", "docs/user/a/b.md", "docs/user/a/pic.png", "docs/user/pic.png", "docs/self-hosting/install.md"]),
+    images: new Set(["docs/user/a/pic.png", "docs/user/pic.png"]),
+    routes: new Set(["/docs", "/docs/a/b", "/docs/self-hosting/install"]),
+    headings: new Set(["intro", "intro-1"]),
+    ...extra,
+  };
+}
+
+describe("link targets", () => {
+  const context = contextFor("docs/user/a/b.md");
+
+  it.each([
+    "https://example.com",
+    "HTTPS://example.com/a?b=1#c",
+    "../index.md",
+    "./b.md",
+    "../../self-hosting/install.md",
+    "/docs",
+    "/docs/",
+    "/docs/a/b",
+    "/docs/a/b/?x=1#y",
+    "/docs/self-hosting/install",
+    "/docs/cloud",
+    "/docs/cloud/anything/else",
+    "#intro",
+    "#intro-1",
+    "%2E%2E/index.md",
+  ])("accepts %s", (url) => {
+    expect(checkLink(url, context)).toBeNull();
+  });
+
+  it.each([
+    "",
+    "http://example.com",
+    "HTTP://example.com",
+    "javascript:alert(1)",
+    "JavaScript:alert(1)",
+    "java\tscript:alert(1)",
+    " javascript:alert(1)",
+    "data:text/html;base64,AAAA",
+    "mailto:a@example.com",
+    "tel:+4930123",
+    "ftp://example.com/a",
+    "file:///etc/passwd",
+    "https:example.com",
+    "https://",
+    "//example.com/a",
+    "/pricing",
+    "/",
+    "/docsx",
+    "/docs/missing",
+    "/docs/../etc/passwd",
+    "/docs/cloudy",
+    "missing.md",
+    "../missing.md",
+    "../../../outside.md",
+    "..\\index.md",
+    "%2E%2E%2F%2E%2E%2F%2E%2E%2Foutside.md",
+    "%zz",
+    "#absent",
+    "#",
+    "#INTRO",
+    "?query-only",
+  ])("refuses %j", (url) => {
+    expect(checkLink(url, context)).not.toBeNull();
+  });
+});
+
+describe("image sources", () => {
+  const context = contextFor("docs/user/a/b.md");
+
+  it.each(["pic.png", "./pic.png"])("accepts %s", (url) => {
+    expect(checkImage(url, context)).toBeNull();
+  });
+
+  it.each([
+    "",
+    "missing.png",
+    "../pic.png",
+    "sub/../pic.png",
+    "/pic.png",
+    "//example.com/pic.png",
+    "https://example.com/pic.png",
+    "data:image/png;base64,AAAA",
+    "pic.svg",
+    "pic.bmp",
+    "pic",
+    "pic.png?x=1",
+    "pic.png#frag",
+    "%2E%2E/pic.png",
+    "pic.png ",
+  ])("refuses %j", (url) => {
+    expect(checkImage(url, context)).not.toBeNull();
+  });
+
+  it.each(["png", "jpg", "jpeg", "webp", "gif", "avif"])("matches the case of the file name for .%s", (extension) => {
+    const target = `docs/user/a/shot.${extension}`;
+    const withShot = contextFor("docs/user/a/b.md", { images: new Set([target]) });
+    expect(checkImage(`shot.${extension.toUpperCase()}`, withShot)).not.toBeNull();
+    expect(checkImage(`shot.${extension}`, withShot)).toBeNull();
+  });
+});
+
+describe("heading fragments", () => {
+  it.each([
+    ["Links and anchors", "links-and-anchors"],
+    ["The `code` heading", "the-code-heading"],
+    ["What's new? (v2)", "whats-new-v2"],
+    ["snake_case and-dash", "snake_case-and-dash"],
+    ["Über uns", "über-uns"],
+  ])("turns %j into %s", (text, slug) => {
+    expect(slugify(text)).toBe(slug);
   });
 });

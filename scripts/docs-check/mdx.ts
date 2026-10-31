@@ -15,18 +15,28 @@ export interface Finding {
   message: string;
 }
 
-interface Attribute {
+export interface Attribute {
   type: string;
   name?: string;
   value?: string | null | { type: string; value: string };
 }
 
-interface AstNode {
+export interface AstNode {
   type: string;
   position?: { start: { line: number } };
   children?: AstNode[];
   name?: string | null;
   attributes?: Attribute[];
+  /** A link, an image or a definition. */
+  url?: string;
+  /** A definition. */
+  identifier?: string;
+  /** A reference to a definition. */
+  referenceType?: string;
+  /** Text, inline code and code. */
+  value?: string;
+  /** A heading. */
+  depth?: number;
 }
 
 const markdownParser = unified().use(remarkParse);
@@ -91,24 +101,36 @@ function inspect(node: AstNode, findings: Finding[]): void {
   for (const child of node.children ?? []) inspect(child, findings);
 }
 
+export type Parsed = { ok: true; tree: AstNode } | { ok: false; finding: Finding };
+
 /**
  * Parses a page body (the page without its frontmatter) as MDX for a `.mdx`
- * file and as Markdown for a `.md` file, and returns what the contract refuses.
- * Code fences and inline code are not parsed as MDX, so they may hold any text.
- * A Markdown file is not scanned for `import`, `export` or `{...}`: Markdown
- * gives them no meaning, only raw HTML is refused there.
+ * file and as Markdown for a `.md` file.
  */
-export function lintBody(body: string, extension: ".md" | ".mdx"): Finding[] {
-  const findings: Finding[] = [];
-  let tree: AstNode;
+export function parseBody(body: string, extension: ".md" | ".mdx"): Parsed {
   try {
-    tree = (extension === ".mdx" ? mdxParser : markdownParser).parse(body);
+    return { ok: true, tree: (extension === ".mdx" ? mdxParser : markdownParser).parse(body) };
   } catch (error) {
-    return [parseFailure(error)];
+    return { ok: false, finding: parseFailure(error) };
   }
+}
+
+/**
+ * Returns what the contract refuses in a parsed page. Code fences and inline
+ * code are not parsed as MDX, so they may hold any text. A Markdown file is not
+ * scanned for `import`, `export` or `{...}`: Markdown gives them no meaning,
+ * only raw HTML is refused there.
+ */
+export function lintTree(tree: AstNode): Finding[] {
+  const findings: Finding[] = [];
   inspect(tree, findings);
   // A raw HTML element is an opening and a closing node; report it once per line.
   return findings.filter(
     (finding, index) => findings.findIndex((other) => other.line === finding.line && other.message === finding.message) === index,
   );
+}
+
+export function lintBody(body: string, extension: ".md" | ".mdx"): Finding[] {
+  const parsed = parseBody(body, extension);
+  return parsed.ok ? lintTree(parsed.tree) : [parsed.finding];
 }

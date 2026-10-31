@@ -1,13 +1,10 @@
-import { lstatSync, readdirSync, readFileSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix } from "node:path";
 import { isVersion, splitFrontmatter, stripBom, validateFrontmatter } from "./frontmatter.ts";
-import { lintBody } from "./mdx.ts";
-
-/** The content roots of the docs contract (doc 09 section 3.5), relative to the repository root. */
-export const CONTENT_ROOTS = ["docs/user", "docs/self-hosting", "docs/releases"] as const;
-
-export const PAGE_EXTENSIONS = [".md", ".mdx"] as const;
-export const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"] as const;
+import { CONTENT_ROOTS, IMAGE_EXTENSIONS, MAX_IMAGE_BYTES, PAGE_EXTENSIONS } from "./contract.ts";
+import { checkImage, checkLink, collectRefs, type LinkContext, type PageRefs } from "./links.ts";
+import { lintTree, parseBody } from "./mdx.ts";
+import { firstUserSegment, RESERVED_SEGMENTS, routeOf } from "./routes.ts";
 
 export interface Violation {
   /** Path relative to the repository root, with `/` separators. */
@@ -70,7 +67,14 @@ function checkReleaseName(path: string, since: string | undefined, violations: V
   }
 }
 
-function checkPage(repoRoot: string, path: string, violations: Violation[]): void {
+interface CheckedPage extends PageRefs {
+  path: string;
+  /** The lines the frontmatter takes, to turn a line of the body into a line of the file. */
+  offset: number;
+}
+
+/** Checks the frontmatter, the release name and the MDX of a page; returns what the link pass needs. */
+function checkPage(repoRoot: string, path: string, violations: Violation[]): CheckedPage {
   const text = readFileSync(join(repoRoot, path), "utf8");
   const split = splitFrontmatter(text);
   const isRelease = path.startsWith("docs/releases/");
@@ -85,9 +89,46 @@ function checkPage(repoRoot: string, path: string, violations: Violation[]): voi
   if (isRelease) checkReleaseName(path, since, violations);
 
   const offset = split?.frontmatterLines ?? 0;
-  const extension = path.endsWith(".mdx") ? ".mdx" : ".md";
-  for (const finding of lintBody(split?.body ?? stripBom(text), extension)) {
+  const parsed = parseBody(split?.body ?? stripBom(text), path.endsWith(".mdx") ? ".mdx" : ".md");
+  if (!parsed.ok) {
+    violations.push({ file: path, line: parsed.finding.line + offset, message: parsed.finding.message });
+    return { path, offset, refs: [], headings: new Set() };
+  }
+  for (const finding of lintTree(parsed.tree)) {
     violations.push({ file: path, line: finding.line + offset, message: finding.message });
+  }
+  return { path, offset, ...collectRefs(parsed.tree) };
+}
+
+/** The reserved first segments and the routes two pages share; returns the routes that exist. */
+function checkRoutes(pages: readonly string[], violations: Violation[]): Set<string> {
+  const byRoute = new Map<string, string[]>();
+  for (const page of pages) {
+    const segment = firstUserSegment(page);
+    if ((RESERVED_SEGMENTS as readonly (string | null)[]).includes(segment)) {
+      violations.push({
+        file: page,
+        message: `the route starts with the reserved segment "${segment ?? ""}"; ${RESERVED_SEGMENTS.join(", ")} belong to other parts of the site`,
+      });
+    }
+    const route = routeOf(page);
+    if (route !== null) byRoute.set(route, [...(byRoute.get(route) ?? []), page]);
+  }
+  for (const [route, sharing] of byRoute) {
+    for (const page of sharing) {
+      const others = sharing.filter((other) => other !== page);
+      if (others.length > 0) violations.push({ file: page, message: `produces the route ${route}, which ${others.join(" and ")} also produces` });
+    }
+  }
+  return new Set(byRoute.keys());
+}
+
+function checkImageSizes(repoRoot: string, images: readonly string[], violations: Violation[]): void {
+  for (const image of images) {
+    const size = statSync(join(repoRoot, image)).size;
+    if (size > MAX_IMAGE_BYTES) {
+      violations.push({ file: image, message: `the image is ${String(size)} bytes; the limit is ${String(MAX_IMAGE_BYTES)} (1 MiB)` });
+    }
   }
 }
 
@@ -107,7 +148,19 @@ export function checkDocs(repoRoot: string): { violations: Violation[]; pages: n
     }
     walk(repoRoot, root, violations, found);
   }
-  for (const path of found.pages) checkPage(repoRoot, path, violations);
+  const checked = found.pages.map((path) => checkPage(repoRoot, path, violations));
+  const routes = checkRoutes(found.pages, violations);
+  checkImageSizes(repoRoot, found.images, violations);
+
+  const files = new Set([...found.pages, ...found.images]);
+  const images = new Set(found.images);
+  for (const page of checked) {
+    const context: LinkContext = { page: page.path, files, images, routes, headings: page.headings };
+    for (const ref of page.refs) {
+      const message = ref.kind === "link" ? checkLink(ref.url, context) : checkImage(ref.url, context);
+      if (message !== null) violations.push({ file: page.path, line: ref.line + page.offset, message });
+    }
+  }
   violations.sort((a, b) => (a.file === b.file ? (a.line ?? 0) - (b.line ?? 0) : a.file < b.file ? -1 : 1));
   return { violations, pages: found.pages.length };
 }
