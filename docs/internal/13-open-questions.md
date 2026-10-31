@@ -83,7 +83,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q8 | AI suggestions through the OpenAI-compatible adapter; the provider is configuration | Decided (maintainer) |
 | Q9 | One generic SMTP adapter for every deployment | Decided (maintainer) |
 | Q66 | Errors through `ErrorReportPort`; internal `/metrics` endpoint; no metrics stack required | Settled → D27 (maintainer) |
-| Q90 | An AI endpoint on a private address is refused unless the operator lists its exact host in an allowlist for the AI endpoint | Decided (default) |
+| Q90 | An AI endpoint on a private address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`; the allowance covers that one origin, on the AI adapter's egress instance only | Decided (default) |
 
 ### Infrastructure and operations
 
@@ -333,7 +333,7 @@ Without this, a documentation fix would reach the site only with the next site c
 ### Q8 — AI suggestion provider
 **Status:** Decided (maintainer) · **Due:** Phase 4 (AI feature) · **Affects:** doc 01 §6, Cloud doc 11 (subprocessors), D17
 
-**Decision: AI suggestions go through the OpenAI-compatible adapter (small model, no training on inputs). The provider is configuration: an EU provider or a self-hosted model.** AI stays off until a provider is configured. A self-hosted model on a private address is allowed only through the operator allowlist of Q90. Cloud's provider, and when it is switched on, is recorded in the Cloud documentation.
+**Decision: AI suggestions go through the OpenAI-compatible adapter (small model, no training on inputs). The provider is configuration: an EU provider or a self-hosted model.** AI stays off until a provider is configured. A self-hosted model on a private address is allowed only through the operator allowance of Q90 (`AI_ALLOWED_PRIVATE_HOST`). Cloud's provider, and when it is switched on, is recorded in the Cloud documentation.
 
 ### Q9 — Transactional mail relay
 **Status:** Decided (maintainer) · **Due:** Phase 2 (verification mails) · **Affects:** doc 01 §6, Cloud doc 07, Cloud doc 11
@@ -350,7 +350,42 @@ Cloud's backends are recorded in the Cloud documentation.
 ### Q90 — An AI endpoint on a private address
 **Status:** Decided (default) · **Due:** Phase 4 (AI feature) · **Affects:** doc 01 §6 (`EgressPort`, `AiSuggestPort`), doc 10 T6 and §5, doc 08 §3.5 (`egress/ssrf`), Q8
 
-**Decision: an AI endpoint on a private, loopback or link-local address is refused unless the operator lists its exact host in an allowlist that applies to the AI endpoint only.** The AI settings are `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` and `AI_PROVIDER_NAME`; the allowlist is one more operator setting next to them. An entry matches a single host, never a network range, and member input can neither add nor widen it. The allowlisted host is otherwise treated like any other target: the egress adapter resolves DNS itself and pins the validated address, redirects are re-validated hop by hop (a redirect away from the host is refused unless it is public), and the size and time caps apply. Metadata, favicon and OIDC discovery fetches have no allowlist. The `egress/ssrf` suite keeps every case and gains one: an allowlisted private host works for AI requests and for nothing else.
+**Decision: an AI endpoint on a loopback, private or CGNAT address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`. The allowance covers the one origin of `AI_BASE_URL` and is held only by the egress instance the AI adapter uses.** The AI settings are `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` and `AI_PROVIDER_NAME`; `AI_ALLOWED_PRIVATE_HOST` is the one more operator setting next to them (optional; CE self-host section of doc 07's key inventory; Cloud uses a public provider and leaves it unset). Member input can neither set nor widen it: the AI request URL is built from `AI_BASE_URL` alone, and a bookmark's URL or metadata reaches the provider only inside the request body.
+
+The matching rule, which the adapter (E4.3.2) implements as written:
+
+- **The value** is one bare host: a DNS name or an IP literal, with no scheme, port, path, userinfo, wildcard, comma or network range. Configuration loading refuses to start when it is set without `AI_BASE_URL`, when it is not a bare host, or when it differs from the host of `AI_BASE_URL` after URL normalisation (lower case, IDNA, IPv4 notations and IPv6 compressed to one form; a trailing dot is a different host and is not folded). A changed `AI_BASE_URL` therefore never keeps an allowance meant for the old host.
+- **A hop is exempt** only when its origin (scheme, normalised host and effective port, the default port elided as `URL.origin` does) equals the origin of `AI_BASE_URL`. The same host on another port, another scheme or another name is an ordinary target and is refused when not public.
+- **What is exempt** is the address check alone, and only for these classes: loopback, RFC 1918, CGNAT (`100.64.0.0/10`, which Tailscale-style networks use) and IPv6 unique-local, an IPv4-mapped IPv6 address being classed by the IPv4 address it embeds. Link-local (the metadata address among it), unspecified, multicast, reserved and documentation ranges stay refused even for the allowlisted host. This narrows the first wording of this question, which named link-local; a model has no reason to sit there, and the metadata address lies in it.
+- **DNS:** the adapter resolves the host itself on every request, requires every answer to be public or in the exempt classes (one refused answer refuses the request, as in T6), pins the first validated address and keeps the host name for `Host` and the TLS server name. An IP-literal host is not resolved.
+- **Redirects** are followed by hand as for any request. A hop to the allowlisted origin is exempt again; a hop anywhere else is checked as a normal target and refused unless public. The cross-origin rules are unchanged: only the named headers follow (so `Authorization` stays with the origin it was sent to) and a 307 or 308 that would carry the body is refused.
+- **Everything else is unchanged:** the redirect limit, the time and size caps, the content-type allowlist and the decoded-body cap. There is no setting that relaxes TLS verification; an operator with a private CA trusts it through the process's usual CA environment.
+- **Where it lives:** `CreateEgressOptions` gains `privateOrigin?: string`, accepted in production (unlike `testOnly`). The composition root builds a second `HttpEgress` with it from `AI_BASE_URL` and hands that instance to the AI adapter only; the instance every other caller shares (metadata, favicon, OIDC discovery) is built without it, so the allowance is not a flag a caller can pass.
+
+**Options considered.**
+
+| Option | Verdict |
+|---|---|
+| (a) Explicit allowance for the exact configured AI host, every other T6 case unchanged | Chosen. A self-hosted model on the compose network or the LAN works by setting one more variable; no code changes. |
+| (b) Require a public endpoint; self-hosted models reached through a public reverse proxy | Rejected. Every self-hoster would have to publish an unauthenticated model to the internet, or run a proxy with its own authentication, to use a feature that otherwise needs one variable. It leaves T6 untouched but moves the exposure to the operator's network. |
+| (c) A general private-address exception, or a network-range allowlist | Killed by the criterion: the metadata fetcher would become an internal probe for any member (T6). |
+| (d) Treat the host of `AI_BASE_URL` as allowed without a second setting | Rejected. A mistyped or stale `AI_BASE_URL` would reach a private address silently; naming the host makes the exception a deliberate, reviewable line. |
+| (e) A per-request "allow private" flag on `EgressRequest` | Rejected. The exception would be reachable by any caller that passes the flag; a separate instance makes the shared one incapable of it. |
+
+**Measured.** The existing suite passes before any change: `pnpm exec turbo run build --filter=@slugbase/core`, then in `packages/adapters` `pnpm exec vitest run test/egress/ssrf.integration.test.ts test/egress.test.ts test/egress-address.test.ts` gave 3 test files and 271 tests passed. The matching rule leans on `URL.origin`; `node -e` over `new URL(...)` gave `http://llm.lan:80/v1` and `http://llm.lan/v1` the same origin `http://llm.lan`, `http://LLM.Lan.:11434` the origin `http://llm.lan.:11434` (a trailing dot stays), `http://[0:0:0:0:0:0:0:1]:11434` the origin `http://[::1]:11434`, `http://0300.168.1.20:11434` the origin `http://192.168.1.20:11434`, `http://bücher.example` the host `xn--bcher-kva.example`, `http://llm.lan:11434@evil.example/` the host `evil.example`, and `http://llm.lan%2eevil/` the host `llm.lan.evil`. Verdict: option (a) meets the pass criterion (the rule needs no code change by the operator, `strict()` instances still refuse every listed case, and member input does not reach the setting) and none of the kill criterion.
+
+**Cases of `egress/ssrf` that stay green unchanged** (all run against an instance without the allowance): the 21 named non-public targets a name resolves to, the 21 non-public literals in every notation, the test-allowance exactness case, the four DNS-rebinding cases, the redirect cases (public to private, to a private-resolving name, to `ftp`, `file`, `gopher`, `javascript`, `data` and credentialed URLs, to the metadata address, its decimal form, mapped loopback, unique-local and CGNAT), the favicon-to-metadata failure scenario (three cases), and the cap cases (deadline, declared and undeclared size, exact limit, decoded bodies, content type). `egress.test.ts` and `egress-address.test.ts` stay as they are.
+
+**Tests the adapter item adds** (an `an allowlisted AI origin` group in `packages/adapters/test/egress/ssrf.integration.test.ts`, the config cases beside the env-schema tests, the composition case in `apps/slugbase/test/egress.test.ts`):
+- the allowlisted private origin is reached, once resolved, pinned, with the host name in `Host`; the same request through an instance built without `privateOrigin` is `EgressBlocked` with no connection (the new case: an allowlisted private host works for AI requests and for nothing else);
+- the same host on another port and another private host are refused on the AI instance, with no connection;
+- the allowlisted name answering link-local, the metadata address, unspecified, multicast, or a mix of a private and one of those, is refused; a name that answers a different private address on the next request is validated afresh;
+- redirects: from the allowlisted origin to another private port, host or the metadata address is refused with no connection; to the same origin on another path is followed; to a public host is followed without `Authorization`; a 307 or 308 with a body to another origin is refused;
+- origin equivalence: default-port elision, case, IPv4 notation and IDNA match; a trailing dot does not;
+- the size, time and content-type caps hold for the allowlisted origin;
+- configuration refuses to start for each invalid shape of the value above, and an AI endpoint on a private address without the setting is `EgressBlocked` at the first request;
+- the composition root hands the allowance-bearing instance to the AI adapter and the plain one to the metadata, favicon and OIDC discovery callers.
+
 Q8 allows a self-hosted model, which usually listens on a private address, while T6 refuses private addresses with no exception. A public reverse proxy in front of the model would also work but moves the burden to every self-hoster; a general private-address exception is rejected because it would turn the metadata fetcher into an internal probe (T6).
 
 ---
