@@ -108,7 +108,6 @@ async function sendVariants(call: ApiCall, senders: { readonly send: Send; reado
 // no operation that needs a principal yet.
 
 const HOOK_TIMEOUT_MS = 300_000;
-const WALK_TIMEOUT_MS = 60_000;
 const MATRIX_PARTS = 4;
 
 const database = useTestDatabase();
@@ -174,6 +173,17 @@ async function sneakyLookup({ params }: { params: { rowId: string } }): Promise<
 
 const origin = serverConfig({ NODE_ENV: "test" }).APP_ORIGIN;
 const committed = loadOpenApiDocument();
+const contractSize = classifyOperations(committed).summary;
+
+/**
+ * The walk and the matrix cost a fixed amount for each operation of the contract, and a new operation adds its own calls: the walker seeds, hashes and signs in up to four accounts
+ * for it, each a real sign-in with the production argon2id hash, and the matrix makes at least nine calls and a checksum of workspace B for it. With `taskset -c 2,3` they took
+ * 5.8 s (walk, 120 operations) and 3.3 s (matrix, 62 tenant-scoped ones) with no other load on those cores, 21 s and 9.8 s with six busy loops on them, and 61.5 s and 30.6 s with sixteen (about
+ * 0.5 s an operation). So the bound is a budget per operation, four times the worst of those, and follows the contract.
+ */
+const OPERATION_TIMEOUT_MS = 2_000;
+const WALK_TIMEOUT_MS = OPERATION_TIMEOUT_MS * contractSize.total;
+const MATRIX_TIMEOUT_MS = OPERATION_TIMEOUT_MS * contractSize.byKind["tenant-scoped"];
 
 /** The committed document with only the operations named, each under its own path, and everything else of it (the components among them) as it is. */
 function documentOf(operationIds: ReadonlySet<string>): unknown {
@@ -407,7 +417,7 @@ describe("the hooks over a test module", () => {
   });
 });
 
-describe("the cross-tenant matrix in API mode over the server", () => {
+describe("the cross-tenant matrix in API mode over the server", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   const document = buildDocument(probeOperations, committed);
   const mapping = { rowId: "bookmark" } as const;
 
@@ -581,7 +591,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
   }
 
-  it("passes for the sixty-three tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its shares of bookmarks and folders, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
+  it("passes for the sixty-three tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its shares of bookmarks and folders, its remembered choices and its audit log as they were", { timeout: MATRIX_TIMEOUT_MS }, async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
