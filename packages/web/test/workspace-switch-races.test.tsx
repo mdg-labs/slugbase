@@ -348,6 +348,125 @@ describe("the Teams page after a switch", () => {
   }, SLOW_TEST_TIMEOUT_MS);
 });
 
+const STAMP = "2026-10-01T08:00:00.000Z";
+const OWNER_ID = "0192f3a0-bbbb-7000-8000-000000000001";
+
+/** A list answer; the shape of an item is the page's to read. */
+function page(items: readonly unknown[]): Response {
+  return json({ items, nextCursor: null, total: items.length });
+}
+
+interface FirstRead {
+  /** The page the read belongs to. */
+  readonly path: string;
+  /** The request the test holds the first of. */
+  readonly pathname: string;
+  /** What that read answers for a workspace. */
+  readonly answer: (workspace: "first" | "second") => Response;
+  /** What the page shows of the workspace it is answered for. */
+  readonly shows: Readonly<Record<"first" | "second", string>>;
+}
+
+const FIRST_READS: Readonly<Record<string, FirstRead>> = {
+  bookmarks: {
+    path: "/bookmarks",
+    pathname: "/api/v1/bookmarks",
+    answer: (workspace) =>
+      page([
+        {
+          id: workspace === "first" ? "0192f3a0-aaaa-7000-8000-000000000001" : "0192f3a0-aaaa-7000-8000-000000000002",
+          ownerId: OWNER_ID,
+          url: "https://example.com/docs",
+          host: "example.com",
+          title: workspace === "first" ? "Bookmark of the first workspace" : "Bookmark of the second workspace",
+          description: null,
+          slug: null,
+          forwarding: false,
+          pinned: false,
+          openCount: 0,
+          lastOpenedAt: null,
+          folders: [],
+          tags: [],
+          version: 1,
+          createdAt: STAMP,
+          updatedAt: STAMP,
+        },
+      ]),
+    shows: { first: "Bookmark of the first workspace", second: "Bookmark of the second workspace" },
+  },
+  folders: {
+    path: "/folders",
+    pathname: "/api/v1/folders",
+    answer: (workspace) =>
+      page([
+        {
+          id: workspace === "first" ? "0192f3a0-dddd-7000-8000-000000000001" : "0192f3a0-dddd-7000-8000-000000000002",
+          ownerId: OWNER_ID,
+          name: workspace === "first" ? "Folder of the first workspace" : "Folder of the second workspace",
+          icon: "folder",
+          color: 1,
+          bookmarkCount: 0,
+          version: 1,
+          createdAt: STAMP,
+          updatedAt: STAMP,
+        },
+      ]),
+    shows: { first: "Folder of the first workspace", second: "Folder of the second workspace" },
+  },
+  tags: {
+    path: "/tags",
+    pathname: "/api/v1/tags",
+    answer: (workspace) =>
+      page([
+        {
+          id: workspace === "first" ? "0192f3a0-eeee-7000-8000-000000000001" : "0192f3a0-eeee-7000-8000-000000000002",
+          name: workspace === "first" ? "tag-of-the-first-workspace" : "tag-of-the-second-workspace",
+          bookmarkCount: 0,
+          createdAt: STAMP,
+        },
+      ]),
+    shows: { first: "tag-of-the-first-workspace", second: "tag-of-the-second-workspace" },
+  },
+};
+
+describe("a first read that is out when the switch is made", () => {
+  it.each(Object.keys(FIRST_READS))("asks the new workspace for the %s and shows them, not the previous workspace's answer", async (name) => {
+    const read = FIRST_READS[name];
+    if (read === undefined) {
+      throw new Error(`no first read named ${name}`);
+    }
+    const held: Respond[] = [];
+    let reads = 0;
+    const stub = stubWorkspaceSettingsServer({
+      second: { aiEnabled: true },
+      other: (request) => {
+        const { pathname } = new URL(request.url);
+        if (pathname === read.pathname) {
+          reads += 1;
+          return reads === 1 ? hold(held) : Promise.resolve(read.answer("second"));
+        }
+        if (pathname === ENTITLEMENTS_PATH) {
+          return Promise.resolve(json(entitlementsBody(true)));
+        }
+        // The other lists the shell reads.
+        return Promise.resolve(page([]));
+      },
+    });
+    await open(read.path);
+    // The list has no data yet, so this read is the first of its key and is still out when the session moves.
+    await waitFor(() => {
+      expect(held.length).toBe(1);
+    }, LOADED_WAIT);
+
+    await switchTo(stub, SECOND_WORKSPACE_NAME);
+    await answer(held, () => read.answer("first"));
+
+    expect((await screen.findAllByText(read.shows.second, undefined, LOADED_WAIT)).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(read.shows.first)).toEqual([]);
+    expect(reads).toBeGreaterThanOrEqual(2);
+  }, SLOW_TEST_TIMEOUT_MS);
+});
+
 describe("the entitlements across switches", () => {
   it("gives each workspace its own entitlements on the way from the first to the second and back", async () => {
     const held: Respond[] = [];
