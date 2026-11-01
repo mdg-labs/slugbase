@@ -121,8 +121,9 @@ jobs:
       - name: Check /api/v1 for breaking changes
         run: bash scripts/check-openapi-breaking.sh
 
-  # The docs contract (doc 09 section 3.5) is checked only for a change under
-  # the three content roots. The job itself always runs and succeeds without
+  # The docs contract (doc 09 section 3.5) is checked only for a change that can
+  # alter its verdict: the three content roots, the checker in scripts/docs-check
+  # and the lockfile that pins the checker's dependencies. The job itself always runs and succeeds without
   # checking when nothing there changed, so it can be a required status check
   # (doc 08 section 6.2). When the changed files cannot be determined (no base
   # commit, a base the checkout does not hold) the check runs.
@@ -150,10 +151,10 @@ jobs:
             echo "Base commit ${BASE_SHA} is not in the checkout; the check runs."
           else
             rc=0
-            git diff --quiet "$BASE_SHA" HEAD -- docs/user docs/self-hosting docs/releases || rc=$?
+            git diff --quiet "$BASE_SHA" HEAD -- docs/user docs/self-hosting docs/releases scripts/docs-check pnpm-lock.yaml || rc=$?
             case "$rc" in
-              0) changed=false; echo "Nothing under docs/user, docs/self-hosting or docs/releases changed; the check is skipped." ;;
-              1) echo "The documentation changed; the check runs." ;;
+              0) changed=false; echo "Nothing under docs/user, docs/self-hosting, docs/releases or scripts/docs-check changed, and neither did pnpm-lock.yaml; the check is skipped." ;;
+              1) echo "The documentation, its checker or the lockfile changed; the check runs." ;;
               *) echo "git diff failed (exit ${rc})" >&2; exit 1 ;;
             esac
           fi
