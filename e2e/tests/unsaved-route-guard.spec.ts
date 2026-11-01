@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { Locator, Page } from "@playwright/test";
+import type { Dialog, Locator, Page } from "@playwright/test";
 import { message } from "../support/catalog.ts";
 import { appOrigin } from "../support/environment.ts";
 import { openPaletteWithShortcut, paletteDialog } from "../support/palette.ts";
@@ -9,6 +9,9 @@ import { expect, test, type App } from "../support/test.ts";
 // buttons and a palette command ask the discard question first, for every route that opens a form overlay. Keeping the form leaves
 // the address and the typed text as they were; discarding completes the navigation that was asked for; a form with no edit, and one
 // that has saved, ask nothing. Nothing is saved on the server: no journey presses a save button.
+//
+// Leaving the document (a reload, a Back across documents) fires no route change, so the browser's own leave prompt is raised for
+// it, only while a form holds an edit; dismissing it keeps the form and the edit.
 
 const en = (key: string, values: Readonly<Record<string, string>> = {}): string => message("en", key, values);
 
@@ -224,6 +227,119 @@ for (const form of CASES) {
   });
 }
 
+/** A leave that the browser stops with its own prompt: starts `leave`, answers the prompt it raises by staying, and returns the prompt. */
+async function promptedBy(page: Page, leave: () => Promise<unknown>): Promise<Dialog> {
+  const raised = page.waitForEvent("dialog");
+  void leave().catch(() => undefined);
+  const prompt = await raised;
+  await prompt.dismiss();
+  return prompt;
+}
+
+function reload(page: Page): () => Promise<void> {
+  return () =>
+    page.evaluate(() => {
+      window.location.reload();
+    });
+}
+
+for (const form of CASES) {
+  test.describe(`${form.name} behind a reload`, () => {
+    test("raises the browser's prompt, and dismissing it keeps the form and the edit", async ({ page, app, account }) => {
+      await account.set({ locale: "en" });
+      const { dialog, field, path } = await form.open(page, app);
+      await app.scan();
+      await field.fill("");
+      await field.pressSequentially("an edit");
+
+      const prompt = await promptedBy(page, reload(page));
+
+      expect(prompt.type()).toBe("beforeunload");
+      await expect(dialog).toBeVisible();
+      await expect(field).toHaveValue("an edit");
+      expect(new URL(page.url()).pathname).toBe(path);
+    });
+
+    test("asks nothing with no edit", async ({ page, app, account }) => {
+      await account.set({ locale: "en" });
+      const prompts: Dialog[] = [];
+      page.on("dialog", (raised) => {
+        prompts.push(raised);
+        void raised.dismiss();
+      });
+      await form.open(page, app);
+      await app.scan();
+
+      await page.reload();
+
+      expect(prompts).toEqual([]);
+    });
+
+    test("asks nothing after the edit was discarded", async ({ page, app, account }) => {
+      await account.set({ locale: "en" });
+      const prompts: Dialog[] = [];
+      page.on("dialog", (raised) => {
+        prompts.push(raised);
+        void raised.dismiss();
+      });
+      const { field } = await form.open(page, app);
+      await app.scan();
+      await field.fill("");
+      await field.pressSequentially("an edit");
+      await paletteGoHome(page);
+      await question(page).getByRole("button", { name: en("unsaved.discard"), exact: true }).click();
+      await expect.poll(() => new URL(page.url()).pathname).toBe("/");
+      await app.scan();
+
+      await page.reload();
+
+      expect(prompts).toEqual([]);
+    });
+  });
+}
+
+// A Back across documents: the form is open on the first entry of its document, which a hard visit made, so Back leaves for the site
+// before it and the router sees nothing.
+test.describe("a Back across documents behind an edited form", () => {
+  const FORMS = [
+    { name: "the folder form", address: "/folders?create=1", dialog: "folders.form.title.create", field: "folders.form.name.label" },
+    { name: "the bookmark form", address: "/bookmarks?new=1", dialog: "bookmarks.modal.create.title", field: "bookmarks.modal.title.label" },
+  ] as const;
+  for (const form of FORMS) {
+    test(`raises the browser's prompt for ${form.name}, and dismissing it keeps the form and the edit`, async ({ page, app, account }) => {
+      await account.set({ locale: "en" });
+      await app.visit("/tags", page.getByRole("heading", { level: 1, name: en("tags.page.title"), exact: true }));
+      const dialog = page.getByRole("dialog", { name: en(form.dialog), exact: true });
+      await app.visit(form.address, dialog);
+      const field = dialog.getByLabel(en(form.field), { exact: true });
+      await field.pressSequentially("an edit");
+
+      const prompt = await promptedBy(page, () => page.goBack());
+
+      expect(prompt.type()).toBe("beforeunload");
+      await expect(dialog).toBeVisible();
+      await expect(field).toHaveValue("an edit");
+      expect(new URL(page.url()).pathname).toBe(new URL(form.address, page.url()).pathname);
+    });
+  }
+
+  test("goes back across documents once the edit is gone", async ({ page, app, account }) => {
+    await account.set({ locale: "en" });
+    const prompts: Dialog[] = [];
+    page.on("dialog", (raised) => {
+      prompts.push(raised);
+      void raised.dismiss();
+    });
+    await app.visit("/tags", page.getByRole("heading", { level: 1, name: en("tags.page.title"), exact: true }));
+    await app.visit("/folders?create=1", page.getByRole("dialog", { name: en("folders.form.title.create"), exact: true }));
+
+    await page.goBack();
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/tags");
+    expect(prompts).toEqual([]);
+  });
+});
+
 // Two presses of Back while the question is open: the history moves the browser back to the page for each press, and the
 // router and the address must still agree afterwards. The stack is /bookmarks, /folders, /tags (all by the app's own
 // navigation, one document), with the tag rename form open on /tags.
@@ -308,4 +424,78 @@ test.describe("two traversals during one question", () => {
     await expect(page.getByRole("heading", { level: 1, name: en("shell.folders"), exact: true })).toBeVisible();
     await app.scan();
   });
+});
+
+// A second Back during one question that lands on an entry with the page's own address: the stack is tags, folders, tags, folders, tags
+// (all by the app's own navigation, one document), with the tag rename form open on the last one. The question ends by itself, the
+// form and the edit stay, and no wait for a history entry is left listening.
+test("a second Back onto an entry with the form's own address settles the question and leaves no listener", async ({ page, app, account }) => {
+  await account.set({ locale: "en" });
+  const token = randomBytes(4).toString("hex");
+  const made = await page.request.post("/api/v1/tags", { headers: { origin: appOrigin(), "content-type": "application/json" }, data: { name: `guard-${token}` } });
+  expect(made.status(), "POST /api/v1/tags").toBe(201);
+  const heading = (name: string): Locator => page.getByRole("heading", { level: 1, name, exact: true });
+  await app.visit("/tags", heading(en("tags.page.title")));
+  for (const [link, title] of [
+    [en("shell.folders"), en("shell.folders")],
+    [en("shell.tags"), en("tags.page.title")],
+    [en("shell.folders"), en("shell.folders")],
+    [en("shell.tags"), en("tags.page.title")],
+  ] as const) {
+    await NAV(page).getByRole("link", { name: link, exact: true }).click();
+    await expect(heading(title)).toBeVisible();
+    await app.scan();
+  }
+  await page.getByRole("button", { name: en("tags.list.actionsFor", { name: `guard-${token}` }), exact: true }).click();
+  await page.getByRole("menuitem", { name: en("tags.actions.rename"), exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: en("tags.form.title"), exact: true });
+  const field = dialog.getByRole("textbox", { name: en("tags.form.name.label"), exact: true });
+  await expect(dialog).toBeVisible();
+  await field.fill("an edit");
+  // Counts the popstate listeners that are added and not removed from here on.
+  await page.evaluate(() => {
+    const counted = window as unknown as { __listening: number; __pops: number };
+    counted.__listening = 0;
+    counted.__pops = 0;
+    const add = window.addEventListener.bind(window);
+    const remove = window.removeEventListener.bind(window);
+    window.addEventListener = (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void => {
+      if (type === "popstate") {
+        counted.__listening += 1;
+      }
+      add(type, listener, options);
+    };
+    window.removeEventListener = (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void => {
+      if (type === "popstate") {
+        counted.__listening -= 1;
+      }
+      remove(type, listener, options);
+    };
+    window.addEventListener("popstate", () => {
+      counted.__pops += 1;
+    });
+  });
+
+  await page.evaluate(() => {
+    window.history.back();
+  });
+  await expect(question(page)).toBeVisible();
+  await page.evaluate(() => {
+    window.history.back();
+  });
+
+  await expect(question(page)).toBeHidden();
+  await expect(dialog).toBeVisible();
+  await expect(field).toHaveValue("an edit");
+  expect(address(page)).toBe("/tags");
+  // The counting listener itself is the one that remains.
+  expect(await page.evaluate(() => (window as unknown as { __listening: number }).__listening)).toBe(1);
+
+  await page.goBack();
+  await expect(question(page)).toBeVisible();
+  await question(page).getByRole("button", { name: en("unsaved.discard"), exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => address(page)).toBe("/folders");
+  await expect(heading(en("shell.folders"))).toBeVisible();
+  await app.scan();
 });

@@ -34,6 +34,10 @@ function serve(): Server {
     vi.fn((request: Request) =>
       signedIn(request, async (other) => {
         const url = new URL(other.url);
+        if (url.pathname === "/api/v1/auth/logout" && other.method === "POST") {
+          ended = true;
+          return new Response(null, { status: 204 });
+        }
         if (ended && url.pathname !== "/api/config") {
           return problem(401, "unauthenticated", "req-401");
         }
@@ -329,5 +333,114 @@ describe("a form that leaves by itself", { timeout: HEAVY_TEST_TIMEOUT_MS }, () 
       expect(window.location.pathname).toBe("/login");
     });
     expect(screen.queryByRole("alertdialog", { name: QUESTION })).toBeNull();
+  });
+});
+
+/** Whether the app asks the browser to raise its own leave prompt: a `beforeunload` that a listener cancels. */
+function leavePromptRaised(): boolean {
+  const leaving = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(leaving);
+  return leaving.defaultPrevented;
+}
+
+describe("leaving the document behind an edited form", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  it("raises the browser's prompt while a form holds an edit, and only then", async () => {
+    serve();
+    await openApp("/folders");
+    await screen.findByRole("heading", { level: 2, name: "No folders yet" });
+    expect(leavePromptRaised()).toBe(false);
+
+    await press(screen.getAllByRole("button", { name: "New folder" })[0] as HTMLElement);
+    const dialog = await screen.findByRole("dialog", { name: "New folder" });
+    expect(leavePromptRaised()).toBe(false);
+
+    await type(dialog, "Recipes");
+    await waitFor(() => {
+      expect(leavePromptRaised()).toBe(true);
+    });
+
+    await type(dialog, "");
+    await waitFor(() => {
+      expect(leavePromptRaised()).toBe(false);
+    });
+  });
+
+  it("registers its listener with the edit and removes it with the edit", async () => {
+    serve();
+    await openApp("/folders");
+    await screen.findByRole("heading", { level: 2, name: "No folders yet" });
+    const added = vi.spyOn(window, "addEventListener");
+    const removed = vi.spyOn(window, "removeEventListener");
+    const count = (spy: typeof added): number => spy.mock.calls.filter(([type]) => type === "beforeunload").length;
+
+    await press(screen.getAllByRole("button", { name: "New folder" })[0] as HTMLElement);
+    const dialog = await screen.findByRole("dialog", { name: "New folder" });
+    expect(count(added)).toBe(0);
+
+    await type(dialog, "Recipes");
+    await waitFor(() => {
+      expect(count(added)).toBe(1);
+    });
+    expect(count(removed)).toBe(0);
+
+    await press(within(dialog).getByRole("button", { name: "Cancel" }));
+    await press(within(await question()).getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => {
+      expect(count(removed)).toBe(1);
+    });
+    expect(leavePromptRaised()).toBe(false);
+  });
+
+  it("raises nothing once a save has closed the form", async () => {
+    const server = serve();
+    await openApp("/folders");
+    const dialog = await openEditedForm();
+    await waitFor(() => {
+      expect(leavePromptRaised()).toBe(true);
+    });
+
+    await press(within(dialog).getByRole("button", { name: "Create folder" }));
+
+    await waitFor(() => {
+      expect(server.calls.filter((call) => call.method === "POST")).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "New folder" })).toBeNull();
+    });
+    expect(leavePromptRaised()).toBe(false);
+  });
+
+  it("raises nothing after a sign-out behind an edited form", async () => {
+    serve();
+    await openApp("/folders");
+    await openEditedForm();
+    await waitFor(() => {
+      expect(leavePromptRaised()).toBe(true);
+    });
+
+    await paletteGoTo(/^Sign out/);
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/login");
+    });
+    expect(screen.queryByRole("alertdialog", { name: QUESTION })).toBeNull();
+    expect(leavePromptRaised()).toBe(false);
+  });
+
+  it("raises nothing after the sign-in redirect of a session that ended behind an edited form", async () => {
+    const server = serve();
+    await openApp("/folders");
+    const dialog = await openEditedForm();
+    await waitFor(() => {
+      expect(leavePromptRaised()).toBe(true);
+    });
+    server.endSession();
+
+    await press(within(dialog).getByRole("button", { name: "Create folder" }));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/login");
+    });
+    expect(leavePromptRaised()).toBe(false);
   });
 });

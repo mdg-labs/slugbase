@@ -50,6 +50,8 @@ interface Question {
   readonly from: number;
   /** The position the member's last Back or Forward press while the question was open asked for. */
   target: number | undefined;
+  /** Whether a press while the question was open landed on an entry with the page's own address, where the browser stays. */
+  landed: boolean;
 }
 
 function isTraversal(action: string): boolean {
@@ -65,7 +67,11 @@ function isTraversal(action: string): boolean {
  * The history answers a held Back or Forward by moving the browser back to where it was, for each press. A press while the
  * question is open is held the same way and remembered; the router's wait for the first press is then settled with
  * "let through" once the browser is back on the page (it must not move the browser again), and a discard goes on to the page
- * of the last press.
+ * of the last press. A press that lands on an entry with the page's own address ends the question at once: the history leaves the
+ * browser on that entry, so the wait for the first press is let through without one.
+ *
+ * Leaving the document (a reload, a closed tab, a Back or Forward across documents) fires no route change, so the browser's own
+ * leave prompt is registered for as long as a form holds an edit, and no longer.
  */
 function RouteLeaveGuard({ router }: { router: AppRouter }): ReactElement {
   const { t } = useTranslation();
@@ -81,6 +87,10 @@ function RouteLeaveGuard({ router }: { router: AppRouter }): ReactElement {
     question.current = undefined;
     setAsking(false);
     if (asked === undefined) {
+      return;
+    }
+    if (asked.landed) {
+      asked.resolve(false);
       return;
     }
     if (!asked.traversal || asked.target === undefined) {
@@ -118,14 +128,28 @@ function RouteLeaveGuard({ router }: { router: AppRouter }): ReactElement {
     if (!armed) {
       return;
     }
+    const prompt = (event: BeforeUnloadEvent): void => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", prompt);
+    return () => {
+      window.removeEventListener("beforeunload", prompt);
+    };
+  }, [armed]);
+
+  useEffect(() => {
+    if (!armed) {
+      return;
+    }
     const unblock = router.history.block({
       enableBeforeUnload: false,
       blockerFn: ({ currentLocation, nextLocation, action }) => {
         const asked = question.current;
         if (asked?.traversal === true && isTraversal(action)) {
           if (nextLocation.href === currentLocation.href) {
-            // The member is back on the page the question is about: nothing is left to ask, and the browser is there already.
-            asked.target = asked.from;
+            // The member is back on the page the question is about: nothing is left to ask. The history does not move the
+            // browser back for this press, so it stays on the entry it is on, which is not necessarily the one the question began on.
+            asked.landed = true;
             finish(true);
             return false;
           }
@@ -144,7 +168,7 @@ function RouteLeaveGuard({ router }: { router: AppRouter }): ReactElement {
         }
         opener.current = document.activeElement;
         return new Promise<boolean>((resolve) => {
-          question.current = { resolve, traversal: isTraversal(action), from: currentLocation.state.__TSR_index, target: undefined };
+          question.current = { resolve, traversal: isTraversal(action), from: currentLocation.state.__TSR_index, target: undefined, landed: false };
           setAsking(true);
         });
       },
