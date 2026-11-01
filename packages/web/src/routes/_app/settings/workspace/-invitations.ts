@@ -11,16 +11,22 @@ export type InvitationRole = "admin" | "member";
 
 export const INVITATIONS_QUERY_KEY = ["invitations"] as const;
 
+/** The key of the invitation list of one workspace; it sits under `INVITATIONS_QUERY_KEY`, so invalidating that key reaches it. */
+function invitationsKey(workspaceId: string) {
+  return [...INVITATIONS_QUERY_KEY, workspaceId] as const;
+}
+
 const PAGE_SIZE = 50;
 
-/** The workspace's pending invitations, newest first, a page at a time. */
-export function invitationsQuery(api: ApiClient) {
+/** The pending invitations of the workspace the session acts in, newest first, a page at a time, kept under that workspace's key. */
+export function invitationsQuery(api: ApiClient, workspaceId: string) {
   return infiniteQueryOptions({
-    queryKey: INVITATIONS_QUERY_KEY,
+    queryKey: invitationsKey(workspaceId),
     initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam, signal }) => {
       const { data, error } = await api.GET("/api/v1/invitations", {
         params: { query: { limit: PAGE_SIZE, ...(pageParam === undefined ? {} : { cursor: pageParam }) } },
+        signal,
       });
       if (data === undefined) {
         throw new Error("The invitations request did not answer with a document", { cause: error });

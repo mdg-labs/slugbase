@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { useConfig } from "../../../../config/config-context.tsx";
 import { Slot } from "../../../../extensions/index.ts";
 import { useFormat } from "../../../../i18n/use-format.ts";
-import { membersQuery } from "../../../../shell/workspace-members.ts";
+import { membersOf, membersQuery, useActiveWorkspaceId } from "../../../../shell/workspace-members.ts";
 import { InviteDialog } from "./-invite-dialog.tsx";
 import {
   INVITATIONS_QUERY_KEY,
@@ -42,14 +42,14 @@ interface IssuedLink {
  * can send mail), a copyable link and Revoke after a `confirm`. An expired invitation is marked and can be resent or given
  * a link, which renews it.
  */
-export function InvitationsSection(): ReactElement {
+function InvitationsList({ workspaceId }: { workspaceId: string }): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const router = useRouter();
   const queryClient = useQueryClient();
   const api = router.options.context.api;
   const { features } = useConfig();
-  const invitations = useInfiniteQuery(invitationsQuery(api));
+  const invitations = useInfiniteQuery(invitationsQuery(api, workspaceId));
   // Only the pages of members the members table has loaded: the names of inviters are not worth a request for every page.
   const members = useInfiniteQuery(membersQuery(api));
   const [inviting, setInviting] = useState(false);
@@ -113,11 +113,12 @@ export function InvitationsSection(): ReactElement {
     if (invitation.invitedBy === null) {
       return t("settings.members.invitations.invitedBy.deleted");
     }
-    const member = members.data?.pages.flatMap((page) => page.items).find(({ accountId }) => accountId === invitation.invitedBy);
+    const pages = membersOf(members.data, workspaceId);
+    const member = pages?.flatMap((page) => page.items).find(({ accountId }) => accountId === invitation.invitedBy);
     if (member !== undefined) {
       return member.displayName;
     }
-    return members.isSuccess && !members.hasNextPage ? t("settings.members.invitations.invitedBy.former") : t("settings.members.invitations.invitedBy.unknown");
+    return pages !== undefined && members.isSuccess && !members.hasNextPage ? t("settings.members.invitations.invitedBy.former") : t("settings.members.invitations.invitedBy.unknown");
   }
 
   function actionsOf(invitation: InvitationListItem): readonly RowAction[] {
@@ -308,4 +309,10 @@ export function InvitationsSection(): ReactElement {
       )}
     </section>
   );
+}
+
+/** The invitations of the workspace the session acts in; the list and its dialogs start afresh when the workspace changes. */
+export function InvitationsSection(): ReactElement | null {
+  const workspaceId = useActiveWorkspaceId();
+  return workspaceId === undefined ? null : <InvitationsList key={workspaceId} workspaceId={workspaceId} />;
 }

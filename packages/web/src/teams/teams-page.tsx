@@ -19,7 +19,7 @@ import { useTranslation } from "react-i18next";
 import { EntitlementGate } from "../entitlements/index.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
-import { MEMBERS_QUERY_KEY } from "../shell/workspace-members.ts";
+import { MEMBERS_QUERY_KEY, useActiveWorkspaceId } from "../shell/workspace-members.ts";
 import { canAdminister, useWorkspace } from "../shell/workspace.ts";
 import { TeamForm } from "./team-form.tsx";
 import { TEAMS_QUERY_KEY, deleteTeam, teamFailureOf, teamListQuery, teamQuery, type Team } from "./teams.ts";
@@ -47,13 +47,13 @@ function TeamMembers({ team }: { team: Team }): ReactElement {
   );
 }
 
-function TeamsContent(): ReactElement {
+function TeamsContent({ workspaceId }: { workspaceId: string }): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const api = router.options.context.api;
   const workspace = useWorkspace();
-  const teams = useInfiniteQuery(teamListQuery(api));
+  const teams = useInfiniteQuery(teamListQuery(api, workspaceId));
   // Only an admin or an owner changes teams; the server decides in the end, so a role not yet known shows the list alone.
   const editable = workspace.data !== undefined && canAdminister(workspace.data.role);
   const [form, setForm] = useState<{ readonly team: Team | undefined } | undefined>(undefined);
@@ -231,9 +231,12 @@ function TeamsContent(): ReactElement {
  * the workspace lacks it the upgrade slot stands in for it and no team is asked for.
  */
 export function TeamsPage(): ReactElement {
+  const { t } = useTranslation();
+  const workspaceId = useActiveWorkspaceId();
   return (
     <EntitlementGate name="teams.manage">
-      <TeamsContent />
+      {/* Keyed by the workspace, so that the list, the form and the confirmation of the previous workspace do not carry over. */}
+      {workspaceId === undefined ? <Loading label={t("teams.loading")} /> : <TeamsContent key={workspaceId} workspaceId={workspaceId} />}
     </EntitlementGate>
   );
 }

@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { membersQuery, type Member } from "../shell/workspace-members.ts";
+import { membersOf, membersQuery, useActiveWorkspaceId, type Member } from "../shell/workspace-members.ts";
 
 export interface AllMembers {
   /** The members read so far; all of them once `status` is "ready". */
@@ -19,11 +19,14 @@ export function useAllMembers(): AllMembers {
       void fetchNextPage({ cancelRefetch: false });
     }
   }, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
-  const members = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // What the cache holds may be the previous workspace's list, which is read again after a switch and meanwhile no choice is made from.
+  const workspaceId = useActiveWorkspaceId();
+  const pages = workspaceId === undefined ? undefined : membersOf(list.data, workspaceId);
+  const members = pages?.flatMap((page) => page.items) ?? [];
   let status: AllMembers["status"] = "loading";
   if (isError) {
     status = "failed";
-  } else if (list.data !== undefined && !hasNextPage) {
+  } else if (pages !== undefined && !hasNextPage) {
     status = "ready";
   }
   return { members, status };

@@ -28,11 +28,13 @@ import {
   canRemove,
   canTransferOwnership,
   changeMemberRole,
+  membersOf,
   membersQuery,
   moveOwnRole,
+  useActiveWorkspaceId,
   withMember,
   type Member,
-  type MemberList,
+  type MemberPage,
   type RoleChangeRefusal,
 } from "./workspace-members.ts";
 import { WORKSPACE_QUERY_KEY, useWorkspace, type WorkspaceRole } from "./workspace.ts";
@@ -53,7 +55,7 @@ function useRoleLabel(): (role: WorkspaceRole) => string {
   };
 }
 
-function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; viewerId: string | undefined }): ReactElement {
+function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: WorkspaceRole; viewerId: string | undefined; workspaceId: string }): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const router = useRouter();
@@ -86,7 +88,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
         next.delete(member.accountId);
         return next;
       });
-      queryClient.setQueryData<InfiniteData<MemberList, string | undefined>>(MEMBERS_QUERY_KEY, (data) => withMember(data, outcome.member));
+      queryClient.setQueryData<InfiniteData<MemberPage, string | undefined>>(MEMBERS_QUERY_KEY, (data) => withMember(data, outcome.member));
       if (member.accountId === queryClient.getQueryData<Me>(ME_QUERY_KEY)?.account.id) {
         // The server rotated the session's token with the change; what the page knows of the caller's role moves with it.
         moveOwnRole(queryClient, outcome.member.role);
@@ -94,7 +96,11 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
     },
   });
 
-  const items = members.data?.pages.flatMap((page) => page.items) ?? [];
+  // What the cache holds may be the previous workspace's list, which is read again after a switch and meanwhile neither shown nor acted on.
+  const pages = membersOf(members.data, workspaceId);
+  const items = pages?.flatMap((page) => page.items) ?? [];
+  const waiting = members.isPending || (pages === undefined && !members.isError);
+  const hasNextPage = pages !== undefined && members.hasNextPage;
   const dateTime = (value: string): string => format.date(new Date(value), { dateStyle: "medium", timeStyle: "short" });
 
   function refusalMessage(refusal: RoleChangeRefusal | undefined): string | undefined {
@@ -236,7 +242,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
 
   return (
     <>
-      {members.isPending ? <Loading label={t("shell.loading")} /> : null}
+      {waiting ? <Loading label={t("shell.loading")} /> : null}
       {members.isError ? (
         <Banner
           action={
@@ -282,10 +288,10 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
       {items.length === 0 ? null : (
         <>
           <DataTable columns={columns} label={t("settings.members.title")} rowKey={(member) => member.accountId} rows={items} />
-          {items.length === 1 && !members.hasNextPage ? (
+          {items.length === 1 && !hasNextPage ? (
             <EmptyState description={t("settings.members.single.description")} title={t("settings.members.single.title")} />
           ) : null}
-          {members.hasNextPage ? (
+          {hasNextPage ? (
             <div className="flex justify-center">
               <Button
                 loading={members.isFetchingNextPage}
@@ -310,8 +316,9 @@ function MembersContent(): ReactElement | null {
   const api = router.options.context.api;
   const workspace = useWorkspace();
   const me = useQuery(meQuery(api));
+  const workspaceId = useActiveWorkspaceId();
   // The guard around this renders it only once the workspace is loaded and its role is an admin's or an owner's.
-  if (workspace.data === undefined) {
+  if (workspace.data === undefined || workspaceId === undefined) {
     return null;
   }
   return (
@@ -320,7 +327,8 @@ function MembersContent(): ReactElement | null {
         <h1 className="font-semibold text-xl">{t("settings.members.title")}</h1>
         <p className="text-muted-foreground text-sm">{t("settings.members.description")}</p>
       </div>
-      <MembersTable viewerId={me.data?.account.id} viewerRole={workspace.data.role} />
+      {/* Keyed by the workspace, so that the dialogs and refusals of the previous workspace do not carry over. */}
+      <MembersTable key={workspaceId} viewerId={me.data?.account.id} viewerRole={workspace.data.role} workspaceId={workspaceId} />
     </div>
   );
 }
