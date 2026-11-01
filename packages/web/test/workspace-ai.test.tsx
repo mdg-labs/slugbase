@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Entitlements } from "../src/entitlements/index.ts";
 import type { WebExtension } from "../src/extensions/index.ts";
 import { createWebApp } from "../src/index.ts";
+import { SWITCH_WRITE_WAIT_MS } from "../src/shell/workspaces.ts";
 import { ME_PATH, WORKSPACE_ID, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 import { OTHER_WORKSPACE_ID, SECOND_WORKSPACE_NAME, WORKSPACE_SETTINGS_PATH, stubWorkspaceSettingsServer, type Role } from "./workspace-settings-server.ts";
 
@@ -381,10 +382,11 @@ describe("a switch of workspace on the page", () => {
     const held = new Map<string, (response: Response) => void>();
     const stored = new Map([[WORKSPACE_ID, true], [OTHER_WORKSPACE_ID, false]]);
     let holding = false;
-    // The workspace read is held too: the settings of the new workspace answer before the page learns of it.
+    const workspaceReads: ((response: Response) => void)[] = [];
+    // The workspace read is held too: the page asks for the settings only once the new workspace's role is known.
     const stub = server({
       second: { aiEnabled: false },
-      get: () => (holding ? new Promise<Response>(() => undefined) : undefined),
+      get: () => (holding ? new Promise<Response>((resolve) => workspaceReads.push(resolve)) : undefined),
       settingsGet: (_call, workspaceId) =>
         holding
           ? new Promise<Response>((resolve) => {
@@ -401,6 +403,15 @@ describe("a switch of workspace on the page", () => {
     expect(await screen.findByRole("status", { name: "Loading" }, LOADED_WAIT)).toBeTruthy();
     expect(screen.queryByRole("switch")).toBeNull();
     await act(async () => {
+      for (const release of workspaceReads) {
+        release(json({ id: OTHER_WORKSPACE_ID, name: SECOND_WORKSPACE_NAME, role: "owner", memberCount: 2, createdAt: "2026-09-01T08:00:00.000Z", version: 3 }));
+      }
+      await Promise.resolve();
+    });
+    // The role is known, and the setting of the new workspace is still on its way.
+    expect(await screen.findByRole("status", { name: "Loading" }, LOADED_WAIT)).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
+    await act(async () => {
       held.get(OTHER_WORKSPACE_ID)?.(json({ aiEnabled: false }));
       await Promise.resolve();
     });
@@ -409,8 +420,20 @@ describe("a switch of workspace on the page", () => {
     }, LOADED_WAIT);
 
     held.clear();
+    workspaceReads.length = 0;
     await switchTo(stub, FIRST_WORKSPACE_NAME);
 
+    // The cached document is the other workspace's, so the page waits for this workspace's own before it shows anything.
+    expect(screen.queryByRole("switch")).toBeNull();
+    await waitFor(() => {
+      expect(workspaceReads.length).toBeGreaterThan(0);
+    }, LOADED_WAIT);
+    await act(async () => {
+      for (const release of workspaceReads) {
+        release(json({ id: WORKSPACE_ID, name: FIRST_WORKSPACE_NAME, role: "owner", memberCount: 2, createdAt: "2026-09-01T08:00:00.000Z", version: 3 }));
+      }
+      await Promise.resolve();
+    });
     await waitFor(() => {
       expect(held.has(WORKSPACE_ID)).toBe(true);
     }, LOADED_WAIT);
@@ -443,6 +466,9 @@ describe("a switch of workspace on the page", () => {
     await waitFor(() => {
       expect(screen.getByRole("switch", { name: SWITCH }).getAttribute("aria-checked")).toBe("false");
     }, LOADED_WAIT);
+    // A save that has not answered for longer than SWITCH_WRITE_WAIT_MS is taken as stuck and no longer holds the switch back.
+    const now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now + SWITCH_WRITE_WAIT_MS + 1000);
     await switchTo(stub, SECOND_WORKSPACE_NAME);
     await waitFor(() => {
       expect(screen.getByRole("switch", { name: SWITCH }).getAttribute("aria-checked")).toBe("false");

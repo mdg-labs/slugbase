@@ -20,7 +20,7 @@ import { EntitlementGate } from "../entitlements/index.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { MEMBERS_QUERY_KEY } from "../shell/workspace-members.ts";
-import { canAdminister, workspaceQuery } from "../shell/workspace.ts";
+import { canAdminister, useWorkspace } from "../shell/workspace.ts";
 import { TeamForm } from "./team-form.tsx";
 import { TEAMS_QUERY_KEY, deleteTeam, teamFailureOf, teamListQuery, teamQuery, type Team } from "./teams.ts";
 
@@ -52,7 +52,7 @@ function TeamsContent(): ReactElement {
   const router = useRouter();
   const queryClient = useQueryClient();
   const api = router.options.context.api;
-  const workspace = useQuery(workspaceQuery(api));
+  const workspace = useWorkspace();
   const teams = useInfiniteQuery(teamListQuery(api));
   // Only an admin or an owner changes teams; the server decides in the end, so a role not yet known shows the list alone.
   const editable = workspace.data !== undefined && canAdminister(workspace.data.role);

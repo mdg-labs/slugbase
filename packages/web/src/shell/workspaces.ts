@@ -52,12 +52,21 @@ export function addMembership(queryClient: QueryClient, workspace: WorkspaceSumm
 }
 
 /** Why a switch did not go through, as far as the member is told. */
-export type SwitchFailure = "notAMember" | "unavailable";
+export type SwitchFailure = "notAMember" | "saving" | "unavailable";
 
 /** The sentence for a failed switch, in the language of the page. */
 export function useSwitchFailureMessage(): (failure: SwitchFailure) => string {
   const { t } = useTranslation();
-  return (failure) => (failure === "notAMember" ? t("workspaces.switch.failed.notAMember") : t("workspaces.switch.failed.unavailable"));
+  return (failure) => {
+    switch (failure) {
+      case "notAMember":
+        return t("workspaces.switch.failed.notAMember");
+      case "saving":
+        return t("workspaces.switch.failed.saving");
+      case "unavailable":
+        return t("workspaces.switch.failed.unavailable");
+    }
+  };
 }
 
 export type SwitchOutcome =
@@ -78,7 +87,25 @@ export interface WorkspaceSwitch {
   readonly switchTo: (workspaceId: string) => Promise<SwitchOutcome>;
 }
 
-/** Switches the session's active workspace. Only one switch runs at a time. */
+/**
+ * How long a write may be out before it no longer holds a switch back. A write names no workspace and the server
+ * binds it to the session's workspace when it arrives, so one still on its way when the session moves can change
+ * the other workspace; a write that has not answered after this long is taken as stuck, so that it cannot lock the
+ * switch for the rest of the session.
+ */
+export const SWITCH_WRITE_WAIT_MS = 30_000;
+
+/** Whether a write (a mutation of React Query) was started less than `SWITCH_WRITE_WAIT_MS` ago and has not answered. */
+function writeIsOut(queryClient: QueryClient): boolean {
+  const now = Date.now();
+  return queryClient.getMutationCache().getAll().some(({ state }) => state.status === "pending" && now - state.submittedAt < SWITCH_WRITE_WAIT_MS);
+}
+
+/**
+ * Switches the session's active workspace. Only one switch runs at a time, and none while a write is out: the
+ * switch answers `saving` and sends nothing, and the member tries again once the write has answered. Writes that
+ * are not React Query mutations are not seen, and neither are writes started after the switch request left.
+ */
 export function useWorkspaceSwitch(): WorkspaceSwitch {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -98,10 +125,16 @@ export function useWorkspaceSwitch(): WorkspaceSwitch {
       if (running.current) {
         return { status: "skipped" };
       }
+      if (writeIsOut(queryClient)) {
+        return { status: "failed", failure: "saving" };
+      }
       running.current = true;
       setPending(true);
       try {
         await setActiveWorkspace(router.options.context.api, workspaceId);
+        // A read of the account that is still out was asked before the session moved, and its answer would put the previous workspace back.
+        await queryClient.cancelQueries({ queryKey: ME_QUERY_KEY });
+        queryClient.setQueryData<Me>(ME_QUERY_KEY, (me) => (me === undefined ? me : { ...me, activeWorkspaceId: workspaceId }));
       } catch (caught) {
         if (caught instanceof ApiProblemError && caught.status === 404) {
           // The account is no longer a member of it: the list the member chose from is out of date.
@@ -115,7 +148,6 @@ export function useWorkspaceSwitch(): WorkspaceSwitch {
           setPending(false);
         }
       }
-      queryClient.setQueryData<Me>(ME_QUERY_KEY, (me) => (me === undefined ? me : { ...me, activeWorkspaceId: workspaceId }));
       void queryClient.invalidateQueries();
       void router.invalidate();
       return { status: "switched" };

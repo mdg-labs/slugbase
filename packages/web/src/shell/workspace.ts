@@ -1,8 +1,9 @@
 import type { ComponentTypes } from "@slugbase/contracts";
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { ApiProblemError, type ApiClient, type ApiProblemCode } from "../api/client.ts";
 import { isReauthCancelled } from "../auth/reauth.ts";
-import type { Me } from "../account/me.ts";
+import { meQuery, type Me } from "../account/me.ts";
 
 export type Workspace = ComponentTypes["schemas"]["Workspace"];
 export type WorkspaceRole = Workspace["role"];
@@ -21,6 +22,33 @@ export function workspaceQuery(api: ApiClient) {
       return data;
     },
   });
+}
+
+/** What a page reads of the workspace the session acts in. */
+export interface WorkspaceRead {
+  readonly data: Workspace | undefined;
+  readonly isPending: boolean;
+  readonly isError: boolean;
+  readonly isFetching: boolean;
+  readonly refetch: () => Promise<unknown>;
+}
+
+/**
+ * The workspace the session acts in, as pages read it. The request names no workspace and its answer is cached under
+ * one key, so after a switch the cache holds the previous workspace's document until the new one arrives. A document
+ * whose workspace is not the account's active one is not the page's to show or to act on (a rename sends the
+ * document's version to the session's workspace), so it reads as not loaded. While the account is not known the
+ * document stands as it is.
+ */
+export function useWorkspace(): WorkspaceRead {
+  const api = useRouter().options.context.api;
+  const me = useQuery({ ...meQuery(api), staleTime: Number.POSITIVE_INFINITY });
+  const { data, isPending, isError, isFetching, refetch } = useQuery(workspaceQuery(api));
+  const activeId = me.data?.activeWorkspaceId;
+  if (data !== undefined && typeof activeId === "string" && data.id !== activeId) {
+    return { data: undefined, isPending: !isError, isError, isFetching, refetch };
+  }
+  return { data, isPending, isError, isFetching, refetch };
 }
 
 /** Renames the workspace if it is still at `version`; a workspace at another version answers `412` and keeps its name. */

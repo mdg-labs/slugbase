@@ -22,8 +22,11 @@ export function entitlementsQuery(api: ApiClient, workspaceId: string) {
     queryKey: [...ENTITLEMENTS_QUERY_KEY, workspaceId],
     staleTime: Number.POSITIVE_INFINITY,
     refetchOnWindowFocus: "always",
-    queryFn: async (): Promise<Entitlements> => {
-      const { data, error } = await api.GET("/api/v1/entitlements");
+    // The request names no workspace: the server answers for the session's. The signal ends a read when its key loses
+    // its last reader, so the read a switch starts under the old key is dropped rather than stored there with the
+    // answer of the workspace the session has moved to.
+    queryFn: async ({ signal }): Promise<Entitlements> => {
+      const { data, error } = await api.GET("/api/v1/entitlements", { signal });
       if (data === undefined) {
         throw new Error("The entitlements request did not answer with a document", { cause: error });
       }

@@ -1,11 +1,9 @@
 import { Button } from "@slugbase/ui";
 import { Banner, Loading } from "@slugbase/ui/patterns";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ForbiddenPage } from "./error-pages.tsx";
-import { canAdminister, workspaceQuery } from "./workspace.ts";
+import { canAdminister, useWorkspace } from "./workspace.ts";
 
 /**
  * Guards a workspace settings page that only admins and owners may open (doc 03 section 11): a member sees the
@@ -14,8 +12,7 @@ import { canAdminister, workspaceQuery } from "./workspace.ts";
  */
 export function WorkspaceAdminOnly({ children }: { children: ReactNode }): ReactElement {
   const { t } = useTranslation();
-  const router = useRouter();
-  const workspace = useQuery(workspaceQuery(router.options.context.api));
+  const workspace = useWorkspace();
 
   if (workspace.data === undefined) {
     return workspace.isError ? (

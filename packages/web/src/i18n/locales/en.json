@@ -2619,6 +2619,7 @@
       "failed": {
         "title": "The workspace was not switched",
         "unavailable": "You are still in the same workspace. Try again.",
+        "saving": "A change is still being saved. Try again in a moment.",
         "notAMember": "You are no longer a member of that workspace."
       }
     },
