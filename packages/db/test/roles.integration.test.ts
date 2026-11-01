@@ -519,9 +519,11 @@ describe("a run converges drifted roles", () => {
       before: [...DRIFT, DRIFT_PROBE, "SELECT pg_sleep(1.5)"],
     });
     const state = { done: false };
-    void running.then(() => {
+    // Both outcomes end the poll; a rejection stays on `running` for the await below to report.
+    const markDone = (): void => {
       state.done = true;
-    });
+    };
+    void running.then(markDone, markDone);
     while (!state.done) {
       const rows = await owner<{ bypass: boolean }[]>`SELECT rolbypassrls AS bypass FROM pg_roles WHERE rolname = 'slugbase_app'`;
       seen.push(rows[0]?.bypass === true);
