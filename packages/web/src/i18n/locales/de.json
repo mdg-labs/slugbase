@@ -2243,6 +2243,12 @@
       "description": "Melde dich erneut an, um fortzufahren."
     }
   },
+  "unsaved": {
+    "title": "Änderungen verwerfen?",
+    "description": "Die Änderungen in diesem Formular gehen verloren, wenn du diese Seite jetzt verlässt.",
+    "discard": "Änderungen verwerfen",
+    "keepEditing": "Weiter bearbeiten"
+  },
   "feedback": {
     "regionLabel": "Mitteilungen",
     "mutationFailed": {

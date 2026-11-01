@@ -2243,6 +2243,12 @@
       "description": "Sign in again to continue."
     }
   },
+  "unsaved": {
+    "title": "Discard your changes?",
+    "description": "The changes you made in this form are lost if you leave this page now.",
+    "discard": "Discard changes",
+    "keepEditing": "Keep editing"
+  },
   "feedback": {
     "regionLabel": "Notifications",
     "mutationFailed": {

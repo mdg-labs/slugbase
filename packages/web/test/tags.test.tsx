@@ -285,6 +285,17 @@ async function key(init: KeyboardEventInit, target: Element | Window = window): 
   });
 }
 
+async function traverse(direction: "back" | "forward"): Promise<void> {
+  await act(async () => {
+    if (direction === "back") {
+      window.history.back();
+    } else {
+      window.history.forward();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+}
+
 async function typeInto(field: HTMLElement, value: string): Promise<void> {
   await act(async () => {
     fireEvent.change(field, { target: { value } });
@@ -617,6 +628,45 @@ describe("renaming a tag", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(server.to("PATCH")[0]?.body).toEqual({ name: "Cooking" });
     await waitFor(() => {
       expect(namesShown()).toEqual(["Archive", "Cooking", "Reading"]);
+    });
+    expect(screen.queryByRole("dialog", { name: "Rename tag" })).toBeNull();
+  });
+
+  it("asks the discard question when Back would leave the page with the form edited, and not when the page stays", async () => {
+    stubServer(SPEC);
+    await openApp("/");
+    await screen.findByRole("heading", { level: 1 });
+    await key({ key: "g" });
+    await key({ key: "t" });
+    await inPage.findByText("Recipes");
+    await press(within(screen.getByRole("table", { name: "Tags" })).getByRole("link", { name: "Recipes" }));
+    await screen.findByRole("heading", { level: 2, name: "Recipes" });
+    const dialog = await openRename("Recipes");
+    await typeInto(within(dialog).getByRole("textbox", { name: "Name" }), "Cooking");
+
+    // Back to the list without the selected tag stays on the page: the form is not left.
+    await traverse("back");
+    await waitFor(() => {
+      expect(window.location.search).toBe("");
+    });
+    expect(screen.queryByRole("alertdialog", { name: "Discard your changes?" })).toBeNull();
+    expect(within(screen.getByRole("dialog", { name: "Rename tag" })).getByRole<HTMLInputElement>("textbox", { name: "Name" }).value).toBe("Cooking");
+
+    // Back to the page before the Tags page leaves it.
+    await traverse("back");
+    await press(within(await screen.findByRole("alertdialog", { name: "Discard your changes?" })).getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(within(screen.getByRole("dialog", { name: "Rename tag" })).getByRole<HTMLInputElement>("textbox", { name: "Name" }).value).toBe("Cooking");
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/tags");
+    });
+
+    await traverse("back");
+    await press(within(await screen.findByRole("alertdialog", { name: "Discard your changes?" })).getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/");
     });
     expect(screen.queryByRole("dialog", { name: "Rename tag" })).toBeNull();
   });

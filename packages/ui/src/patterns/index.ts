@@ -61,6 +61,15 @@ export { TileGrid, TileLink, type TileGridProps, type TileLinkProps } from "./ti
 export { Totp, type TotpProps } from "./totp.tsx";
 export { TypedConfirm, matchesExpected, type TypedConfirmProps } from "./typed-confirm.tsx";
 export { UnsavedGuard, type UnsavedGuardProps } from "./unsaved-guard.tsx";
+export {
+  staysOnPage,
+  staysWhileParams,
+  unsavedChanges,
+  useUnsavedForm,
+  type FormAddress,
+  type FormStays,
+  type UnsavedChanges,
+} from "./unsaved-changes.ts";
 export { UrlInput, type UrlInputProps } from "./url-input.tsx";
 export { UsageMeter, type UsageMeterProps } from "./usage-meter.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";

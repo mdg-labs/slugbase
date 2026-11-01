@@ -1,10 +1,11 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, FormField, FormOverlay, Loading, MultiPick, TextareaField, feedbackToast, useBusyFormFocus, type PickerOption } from "@slugbase/ui/patterns";
+import { Banner, FormField, FormOverlay, Loading, MultiPick, TextareaField, feedbackToast, useBusyFormFocus, useUnsavedForm, type PickerOption } from "@slugbase/ui/patterns";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
+import { sameIds } from "../bookmarks/bookmark-choices.ts";
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { MEMBERS_QUERY_KEY } from "../shell/workspace-members.ts";
 import {
@@ -56,12 +57,22 @@ function TeamFormBody({ initial, onClose }: { initial: TeamWithMembers | undefin
   const [nameRequired, setNameRequired] = useState(false);
   const [failure, setFailure] = useState<TeamFailure | undefined>(undefined);
 
+  const unsaved = useUnsavedForm(
+    name.trim() !== (base?.name ?? "") ||
+      description.trim() !== (base?.description ?? "") ||
+      !sameIds(
+        memberIds,
+        (base?.members ?? []).map(({ accountId }) => accountId),
+      ),
+  );
+
   const save = useMutation({
     mutationKey: SAVE_KEY,
     meta: SHOWN_IN_THE_FORM,
     mutationFn: (draft: { name: string; description: string; memberIds: readonly string[] }) => saveTeam(api, base, draft, setBase),
     onSuccess: () => {
       feedbackToast.success(initial === undefined ? t("teams.form.saved.created") : t("teams.form.saved.updated"));
+      unsaved.release();
       onClose();
     },
     onError: (error) => {

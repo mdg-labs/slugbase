@@ -618,6 +618,14 @@ export { FolderIcon }
 export { FolderPlusIcon }
 
 // @public
+export interface FormAddress {
+    // (undocumented)
+    readonly pathname: string;
+    // (undocumented)
+    readonly search: string;
+}
+
+// @public
 export function FormField(input: FormFieldProps): ReactElement;
 
 // @public (undocumented)
@@ -649,6 +657,9 @@ export interface FormOverlayProps {
     // (undocumented)
     title: ReactNode;
 }
+
+// @public
+export type FormStays = (next: FormAddress, current: FormAddress) => boolean;
 
 export { ForwardIcon }
 
@@ -1155,6 +1166,12 @@ export interface StatusBadgeProps {
 // @public (undocumented)
 export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
 
+// @public
+export const staysOnPage: FormStays;
+
+// @public
+export function staysWhileParams(...names: readonly string[]): FormStays;
+
 export { SunMoonIcon }
 
 export { TableIcon }
@@ -1277,6 +1294,20 @@ export interface TypedConfirmProps {
 }
 
 // @public
+export interface UnsavedChanges {
+    hasUnsaved: () => boolean;
+    holds: (change: {
+        readonly current: FormAddress;
+        readonly next: FormAddress;
+    }) => boolean;
+    releaseAll: () => void;
+    subscribe: (listener: () => void) => () => void;
+}
+
+// @public
+export const unsavedChanges: UnsavedChanges;
+
+// @public
 export function UnsavedGuard(input: UnsavedGuardProps): ReactElement;
 
 // @public (undocumented)
@@ -1331,6 +1362,11 @@ export interface UsageMeterProps {
 export function useBusyFormFocus(busy: boolean): BusyFormFocus;
 
 export { UsersIcon }
+
+// @public
+export function useUnsavedForm(dirty: boolean, stays?: FormStays): {
+    release: () => void;
+};
 
 // @public
 export function Wizard(input: WizardProps): ReactElement;

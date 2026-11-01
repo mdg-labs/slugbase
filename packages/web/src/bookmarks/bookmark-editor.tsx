@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, Confirm, Disclosure, FormField, FormOverlay, SettingSwitch, TextareaField, UnsavedGuard, UrlInput, feedbackToast, useBusyFormFocus } from "@slugbase/ui/patterns";
+import { Banner, Confirm, Disclosure, FormField, FormOverlay, SettingSwitch, TextareaField, UnsavedGuard, UrlInput, feedbackToast, staysWhileParams, useBusyFormFocus, useUnsavedForm } from "@slugbase/ui/patterns";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement, type SyntheticEvent } from "react";
@@ -225,6 +225,9 @@ type Request =
   | { readonly kind: "create"; readonly body: CreateBookmarkRequest }
   | { readonly kind: "update"; readonly id: string; readonly version: number; readonly body: UpdateBookmarkRequest };
 
+// The modal is open while the address names the same bookmark, or the new one.
+const STAYS_WHILE_OPEN = staysWhileParams("new", "bookmark");
+
 /**
  * The bookmark form in its overlay (doc 02 sections 5.2 and 5.3, doc 03 section 4): the address, the title, the folders and tags,
  * a description under "More" and the pin, for a new bookmark or one loaded to change. A change is sent against the version that was
@@ -282,6 +285,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
     !sameIds(values.folderIds, initial.folderIds) ||
     !sameIds(values.tagIds, initial.tagIds) ||
     values.tagNames.length > 0;
+  const unsaved = useUnsavedForm(dirty, STAYS_WHILE_OPEN);
 
   const save = useMutation({
     mutationKey: ["bookmarks", "save"],
@@ -294,6 +298,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
       void queryClient.invalidateQueries({ queryKey: FOLDERS_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: TAGS_QUERY_KEY });
       feedbackToast.success(editing ? t("bookmarks.modal.saved.updated") : t("bookmarks.modal.saved.created"));
+      unsaved.release();
       onClose();
     },
     onError: (error, request) => {
@@ -319,6 +324,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: BOOKMARKS_QUERY_KEY });
       feedbackToast.success(t("bookmarks.modal.deleted"));
+      unsaved.release();
       onClose();
     },
     onError: (error) => {
@@ -795,6 +801,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
         onDiscard={() => {
           const pending = discard;
           setDiscard(undefined);
+          unsaved.release();
           pending?.run();
         }}
         onKeepEditing={() => {
