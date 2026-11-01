@@ -9,9 +9,10 @@ import { createTestDatabase, useCluster } from "../src/testing.ts";
 
 // Two harness users at once (doc 08 section 3.2). The cluster lock keeps the
 // roles of the cluster still while test databases use them: a test database
-// holds it shared for its whole life, and a test that changes the roles holds it
-// exclusively for that step only. A holder here is a process of its own, as the
-// test file of another run would be.
+// holds it shared for its whole life, and a step that changes the roles commits
+// can hold it exclusively for that step only. No test takes it exclusively on the
+// shared cluster; these tests do, in the scratch database of their own. A holder
+// here is a process of its own, as the test file of another run would be.
 //
 // Advisory locks belong to the database a session is connected to. The harness
 // connects to the database of its server URL, so these tests point it at a
