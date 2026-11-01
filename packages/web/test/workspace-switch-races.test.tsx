@@ -173,6 +173,26 @@ describe("the General page after a switch", () => {
     expect((await screen.findByRole<HTMLInputElement>("textbox", { name: "Name" }, LOADED_WAIT)).value).toBe(SECOND_WORKSPACE_NAME);
   }, SLOW_TEST_TIMEOUT_MS);
 
+  it("reads the new workspace's document when the first read, still out at the switch, is answered with the previous one", async () => {
+    const held: Respond[] = [];
+    const stub = stubWorkspaceSettingsServer({
+      second: { aiEnabled: true },
+      get: (call) => (call === 1 ? new Promise<Response>((resolve) => held.push(resolve)) : undefined),
+    });
+    await open("/settings/workspace");
+    await waitFor(() => {
+      expect(held.length).toBe(1);
+    }, LOADED_WAIT);
+
+    // The page has no document yet, so the read is the first one of its key and is still out when the session moves.
+    await switchTo(stub, SECOND_WORKSPACE_NAME);
+    await answer(held, () => json(workspaceBody(WORKSPACE_ID, WORKSPACE_NAME, 3)));
+
+    expect((await screen.findByRole<HTMLInputElement>("textbox", { name: "Name" }, LOADED_WAIT)).value).toBe(SECOND_WORKSPACE_NAME);
+    expect(stub.received("GET", WORKSPACE_PATH).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByDisplayValue(WORKSPACE_NAME)).toBeNull();
+  }, SLOW_TEST_TIMEOUT_MS);
+
   it("shows an error, not the previous workspace, when the new workspace's document cannot be read", async () => {
     let holding = false;
     const stub = stubWorkspaceSettingsServer({
