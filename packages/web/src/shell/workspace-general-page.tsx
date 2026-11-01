@@ -27,7 +27,13 @@ function GeneralForm({ workspace, onReload, reloading }: { workspace: Workspace;
     meta: { fieldErrors: true },
     mutationFn: (next: string) => renameWorkspace(router.options.context.api, next, workspace.version),
     onSuccess: (saved) => {
-      queryClient.setQueryData<Workspace>(WORKSPACE_QUERY_KEY, saved);
+      // A rename out for longer than `SWITCH_WRITE_WAIT_MS` does not hold a switch back, so its answer can arrive once the session acts in
+      // another workspace, whose document the cache then holds. The saved document is stored only while its workspace is the active one;
+      // the account and the list below are keyed by workspace, so they take the new name either way.
+      const activeWorkspaceId = queryClient.getQueryData<Me>(ME_QUERY_KEY)?.activeWorkspaceId;
+      if (activeWorkspaceId === undefined || activeWorkspaceId === saved.id) {
+        queryClient.setQueryData<Workspace>(WORKSPACE_QUERY_KEY, saved);
+      }
       queryClient.setQueryData<Me>(ME_QUERY_KEY, (me) =>
         me === undefined
           ? me

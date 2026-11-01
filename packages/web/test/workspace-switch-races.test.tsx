@@ -297,6 +297,41 @@ describe("a switch while a write is out", () => {
     expect(stub.received("PATCH", WORKSPACE_SETTINGS_PATH)).toHaveLength(1);
   }, SLOW_TEST_TIMEOUT_MS);
 
+  it("keeps the new workspace's document when a rename that was out past the bound is answered after the switch", async () => {
+    const held: Respond[] = [];
+    const stub = stubWorkspaceSettingsServer({
+      second: { aiEnabled: true },
+      patch: () => new Promise<Response>((resolve) => held.push(resolve)),
+    });
+    await open("/settings/workspace");
+    const name = await screen.findByRole<HTMLInputElement>("textbox", { name: "Name" }, LOADED_WAIT);
+    await settleAccountReads(stub);
+    await act(async () => {
+      fireEvent.change(name, { target: { value: "Renamed Workspace" } });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(held.length).toBe(1);
+    }, LOADED_WAIT);
+
+    // The rename has been out longer than a write holds a switch back, so the switch goes through.
+    const now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now + SWITCH_WRITE_WAIT_MS + 1000);
+    await switchTo(stub, SECOND_WORKSPACE_NAME);
+    expect((await screen.findByRole<HTMLInputElement>("textbox", { name: "Name" }, LOADED_WAIT)).value).toBe(SECOND_WORKSPACE_NAME);
+
+    await answer(held, () => json(workspaceBody(WORKSPACE_ID, "Renamed Workspace", 4)));
+    await settleAccountReads(stub);
+
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Name" }).value).toBe(SECOND_WORKSPACE_NAME);
+    expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
+    expect(screen.queryByDisplayValue("Renamed Workspace")).toBeNull();
+  }, SLOW_TEST_TIMEOUT_MS);
+
   it("does not stay locked by a save that never answers", async () => {
     const stub = stubWorkspaceSettingsServer({
       ai: { provider: "Example AI" },
