@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, Confirm, FormField, FormOverlay, feedbackToast } from "@slugbase/ui/patterns";
+import { Banner, Confirm, FormField, FormOverlay, feedbackToast, useBusyFormFocus } from "@slugbase/ui/patterns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
@@ -100,6 +100,8 @@ export function TagRenameForm({ tag, onMerged, onClose }: TagRenameFormProps): R
     },
   });
 
+  const busyFocus = useBusyFormFocus(rename.isPending);
+
   function submit(event: SyntheticEvent): void {
     event.preventDefault();
     if (rename.isPending) {
@@ -151,7 +153,7 @@ export function TagRenameForm({ tag, onMerged, onClose }: TagRenameFormProps): R
         open
         title={t("tags.form.title")}
       >
-        <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+        <form className="flex flex-col gap-4" noValidate onSubmit={submit} {...busyFocus}>
           {shown === undefined || nameFailure ? null : <Banner title={shown} variant="error" />}
           <FormField
             error={nameFailure ? shown : nameRequired ? t("tags.form.name.error.required") : undefined}

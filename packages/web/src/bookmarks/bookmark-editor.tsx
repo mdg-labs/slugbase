@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, Confirm, Disclosure, FormField, FormOverlay, SettingSwitch, TextareaField, UnsavedGuard, UrlInput, feedbackToast } from "@slugbase/ui/patterns";
+import { Banner, Confirm, Disclosure, FormField, FormOverlay, SettingSwitch, TextareaField, UnsavedGuard, UrlInput, feedbackToast, useBusyFormFocus } from "@slugbase/ui/patterns";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement, type SyntheticEvent } from "react";
@@ -263,7 +263,6 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   const allTags = useAllTags();
   // What the page said about itself, with the address it was read for: the suggestion request carries it as it is.
   const page = useRef<{ readonly url: string; readonly title: string | null | undefined; readonly description: string | null | undefined } | undefined>(undefined);
-  const form = useRef<HTMLFormElement>(null);
   const latest = useRef<{ readonly values: Values; readonly tags: readonly { readonly id: string; readonly name: string }[] }>({ values: initial, tags: [] });
 
   const lookup = useQuery(bookmarksByUrlQuery(api, lookupUrl));
@@ -328,6 +327,8 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   });
 
   const busy = save.isPending || remove.isPending || reloading || creatingFolder;
+  const busyFocus = useBusyFormFocus(busy);
+  const form = busyFocus.ref;
 
   function change(next: Partial<Values>): void {
     setValues((current) => ({ ...current, ...next }));
@@ -562,7 +563,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
         }
         title={editing ? t("bookmarks.modal.edit.title") : t("bookmarks.modal.create.title")}
       >
-        <form className="flex flex-col gap-4" noValidate onKeyDown={onKeyDown} onSubmit={onFormSubmit} ref={form}>
+        <form className="flex flex-col gap-4" noValidate onKeyDown={onKeyDown} onSubmit={onFormSubmit} {...busyFocus}>
           {failure === undefined ? null : (
             <FailureBanner
               failure={failure}
@@ -580,6 +581,10 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
             <UrlInput
               disabled={busy}
               onBlur={() => {
+                // While the form saves, the focus leaves the field because the overlay keeps it, not because the member left the address.
+                if (busy) {
+                  return;
+                }
                 lookUp(values.url.trim());
                 prefill(values.url.trim());
               }}

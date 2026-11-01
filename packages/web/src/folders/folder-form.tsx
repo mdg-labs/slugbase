@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, FormField, FormOverlay, Picker, SegmentedChoice, feedbackToast } from "@slugbase/ui/patterns";
+import { Banner, FormField, FormOverlay, Picker, SegmentedChoice, feedbackToast, useBusyFormFocus } from "@slugbase/ui/patterns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
@@ -119,6 +119,8 @@ export function FolderForm({ intent, folder, onClose }: FolderFormProps): ReactE
     },
   });
 
+  const busyFocus = useBusyFormFocus(save.isPending);
+
   function submit(event: SyntheticEvent): void {
     event.preventDefault();
     if (save.isPending) {
@@ -179,7 +181,7 @@ export function FolderForm({ intent, folder, onClose }: FolderFormProps): ReactE
       open
       title={title}
     >
-      <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} {...busyFocus}>
         {failure === undefined || nameFailure ? null : <Banner title={failureMessage(failure)} variant="error" />}
         <FormField
           error={nameFailure ? failureMessage(failure) : nameRequired ? t("folders.form.name.error.required") : undefined}

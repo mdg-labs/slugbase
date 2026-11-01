@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, FormField, FormOverlay, Loading, MultiPick, TextareaField, feedbackToast, type PickerOption } from "@slugbase/ui/patterns";
+import { Banner, FormField, FormOverlay, Loading, MultiPick, TextareaField, feedbackToast, useBusyFormFocus, type PickerOption } from "@slugbase/ui/patterns";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
@@ -91,6 +91,8 @@ function TeamFormBody({ initial, onClose }: { initial: TeamWithMembers | undefin
   }
   const optionList = sortedOptions(options);
 
+  const busyFocus = useBusyFormFocus(save.isPending);
+
   function submit(event: SyntheticEvent): void {
     event.preventDefault();
     if (save.isPending) {
@@ -134,7 +136,7 @@ function TeamFormBody({ initial, onClose }: { initial: TeamWithMembers | undefin
   const partlySaved = failure !== undefined && !nameFailure && base !== initial;
 
   return (
-    <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+    <form className="flex flex-col gap-4" noValidate onSubmit={submit} {...busyFocus}>
       {failure === undefined || nameFailure ? null : (
         <Banner
           description={partlySaved ? t("teams.form.error.partlySaved") : undefined}

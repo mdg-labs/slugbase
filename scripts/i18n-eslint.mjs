@@ -106,8 +106,9 @@ export const LITERAL_STRING_OPTIONS = {
 
 /**
  * The coss ui components vendored into @slugbase/ui (packages/ui/src/components/ui)
- * are third-party sources, changed only by re-adding them with the shadcn CLI,
- * and several carry English text of their own ("Close", "Toggle Sidebar").
+ * are third-party sources, copied with the shadcn CLI and changed afterwards only
+ * by the edits NOTICE.md records (D13), and several carry English text of their
+ * own ("Close", "Toggle Sidebar").
  * They are outside the rule; the patterns of @slugbase/ui itself are inside it.
  */
 export const VENDORED_UI = "packages/ui/src/components/ui/**";

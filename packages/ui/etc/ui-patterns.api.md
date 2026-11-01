@@ -237,6 +237,13 @@ export interface BulkBarProps {
 }
 
 // @public
+export interface BusyFormFocus {
+    "aria-busy": true | undefined;
+    onFocus: (event: FocusEvent_2<HTMLFormElement>) => void;
+    ref: RefObject<HTMLFormElement | null>;
+}
+
+// @public
 export function CardGrid(input: CardGridProps): ReactElement;
 
 // @public
@@ -1319,6 +1326,9 @@ export interface UsageMeterProps {
     value: number;
     valueLabel: string;
 }
+
+// @public
+export function useBusyFormFocus(busy: boolean): BusyFormFocus;
 
 export { UsersIcon }
 
