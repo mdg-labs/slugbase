@@ -648,10 +648,9 @@ export function matchedCountStatement(tx: TenantTx, filter: BookmarkListFilter, 
 /**
  * The page of a list with a text query: the bookmarks of the page, and how many matches the function answered, which an empty page carries too.
  *
- * The statement is planned with JIT compilation off for its own run. It holds the plans of both branches, and the estimate of the branch for many matches (the access rule tested for each row of a walk of
- * the workspace) is above `jit_above_cost` for a library of tens of thousands of bookmarks, so a statement that is compiled on each call spends about 300 ms compiling whichever branch it runs, though it runs one
- * of two that read a few hundred rows. The setting is the transaction's own and is put back as it was after the statement; when the statement fails, the transaction or its savepoint is rolled back and the
- * setting with it.
+ * The statement runs with JIT compilation off for its own run. It holds the plans of both branches, and a statement that JIT compiles on each call pays for the compilation whichever branch it runs. On a library of
+ * 50 000 bookmarks its estimated cost is 8 448 to 24 446, under the 100 000 of `jit_above_cost`, so it is not compiled today; the setting keeps it from being compiled should a larger library or another plan lift
+ * the estimate over that. The setting is the transaction's own and is put back as it was after the statement; when the statement fails, the transaction or its savepoint is rolled back and the setting with it.
  */
 async function matchedPage(tx: TenantTx, request: BookmarkListRequest): Promise<{ readonly page: readonly { readonly id: string; readonly sort_key: string | null }[]; readonly matched: number }> {
   const statement = matchedPageStatement(tx, request);
