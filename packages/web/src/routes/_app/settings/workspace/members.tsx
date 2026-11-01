@@ -1,9 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { EntitlementGate } from "../../../../entitlements/index.ts";
 import { WorkspaceMembersPage } from "../../../../shell/workspace-members-page.tsx";
-import { canAdminister, workspaceQuery } from "../../../../shell/workspace.ts";
+import { canAdminister, useWorkspace } from "../../../../shell/workspace.ts";
 import { InvitationsSection } from "./-invitations-section.tsx";
 
 /**
@@ -12,8 +11,7 @@ import { InvitationsSection } from "./-invitations-section.tsx";
  * and no invitations.
  */
 function MembersRoute(): ReactElement {
-  const router = useRouter();
-  const workspace = useQuery(workspaceQuery(router.options.context.api));
+  const workspace = useWorkspace();
   return (
     <div className="flex flex-col gap-8">
       <WorkspaceMembersPage />

@@ -1,6 +1,7 @@
 import { LimitedEntitlementSource } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // POST /api/v1/bookmarks/bulk and GET /api/v1/bookmarks/ids (doc 04 sections 6.2, 7 and 10.6, doc 02 sections 5.7, 5.8 and 10, doc 05
@@ -9,6 +10,10 @@ import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type Worl
 // intact; and the ones around it: a counter that does not equal the rows afterwards (a skipped, a foreign or a plan-archived row counted),
 // a request that half-applies when its audit event cannot be written, a filter that matches more than the select-all cap and deletes
 // anyway, an audit event that names a title or an address, and a bucket that does not stop the twenty-first request of the hour.
+
+// Every test builds its own people, and each one is a seeded password hash, a sign-in and a re-authentication: three argon2id operations, about 10 ms of CPU
+// each. That is the shipped cost, so a test that acts as the owner alone takes `soloSetup` and the others the whole cast. Measured with `taskset -c 2,3` and sixteen busy loops on
+// those two cores, a test took up to 3.7 s (idle: 0.3 s), so vitest's default of 5 s failed on a loaded runner with nothing wrong; the describes take the heavy bound.
 
 const TEST_TIMEOUT_MS = 60_000;
 const BOOKMARKS = "/api/v1/bookmarks";
@@ -71,6 +76,13 @@ async function setup(world: World) {
   const shared = await harness.workspaceOf([{ person: owner, role: "owner" }, { person: member, role: "member" }]);
   const other = await harness.workspaceOf([{ person: stranger, role: "owner" }]);
   return { owner, member, stranger, shared, other };
+}
+
+/** A workspace of the owner alone, for a test that acts as the owner and no one else: each further person costs a sign-in and a re-authentication, an argon2id verification apiece. */
+async function soloSetup(world: World) {
+  const owner = await harness.person(world);
+  const shared = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+  return { owner, shared };
 }
 
 interface Seed {
@@ -141,7 +153,7 @@ async function auditOf(workspaceId: string): Promise<AuditRow[]> {
   });
 }
 
-describe("bulk delete", () => {
+describe("bulk delete", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it(
     "deletes the seven of ten identifiers the caller owns, skips the three that are another member's as not found, and leaves the other member's rows intact",
     async () => {
@@ -225,7 +237,7 @@ describe("bulk delete", () => {
     "refuses a filter that matches more than the select-all cap with 422 validation_failed and deletes nothing",
     async () => {
       const world = harness.serve({ env: relaxed });
-      const { owner, shared } = await setup(world);
+      const { owner, shared } = await soloSetup(world);
       await database().owner.begin(async (tx) => {
         await tx`SET LOCAL ROLE slugbase_system`;
         await tx`
@@ -257,7 +269,7 @@ describe("bulk delete", () => {
 
   it("refuses a filter whose url cannot be a bookmark's with 422 on filter.url, and deletes nothing", async () => {
     const world = harness.serve({ env: relaxed });
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     await seed(shared.workspaceId, owner, 2);
 
     const refused = await bulk(world, owner, { action: "delete", filter: { url: "ftp://example.com/file" } });
@@ -295,7 +307,7 @@ describe("bulk delete", () => {
     "applies nothing when the audit event cannot be written: the rows and the counter are as they were",
     async () => {
       const world = harness.serve({ env: relaxed });
-      const { owner, shared } = await setup(world);
+      const { owner, shared } = await soloSetup(world);
       const own = await seed(shared.workspaceId, owner, 3);
       const before = { rows: await rowsOf(shared.workspaceId), counter: await counterOf(shared.workspaceId) };
       await database().owner`
@@ -316,7 +328,7 @@ describe("bulk delete", () => {
   );
 });
 
-describe("bulk pin and unpin", () => {
+describe("bulk pin and unpin", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("pins the caller's own bookmarks, leaves a pinned one with its pin time and version, and skips another member's and a plan-archived one as not found", async () => {
     const world = harness.serve({ env: relaxed });
     const { owner, member, shared } = await setup(world);
@@ -359,7 +371,7 @@ describe("bulk pin and unpin", () => {
   });
 });
 
-describe("the request", () => {
+describe("the request", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each([
     ["neither ids nor filter", { action: "delete" }],
     ["both ids and filter", { action: "delete", ids: [UNKNOWN_ID], filter: {} }],
@@ -373,7 +385,7 @@ describe("the request", () => {
     ["a filter boolean that is a string", { action: "delete", filter: { pinned: "true" } }],
   ])("answers 422 validation_failed for %s and deletes nothing", async (_name, body) => {
     const world = harness.serve({ env: relaxed });
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     await seed(shared.workspaceId, owner, 2);
 
     const refused = await bulk(world, owner, body);
@@ -386,7 +398,7 @@ describe("the request", () => {
 
   it("accepts exactly 1 000 identifiers, one named twice counting once", async () => {
     const world = harness.serve({ env: relaxed });
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     const own = await seed(shared.workspaceId, owner, 2);
 
     const result = await done(await bulk(world, owner, { action: "delete", ids: [...own, own[0] ?? "", ...Array.from({ length: 997 }, () => UNKNOWN_ID)] }));
@@ -402,7 +414,7 @@ describe("the request", () => {
 
   it("answers 403 token_scope to a token that may only read, and deletes nothing; a read-write token deletes", async () => {
     const world = harness.serve({ env: relaxed });
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     const own = await seed(shared.workspaceId, owner, 2);
     const readOnly = await harness.token(shared.workspaceId, owner, "read");
     const readWrite = await harness.token(shared.workspaceId, owner, "read-write");
@@ -418,7 +430,7 @@ describe("the request", () => {
 
   it("records a read-write token's bulk delete as the token: actor type api_token with that token's identifier and its account", async () => {
     const world = harness.serve({ env: relaxed });
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     const own = await seed(shared.workspaceId, owner, 3);
     const readWrite = await harness.token(shared.workspaceId, owner, "read-write");
     const tokenRows = await database().owner.begin(async (tx) => {
@@ -510,7 +522,7 @@ async function sharingSetup(world: World) {
   return { owner, reader, sharer, stranger, shared, other, teamId };
 }
 
-describe("bulk share", () => {
+describe("bulk share", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shares the caller's own bookmarks with a member, skips another member's, a plan-archived one, another workspace's and an unknown one as not found, and the member can read exactly the shared ones", async () => {
     const world = servingShares();
     const { owner, reader, sharer, stranger, shared, other } = await sharingSetup(world);
@@ -646,7 +658,7 @@ describe("bulk share", () => {
     ["a folder on share", { action: "share", ids: [UNKNOWN_ID], accountId: UNKNOWN_ID, folderId: UNKNOWN_ID }],
   ])("answers 422 validation_failed for %s", async (_name, body) => {
     const world = servingShares();
-    const { owner } = await sharingSetup(world);
+    const { owner } = await soloSetup(world);
 
     const refused = await bulk(world, owner, body);
 
@@ -679,7 +691,7 @@ describe("bulk share", () => {
 
   it("keeps the preview of adding tags as it was, with a null audience", async () => {
     const world = servingShares();
-    const { owner } = await sharingSetup(world);
+    const { owner } = await soloSetup(world);
     const created = await send(world, "POST", "/api/v1/tags", { cookie: owner.cookie }, { name: "alpha" });
     expect(created.status).toBe(201);
     const tagId = ((await created.json()) as { id: string }).id;
@@ -705,10 +717,10 @@ describe("bulk share", () => {
   });
 });
 
-describe("the bulk bucket", () => {
+describe("the bulk bucket", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("stops the twenty-first request of the hour per account with 429 and Retry-After, and the refused request changes nothing", async () => {
     const world = harness.serve();
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     const [target] = await seed(shared.workspaceId, owner, 1);
 
     for (let index = 0; index < 20; index += 1) {
@@ -726,7 +738,7 @@ describe("the bulk bucket", () => {
 
   it("takes the limit from the RATE_LIMIT_BULK keys", async () => {
     const world = harness.serve({ env: { RATE_LIMIT_BULK_IP: "2/hour", RATE_LIMIT_BULK_ACCOUNT: "2/hour" } });
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
 
     expect((await bulk(world, owner, { action: "pin", ids: [UNKNOWN_ID] })).status).toBe(200);
     expect((await bulk(world, owner, { action: "pin", ids: [UNKNOWN_ID] })).status).toBe(200);
@@ -734,7 +746,7 @@ describe("the bulk bucket", () => {
   });
 });
 
-describe("select all", () => {
+describe("select all", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("lists the identifiers of the caller's own bookmarks that match the filters, newest first, and no other member's, workspace's or plan-archived one", async () => {
     const world = harness.serve({ env: relaxed });
     const { owner, member, stranger, shared, other } = await setup(world);
@@ -760,7 +772,7 @@ describe("select all", () => {
 
   it("returns the first 5 000 and says it was cut when more match; a bulk request by the same filter is refused", async () => {
     const world = harness.serve({ env: relaxed });
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
       await tx`
@@ -781,7 +793,7 @@ describe("select all", () => {
 
   it("is not read as the identifier of a bookmark, and refuses a url that cannot be a bookmark's and a parameter it does not declare", async () => {
     const world = harness.serve({ env: relaxed });
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
 
     expect((await ids(world, owner)).status).toBe(200);
     const badUrl = await ids(world, owner, `url=${encodeURIComponent("ftp://example.com/x")}`);
@@ -793,7 +805,7 @@ describe("select all", () => {
 
   it("lets a read-only token list the identifiers", async () => {
     const world = harness.serve({ env: relaxed });
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     const own = await seed(shared.workspaceId, owner, 2);
     const readOnly = await harness.token(shared.workspaceId, owner, "read");
 

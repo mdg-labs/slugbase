@@ -9,8 +9,7 @@ import { READY_TIMEOUT_MS, sharedMemberState } from "./member-shared.ts";
 // A member of the journeys' own. The owner of the instance signed in with a password nobody keeps, and the journeys that read the
 // owner's language or theme queue for the lock of the account's preferences (support/account-preferences.ts), so a journey that does not
 // need the owner's account takes a session of its own: it invites an address, accepts the invitation as a new account with a password
-// made up for the run, and keeps the session as the state the journey starts from. Accepting an invitation is limited per client address
-// (10 an hour, doc 04 section 7) and the journeys of one run share that budget, so the journeys that use `sharedMember` accept once
+// made up for the run, and keeps the session as the state the journey starts from. The journeys that use `sharedMember` accept once
 // between them, whichever engine gets there first, and the others wait for the session it keeps. The password is never printed.
 
 type Playwright = PlaywrightWorkerArgs["playwright"];

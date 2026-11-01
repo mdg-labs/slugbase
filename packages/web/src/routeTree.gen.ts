@@ -42,6 +42,7 @@ import { Route as AppSettingsAccountPreferencesRouteImport } from "./routes/_app
 import { Route as AppSettingsAccountSecurityRouteImport } from "./routes/_app/settings/account/security.tsx";
 import { Route as AppSettingsAccountTokensRouteImport } from "./routes/_app/settings/account/tokens.tsx";
 import { Route as AppSettingsWorkspaceIndexRouteImport } from "./routes/_app/settings/workspace/index.tsx";
+import { Route as AppSettingsWorkspaceAiRouteImport } from "./routes/_app/settings/workspace/ai.tsx";
 import { Route as AppSettingsWorkspaceMembersRouteImport } from "./routes/_app/settings/workspace/members.tsx";
 import { Route as AppSettingsWorkspaceTeamsRouteImport } from "./routes/_app/settings/workspace/teams.tsx";
 
@@ -213,6 +214,11 @@ const AppSettingsWorkspaceIndexRoute =
     path: "/workspace/",
     getParentRoute: () => AppSettingsRoute,
   } as any);
+const AppSettingsWorkspaceAiRoute = AppSettingsWorkspaceAiRouteImport.update({
+  id: "/workspace/ai",
+  path: "/workspace/ai",
+  getParentRoute: () => AppSettingsRoute,
+} as any);
 const AppSettingsWorkspaceMembersRoute =
   AppSettingsWorkspaceMembersRouteImport.update({
     id: "/workspace/members",
@@ -257,6 +263,7 @@ export interface FileRoutesByFullPath {
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
+  "/settings/workspace/ai": typeof AppSettingsWorkspaceAiRoute;
   "/settings/workspace/members": typeof AppSettingsWorkspaceMembersRoute;
   "/settings/workspace/teams": typeof AppSettingsWorkspaceTeamsRoute;
   "/settings/account/": typeof AppSettingsAccountIndexRoute;
@@ -291,6 +298,7 @@ export interface FileRoutesByTo {
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
+  "/settings/workspace/ai": typeof AppSettingsWorkspaceAiRoute;
   "/settings/workspace/members": typeof AppSettingsWorkspaceMembersRoute;
   "/settings/workspace/teams": typeof AppSettingsWorkspaceTeamsRoute;
   "/settings/account": typeof AppSettingsAccountIndexRoute;
@@ -329,6 +337,7 @@ export interface FileRoutesById {
   "/_app/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/_app/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/_app/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
+  "/_app/settings/workspace/ai": typeof AppSettingsWorkspaceAiRoute;
   "/_app/settings/workspace/members": typeof AppSettingsWorkspaceMembersRoute;
   "/_app/settings/workspace/teams": typeof AppSettingsWorkspaceTeamsRoute;
   "/_app/settings/account/": typeof AppSettingsAccountIndexRoute;
@@ -367,6 +376,7 @@ export interface FileRouteTypes {
     | "/settings/account/preferences"
     | "/settings/account/security"
     | "/settings/account/tokens"
+    | "/settings/workspace/ai"
     | "/settings/workspace/members"
     | "/settings/workspace/teams"
     | "/settings/account/"
@@ -401,6 +411,7 @@ export interface FileRouteTypes {
     | "/settings/account/preferences"
     | "/settings/account/security"
     | "/settings/account/tokens"
+    | "/settings/workspace/ai"
     | "/settings/workspace/members"
     | "/settings/workspace/teams"
     | "/settings/account"
@@ -438,6 +449,7 @@ export interface FileRouteTypes {
     | "/_app/settings/account/preferences"
     | "/_app/settings/account/security"
     | "/_app/settings/account/tokens"
+    | "/_app/settings/workspace/ai"
     | "/_app/settings/workspace/members"
     | "/_app/settings/workspace/teams"
     | "/_app/settings/account/"
@@ -694,6 +706,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppSettingsWorkspaceIndexRouteImport;
       parentRoute: typeof AppSettingsRoute;
     };
+    "/_app/settings/workspace/ai": {
+      id: "/_app/settings/workspace/ai";
+      path: "/workspace/ai";
+      fullPath: "/settings/workspace/ai";
+      preLoaderRoute: typeof AppSettingsWorkspaceAiRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
     "/_app/settings/workspace/members": {
       id: "/_app/settings/workspace/members";
       path: "/workspace/members";
@@ -734,6 +753,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAccountPreferencesRoute: typeof AppSettingsAccountPreferencesRoute;
   AppSettingsAccountSecurityRoute: typeof AppSettingsAccountSecurityRoute;
   AppSettingsAccountTokensRoute: typeof AppSettingsAccountTokensRoute;
+  AppSettingsWorkspaceAiRoute: typeof AppSettingsWorkspaceAiRoute;
   AppSettingsWorkspaceMembersRoute: typeof AppSettingsWorkspaceMembersRoute;
   AppSettingsWorkspaceTeamsRoute: typeof AppSettingsWorkspaceTeamsRoute;
   AppSettingsAccountIndexRoute: typeof AppSettingsAccountIndexRoute;
@@ -745,6 +765,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAccountPreferencesRoute: AppSettingsAccountPreferencesRoute,
   AppSettingsAccountSecurityRoute: AppSettingsAccountSecurityRoute,
   AppSettingsAccountTokensRoute: AppSettingsAccountTokensRoute,
+  AppSettingsWorkspaceAiRoute: AppSettingsWorkspaceAiRoute,
   AppSettingsWorkspaceMembersRoute: AppSettingsWorkspaceMembersRoute,
   AppSettingsWorkspaceTeamsRoute: AppSettingsWorkspaceTeamsRoute,
   AppSettingsAccountIndexRoute: AppSettingsAccountIndexRoute,

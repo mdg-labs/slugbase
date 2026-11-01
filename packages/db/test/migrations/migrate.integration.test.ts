@@ -261,6 +261,22 @@ async function waitForBlockedIndexBuild(database: string): Promise<void> {
   throw new Error("no concurrent index build is waiting");
 }
 
+// Resolves once a slugbase-migrate backend of the database is waiting for a lock
+// on a statement containing the given text, i.e. once lock_timeout is running.
+async function waitForBlockedStatement(database: string, statement: string): Promise<void> {
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const rows = await admin<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_stat_activity
+      WHERE datname = ${database} AND application_name = 'slugbase-migrate'
+        AND wait_event_type = 'Lock' AND query LIKE ${`%${statement}%`}`;
+    if ((rows[0]?.n ?? 0) > 0) {
+      return;
+    }
+    await sleep(50);
+  }
+  throw new Error("no migration is waiting for the lock");
+}
+
 async function indexes(owner: postgres.Sql, names: string[]): Promise<{ name: string; valid: boolean; unique: boolean }[]> {
   return owner<{ name: string; valid: boolean; unique: boolean }[]>`
     SELECT c.relname AS name, i.indisvalid AS valid, i.indisunique AS unique
@@ -518,8 +534,16 @@ describe("a failing migration", () => {
 });
 
 describe("lock_timeout (doc 05 section 5.2)", () => {
+  // Several times the 5 s lock_timeout, from when the statement starts waiting.
+  const BLOCKED_BOUND_MS = 20_000;
+  const QUEUE_GUARD_MS = BLOCKED_BOUND_MS + 2_000;
+
   it("fails a migration blocked by a table lock within the timeout instead of queueing", async () => {
     const { name, owner } = await createDatabase();
+    // migrate always applies the CE chain first, which takes seconds and as long
+    // as the host lets it: it is done before the table is locked, and the upper
+    // bound runs from when the server reports the blocked statement waiting.
+    await applyCoreChain(name);
     await owner.unsafe("CREATE TABLE locked_target (id integer)");
     await owner.unsafe("ALTER TABLE locked_target OWNER TO slugbase_owner");
     const holder = superuser(name);
@@ -536,18 +560,29 @@ describe("lock_timeout (doc 05 section 5.2)", () => {
 
     const chains = [fixture("blocked")];
     const started = Date.now();
+    const run = migrate({ url: migratorUrl(name), chains });
+    run.catch(() => undefined);
+    let waitingSince = started;
+    let queueGuard: NodeJS.Timeout | undefined;
     let error: MigrationError;
     try {
-      error = await rejection(migrate({ url: migratorUrl(name), chains }));
+      await waitForBlockedStatement(name, "locked_target");
+      waitingSince = Date.now();
+      // A migration that queues behind the lock instead of timing out is let
+      // through here, after the bound, so the test fails on it instead of hanging.
+      queueGuard = setTimeout(release, QUEUE_GUARD_MS);
+      error = await rejection(run);
     } finally {
+      clearTimeout(queueGuard);
       release();
       await holding;
     }
     const elapsed = Date.now() - started;
+    const waited = Date.now() - waitingSince;
 
     expect(error.code).toBe("55P03");
     expect(elapsed).toBeGreaterThanOrEqual(4_500);
-    expect(elapsed).toBeLessThan(20_000);
+    expect(waited).toBeLessThan(BLOCKED_BOUND_MS);
     expect(await recordedRows(owner, "migrations_blocked")).toBe(0);
     expect(await migrateLockIsFree(owner)).toBe(true);
 

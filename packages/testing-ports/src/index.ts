@@ -1,3 +1,5 @@
+export { FakeAi, FakeAiError } from "./ai.ts";
+export type { FakeAiErrorCode, FakeAiRequest, FakeAiSuggestion } from "./ai.ts";
 export { FixedClock } from "./clock.ts";
 export { FakeEgress, FakeEgressError } from "./egress.ts";
 export type {

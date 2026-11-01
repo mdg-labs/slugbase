@@ -63,6 +63,13 @@
 -- the moment it is one and the fetch job replaces it, so deleting the row later changes no answer. Rows another statement holds are skipped and found by
 -- the next call. The grants it needs are in 630-favicons.sql.
 --
+-- ai_suggestions: past expires_at, which is 30 days after the suggestion was cached (doc 05 section 6). A reader treats an expired row as absent and the
+-- next request for the key replaces it, so deleting the row later changes no answer. Rows another statement holds are skipped and found by the next call. The
+-- grants it needs are in 690-ai-suggestions.sql.
+--
+-- ai_suggestion_usage: created more than 90 days in the past (doc 05 section 6). The rows hold which fields came from a suggestion and no content. Rows another
+-- statement holds are skipped and found by the next call. The grants it needs are in 690-ai-suggestions.sql.
+--
 -- Every other rule is fixed in the function, and its one argument only chooses how
 -- long audit events stay, so a caller cannot widen what the other tables lose; it
 -- uses no dynamic SQL. The overload without an argument keeps working for a replica
@@ -84,6 +91,7 @@ DECLARE
   c_token_retention CONSTANT interval := interval '30 days';
   c_credential_token_retention CONSTANT interval := interval '7 days';
   c_invitation_retention CONSTANT interval := interval '30 days';
+  c_ai_usage_retention CONSTANT interval := interval '90 days';
   v_deleted bigint;
 BEGIN
   IF p_audit_retention_days IS NULL OR p_audit_retention_days < 0 THEN
@@ -170,6 +178,26 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'favicons'::text, v_deleted;
+
+  DELETE FROM public.ai_suggestions
+  WHERE (workspace_id, account_id, url_canonical, locale) IN (
+    SELECT a.workspace_id, a.account_id, a.url_canonical, a.locale FROM public.ai_suggestions a
+    WHERE a.expires_at <= v_now
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'ai_suggestions'::text, v_deleted;
+
+  DELETE FROM public.ai_suggestion_usage
+  WHERE id IN (
+    SELECT u.id FROM public.ai_suggestion_usage u
+    WHERE u.created_at <= v_now - c_ai_usage_retention
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'ai_suggestion_usage'::text, v_deleted;
 
   v_deleted := 0;
   IF p_audit_retention_days > 0 THEN

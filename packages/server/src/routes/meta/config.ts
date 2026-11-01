@@ -21,7 +21,7 @@ const LOCALES = ["en", "de"] as const;
 const CACHE_CONTROL = "public, max-age=60";
 
 export interface ApiConfigOptions {
-  readonly config: Pick<ServerConfig, "APP_ORIGIN" | "DOCS_BASE_URL" | "SETUP_ENABLED" | "SETUP_TOKEN_REQUIRED">;
+  readonly config: Pick<ServerConfig, "AI_PROVIDER_NAME" | "APP_ORIGIN" | "DOCS_BASE_URL" | "SETUP_ENABLED" | "SETUP_TOKEN_REQUIRED">;
   /** `setupRequired` and `setupTokenRequired` are the answer of `GET /api/v1/setup/status`. */
   readonly store: Pick<SetupStore, "setupPending"> & InstanceSettingsStore;
   readonly buildInfo: BuildInfo;
@@ -60,7 +60,12 @@ export function apiConfigRoute({ config, store, buildInfo, adapters, registratio
         locales: [...LOCALES],
         defaultLocale: LOCALES[0],
         docsBaseUrl: config.DOCS_BASE_URL,
-        features: { mail: adapters.mail.available, ai: adapters.ai.available },
+        features: {
+          mail: adapters.mail.available,
+          ai: adapters.ai.available,
+          // The name members see (D22); the endpoint, the model and the key never leave the server.
+          ...(adapters.ai.available && config.AI_PROVIDER_NAME !== undefined ? { aiProvider: config.AI_PROVIDER_NAME } : {}),
+        },
         signIn: {
           registration: registrationUnavailable(registration, adapters.mail.available) === undefined,
           oidc: await oidcProviders(adapters.identity, logger),

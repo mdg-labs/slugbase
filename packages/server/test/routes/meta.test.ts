@@ -54,6 +54,28 @@ describe("GET /api/config", () => {
     });
   });
 
+  describe("features.aiProvider", () => {
+    const AI_ENV = { AI_BASE_URL: "https://ai.example.org/v1", AI_MODEL: "model-a", AI_PROVIDER_NAME: "Example AI" };
+    const withAi = (): Adapters => {
+      const ports = adapters();
+      return { ...ports, ai: { ...ports.ai, available: true } };
+    };
+    const features = async (env: Record<string, string>, given: Adapters) =>
+      ((await (await get(start(env, { adapters: given }), "/api/config")).json()) as { features: Record<string, unknown> }).features;
+
+    it("carries the operator's display name where an AI port is configured, so any member can be told who receives the request", async () => {
+      expect(await features(AI_ENV, withAi())).toEqual({ mail: false, ai: true, aiProvider: "Example AI" });
+    });
+
+    it("is left out where no AI port is configured, and never carries the endpoint, the model or a key", async () => {
+      expect(await features({}, adapters())).toEqual({ mail: false, ai: false });
+      const body = JSON.stringify(await features({ ...AI_ENV, AI_API_KEY: "key-for-the-test" }, withAi()));
+      expect(body).not.toContain("ai.example.org");
+      expect(body).not.toContain("model-a");
+      expect(body).not.toContain("key-for-the-test");
+    });
+  });
+
   it("carries the display name and the sign-in notice the instance admin stored, the notice unchanged as plain text", async () => {
     const notice = '<img src=x onerror="alert(1)"> Planned maintenance & <b>more</b>';
     const stored = fakeAuthStore({ instanceSettings: () => Promise.resolve({ allowWorkspaceCreation: true, displayName: "Acme Links", signInNotice: notice }) });

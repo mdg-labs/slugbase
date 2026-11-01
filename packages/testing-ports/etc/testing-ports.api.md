@@ -5,6 +5,58 @@
 ```ts
 
 // @public
+export class FakeAi {
+    // (undocumented)
+    readonly available = true;
+    // (undocumented)
+    failWith(code: FakeAiErrorCode): void;
+    get requests(): readonly FakeAiRequest[];
+    // (undocumented)
+    reset(): void;
+    // (undocumented)
+    respondWith(suggestion: FakeAiSuggestion): void;
+    // (undocumented)
+    suggest(request: FakeAiRequest): Promise<FakeAiSuggestion>;
+}
+
+// @public
+export class FakeAiError extends Error {
+    constructor(code: FakeAiErrorCode);
+    // (undocumented)
+    readonly code: FakeAiErrorCode;
+}
+
+// @public (undocumented)
+export type FakeAiErrorCode = "ai_failed" | "ai_timeout" | "ai_invalid_response";
+
+// @public
+export interface FakeAiRequest {
+    // (undocumented)
+    readonly language: string;
+    // (undocumented)
+    readonly metadata?: {
+        readonly title?: string;
+        readonly description?: string;
+    };
+    // (undocumented)
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export interface FakeAiSuggestion {
+    // (undocumented)
+    readonly confidence: number;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
 export class FakeEgress {
     constructor(routes?: Readonly<Record<string, FakeEgressRoute>>);
     // (undocumented)

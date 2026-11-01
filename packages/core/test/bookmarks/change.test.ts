@@ -197,6 +197,96 @@ describe("updateBookmark", () => {
   });
 });
 
+describe("updateBookmark counting the fields taken from an AI suggestion", () => {
+  function recorder(held = true) {
+    const recorded: { bookmarkId: string; fields: readonly string[] }[] = [];
+    const calls: string[] = [];
+    return {
+      recorded,
+      calls,
+      aiUsage: {
+        hold: () => {
+          calls.push("hold");
+          return Promise.resolve(held);
+        },
+        record: (request: { bookmarkId: string; fields: readonly string[] }) => {
+          calls.push("record");
+          recorded.push(request);
+          return Promise.resolve();
+        },
+      },
+    };
+  }
+
+  it("counts the fields named once, in the order title, slug, tags, when the change is written", async () => {
+    const { dependencies } = updating();
+    const { recorded, aiUsage } = recorder();
+
+    await updateBookmark({ ...dependencies, aiUsage }, { ...ASKING, patch: { title: "New" }, aiFields: ["slug", "title", "slug"] });
+
+    expect(recorded).toEqual([{ bookmarkId: BOOKMARK, fields: ["title", "slug"] }]);
+  });
+
+  it.each([
+    ["a change that writes nothing", { kind: "unchanged", bookmark: STORED } as const],
+    ["a stale version", { kind: "stale" } as const],
+    ["a bookmark that is not found", { kind: "not_found" } as const],
+    ["a slug that is taken", { kind: "slug_taken" } as const],
+  ])("counts nothing for %s", async (_name, answer) => {
+    const { dependencies } = updating(answer);
+    const { recorded, aiUsage } = recorder();
+
+    await updateBookmark({ ...dependencies, aiUsage }, { ...ASKING, patch: { title: "New" }, aiFields: ["title"] });
+
+    expect(recorded).toEqual([]);
+  });
+
+  it("holds the member's place before the store locks the bookmark, and records after the change is written", async () => {
+    const { requests, dependencies } = updating();
+    const { calls, aiUsage } = recorder();
+    const order: string[] = [];
+    const store = { ...dependencies.store, update: (request: Parameters<typeof dependencies.store.update>[0]) => { order.push(...calls, "update"); return dependencies.store.update(request); } };
+
+    await updateBookmark({ ...dependencies, store, aiUsage }, { ...ASKING, patch: { title: "New" }, aiFields: ["title"] });
+
+    expect(order).toEqual(["hold", "update"]);
+    expect(calls).toEqual(["hold", "record"]);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("answers not found, and writes and counts nothing, for a member who has left the workspace", async () => {
+    const { requests, dependencies } = updating();
+    const { calls, aiUsage } = recorder(false);
+
+    const outcome = await updateBookmark({ ...dependencies, aiUsage }, { ...ASKING, patch: { title: "New" }, aiFields: ["title"] });
+
+    expect(outcome).toEqual({ kind: "not_found" });
+    expect(requests).toEqual([]);
+    expect(calls).toEqual(["hold"]);
+  });
+
+  it("holds nothing when the change names no field", async () => {
+    const { dependencies } = updating();
+    const { calls, aiUsage } = recorder();
+
+    await updateBookmark({ ...dependencies, aiUsage }, { ...ASKING, patch: { title: "New" } });
+
+    expect(calls).toEqual([]);
+  });
+
+  it("counts nothing when no field is named or there is no recorder, and the change is the same", async () => {
+    const { requests, dependencies } = updating();
+    const { recorded, aiUsage } = recorder();
+
+    await updateBookmark({ ...dependencies, aiUsage }, { ...ASKING, patch: { title: "New" } });
+    const outcome = await updateBookmark(dependencies, { ...ASKING, patch: { title: "New" }, aiFields: ["title"] });
+
+    expect(recorded).toEqual([]);
+    expect(outcome.kind).toBe("updated");
+    expect(requests).toHaveLength(2);
+  });
+});
+
 describe("deleteBookmark", () => {
   function deleting(removed: boolean, shared: boolean) {
     const asked: { bookmarkId: string; ownerId: string }[] = [];

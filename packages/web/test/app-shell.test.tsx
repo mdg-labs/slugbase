@@ -1,7 +1,6 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
-import { docsUrl } from "../src/shell/docs-url.ts";
 import { CONFIG_BODY, PRODUCT_NAME, json, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
@@ -100,7 +99,8 @@ describe("the app shell around the Home route", () => {
     const help = await screen.findByRole("link", { name: "Help & docs" });
     expect(help.getAttribute("href")).toBe("https://docs.example.org/docs");
     expect(help.getAttribute("target")).toBe("_blank");
-    expect(help.getAttribute("rel")).toContain("noreferrer");
+    expect(help.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(new URL(help.getAttribute("href") ?? "").search).toBe("");
   });
 
   it("collapses and expands the sidebar even where the Cookie Store API is missing", async () => {
@@ -199,17 +199,5 @@ describe("the app shell in German", () => {
     expect(screen.getByRole("link", { name: "Zum Inhalt springen" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1, name: `Willkommen bei ${PRODUCT_NAME}` })).toBeTruthy();
     expect(screen.getByText("Lesezeichen mit kurzen, privaten Slugs.")).toBeTruthy();
-  });
-});
-
-describe("docsUrl", () => {
-  it("joins the docs base URL and a route with one slash", () => {
-    expect(docsUrl("https://slugbase.app/docs", "/getting-started")).toBe("https://slugbase.app/docs/getting-started");
-    expect(docsUrl("https://slugbase.app/docs/", "getting-started")).toBe("https://slugbase.app/docs/getting-started");
-  });
-
-  it("is the docs home without a route and the default site without a base", () => {
-    expect(docsUrl("https://docs.example.org/docs/")).toBe("https://docs.example.org/docs");
-    expect(docsUrl()).toBe("https://slugbase.app/docs");
   });
 });

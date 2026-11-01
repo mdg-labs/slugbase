@@ -45,6 +45,7 @@ import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
+import { aiRoutes } from "./routes/ai/index.ts";
 import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
 import { faviconRoutes } from "./routes/favicons.ts";
 import { auditRoutes } from "./routes/audit/index.ts";
@@ -179,6 +180,11 @@ export interface CreateServerOptions {
    * three seconds. A composition leaves it out; a test shortens it.
    */
   readonly metadataBudgetMs?: number;
+  /**
+   * The most the provider of `POST /api/v1/ai/suggestions` may take, in milliseconds (doc 02 section 14); by default five seconds. A
+   * composition leaves it out; a test shortens it.
+   */
+  readonly aiBudgetMs?: number;
   /**
    * What `PUBLIC_REGISTRATION` and `EMAIL_VERIFICATION_REQUIRED` mean when the operator left them unset
    * (doc 01 section 11): the composition root's choice, never an edition flag (D4). By default registration
@@ -596,6 +602,8 @@ export function createServer(options: CreateServerOptions): Server {
   const upgradeCheck = options.entitlements === undefined && adapters.entitlements.available ? createEntitlementUpgradeCheck(entitlementService) : noUpgradeAvailable;
   // So are the bookmarks of the active workspace: created under the workspace's `bookmarks.max` (the ceiling is read from the engine, the count is taken in the database) and read back by their owner.
   builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), sharingEntitlements: entitlementCheck, upgradeAvailable: upgradeCheck, cursorSecret: config.SESSION_SECRET, usage, egress: adapters.egress, ...(options.metadataBudgetMs === undefined ? {} : { metadataBudgetMs: options.metadataBudgetMs }) }));
+  // The suggestions of the AI port for the bookmark modal; the provider and the model the cache records are the operator's, or placeholders where a test composes a port without them.
+  builtInRoutes.push(...aiRoutes({ ai: adapters.ai, provider: config.AI_PROVIDER_NAME ?? "unspecified", model: config.AI_MODEL ?? "unspecified", ...(options.aiBudgetMs === undefined ? {} : { budgetMs: options.aiBudgetMs }) }));
   // The icon of a host the bookmarks point at, from the deployment-wide cache, queuing its fetch for a host the caller can read a bookmark on.
   builtInRoutes.push(...faviconRoutes());
   // And the tags of the member who makes them: created, listed with their counts, renamed and deleted by their owner alone.

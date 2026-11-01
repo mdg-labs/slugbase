@@ -24,6 +24,8 @@ const WORKSPACE_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const CLUSTER_LOCK_KEY = /7_?354_?190_?025/;
 // The one test file that names the key to look at who holds it in pg_locks, and takes none itself.
 const LOCK_OBSERVER = "packages/db/test/harness-cluster-lock.integration.test.ts";
+// The files that test the exclusive step itself: the observer, and the process it drives.
+const EXCLUSIVE_STEP_TESTS = [LOCK_OBSERVER, "packages/db/test/support/cluster-holder.ts"];
 
 // The folders of test files in the packages and apps, as paths from the root.
 function testFiles(): string[] {
@@ -67,5 +69,15 @@ describe("the integration runs the development Postgres serves at once", () => {
       (file) => file !== LOCK_OBSERVER && CLUSTER_LOCK_KEY.test(readFileSync(join(WORKSPACE_ROOT, file), "utf8")),
     );
     expect(holders).toEqual([]);
+  });
+
+  // An exclusive request queues the first test database of every test file of every
+  // run behind the test databases in use, so one test file that asks for it holds up
+  // the runs of the whole machine for as long as their longest test file (doc 08 section 3.2).
+  it("takes the cluster exclusively in no test file but the tests of the lock itself", () => {
+    const takers = testFiles().filter(
+      (file) => !EXCLUSIVE_STEP_TESTS.includes(file) && /\blockExclusive\b/.test(readFileSync(join(WORKSPACE_ROOT, file), "utf8")),
+    );
+    expect(takers).toEqual([]);
   });
 });

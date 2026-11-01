@@ -73,8 +73,9 @@ describe("getApiConfig", () => {
     expect([...instance.required].sort()).toEqual(["displayName", "signInNotice"]);
     expect(instance.properties["displayName"]).toMatchObject({ type: "string" });
     const features = api.properties["features"] as { properties: Obj; required: string[] };
-    expect(Object.keys(features.properties).sort()).toEqual(["ai", "mail"]);
+    expect(Object.keys(features.properties).sort()).toEqual(["ai", "aiProvider", "mail"]);
     expect([...features.required].sort()).toEqual(["ai", "mail"]);
+    expect(features.properties["aiProvider"]).toMatchObject({ type: "string" });
   });
 });
 

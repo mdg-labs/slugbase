@@ -1,0 +1,9 @@
+---
+title: t
+description: d
+edition: ce
+---
+
+See [the other page][other].
+
+[other]: missing.md

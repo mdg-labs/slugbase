@@ -1,6 +1,6 @@
 import { Button, Input } from "@slugbase/ui";
 import { AccountAvatar, Banner, FormField, Loading, SettingsSection, feedbackToast } from "@slugbase/ui/patterns";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,7 +8,7 @@ import { ME_QUERY_KEY, type Me } from "../account/me.ts";
 import { ApiProblemError } from "../api/client.ts";
 import { WorkspaceDangerZone } from "./workspace-danger-zone.tsx";
 import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
-import { WORKSPACE_QUERY_KEY, canAdminister, renameWorkspace, workspaceQuery, type Workspace } from "./workspace.ts";
+import { WORKSPACE_QUERY_KEY, canAdminister, renameWorkspace, useWorkspace, type Workspace } from "./workspace.ts";
 
 const NAME_MAX_LENGTH = 64;
 
@@ -27,7 +27,13 @@ function GeneralForm({ workspace, onReload, reloading }: { workspace: Workspace;
     meta: { fieldErrors: true },
     mutationFn: (next: string) => renameWorkspace(router.options.context.api, next, workspace.version),
     onSuccess: (saved) => {
-      queryClient.setQueryData<Workspace>(WORKSPACE_QUERY_KEY, saved);
+      // A rename out for longer than `SWITCH_WRITE_WAIT_MS` does not hold a switch back, so its answer can arrive once the session acts in
+      // another workspace, whose document the cache then holds. The saved document is stored only while its workspace is the active one;
+      // the account and the list below are keyed by workspace, so they take the new name either way.
+      const activeWorkspaceId = queryClient.getQueryData<Me>(ME_QUERY_KEY)?.activeWorkspaceId;
+      if (activeWorkspaceId === undefined || activeWorkspaceId === saved.id) {
+        queryClient.setQueryData<Workspace>(WORKSPACE_QUERY_KEY, saved);
+      }
       queryClient.setQueryData<Me>(ME_QUERY_KEY, (me) =>
         me === undefined
           ? me
@@ -134,8 +140,8 @@ function GeneralForm({ workspace, onReload, reloading }: { workspace: Workspace;
 /** `/settings/workspace` (doc 03 section 11.6): the workspace's name, which admins and owners can change, and its monogram. */
 export function WorkspaceGeneralPage(): ReactElement {
   const { t } = useTranslation();
-  const router = useRouter();
-  const workspace = useQuery(workspaceQuery(router.options.context.api));
+  // The workspace is the active one of the account, so after a switch the page shows a skeleton and no form until the new workspace's own document arrives; a rename names no workspace and would reach the session's, with the version of the one shown.
+  const workspace = useWorkspace();
 
   return (
     <div className="flex flex-col gap-4">
@@ -143,7 +149,7 @@ export function WorkspaceGeneralPage(): ReactElement {
       {workspace.data === undefined ? null : (
         // A new version means the name came from the server again, so the form starts from it.
         <GeneralForm
-          key={workspace.data.version}
+          key={`${workspace.data.id}:${String(workspace.data.version)}`}
           onReload={() => {
             void workspace.refetch();
           }}

@@ -1,23 +1,23 @@
 ---
-# Framework-specific frontmatter — adapt per docs-config.md § Frontmatter
-# Common fields (rename/remove per framework):
 title: "{PAGE_TITLE}"
 description: "{ONE_LINE_PURPOSE}"
-sidebar_position: {N}
-# slug: {kebab-case-slug}   # Mintlify, Docusaurus, etc.
+edition: both
+since: 1.0.0
+order: 10
 ---
 
-# {PAGE_TITLE}
-
 {ONE_SENTENCE_PURPOSE — what the user can accomplish on this page.}
+
+<Screenshot alt="{PAGE_NAME} overview" />
+
+<Callout>
+{EDITION_NOTE — what differs between editions on this page; delete the whole callout when nothing does}
+</Callout>
 
 ## Prerequisites
 
 - {PREREQUISITE_1 — e.g. "You are signed in."}
 - {PREREQUISITE_2 — or "None."}
-
-<!-- Optional when screenshot policy = PLACEHOLDERS -->
-<!-- {SCREENSHOT: {PAGE_NAME} overview} -->
 
 ## {KEY_ACTION_1 — imperative verb phrase}
 
@@ -32,14 +32,12 @@ sidebar_position: {N}
 1. {Step.}
 2. {Step.}
 
-<!-- Repeat ## sections for each primary action visible on the page -->
-
 ## Field and option reference
 
 | Field / option | Description | Required |
 | -------------- | ----------- | -------- |
 | {Customer-facing label} | {What it does.} | {Yes \| No} |
-| {Customer-facing label} | {What it does.} | {Yes \| No} |
+| {Customer-facing label, in one edition only} | {What it does.} <EditionBadge edition="cloud" /> | {Yes \| No} |
 
 ## Troubleshooting
 

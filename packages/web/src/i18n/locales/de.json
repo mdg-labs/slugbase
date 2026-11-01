@@ -1413,7 +1413,8 @@
       "workspace": "Workspace",
       "general": "Allgemein",
       "members": "Mitglieder",
-      "teams": "Teams"
+      "teams": "Teams",
+      "ai": "KI-Vorschläge"
     },
     "account": {
       "title": "Profil",
@@ -1922,6 +1923,25 @@
       },
       "forbidden": "Du darfst diesen Workspace nicht mehr ändern.",
       "saveFailed": "Der Name konnte nicht gespeichert werden. Versuche es erneut.",
+      "ai": {
+        "title": "KI-Vorschläge",
+        "section": {
+          "title": "KI-Vorschläge",
+          "description": "Titel, Slug und Tags vorschlagen, wenn jemand ein Lesezeichen speichert."
+        },
+        "switch": {
+          "label": "KI-Vorschläge für diesen Workspace aktivieren",
+          "description": "Mitglieder können sich in ihren Voreinstellungen weiterhin selbst abmelden."
+        },
+        "note": {
+          "named": "Wenn ein Mitglied Vorschläge anfordert, erhält {provider} die URL der Seite, die davon abgerufenen öffentlichen Metadaten und die Tag-Namen dieses Mitglieds. Weitere Lesezeichen und Workspace-Namen werden nicht gesendet.",
+          "unnamed": "Wenn ein Mitglied Vorschläge anfordert, erhält der von deinem Administrator eingerichtete KI-Dienst die URL der Seite, die davon abgerufenen öffentlichen Metadaten und die Tag-Namen dieses Mitglieds. Weitere Lesezeichen und Workspace-Namen werden nicht gesendet."
+        },
+        "unavailable": "Auf diesem Server nicht verfügbar",
+        "loadFailed": {
+          "title": "Die KI-Einstellung konnte nicht geladen werden"
+        }
+      },
       "danger": {
         "title": "Gefahrenbereich"
       },
@@ -2599,6 +2619,7 @@
       "failed": {
         "title": "Der Workspace wurde nicht gewechselt",
         "unavailable": "Du bist weiterhin im selben Workspace. Versuche es erneut.",
+        "saving": "Eine Änderung wird noch gespeichert. Versuche es gleich noch einmal.",
         "notAMember": "Du bist kein Mitglied dieses Workspace mehr."
       }
     },

@@ -1413,7 +1413,8 @@
       "workspace": "Workspace",
       "general": "General",
       "members": "Members",
-      "teams": "Teams"
+      "teams": "Teams",
+      "ai": "AI suggestions"
     },
     "account": {
       "title": "Profile",
@@ -1922,6 +1923,25 @@
       },
       "forbidden": "You are no longer allowed to change this workspace.",
       "saveFailed": "The name could not be saved. Try again.",
+      "ai": {
+        "title": "AI suggestions",
+        "section": {
+          "title": "AI suggestions",
+          "description": "Suggest a title, a slug and tags when someone saves a bookmark."
+        },
+        "switch": {
+          "label": "Enable AI suggestions for this workspace",
+          "description": "Members can still opt out for themselves in their preferences."
+        },
+        "note": {
+          "named": "When a member asks for suggestions, {provider} receives the page's URL, the public metadata fetched from it and that member's tag names. No other bookmarks and no workspace names are sent.",
+          "unnamed": "When a member asks for suggestions, the AI service your administrator configured receives the page's URL, the public metadata fetched from it and that member's tag names. No other bookmarks and no workspace names are sent."
+        },
+        "unavailable": "Not available on this server",
+        "loadFailed": {
+          "title": "The AI setting could not be loaded"
+        }
+      },
       "danger": {
         "title": "Danger zone"
       },
@@ -2599,6 +2619,7 @@
       "failed": {
         "title": "The workspace was not switched",
         "unavailable": "You are still in the same workspace. Try again.",
+        "saving": "A change is still being saved. Try again in a moment.",
         "notAMember": "You are no longer a member of that workspace."
       }
     },

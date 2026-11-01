@@ -178,3 +178,70 @@ export function totpIssuer() {
       error: "must be 1 to 64 characters with no control character and no colon",
     });
 }
+
+/**
+ * The base URL of an OpenAI-compatible endpoint: an absolute http or https URL with a host, no credentials, no query
+ * and no fragment (the adapter appends its path, and a credential in the URL could not be sent). Trailing slashes are removed.
+ */
+export function aiBaseUrl() {
+  return z
+    .string()
+    .refine(
+      (value) => {
+        const url = parseUrl(value);
+        return (
+          url !== undefined &&
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          url.hostname !== "" &&
+          url.username === "" &&
+          url.password === "" &&
+          url.search === "" &&
+          url.hash === "" &&
+          !/[?#]/.test(value)
+        );
+      },
+      { error: "must be an absolute http or https URL with a host and no credentials, query or fragment" },
+    )
+    .transform((value) => value.replace(/\/+$/, ""));
+}
+
+/** A credential or an identifier sent to the provider: visible ASCII with no space, so it is one header or JSON value as written. */
+export function visibleToken(maxLength: number) {
+  return z.string().refine((value) => value.length <= maxLength && /^[\x21-\x7e]+$/.test(value), {
+    error: `must be 1 to ${String(maxLength)} visible ASCII characters with no space`,
+  });
+}
+
+/** A name shown to members: 1 to 64 characters after trimming, with no control character. */
+export function displayName() {
+  return z
+    .string()
+    .trim()
+    .refine((value) => /^[^\p{Cc}]{1,64}$/u.test(value), { error: "must be 1 to 64 characters with no control character" });
+}
+
+// Characters that make a value more than one bare host: whitespace, a scheme, port, userinfo, path, query, wildcard, list or range separator, a percent escape.
+const NOT_IN_A_BARE_HOST = /[\s/\\?#@:*,%[\]<>"'|^`{}!$&();=+~]/u;
+
+/**
+ * One bare host: a DNS name or an IP literal (an IPv6 literal with or without brackets), with no scheme, port, path,
+ * userinfo, wildcard, comma or network range. Yields the host as `URL` normalises it (lower case, IDNA, IPv4 notations
+ * and IPv6 compressed to one form), so it compares with the host of a URL.
+ */
+export function bareHost() {
+  return z
+    .string()
+    .transform((value) => {
+      const bracketed = /^\[([0-9A-Fa-f:.]+)\]$/.exec(value)?.[1];
+      const unbracketed = /^[0-9A-Fa-f:.]+$/.test(value) && value.split(":").length > 2 ? value : undefined;
+      const literal = bracketed ?? unbracketed;
+      if (literal === undefined && NOT_IN_A_BARE_HOST.test(value)) {
+        return undefined;
+      }
+      const url = parseUrl(`http://${literal === undefined ? value : `[${literal}]`}`);
+      return url !== undefined && url.hostname !== "" && url.host === url.hostname && url.pathname === "/" ? url.hostname : undefined;
+    })
+    .refine((host): host is string => host !== undefined, {
+      error: "must be one bare host name or IP address, with no scheme, port, path, wildcard or range",
+    });
+}

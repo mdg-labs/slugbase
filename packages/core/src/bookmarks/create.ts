@@ -1,3 +1,4 @@
+import { aiFieldsOf, type AiField, type AiUsageRecorder } from "../ai/usage.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
 import { parseSlug } from "../go/slug.ts";
@@ -149,6 +150,8 @@ export interface BookmarkCreationDependencies {
   readonly store: Pick<BookmarkStore, "create">;
   /** A fresh UUIDv7. */
   readonly newId: () => string;
+  /** Counts the fields of the new bookmark that came from a suggestion, in the transaction of the creation; a creation that names none counts nothing, and so does one without a recorder. */
+  readonly aiUsage?: AiUsageRecorder;
 }
 
 export interface BookmarkCreationAsk {
@@ -168,6 +171,8 @@ export interface BookmarkCreationAsk {
   /** The owner's tags to put on the bookmark by identifier, and by name (a name the owner has no tag of creates one); none when left out. Both together name the union. */
   readonly tagIds?: readonly string[] | undefined;
   readonly tagNames?: readonly string[] | undefined;
+  /** The fields of the bookmark that the member took from an AI suggestion (doc 02 section 14); they feed the count of accepted fields and change nothing else. */
+  readonly aiFields?: readonly AiField[] | undefined;
   /** The workspace's `bookmarks.max`. */
   readonly ceiling: EntitlementLimit;
 }
@@ -204,7 +209,7 @@ function checkLength(field: string, value: string, min: number, max: number): vo
  * trimmed and lower-cased and then held to the grammar before anything is written, and forwarding is true when a slug is given and
  * the caller says nothing else.
  */
-export async function createBookmark({ store, newId }: BookmarkCreationDependencies, ask: BookmarkCreationAsk): Promise<BookmarkCreationOutcome> {
+export async function createBookmark({ store, newId, aiUsage }: BookmarkCreationDependencies, ask: BookmarkCreationAsk): Promise<BookmarkCreationOutcome> {
   const normalized = normalizeBookmarkUrl(ask.url);
   if (!normalized.ok) {
     return { kind: "url_refused", reason: normalized.reason };
@@ -250,6 +255,10 @@ export async function createBookmark({ store, newId }: BookmarkCreationDependenc
       throw new Error("the store refused a bookmark under an unlimited ceiling");
     }
     return { kind: "limit_reached", limit: ask.ceiling, used: result.used };
+  }
+  const aiFields = aiFieldsOf(ask.aiFields);
+  if (result.kind === "created" && aiFields.length > 0) {
+    await aiUsage?.record({ bookmarkId: id, fields: aiFields });
   }
   return result;
 }

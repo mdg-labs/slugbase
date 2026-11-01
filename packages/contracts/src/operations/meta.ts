@@ -36,6 +36,12 @@ export const ApiConfigSchema = z
     features: z.strictObject({
       mail: z.boolean().describe("Whether a mail port is configured"),
       ai: z.boolean().describe("Whether an AI port is configured"),
+      aiProvider: z
+        .string()
+        .optional()
+        .describe(
+          "The operator's display name of the AI provider (AI_PROVIDER_NAME), present only where an AI port is configured; the interface names it wherever it tells a member who processes a request. Never the endpoint, the model or a credential",
+        ),
     }),
     signIn: z
       .strictObject({

@@ -7,6 +7,9 @@
  * (src/sql/280-workspace-deletion.sql), which the same check holds to this list.
  */
 export const workspacePurgeOrder: readonly string[] = [
+  // The cached suggestions and the usage rows of members reference the membership, so they go before the members.
+  "ai_suggestion_usage",
+  "ai_suggestions",
   // api_tokens references the membership of its account, so the tokens go before the members.
   "api_tokens",
   "audit_events",

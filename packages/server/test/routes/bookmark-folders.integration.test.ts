@@ -1,11 +1,16 @@
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // Filing bookmarks in folders (doc 04 sections 10.6 and 10.7, doc 02 sections 7.1 and 8.2, doc 13 Q22, doc 10 T1 and T2): POST and DELETE
 // /api/v1/folders/{id}/bookmarks, `folderIds` on the creation and the change of a bookmark, `folderId` on the list and the `folders` every
 // bookmark carries, through the whole chain over the migrated database. The failure scenario: member A files A's bookmark into member B's
 // folder, B's bookmark into A's folder, and a bookmark or a folder of workspace B into A's, and every call answers 404 and changes nothing.
+
+// Every test builds its own people, and each one is a seeded password hash, a sign-in and a re-authentication: three argon2id operations, about 10 ms of CPU
+// each. That is the shipped cost, so a test that acts as the owner alone takes `soloSetup` and the others the whole cast. Measured with `taskset -c 2,3` and sixteen busy loops on
+// those two cores, a test took up to 2.8 s (idle: 0.3 s), so vitest's default of 5 s failed on a loaded runner with nothing wrong; the describes take the heavy bound.
 
 const BOOKMARKS = "/api/v1/bookmarks";
 const FOLDERS = "/api/v1/folders";
@@ -108,7 +113,14 @@ async function setup(world: World) {
   return { owner, member, stranger, shared, other };
 }
 
-describe("the failure scenario: filing across members and workspaces changes nothing (T1, T2)", () => {
+/** A workspace of the owner alone, for a test that acts as the owner and no one else: each further person costs a sign-in and a re-authentication, an argon2id verification apiece. */
+async function soloSetup(world: World) {
+  const owner = await harness.person(world);
+  const shared = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+  return { owner, shared };
+}
+
+describe("the failure scenario: filing across members and workspaces changes nothing (T1, T2)", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("answers 404 for A's bookmark into B's folder, B's bookmark into A's folder, and writes no link", async () => {
     const world = harness.serve();
     const { owner, member } = await setup(world);
@@ -182,10 +194,10 @@ describe("the failure scenario: filing across members and workspaces changes not
   });
 });
 
-describe("POST and DELETE /folders/{id}/bookmarks", () => {
+describe("POST and DELETE /folders/{id}/bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("files bookmarks and answers the folder with its count, files again without a change, and takes them out again", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
     const folder = await createdFolder(world, owner, "Reading");
     const bookmarks = [await createdBookmark(world, owner, "One"), await createdBookmark(world, owner, "Two")];
     const ids = bookmarks.map((bookmark) => bookmark.id);
@@ -225,7 +237,7 @@ describe("POST and DELETE /folders/{id}/bookmarks", () => {
 
   it("answers 422 for no bookmark, more than 1 000, a malformed identifier, a field it does not declare and an identifier that is not a UUID in the path", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
     const folder = await createdFolder(world, owner, "Reading");
     const bookmark = await createdBookmark(world, owner, "One");
     const post = (path: string, body: unknown) => send(world, "POST", path, { cookie: owner.cookie }, body);
@@ -239,7 +251,7 @@ describe("POST and DELETE /folders/{id}/bookmarks", () => {
 
   it("is refused without a session (401), from another site (403 cross_site_request) and to a read-only token (403 token_scope); a read-write token files", async () => {
     const world = harness.serve();
-    const { owner, shared } = await setup(world);
+    const { owner, shared } = await soloSetup(world);
     const folder = await createdFolder(world, owner, "Reading");
     const bookmark = await createdBookmark(world, owner, "One");
     const path = `${FOLDERS}/${folder.id}/bookmarks`;
@@ -264,10 +276,10 @@ describe("POST and DELETE /folders/{id}/bookmarks", () => {
   });
 });
 
-describe("folderIds on the creation and the change of a bookmark, and folders on its body", () => {
+describe("folderIds on the creation and the change of a bookmark, and folders on its body", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("files a new bookmark in the folders it names, and carries them in the order of their names on the creation, the read and the list", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
     const zebra = await createdFolder(world, owner, "Zebra");
     const apple = await createdFolder(world, owner, "apple");
 
@@ -282,7 +294,7 @@ describe("folderIds on the creation and the change of a bookmark, and folders on
 
   it("replaces the folders on a change, keeps the version and the ETag when only the folders change, and clears them with an empty list", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
     const [one, two, three] = [await createdFolder(world, owner, "One"), await createdFolder(world, owner, "Two"), await createdFolder(world, owner, "Three")];
     const bookmark = await createdBookmark(world, owner, "Filed", [one.id, two.id]);
     const patch = (body: unknown) => send(world, "PATCH", `${BOOKMARKS}/${bookmark.id}`, { cookie: owner.cookie, "if-match": `"${String(bookmark.version)}"` }, body);
@@ -305,7 +317,7 @@ describe("folderIds on the creation and the change of a bookmark, and folders on
 
   it("answers 422 for more than 100 folders or a malformed identifier in folderIds, on both operations", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
     const bookmark = await createdBookmark(world, owner, "Filed");
 
     for (const folderIds of [Array.from({ length: 101 }, () => UNKNOWN), ["nope"]]) {
@@ -315,10 +327,10 @@ describe("folderIds on the creation and the change of a bookmark, and folders on
   });
 });
 
-describe("GET /bookmarks?folderId=", () => {
+describe("GET /bookmarks?folderId=", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("lists the caller's bookmarks filed in the folder, counts them and pages through them with a cursor bound to the folder", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner } = await soloSetup(world);
     const reading = await createdFolder(world, owner, "Reading");
     const other = await createdFolder(world, owner, "Other");
     const filed = [await createdBookmark(world, owner, "A", [reading.id]), await createdBookmark(world, owner, "B", [reading.id]), await createdBookmark(world, owner, "C", [reading.id, other.id])];

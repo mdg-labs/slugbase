@@ -158,6 +158,91 @@
         ],
         "type": "object"
       },
+      "AiSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "description": "How sure the provider is, from 0 to 1",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The suggested slug, in the grammar of a slug; null when the provider's slug was outside the grammar or is one the caller already uses on a bookmark in the workspace. The server never applies it"
+          },
+          "tags": {
+            "description": "At most 5 suggested tag names, without repeats; the names of the caller's own tags that fit come first, in the spelling the caller uses. The server never applies them",
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "title": {
+            "description": "The suggested title, plain text of 1 to 300 characters",
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "slug",
+          "tags",
+          "confidence"
+        ],
+        "type": "object"
+      },
+      "AiSuggestionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "description": "The language the suggestion is written in, a language tag such as en or de-AT of at most 35 characters. The cache is kept for each language, in lower case",
+            "maxLength": 35,
+            "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8}){0,4}$",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": false,
+            "description": "What the page says about itself, as the metadata operation answers it, sent to the provider as data. It is not part of the cache key: a suggestion cached for the address and language is served whatever metadata a later request sends",
+            "properties": {
+              "description": {
+                "description": "The page's description as the metadata operation read it, at most 1 000 characters",
+                "maxLength": 1000,
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title as the metadata operation read it, at most 300 characters",
+                "maxLength": 300,
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "url": {
+            "description": "The address of the page to suggest details for: an http or https URL of at most 2 048 characters, judged as a bookmark's URL is, and sent to the provider in its canonical form. Any other scheme is refused with 422 url_not_allowed",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "locale"
+        ],
+        "type": "object"
+      },
       "ApiConfig": {
         "additionalProperties": false,
         "properties": {
@@ -181,6 +266,10 @@
               "ai": {
                 "description": "Whether an AI port is configured",
                 "type": "boolean"
+              },
+              "aiProvider": {
+                "description": "The operator's display name of the AI provider (AI_PROVIDER_NAME), present only where an AI port is configured; the interface names it wherever it tells a member who processes a request. Never the endpoint, the model or a credential",
+                "type": "string"
               },
               "mail": {
                 "description": "Whether a mail port is configured",
@@ -1535,6 +1624,19 @@
       "CreateBookmarkRequest": {
         "additionalProperties": false,
         "properties": {
+          "aiFields": {
+            "description": "The fields (title, slug, tags) the caller took from an AI suggestion, at most 3 and a field named twice counts once. They only feed the count of accepted suggestions of the workspace, which holds which fields and never what they held; they change nothing about the bookmark, nothing is checked against a suggestion and the count is written in the same transaction as the bookmark. Sending them when AI is off or not configured is not an error. Left out, nothing is counted",
+            "items": {
+              "enum": [
+                "title",
+                "slug",
+                "tags"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
           "description": {
             "description": "The bookmark's description, 0 to 1 000 characters; surrounding whitespace is removed and an empty one is stored as none",
             "maxLength": 1000,
@@ -5418,6 +5520,19 @@
       "UpdateBookmarkRequest": {
         "additionalProperties": false,
         "properties": {
+          "aiFields": {
+            "description": "The fields (title, slug, tags) of this patch the caller took from an AI suggestion, at most 3 and a field named twice counts once. They are counted once when the patch is written (a patch that changes nothing counts nothing), in the same transaction, and they change nothing about the bookmark. They are not a change: a patch with only aiFields writes nothing. Sending them when AI is off or not configured is not an error",
+            "items": {
+              "enum": [
+                "title",
+                "slug",
+                "tags"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
           "description": {
             "anyOf": [
               {
@@ -5967,6 +6082,132 @@
         ],
         "x-slugbase-auth": "anonymous",
         "x-slugbase-rate": "public"
+      }
+    },
+    "/api/v1/ai/suggestions": {
+      "post": {
+        "operationId": "suggestBookmarkDetails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiSuggestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSuggestion"
+                }
+              }
+            },
+            "description": "The suggestion, from the cache kept for the caller, the workspace, the address and the language for 30 days, or from the provider, which is asked for at most 5 seconds and is not asked while the cache holds the suggestion. The cache is never shared with another member or another workspace. A suggestion the provider could not give, or that did not pass the checks, is not an answer and is not cached. Nothing of any bookmark is changed"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), the workspace has the AI toggle off or the caller has opted out of AI suggestions (forbidden), or the workspace does not hold the ai.suggestions entitlement (entitlement_required). The provider is not asked"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, the workspace is being deleted, or the caller left the workspace while the provider was asked"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (a missing, empty, over-long or malformed URL, a language that is not a language tag, a title or description that holds a NUL character or is over-long, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). The provider is not asked"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The provider failed, did not answer within 5 seconds or answered what cannot be used (upstream_failed). Nothing is cached"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No AI provider is configured on this instance (ai_unavailable), the service is temporarily unavailable, or no entitlement source is configured"
+          }
+        },
+        "summary": "Suggest a title, a slug and tags for a page",
+        "tags": [
+          "ai"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-entitlement": "ai.suggestions",
+        "x-slugbase-rate": "ai",
+        "x-slugbase-scope": "write"
       }
     },
     "/api/v1/audit-events": {
@@ -19562,6 +19803,9 @@
     }
   },
   "tags": [
+    {
+      "name": "ai"
+    },
     {
       "name": "audit"
     },

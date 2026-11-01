@@ -1,6 +1,7 @@
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { promisify } from "node:util";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { useCluster, type ClusterUse } from "../src/testing.ts";
@@ -37,12 +38,16 @@ const appLogin: Login = { username: "slugbase_app", password: APP_PASSWORD };
 const migratorLogin: Login = { username: "slugbase_migrator", password: MIGRATOR_PASSWORD };
 
 // Roles are cluster-wide. This file reads them like every test database does,
-// so it holds the cluster shared for its whole run, and the drift test, which
-// changes them, holds it exclusively for that test alone (`@slugbase/db/testing`).
+// so it holds the cluster shared for its whole run (`@slugbase/db/testing`). The
+// drift test changes them and converges them again in one transaction, which no
+// other session sees before it ends, so it needs no exclusive hold of the cluster.
 const ROLE_NAMES = ["slugbase_app", "slugbase_migrator", "slugbase_owner", "slugbase_system"];
 
 // Waiting for another run to release the cluster lock counts against this.
 const HOOK_TIMEOUT_MS = 300_000;
+// The drift tests start psql, which waits for the lock on pg_authid that every
+// run of roles.sql takes, and the second keeps its drift standing for 1.5 s.
+const DRIFT_TEST_TIMEOUT_MS = 120_000;
 
 const clients: postgres.Sql[] = [];
 
@@ -62,34 +67,61 @@ function connect(login: Login, database: string): postgres.Sql {
 
 interface PsqlResult {
   status: number | null;
+  stdout: string;
   stderr: string;
 }
 
-function runRolesSql(options: {
+interface RolesSqlOptions {
   login: Login;
   args?: string[];
   env?: Record<string, string>;
-}): PsqlResult {
-  const result = spawnSync(
-    "psql",
-    ["-X", "-v", "ON_ERROR_STOP=1", ...(options.args ?? []), "-f", ROLES_SQL],
-    {
-      encoding: "utf8",
-      env: {
-        PATH: process.env.PATH ?? "",
-        PGHOST: server.hostname,
-        PGPORT: server.port,
-        PGDATABASE: dbName,
-        PGUSER: options.login.username,
-        PGPASSWORD: options.login.password,
-        ...options.env,
-      },
+  // Statements the same psql session runs before the script, in order.
+  before?: string[];
+}
+
+function rolesSqlCommand(options: RolesSqlOptions): { args: string[]; env: Record<string, string> } {
+  return {
+    args: [
+      "-X",
+      "-v",
+      "ON_ERROR_STOP=1",
+      ...(options.args ?? []),
+      ...(options.before ?? []).flatMap((statement) => ["-c", statement]),
+      "-f",
+      ROLES_SQL,
+    ],
+    env: {
+      PATH: process.env.PATH ?? "",
+      PGHOST: server.hostname,
+      PGPORT: server.port,
+      PGDATABASE: dbName,
+      PGUSER: options.login.username,
+      PGPASSWORD: options.login.password,
+      ...options.env,
     },
-  );
+  };
+}
+
+function runRolesSql(options: RolesSqlOptions): PsqlResult {
+  const { args, env } = rolesSqlCommand(options);
+  const result = spawnSync("psql", args, { encoding: "utf8", env });
   if (result.error) {
     throw result.error;
   }
-  return { status: result.status, stderr: result.stderr };
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+async function runRolesSqlAsync(options: RolesSqlOptions): Promise<PsqlResult> {
+  const { args, env } = rolesSqlCommand(options);
+  try {
+    const result = await promisify(execFile)("psql", args, { encoding: "utf8", env });
+    return { status: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && typeof error.code === "number") {
+      return { status: error.code, stdout: "stdout" in error ? String(error.stdout) : "", stderr: "stderr" in error ? String(error.stderr) : "" };
+    }
+    throw error;
+  }
 }
 
 async function sqlState(run: () => Promise<unknown>): Promise<string | undefined> {
@@ -448,40 +480,59 @@ describe("compose.dev.yml", () => {
   });
 });
 
-// The one test that changes the roles of the cluster: every test database of
-// every run waits for this step, and it waits for each of them to be dropped, so
-// it takes the cluster exclusively from just before the test until just after it.
-// The roles are converged once more before the cluster is given back, so a test
-// that failed half way leaves no drift behind for the others.
+// The drift is made and converged in one transaction: psql opens it, the
+// statements below change the roles, and the COMMIT at the end of roles.sql ends
+// it. The roles are cluster-wide, but no other session sees a role before its
+// transaction commits, so the test databases of other runs never meet the drift
+// and nothing has to wait for them. A failure rolls the whole transaction back.
+const DRIFT = [
+  "BEGIN",
+  // Taking this lock first puts the test in the same order as every run of roles.sql.
+  "LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE",
+  "ALTER ROLE slugbase_app BYPASSRLS",
+  "GRANT slugbase_owner TO slugbase_app",
+  "REVOKE slugbase_owner FROM slugbase_migrator",
+  "GRANT slugbase_owner TO slugbase_migrator WITH INHERIT TRUE",
+];
+const DRIFT_PROBE =
+  "SELECT (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'slugbase_app'), (SELECT count(*) FROM pg_auth_members WHERE member = 'slugbase_app'::regrole)";
+const PASSWORD_ARGS = ["-v", `app_password=${APP_PASSWORD}`, "-v", `migrator_password=${MIGRATOR_PASSWORD}`];
+
 describe("a run converges drifted roles", () => {
-  let endStep: (() => Promise<void>) | undefined;
-
-  beforeAll(async () => {
-    endStep = await cluster?.lockExclusive();
-  }, HOOK_TIMEOUT_MS);
-
-  afterAll(async () => {
-    try {
-      const result = runRolesSql({
-        login: superuser,
-        args: ["-v", `app_password=${APP_PASSWORD}`, "-v", `migrator_password=${MIGRATOR_PASSWORD}`],
-      });
-      expect(result.status).toBe(0);
-    } finally {
-      await endStep?.();
-    }
-  }, HOOK_TIMEOUT_MS);
-
   it("restores attributes and memberships changed by hand", async () => {
-    await owner.unsafe("ALTER ROLE slugbase_app BYPASSRLS");
-    await owner.unsafe("GRANT slugbase_owner TO slugbase_app");
-    await owner.unsafe("REVOKE slugbase_owner FROM slugbase_migrator");
-    await owner.unsafe("GRANT slugbase_owner TO slugbase_migrator WITH INHERIT TRUE");
     const result = runRolesSql({
       login: superuser,
-      args: ["-v", `app_password=${APP_PASSWORD}`, "-v", `migrator_password=${MIGRATOR_PASSWORD}`],
+      args: ["-q", "-A", "-t", ...PASSWORD_ARGS],
+      before: [...DRIFT, DRIFT_PROBE],
     });
     expect(result.status).toBe(0);
+    // The session did see the drift before the script converged it.
+    expect(result.stdout.split("\n")).toContain("t|1");
     expect(await snapshot(owner)).toEqual(afterFirstRun);
-  });
+  }, DRIFT_TEST_TIMEOUT_MS);
+
+  it("shows no other session the drift while it is made and converged", async () => {
+    const seen: boolean[] = [];
+    const running = runRolesSqlAsync({
+      login: superuser,
+      args: ["-q", ...PASSWORD_ARGS],
+      before: [...DRIFT, DRIFT_PROBE, "SELECT pg_sleep(1.5)"],
+    });
+    const state = { done: false };
+    // Both outcomes end the poll; a rejection stays on `running` for the await below to report.
+    const markDone = (): void => {
+      state.done = true;
+    };
+    void running.then(markDone, markDone);
+    while (!state.done) {
+      const rows = await owner<{ bypass: boolean }[]>`SELECT rolbypassrls AS bypass FROM pg_roles WHERE rolname = 'slugbase_app'`;
+      seen.push(rows[0]?.bypass === true);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect((await running).status).toBe(0);
+    // Polled across the 1.5 s the drift stood in the other session.
+    expect(seen.length).toBeGreaterThan(20);
+    expect(seen).not.toContain(true);
+    expect(await snapshot(owner)).toEqual(afterFirstRun);
+  }, DRIFT_TEST_TIMEOUT_MS);
 });

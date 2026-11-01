@@ -1,4 +1,4 @@
-import { generateApiToken, type EgressPort, type EntitlementSource, type MailPort } from "@slugbase/core";
+import { generateApiToken, type AiSuggestPort, type EgressPort, type EntitlementSource, type MailPort } from "@slugbase/core";
 import { apiTokenRepository, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
@@ -79,6 +79,10 @@ export interface WorkspaceHarness {
     readonly egress?: EgressPort;
     /** The most the page-metadata lookup may take, in milliseconds; by default the server's. */
     readonly metadataBudgetMs?: number;
+    /** The AI port of the composition; by default the unconfigured one, which answers `503 ai_unavailable`. */
+    readonly ai?: AiSuggestPort;
+    /** The most the AI provider may take, in milliseconds; by default the server's. */
+    readonly aiBudgetMs?: number;
     /** Configuration keys that replace the suite's defaults. */
     readonly env?: Record<string, string>;
     /** Records what the server logs; by default a logger nobody reads. */
@@ -154,6 +158,7 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
           ...adapters(config),
           ...(options.mail === undefined ? {} : { mail: options.mail }),
           ...(options.egress === undefined ? {} : { egress: options.egress }),
+          ...(options.ai === undefined ? {} : { ai: options.ai }),
           ...(options.entitlementSource === undefined ? {} : { entitlements: options.entitlementSource }),
           tenantResolver: createAccountOnlyTenantResolver(),
         },
@@ -168,6 +173,7 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
         ...(options.hookTimeoutMs === undefined ? {} : { hookTimeoutMs: options.hookTimeoutMs }),
         ...(options.usage === undefined ? {} : { usage: options.usage }),
         ...(options.metadataBudgetMs === undefined ? {} : { metadataBudgetMs: options.metadataBudgetMs }),
+        ...(options.aiBudgetMs === undefined ? {} : { aiBudgetMs: options.aiBudgetMs }),
         ...(options.webRoot === undefined ? {} : { webRoot: options.webRoot }),
       });
       return { server, origin: config.APP_ORIGIN };

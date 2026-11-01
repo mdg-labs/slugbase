@@ -27,7 +27,7 @@ import { PaletteDialog } from "../palette/palette-dialog.tsx";
 import { PaletteProvider } from "../palette/palette-state.tsx";
 import { PaletteTrigger } from "../palette/palette-trigger.tsx";
 import { AppShortcuts } from "../shortcuts/app-shortcuts.tsx";
-import { docsUrl } from "./docs-url.ts";
+import { DOCS_LINK_PROPS, useDocsUrl } from "../docs/docs-url.ts";
 import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
 import { SidebarFolders } from "./sidebar-folders.tsx";
@@ -35,7 +35,8 @@ import { useWorkspaceSwitcher } from "./workspace-switcher.tsx";
 
 function AppLayoutShell(): ReactElement {
   const { t } = useTranslation();
-  const { product, docsBaseUrl } = useConfig();
+  const { product } = useConfig();
+  const docsUrl = useDocsUrl();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useRouterState({ select: (state) => state.location.search });
   const extensions = useExtensions();
@@ -121,7 +122,7 @@ function AppLayoutShell(): ReactElement {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                render={<a href={docsUrl(docsBaseUrl)} rel="noreferrer" target="_blank" />}
+                render={<a href={docsUrl()} {...DOCS_LINK_PROPS} />}
                 tooltip={t("shell.helpAndDocs")}
               >
                 <LifeBuoyIcon aria-hidden="true" />

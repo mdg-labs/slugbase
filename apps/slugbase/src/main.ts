@@ -9,6 +9,7 @@ import {
   createRateLimiter,
   createSecretBox,
   createSentryErrorReport,
+  createOpenAiCompatibleAi,
   createSmtpMail,
   type MailTemplates,
 } from "@slugbase/adapters";
@@ -17,6 +18,7 @@ import {
   ACCOUNT_NOTIFICATIONS,
   unconfigured,
   type Adapters,
+  type AiSuggestPort,
   type EgressPort,
   type IdentityPort,
   type MailPort,
@@ -202,6 +204,27 @@ function composeIdentity(config: ServerConfig | WorkerConfig, egress: EgressPort
   return createOidcIdentity({ providers, egress, logger });
 }
 
+// AI suggestions are the OpenAI-compatible adapter when the operator configured an endpoint, and the unconfigured default,
+// which reports itself unavailable, when not. Only the server answers suggestions, so only its configuration has the keys.
+// The adapter gets an egress instance of its own: the shared one that metadata, favicons and OIDC discovery use is built
+// without any allowance, and this one carries the operator's allowance for a private endpoint (Q90) when
+// `AI_ALLOWED_PRIVATE_HOST` is set, which the configuration only accepts when it is the host of `AI_BASE_URL`.
+function composeAi(config: ServerConfig | WorkerConfig, logger: Logger): AiSuggestPort {
+  if (!("AI_BASE_URL" in config)) {
+    return unconfigured().ai;
+  }
+  const { AI_BASE_URL: baseUrl, AI_API_KEY: apiKey, AI_MODEL: model, AI_PROVIDER_NAME: provider, AI_ALLOWED_PRIVATE_HOST: privateHost } = config;
+  if (baseUrl === undefined || model === undefined || provider === undefined) {
+    return unconfigured().ai;
+  }
+  const egress = new HttpEgress({
+    nodeEnv: config.NODE_ENV,
+    ...(privateHost === undefined ? {} : { privateOrigin: new URL(baseUrl).origin }),
+  });
+  logger.info("AI suggestions configured", { provider, privateEndpoint: privateHost !== undefined });
+  return createOpenAiCompatibleAi({ baseUrl, ...(apiKey === undefined ? {} : { apiKey }), model, egress });
+}
+
 // The secret box is built from the environment by the server and the worker
 // alike: `ENCRYPTION_KEY` seals, the previous keys only open. A key the box
 // refuses stops the process before it serves or works. Error reporting is the
@@ -245,6 +268,7 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   return {
     ...defaults,
     mail,
+    ai: composeAi(config, logger),
     secretBox,
     errors,
     egress,

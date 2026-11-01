@@ -29,6 +29,8 @@ export interface SeededAccount {
 export interface SeedOptions {
   readonly email?: string;
   readonly password?: string | null;
+  /** A hash made earlier, for a test that seeds many accounts it never signs in to; it wins over `password`. */
+  readonly passwordHash?: string;
   readonly disabled?: boolean;
   readonly emailVerified?: boolean;
   readonly instanceAdmin?: boolean;
@@ -44,7 +46,7 @@ export async function seedAccount(database: TestDatabase, options: SeedOptions =
   const id = `0192f3a0-bbbb-7000-8000-${accountNumber.toString(16).padStart(12, "0")}`;
   const email = options.email ?? `person${String(accountNumber)}@example.test`;
   const password = options.password === undefined ? `a long password number ${String(accountNumber)}` : options.password;
-  const passwordHash = password === null ? null : await hashPassword(password);
+  const passwordHash = options.passwordHash ?? (password === null ? null : await hashPassword(password));
   await database.owner.begin(async (tx) => {
     await tx`SELECT set_config('app.account_id', ${id}, true)`;
     await tx`
@@ -226,18 +228,24 @@ export async function workspaceChecksum(database: TestDatabase, workspaceId: str
   return digest;
 }
 
-export const LATENCY_ROUNDS = 21;
+/** Rounds per order in `medianLatencyRatio`; the reference-first and the probe-first rounds are the same in number. */
+export const LATENCY_ROUNDS = 11;
 
-/** How many times `medianLatencyRatio` calls each side: once unmeasured to warm up, then once per round. */
+/** How many times `medianLatencyRatio` calls each side: once unmeasured to warm up, then once per round of either order. */
 export function latencyCalls(rounds = LATENCY_ROUNDS): number {
-  return rounds + 1;
+  return 2 * rounds + 1;
 }
 
 /**
- * How many times longer `probe` takes than `reference`, as the median over
- * `rounds` of the per-round ratio. Each round times both back to back, and the
- * order alternates, so a burst of load on a shared runner lands on both sides of
- * a round and a single slow round moves one ratio of the many, not the median.
+ * How many times longer `probe` takes than `reference`. Each round times both
+ * back to back, so a burst of load on a shared runner lands on both sides of a
+ * round, and `rounds` rounds run with the reference first and `rounds` with the
+ * probe first. A call that follows another one is not timed like one that opens
+ * the pair (the work the first leaves behind, a scheduler slice spent), and on a
+ * loaded host the two orders' medians were seen to differ by a third. The median of each order
+ * is taken apart and the answer is their geometric mean, so a gap between the
+ * orders counts for neither side. One median over all the rounds would instead
+ * land in whichever order had more of them.
  * Both run once first, unmeasured, to warm caches and lazily made state. A
  * target with state made on its first use (an address has a limit bucket) costs
  * more the first time: a side that repeats one pays that once, a side that
@@ -249,6 +257,61 @@ export async function medianLatencyRatio(
   probe: () => Promise<unknown>,
   rounds = LATENCY_ROUNDS,
 ): Promise<number> {
+  const median = (values: number[]): number => values.sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0;
+  const pairs = await timedPairs(reference, probe, rounds);
+  const ratios = (referenceFirst: boolean): number[] => pairs.filter((pair) => pair.referenceFirst === referenceFirst).map((pair) => pair.probe / pair.reference);
+  return Math.sqrt(median(ratios(true)) * median(ratios(false)));
+}
+
+/** What `fastLatencyRatios` reads: `probe` over `reference` at the fastest call and at the first quartile of the calls. */
+export interface FastLatencyRatios {
+  readonly fastest: number;
+  readonly quartile: number;
+}
+
+/**
+ * How many times longer `probe` took than `reference` at the fastest call of each
+ * side and at the 25th percentile of each side's calls, over the same alternating
+ * pairs as `medianLatencyRatio`. For the requests whose work takes a few
+ * milliseconds, the host's noise is not a spread around that time: a call that
+ * loses its CPU slice or waits on a busy database takes several times as long,
+ * whichever side it is, and on a loaded host most of the calls of a stretch do. A
+ * median of ratios, or of times, then reads the load of the moment the sides were
+ * timed in. Delay only adds, so the low end of a side's times is its work with the
+ * least noise on it.
+ * The fastest call reads work that a side does on every call. It does not read work
+ * that some calls skip, because a single call that skips it sets the minimum. The
+ * quartile reads that work when about four calls in five or more do it, and it stays
+ * where a side's fastest quarter of calls puts it while the rest are delayed. Work
+ * that fewer calls do, or that adds less than the request takes (the ratio has to
+ * pass the bound of 2), is read by neither.
+ * Each side is timed `rounds` times in either order, which gives both the same
+ * number of calls as leader and as follower of a pair.
+ */
+export async function fastLatencyRatios(
+  reference: () => Promise<unknown>,
+  probe: () => Promise<unknown>,
+  rounds = LATENCY_ROUNDS,
+): Promise<FastLatencyRatios> {
+  const pairs = await timedPairs(reference, probe, rounds);
+  const sorted = (side: "reference" | "probe"): number[] => pairs.map((pair) => pair[side]).sort((a, b) => a - b);
+  const quartile = (values: number[]): number => values[Math.floor((values.length - 1) / 4)] ?? 0;
+  const referenceTimes = sorted("reference");
+  const probeTimes = sorted("probe");
+  return {
+    fastest: (probeTimes[0] ?? 0) / (referenceTimes[0] ?? 1),
+    quartile: quartile(probeTimes) / quartile(referenceTimes),
+  };
+}
+
+interface TimedPair {
+  readonly referenceFirst: boolean;
+  readonly reference: number;
+  readonly probe: number;
+}
+
+/** Calls each side once unmeasured, then times `2 * rounds` back-to-back pairs, the reference first in the even ones and the probe first in the odd ones. */
+async function timedPairs(reference: () => Promise<unknown>, probe: () => Promise<unknown>, rounds: number): Promise<TimedPair[]> {
   const timed = async (run: () => Promise<unknown>): Promise<number> => {
     const started = performance.now();
     await run();
@@ -256,21 +319,17 @@ export async function medianLatencyRatio(
   };
   await reference();
   await probe();
-  const ratios: number[] = [];
-  for (let round = 0; round < rounds; round += 1) {
-    let referenceTime: number;
-    let probeTime: number;
+  const pairs: TimedPair[] = [];
+  for (let round = 0; round < 2 * rounds; round += 1) {
     if (round % 2 === 0) {
-      referenceTime = await timed(reference);
-      probeTime = await timed(probe);
+      const referenceTime = await timed(reference);
+      pairs.push({ referenceFirst: true, reference: referenceTime, probe: await timed(probe) });
     } else {
-      probeTime = await timed(probe);
-      referenceTime = await timed(reference);
+      const probeTime = await timed(probe);
+      pairs.push({ referenceFirst: false, reference: await timed(reference), probe: probeTime });
     }
-    ratios.push(probeTime / referenceTime);
   }
-  ratios.sort((a, b) => a - b);
-  return ratios[Math.floor(ratios.length / 2)] ?? 0;
+  return pairs;
 }
 
 export const SESSION_COOKIE = "__Host-slugbase_session";

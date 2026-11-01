@@ -218,6 +218,32 @@ export function isPublicAddress({ family, bytes }: ParsedAddress): boolean {
   return family === 4 ? isPublicV4(bytes) : isPublicV6(bytes);
 }
 
+// The non-public ranges an operator can allow for the AI endpoint (Q90): loopback, RFC 1918, CGNAT and
+// IPv6 unique-local. Link-local (the metadata address), unspecified, multicast, reserved and documentation
+// ranges are not among them.
+const OPERATOR_PRIVATE_V4: readonly Cidr4[] = [
+  [10, 0, 0, 0, 8],
+  [100, 64, 0, 0, 10],
+  [127, 0, 0, 0, 8],
+  [172, 16, 0, 0, 12],
+  [192, 168, 0, 0, 16],
+];
+
+/**
+ * Whether the address is loopback, private (RFC 1918), CGNAT or IPv6 unique-local: the only non-public
+ * addresses the operator's allowance for the AI endpoint lifts the refusal of. An IPv4-mapped IPv6 address is
+ * classed by the IPv4 address it embeds.
+ */
+export function isOperatorPrivateAddress({ family, bytes }: ParsedAddress): boolean {
+  if (family === 4) {
+    return OPERATOR_PRIVATE_V4.some((range) => inCidr4(bytes, range));
+  }
+  if (startsWith(bytes, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff], 96)) {
+    return OPERATOR_PRIVATE_V4.some((range) => inCidr4(bytes.slice(12), range));
+  }
+  return startsWith(bytes, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], 128) || startsWith(bytes, [0xfc], 7);
+}
+
 /** Classifies the text of an address; text that is not an address is not public. */
 export function isPublicAddressText(text: string): boolean {
   const parsed = parseAddress(text);

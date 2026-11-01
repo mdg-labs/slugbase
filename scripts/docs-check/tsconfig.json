@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "incremental": true,
+    "tsBuildInfoFile": "../../tooling/.tsbuildinfo/docs-check.tsbuildinfo"
+  },
+  "include": [
+    "*.ts",
+    "../../vitest.shared.ts"
+  ]
+}

@@ -35,7 +35,7 @@ import {
   type MemberList,
   type RoleChangeRefusal,
 } from "./workspace-members.ts";
-import { WORKSPACE_QUERY_KEY, workspaceQuery, type WorkspaceRole } from "./workspace.ts";
+import { WORKSPACE_QUERY_KEY, useWorkspace, type WorkspaceRole } from "./workspace.ts";
 
 const ROLES: readonly WorkspaceRole[] = ["owner", "admin", "member"];
 
@@ -308,7 +308,7 @@ function MembersContent(): ReactElement | null {
   const { t } = useTranslation();
   const router = useRouter();
   const api = router.options.context.api;
-  const workspace = useQuery(workspaceQuery(api));
+  const workspace = useWorkspace();
   const me = useQuery(meQuery(api));
   // The guard around this renders it only once the workspace is loaded and its role is an admin's or an owner's.
   if (workspace.data === undefined) {

@@ -53,7 +53,7 @@ Errors                           /403, /404 (catch-all), /500 (error boundary), 
 
 ### App shell
 
-- **Workspace switcher** (sidebar header): workspace monogram and name, plan label (Cloud, via slot `sidebar.workspacePlan`), menu with the account's workspaces (check on the active one), "New workspace" (where allowed, doc 02 §3.2) and "Workspace settings".
+- **Workspace switcher** (sidebar header): workspace monogram and name, plan label (Cloud, via slot `sidebar.workspacePlan`), menu with the account's workspaces (check on the active one), "New workspace" (where allowed, doc 02 §3.2) and "Workspace settings". A write names no workspace and the server applies it to the session's, so a switch is refused with a toast ("A change is still being saved") while a save is out, and the pages of a workspace show a skeleton, not the previous workspace's document, until the new workspace's own arrives. A save that has not answered for 30 seconds no longer holds the switch back.
 - **Top bar**: breadcrumb (section → current filter, e.g. "Bookmarks › Dev Tools"), the **command trigger** (search-looking button "Search or run a command…" with `⌘K` hint), the **New bookmark** primary button with its `C` hint, theme toggle, and the account menu (avatar → Account, Preferences, Shortcuts `?`, Sign out; Cloud adds "Plan & billing" through slot `accountMenu.items`).
 - **Sidebar footer**: entitlement usage meter and archived-bookmarks notice through slot `sidebar.footer` (Cloud: the bookmark count against the plan limit and a notice about archived bookmarks with the way to restore them; CE renders nothing), and "Help & docs" linking to the documentation. Help links use the stable `/docs/<route>` structure (doc 09 §3.5) under a configurable docs base URL, default `https://slugbase.app/docs` (`docsBaseUrl` in `/api/config`, doc 01 §11).
 
@@ -450,7 +450,7 @@ Team list (name, description, member `avatar-stack`, count) with Create, Edit (n
 
 ### 11.10 `/settings/workspace/ai` — AI suggestions
 
-`setting-switch` card "Enable AI suggestions for this workspace" with the provider's display name and what is sent (doc 02 §14) in an `inline-note`. When the adapter is not configured: an `inline-note` "Not available on this server" (CE) — no controls. Gated by `ai.suggestions`.
+`setting-switch` card "Enable AI suggestions for this workspace" with the provider's display name (`features.aiProvider` of `GET /api/config`, doc 04 §9.1, so it is readable by any member) and what is sent (doc 02 §14) in an `inline-note`; the page is listed for admins and owners, who alone can read the setting (`GET /workspace/settings`). The switch shows a change at once, is disabled while it is saved and goes back, with an error toast, when the save fails. When the adapter is not configured: an `inline-note` "Not available on this server" (CE) — no controls. Gated by `ai.suggestions`.
 
 **Components:** `setting-switch` (`p-switch-4`), `inline-note`, `entitlement-gate`.
 

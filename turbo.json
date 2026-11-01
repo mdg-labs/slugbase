@@ -36,6 +36,24 @@
       ],
       "outputs": ["coverage/**"]
     },
+    "@slugbase/e2e#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/compose.yml",
+        "$TURBO_ROOT$/compose.e2e.yml",
+        "$TURBO_ROOT$/compose.pg17.yml",
+        "$TURBO_ROOT$/.env.example",
+        "$TURBO_ROOT$/.github/workflows/e2e.yml",
+        "$TURBO_ROOT$/packages/web/src/i18n/locales/*.json"
+      ],
+      "outputs": []
+    },
+    "@slugbase/tooling#typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/docs-check/**"],
+      "outputs": ["*.tsbuildinfo", ".tsbuildinfo/**"]
+    },
     "@slugbase/tooling#test:unit": {
       "dependsOn": ["^build"],
       "inputs": [
@@ -47,6 +65,8 @@
         "$TURBO_ROOT$/packages/*/api-extractor.json",
         "$TURBO_ROOT$/packages/*/etc/**",
         "$TURBO_ROOT$/scripts/perf/**",
+        "$TURBO_ROOT$/scripts/docs-check/**",
+        "$TURBO_ROOT$/.claude/skills/customer-docs/**",
         "$TURBO_ROOT$/packages/**/*.ts",
         "$TURBO_ROOT$/packages/**/*.tsx",
         "$TURBO_ROOT$/apps/**/*.ts",

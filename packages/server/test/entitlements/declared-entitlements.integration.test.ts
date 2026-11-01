@@ -1,4 +1,4 @@
-import { LimitedEntitlementSource } from "@slugbase/testing";
+import { FakeAi, LimitedEntitlementSource } from "@slugbase/testing";
 import { loadOpenApiDocument } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -51,6 +51,7 @@ const REQUESTS: Readonly<Record<string, (fixture: Fixture) => Promise<Response>>
   resendInvitation: ({ world, admin, invitationId }) => send(world, "POST", `${INVITATIONS}/${invitationId}/resend`, { cookie: admin.cookie }),
   createInvitationLink: ({ world, admin, invitationId }) => send(world, "POST", `${INVITATIONS}/${invitationId}/link`, { cookie: admin.cookie }),
   listAuditEvents: ({ world, admin }) => send(world, "GET", "/api/v1/audit-events", { cookie: admin.cookie }),
+  suggestBookmarkDetails: ({ world, admin }) => send(world, "POST", "/api/v1/ai/suggestions", { cookie: admin.cookie }, { url: "https://example.com/walked", locale: "en" }),
   createTeam: ({ world, admin }) => send(world, "POST", TEAMS, { cookie: admin.cookie }, { name: `Team ${crypto.randomUUID()}` }),
   updateTeam: ({ world, admin, teamId }) => send(world, "PATCH", `${TEAMS}/${teamId}`, { cookie: admin.cookie }, { description: crypto.randomUUID() }),
   // Each request deletes a team of its own, since the one it deletes is gone for the next.
@@ -62,7 +63,7 @@ const mail = { available: true, send: () => Promise.resolve() } as const;
 
 /** A server over `source`, and a workspace whose admin has one pending invitation, made while the source grants everything. */
 async function fixtureFor(source: LimitedEntitlementSource): Promise<Fixture & { readonly workspaceId: string }> {
-  const world = harness.serve({ entitlementSource: source, mail, env: { RATE_LIMIT_RESET_IP: "10000/hour", RATE_LIMIT_RESET_EMAIL: "10000/hour" } });
+  const world = harness.serve({ entitlementSource: source, mail, ai: new FakeAi(), env: { RATE_LIMIT_RESET_IP: "10000/hour", RATE_LIMIT_RESET_EMAIL: "10000/hour" } });
   const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
   const invitationId = await createInvitation(world, admin, freshAddress());
   return { world, admin, invitationId, workspaceId, teamId: await seedTeam(workspaceId) };

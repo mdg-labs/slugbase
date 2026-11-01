@@ -12,6 +12,7 @@ import { ProblemError } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { queueFetchMetadata } from "../../worker/jobs/fetch-metadata.ts";
+import { aiUsageOf } from "../ai/index.ts";
 import { route } from "../register.ts";
 import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 
@@ -351,7 +352,7 @@ export function bookmarkRoutes({ entitlements, sharingEntitlements, upgradeAvail
       const outcome = await tenant
         .withTenant((tx) =>
           createBookmark(
-            { store: storeOf(tx), newId: uuidv7 },
+            { store: storeOf(tx), newId: uuidv7, aiUsage: aiUsageOf(tx) },
             {
               workspaceId: tenant.workspaceId,
               accountId: tenant.accountId,
@@ -364,6 +365,7 @@ export function bookmarkRoutes({ entitlements, sharingEntitlements, upgradeAvail
               folderIds: body.folderIds,
               tagIds: body.tagIds,
               tagNames: body.tagNames,
+              aiFields: body.aiFields,
               ceiling,
             },
           ),
@@ -568,7 +570,7 @@ export function bookmarkRoutes({ entitlements, sharingEntitlements, upgradeAvail
       const tenant = tenantOf(context);
       const expectedVersions = acceptedVersions(context.req.header("if-match"));
       const outcome = await tenant
-        .withTenant((tx) => updateBookmark({ store: storeOf(tx), newId: uuidv7 }, { bookmarkId: params.id, accountId: tenant.accountId, patch: body, expectedVersions }))
+        .withTenant((tx) => updateBookmark({ store: storeOf(tx), newId: uuidv7, aiUsage: aiUsageOf(tx) }, { bookmarkId: params.id, accountId: tenant.accountId, patch: body, aiFields: body.aiFields, expectedVersions }))
         .catch(slugTakenWhen);
       switch (outcome.kind) {
         case "updated":

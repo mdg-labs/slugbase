@@ -32,6 +32,8 @@ existing line by adding its PR number.
 - **runtime floor** — code relies on a runtime API newer than the declared engine floor (`import.meta.main` under `engines` `>=24.0.0`), so a permitted runtime silently skips the code it guards — PR 409
 - **copied threshold list** — a runner classifies a tool's exit status against its own copy of the thresholds the tool enforces, the copy misses some, so a crossed threshold reads as a failed run instead of a regression — PR 622
 
+- **path filter without the checker** — a job that runs a check only when its content changes omits the checker and its dependencies from the filter, so a tighter rule is first seen on the next unrelated content change — PR 685
+
 ## Design docs
 
 - **cache key** — a cached value depends on a scope the key omits (an account-scoped value in a workspace-keyed cache) — PR 354
@@ -68,6 +70,8 @@ existing line by adding its PR number.
 
 - **refreshed only on refusal** — a client cache of a server-decided grant (the entitlements behind a UI gate) never goes stale and is refreshed only when the client itself is refused, so a grant made elsewhere (another tab, an upgrade) leaves the gate closed until a reload — PR 541
 - **absence read from a cache** — a client concludes from a cached list that a thing does not exist (a folder named in the address) and acts on it (clears the filter, says it is gone), though the list may predate the thing (made on another device), so a valid choice is thrown away — PR 587
+- **first read outlives an invalidation** — a read with no data yet is not restarted by `invalidateQueries`, which keeps its in-flight fetch, so an answer asked for before a session or scope change stands unless the change cancels the read first — PR 685
+- **late write answer into a shared key** — a mutation's `onSuccess` writes a cache key that names no scope after the scope may have changed, replacing the current scope's data with the previous one's — PR 685
 - **unload request not kept alive** — a request sent from a page-leave path (`pagehide`, an unmount) omits `keepalive`, so the browser may cancel it as the page goes and the deferred write never happens — PR 612
 
 ## Input handling
@@ -101,6 +105,8 @@ existing line by adding its PR number.
 - **ready before the data** — a page check waits for an element the page renders before its data has loaded (a heading above a query's content), so the scan or assertion that follows can run on the loading state and a failed load still passes — PR 626, 639
 - **substring locator** — a Playwright role or text locator takes a catalog string without `exact: true`, so it matches any text that contains the string and passes on extra text around it — PR 626
 - **test bound without the query wait** — a slow test gets a longer test timeout but its async queries keep the library's short default wait (Testing Library's 1 s `asyncUtilTimeout`), so a slow render still fails a query inside a test that has time left — PR 639
+- **poll ended by one outcome** — a loop that polls until a promise settles marks done on fulfilment only, so a rejection is unhandled and the loop runs to the test timeout instead of reporting it — PR 685
+- **cache key without the files read** — a test reads files outside its package (root compose files, another package's catalogs), and the task's inputs omit them, so a change there replays a cached pass — PR 685
 - **split moves the state** — splitting a test so that an assertion (an axe pass) runs in a test of its own sets up only the starting state, so the assertion no longer checks the state the original test reached after its actions — PR 629
 
 ## Web UI
