@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import type { WebExtension } from "../src/index.ts";
 import { ACTIVE_WORKSPACE_PATH, WORKSPACES_PATH, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -321,7 +322,7 @@ describe("the states of the switcher", () => {
   });
 });
 
-describe("the accessibility of the switcher", () => {
+describe("the accessibility of the switcher", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("has no axe violations closed, with the menu open, and with the create dialog open", async () => {
     stubWorkspaceServer({ canCreate: true });
     await mountApp();

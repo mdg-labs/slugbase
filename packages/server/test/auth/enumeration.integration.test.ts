@@ -512,7 +512,13 @@ describe("the requests that redeem an invitation token (T8)", () => {
       const dead = await deadTokens();
       const probes = ["an expired token", "a revoked token", "a used token"].map((name) => dead.find((candidate) => candidate.name === name));
       for (const form of await forms()) {
-        const reference = () => form.call(world, randomToken(), "198.51.100.1");
+        // Every call must be the 410 of a dead token, so that a request which failed early cannot set the reading.
+        const refused = async (response: Promise<Response>): Promise<Response> => {
+          const answer = await response;
+          expect(answer.status, form.name).toBe(410);
+          return answer;
+        };
+        const reference = () => refused(form.call(world, randomToken(), "198.51.100.1"));
         // A path that answered before it looked the token up, or after more work than the other, would fall outside the
         // bounds, which are far wider than the noise of a loaded runner: the ratio is a median over many back-to-back pairs.
         for (const probe of probes) {
@@ -520,7 +526,7 @@ describe("the requests that redeem an invitation token (T8)", () => {
             throw new Error("a kind of dead token is missing");
           }
           const { name, token } = probe;
-          const ratio = await medianLatencyRatio(reference, () => form.call(world, token, "198.51.100.1"));
+          const ratio = await medianLatencyRatio(reference, () => refused(form.call(world, token, "198.51.100.1")));
           expect(ratio, `${form.name}, ${name}`).toBeGreaterThan(0.5);
           expect(ratio, `${form.name}, ${name}`).toBeLessThan(2);
         }
