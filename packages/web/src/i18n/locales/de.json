@@ -468,6 +468,19 @@
           "tooLong": "Verwende einen Tag-Namen mit höchstens {max, number} Zeichen."
         }
       },
+      "suggest": {
+        "label": "Vorschlagen",
+        "tooltip": {
+          "named": "Titel, Slug und Tags mit {provider} vorschlagen. Der Dienst erhält die Adresse, Titel und Beschreibung der Seite und die Namen deiner Tags.",
+          "unnamed": "Titel, Slug und Tags mit dem KI-Dienst dieses Servers vorschlagen. Der Dienst erhält die Adresse, Titel und Beschreibung der Seite und die Namen deiner Tags."
+        },
+        "unavailable": "Vorschläge nicht verfügbar",
+        "chips": {
+          "title": "Vorgeschlagener Titel",
+          "slug": "Vorgeschlagener Slug",
+          "tags": "Vorgeschlagene Tags"
+        }
+      },
       "description": {
         "label": "Beschreibung",
         "counter": "{count, number} / {max, number}",

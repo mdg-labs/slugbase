@@ -121,6 +121,12 @@ for (const { name, viewport } of [
     });
 
     test.afterAll(async ({ playwright }) => {
+      // A run whose only test is skipped (the phone-size run of an engine that is not Chromium) never made anything, and in a shard that
+      // holds no run of the palette journey that does, the member it would remove them through does not exist either.
+      if (ids.length === 0) {
+        await destination?.close();
+        return;
+      }
       const refused: number[] = [];
       try {
         const member = await asMember(playwright);

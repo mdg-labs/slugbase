@@ -38,6 +38,18 @@ function inOverlay(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(OVERLAYS) !== null;
 }
 
+// A toast is an alert dialog that says `aria-modal="false"`; it leaves the page behind it in use.
+const NOT_SHOWN = ":not([hidden]):not([data-closed]):not([data-ending-style]):not([aria-modal='false'])";
+const OPEN_MODALS = `[role='dialog']${NOT_SHOWN}, [role='alertdialog']${NOT_SHOWN}`;
+
+/**
+ * Whether a modal dialog or alert dialog is open anywhere on the page. Focus is no test of it: a member who saves from a field of a dialog that disables the
+ * field, or whose focused control leaves the dialog, has focus on the page behind it, where a single key must not act.
+ */
+function modalOpen(): boolean {
+  return document.querySelector(OPEN_MODALS) !== null;
+}
+
 function matches(event: KeyboardEvent, { key, mod = false }: ShortcutBinding): boolean {
   const same = event.key === key || event.key.toLowerCase() === key.toLowerCase();
   if (mod) {
@@ -48,8 +60,8 @@ function matches(event: KeyboardEvent, { key, mod = false }: ShortcutBinding): b
 
 /**
  * Runs `handler` when the shortcut is pressed. A single-key shortcut is skipped while single-key shortcuts
- * are off, while focus is in a field that takes text and while focus is inside a dialog, menu or list box, whose
- * keys belong to it; a modifier shortcut runs either way.
+ * are off, while focus is in a field that takes text, while focus is inside a dialog, menu or list box, whose
+ * keys belong to it, and while a dialog or alert dialog is open wherever focus is; a modifier shortcut runs either way.
  */
 export function useShortcut(binding: ShortcutBinding, handler: (event: KeyboardEvent) => void): void {
   const singleKey = useContext(ShortcutsContext);
@@ -62,7 +74,7 @@ export function useShortcut(binding: ShortcutBinding, handler: (event: KeyboardE
       if (event.defaultPrevented || event.repeat || !matches(event, { key, mod })) {
         return;
       }
-      if (!mod && (!singleKey || typesText(event.target) || inOverlay(event.target))) {
+      if (!mod && (!singleKey || typesText(event.target) || inOverlay(event.target) || modalOpen())) {
         return;
       }
       latest.current(event);

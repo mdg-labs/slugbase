@@ -437,6 +437,7 @@ export interface ConfirmProps {
     confirmLabel: ReactNode;
     description: ReactNode;
     destructive?: boolean;
+    finalFocus?: () => boolean | HTMLElement | null;
     loading?: boolean;
     onConfirm: () => void;
     onOpenChange: (open: boolean) => void;
@@ -633,6 +634,7 @@ export interface FormOverlayProps {
     closeLabel: string;
     // (undocumented)
     description?: ReactNode;
+    headerAction?: ReactNode;
     // (undocumented)
     onOpenChange: (open: boolean) => void;
     // (undocumented)
@@ -1275,6 +1277,7 @@ export interface UnsavedGuardProps {
     description: ReactNode;
     // (undocumented)
     discardLabel: ReactNode;
+    finalFocus?: ConfirmProps["finalFocus"];
     // (undocumented)
     keepEditingLabel: ReactNode;
     onDiscard: () => void;

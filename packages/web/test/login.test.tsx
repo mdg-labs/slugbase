@@ -316,7 +316,7 @@ describe("a sign-in under way", () => {
 
     const button = screen.getByRole("button", { name: /Sign in/ });
     expect(button.hasAttribute("data-loading")).toBe(true);
-    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     expect(await server.logins()).toHaveLength(1);
 
     await act(async () => {

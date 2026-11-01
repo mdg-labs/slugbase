@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState, type ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FormOverlay } from "../../src/patterns/index.ts";
 import { expectNoViolations, stubBrowserApis, stubMatchMedia } from "../support.tsx";
 
@@ -96,6 +96,70 @@ describe("FormOverlay", () => {
 
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+});
+
+describe("FormOverlay header action", () => {
+  function WithAction(): ReactElement {
+    return (
+      <FormOverlay
+        closeLabel="Close"
+        headerAction={
+          <div>
+            <button type="button">Suggest</button>
+            <p>A block of its own</p>
+          </div>
+        }
+        onOpenChange={() => undefined}
+        open
+        title="Confirm it is you"
+      >
+        <input aria-label="Password" type="password" />
+      </FormOverlay>
+    );
+  }
+
+  for (const narrow of [false, true]) {
+    const kind = narrow ? "sheet" : "dialog";
+
+    it(`stands in the header of the ${kind}, outside the description, and is not what describes it`, async () => {
+      stubMatchMedia(narrow);
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      render(<WithAction />);
+
+      const dialog = await screen.findByRole("dialog", { name: "Confirm it is you" });
+      const action = screen.getByRole("button", { name: "Suggest" });
+
+      expect(action.closest("[data-slot=form-overlay-header-action]")).not.toBeNull();
+      expect(action.closest("[data-slot$=-description]")).toBeNull();
+      expect(dialog.querySelector("[data-slot$=-description]")).toBeNull();
+      expect(dialog.getAttribute("aria-describedby")).toBeNull();
+      expect(dialog.contains(action)).toBe(true);
+      expect(errors).not.toHaveBeenCalled();
+      await expectNoViolations(document.body);
+    });
+
+    it(`leaves the description of the ${kind} to the description when it has both`, async () => {
+      stubMatchMedia(narrow);
+      render(
+        <FormOverlay
+          closeLabel="Close"
+          description="Needs your password again."
+          headerAction={<button type="button">Suggest</button>}
+          onOpenChange={() => undefined}
+          open
+          title="Confirm it is you"
+        >
+          <input aria-label="Password" type="password" />
+        </FormOverlay>,
+      );
+
+      const dialog = await screen.findByRole("dialog", { name: "Confirm it is you" });
+      const described = document.getElementById(dialog.getAttribute("aria-describedby") ?? "");
+
+      expect(described?.textContent).toBe("Needs your password again.");
+      expect(described?.contains(screen.getByRole("button", { name: "Suggest" }))).toBe(false);
+    });
+  }
 });
 
 describe("FormOverlay keyboard trap", () => {

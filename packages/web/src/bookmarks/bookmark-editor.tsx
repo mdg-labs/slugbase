@@ -2,7 +2,7 @@ import { Button, Input } from "@slugbase/ui";
 import { Banner, Confirm, Disclosure, FormField, FormOverlay, SettingSwitch, TextareaField, UnsavedGuard, UrlInput, feedbackToast } from "@slugbase/ui/patterns";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactElement, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement, type SyntheticEvent } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Slot } from "../extensions/index.ts";
@@ -10,6 +10,23 @@ import { ShareDialog, SharingSummary, useIsOwner, type ShareSubject } from "../s
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
 import { TAGS_QUERY_KEY, TAG_NAME_MAX_LENGTH } from "../tags/tags.ts";
+import { useAllTags } from "../tags/use-all-tags.ts";
+import { ShimmerOver, SuggestAction, SuggestionChips, suggestActionShown } from "./suggest-action.tsx";
+import {
+  NO_AI_STATE,
+  acceptSlug,
+  acceptTag,
+  acceptTitle,
+  aiFieldsOf,
+  applySuggestion,
+  localeOf,
+  metadataOf,
+  offeredTags,
+  useAiAvailability,
+  useAiSuggester,
+  type AiField,
+  type AiState,
+} from "./ai-suggest.ts";
 import { sameIds } from "./bookmark-choices.ts";
 import { CREATE_FOLDER_MUTATION_KEY, FolderPick } from "./folder-pick.tsx";
 import { rateLimitMessage } from "./rate-limit-message.ts";
@@ -56,6 +73,8 @@ interface Values {
   readonly tagIds: readonly string[];
   /** Tag names the member has no tag of yet; the API makes the tags with the bookmark. */
   readonly tagNames: readonly string[];
+  /** The suggestions on offer, and the values taken from one, which the save counts (doc 02 section 14). */
+  readonly ai: AiState;
 }
 
 /** Why a save did not go through: the failures of `bookmarkFailureOf`, and a folder or tag that is gone. */
@@ -90,6 +109,7 @@ function valuesOf(bookmark: Bookmark | undefined, initialUrl: string | undefined
     folderIds: bookmark?.folders.map(({ id }) => id) ?? [],
     tagIds: bookmark?.tags.map(({ id }) => id) ?? [],
     tagNames: [],
+    ai: NO_AI_STATE,
   };
 }
 
@@ -215,7 +235,7 @@ type Request =
  * be read changes nothing.
  */
 export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onEditExisting, onReload }: BookmarkEditorProps): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const api = router.options.context.api;
@@ -231,12 +251,20 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
     return !editing && isHttpUrl(url) ? url : undefined;
   });
   const [discard, setDiscard] = useState<{ readonly run: () => void } | undefined>(undefined);
+  const discardOpener = useRef<Element | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [sharing, setSharing] = useState(false);
   const owned = useIsOwner(bookmark?.ownerId ?? null);
   const [deleteFailure, setDeleteFailure] = useState<BookmarkFailure | undefined>(undefined);
   const pasted = useRef(false);
   const metadata = usePageMetadata(api);
+  const availability = useAiAvailability();
+  const suggester = useAiSuggester(api);
+  const allTags = useAllTags();
+  // What the page said about itself, with the address it was read for: the suggestion request carries it as it is.
+  const page = useRef<{ readonly url: string; readonly title: string | null | undefined; readonly description: string | null | undefined } | undefined>(undefined);
+  const form = useRef<HTMLFormElement>(null);
+  const latest = useRef<{ readonly values: Values; readonly tags: readonly { readonly id: string; readonly name: string }[] }>({ values: initial, tags: [] });
 
   const lookup = useQuery(bookmarksByUrlQuery(api, lookupUrl));
   const trimmedUrl = values.url.trim();
@@ -306,9 +334,49 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
     setFailure(undefined);
   }
 
-  const fillFromPage = useCallback((page: BookmarkMetadata): void => {
-    const title = (page.title ?? "").trim().slice(0, BOOKMARK_TITLE_MAX_LENGTH);
-    const description = (page.description ?? "").trim().slice(0, BOOKMARK_DESCRIPTION_MAX_LENGTH);
+  useEffect(() => {
+    latest.current = { values, tags: allTags.tags };
+  });
+
+  // The action goes when the API refuses it or a read turns it off, and a button that holds focus when it goes takes focus with it: in some browsers
+  // focus then falls to the page, where a single key would act. Focus goes to the dialog only when it has fallen that far (onto the body, or nowhere);
+  // anywhere else it is left alone, in the form, or in another overlay standing over it such as the discard question or the palette. That overlay
+  // returns focus when it closes: to the element that had it when it opened, or, where that element went with the action, to the dialog
+  // (`focusBack` of the palette, `discardFinalFocus` of the question).
+  const actionOffered = availability.kind === "ready" && !suggester.refused;
+  const actionWasOffered = useRef(actionOffered);
+  useLayoutEffect(() => {
+    if (actionWasOffered.current && !actionOffered) {
+      const held = document.activeElement;
+      const dialog = form.current?.closest<HTMLElement>("[role='dialog']");
+      if (dialog && (held === null || held === document.body)) {
+        dialog.focus();
+      }
+    }
+    actionWasOffered.current = actionOffered;
+  }, [actionOffered]);
+
+  /** Where focus goes when the discard question closes: back to where it was, or into the dialog where that is gone, such as the action that was withdrawn. */
+  function discardFinalFocus(): HTMLElement | boolean {
+    const opener = discardOpener.current;
+    if (opener instanceof HTMLElement && opener !== document.body && opener.isConnected) {
+      return true;
+    }
+    return form.current?.closest<HTMLElement>("[role='dialog']") ?? true;
+  }
+
+  /** The control the label `text` names, for the chips of that field to hand focus to. */
+  const fieldLabelled =
+    (text: string) =>
+    (): HTMLElement | null => {
+      const label = Array.from(form.current?.querySelectorAll("label") ?? []).find((candidate) => candidate.textContent === text);
+      return label?.control instanceof HTMLElement ? label.control : null;
+    };
+
+  const fillFromPage = useCallback((url: string, read: BookmarkMetadata): void => {
+    page.current = { url, title: read.title, description: read.description };
+    const title = (read.title ?? "").trim().slice(0, BOOKMARK_TITLE_MAX_LENGTH);
+    const description = (read.description ?? "").trim().slice(0, BOOKMARK_DESCRIPTION_MAX_LENGTH);
     setValues((current) => ({
       ...current,
       ...(current.titleOwned ? {} : { title }),
@@ -320,7 +388,9 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   function prefill(url: string): void {
     // The bookmark being changed has its own address and title; only another address is read.
     if (isHttpUrl(url) && !(bookmark !== undefined && url === bookmark.url)) {
-      metadata.request(url, fillFromPage);
+      metadata.request(url, (read) => {
+        fillFromPage(url, read);
+      });
     }
   }
 
@@ -329,9 +399,38 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   useEffect(() => {
     // A new bookmark that opens with an address, one pasted onto the page, is read like one pasted into the field.
     if (!editing && isHttpUrl(startUrl)) {
-      requestMetadata(startUrl, fillFromPage);
+      requestMetadata(startUrl, (read) => {
+        fillFromPage(startUrl, read);
+      });
     }
   }, [editing, startUrl, requestMetadata, fillFromPage]);
+
+  function suggest(): void {
+    if (busy) {
+      return;
+    }
+    const url = values.url.trim();
+    if (!isHttpUrl(url)) {
+      setProblems((current) => ({ ...current, url: url === "" ? "required" : "notAllowed" }));
+      return;
+    }
+    setFailure(undefined);
+    suggester.run(
+      { url, locale: localeOf(i18n.language), metadata: page.current?.url === url ? metadataOf(page.current) : undefined, bookmarkId: bookmark?.id },
+      (suggestion) => {
+        // Applied to the form as it is when the answer comes: a field the member filled meanwhile gets a chip, and nothing they typed is replaced.
+        const before = latest.current.values;
+        const next = applySuggestion(before, suggestion, latest.current.tags);
+        setValues(next);
+        setProblems((current) => ({
+          ...current,
+          ...(next.title === before.title ? {} : { title: undefined }),
+          ...(next.slug === before.slug ? {} : { slug: undefined }),
+          ...(next.tagNames === before.tagNames && next.tagIds === before.tagIds ? {} : { tagNames: undefined }),
+        }));
+      },
+    );
+  }
 
   function lookUp(url: string): void {
     // The bookmark being changed has its own address; only another bookmark of the caller's is a duplicate.
@@ -345,6 +444,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
       return;
     }
     if (dirty) {
+      discardOpener.current = document.activeElement;
       setDiscard({ run: leave });
       return;
     }
@@ -357,9 +457,11 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
     }
     setFailure(undefined);
     metadata.cancel();
+    suggester.cancel();
     const url = values.url.trim();
     const title = values.title.trim();
     const description = values.description.trim();
+    const aiFields = aiFieldsOf(values);
     if (bookmark === undefined) {
       const body: CreateBookmarkRequest = {
         url,
@@ -370,6 +472,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
         ...(values.folderIds.length === 0 ? {} : { folderIds: [...values.folderIds] }),
         ...(values.tagIds.length === 0 ? {} : { tagIds: [...values.tagIds] }),
         ...(values.tagNames.length === 0 ? {} : { tagNames: [...values.tagNames] }),
+        ...(aiFields.length === 0 ? {} : { aiFields }),
       };
       const found = validateCreate(body);
       setProblems(found);
@@ -395,10 +498,14 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
       onClose();
       return;
     }
-    const found = validateUpdate(body);
+    // A patch that changes nothing counts nothing, so only the fields this patch sends can be named.
+    const sent: AiField[] = [...(body.title === undefined ? [] : (["title"] as const)), ...(body.slug === undefined ? [] : (["slug"] as const)), ...(body.tagIds === undefined ? [] : (["tags"] as const))];
+    const sentAiFields = aiFieldsOf(values, sent);
+    const patch: UpdateBookmarkRequest = sentAiFields.length === 0 ? body : { ...body, aiFields: sentAiFields };
+    const found = validateUpdate(patch);
     setProblems(found);
     if (Object.keys(found).length === 0) {
-      save.mutate({ kind: "update", id: bookmark.id, version: bookmark.version, body });
+      save.mutate({ kind: "update", id: bookmark.id, version: bookmark.version, body: patch });
     }
   }
 
@@ -436,6 +543,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   const tagsError = fieldMessage("tagNames", problems.tagNames);
   const slugError = fieldMessage("slug", problems.slug);
   const shareSubject: ShareSubject | undefined = bookmark === undefined ? undefined : { kind: "bookmark", id: bookmark.id, name: bookmark.title };
+  const offer = values.ai.offer;
   const slugged = bookmark?.slug !== null && bookmark?.slug !== undefined;
   return (
     <>
@@ -447,9 +555,14 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
           }
         }}
         open
+        headerAction={
+          suggestActionShown({ availability, refused: suggester.refused, failed: suggester.failed }) ? (
+            <SuggestAction availability={availability} failed={suggester.failed} onSuggest={suggest} refused={suggester.refused} running={suggester.running} />
+          ) : undefined
+        }
         title={editing ? t("bookmarks.modal.edit.title") : t("bookmarks.modal.create.title")}
       >
-        <form className="flex flex-col gap-4" noValidate onKeyDown={onKeyDown} onSubmit={onFormSubmit}>
+        <form className="flex flex-col gap-4" noValidate onKeyDown={onKeyDown} onSubmit={onFormSubmit} ref={form}>
           {failure === undefined ? null : (
             <FailureBanner
               failure={failure}
@@ -475,8 +588,11 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               }}
               onValueChange={(url) => {
                 change({ url });
+                // The chips on offer were made for the address that was there.
+                setValues((current) => (current.ai.offer === undefined ? current : { ...current, ai: { ...current.ai, offer: undefined } }));
                 setProblems((current) => ({ ...current, url: undefined }));
                 metadata.follow(url.trim());
+                suggester.follow(url.trim());
                 if (pasted.current) {
                   pasted.current = false;
                   lookUp(url.trim());
@@ -512,17 +628,29 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
           )}
           {lookupCurrent && lookup.isError ? <Banner title={t("bookmarks.modal.duplicate.unchecked")} variant="info" /> : null}
           <FormField error={titleError} label={t("bookmarks.modal.title.label")} name="title">
-            <Input
-              autoComplete="off"
-              disabled={busy}
-              maxLength={BOOKMARK_TITLE_MAX_LENGTH}
-              onValueChange={(title) => {
-                change({ title, titleOwned: true });
-                setProblems((current) => ({ ...current, title: undefined }));
-              }}
-              value={values.title}
-            />
+            <ShimmerOver active={suggester.running && values.title.trim() === ""}>
+              <Input
+                autoComplete="off"
+                disabled={busy}
+                maxLength={BOOKMARK_TITLE_MAX_LENGTH}
+                onValueChange={(title) => {
+                  change({ title, titleOwned: true });
+                  setProblems((current) => ({ ...current, title: undefined }));
+                }}
+                value={values.title}
+              />
+            </ShimmerOver>
           </FormField>
+          <SuggestionChips
+            fieldToFocus={fieldLabelled(t("bookmarks.modal.title.label"))}
+            items={offer?.title === undefined ? [] : [offer.title]}
+            label={t("bookmarks.modal.suggest.chips.title")}
+            onAccept={() => {
+              setValues(acceptTitle);
+              setProblems((current) => ({ ...current, title: undefined }));
+            }}
+            pending={false}
+          />
           <SlugFields
             bookmarkId={bookmark?.id}
             disabled={busy}
@@ -535,7 +663,20 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               setProblems((current) => ({ ...current, slug: undefined }));
             }}
             problem={slugError}
+            shimmer={suggester.running && values.slug === ""}
             slug={values.slug}
+            suggestion={
+              <SuggestionChips
+                fieldToFocus={fieldLabelled(t("bookmarks.modal.slug.label"))}
+                items={offer?.slug === undefined ? [] : [offer.slug]}
+                label={t("bookmarks.modal.suggest.chips.slug")}
+                onAccept={() => {
+                  setValues(acceptSlug);
+                  setProblems((current) => ({ ...current, slug: undefined }));
+                }}
+                pending={false}
+              />
+            }
           />
           <FolderPick
             disabled={busy}
@@ -560,6 +701,16 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               setProblems((current) => ({ ...current, tagNames: undefined }));
             }}
             onTooLong={refuseTagName}
+          />
+          <SuggestionChips
+            fieldToFocus={fieldLabelled(t("bookmarks.modal.tags.label"))}
+            items={offeredTags(values, allTags.tags)}
+            label={t("bookmarks.modal.suggest.chips.tags")}
+            onAccept={(name) => {
+              setValues((current) => acceptTag(current, name, allTags.tags));
+              setProblems((current) => ({ ...current, tagNames: undefined }));
+            }}
+            pending={suggester.running && values.tagIds.length === 0 && values.tagNames.length === 0}
           />
           <Disclosure defaultOpen={initial.description !== "" || problems.description !== undefined} label={t("bookmarks.modal.more")}>
             <TextareaField
@@ -634,6 +785,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
       <UnsavedGuard
         description={t("bookmarks.modal.unsaved.description")}
         discardLabel={t("bookmarks.modal.unsaved.discard")}
+        finalFocus={discardFinalFocus}
         keepEditingLabel={t("bookmarks.modal.unsaved.keepEditing")}
         onDiscard={() => {
           const pending = discard;

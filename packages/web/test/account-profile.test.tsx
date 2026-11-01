@@ -194,7 +194,7 @@ describe("the profile page", () => {
     await waitFor(() => {
       expect(saveButton().getAttribute("data-loading")).not.toBeNull();
     });
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute("aria-disabled")).toBe("true");
     expect(nameInput().disabled).toBe(true);
     await act(async () => {
       answer(json({ ...ACCOUNT, displayName: "Ada King" }));

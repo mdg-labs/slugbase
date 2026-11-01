@@ -19,7 +19,10 @@
 #
 # The stack also has a Mailpit (compose.e2e.yml, merged over compose.yml), which the
 # server and the worker send their mail through; the command gets the address of its
-# HTTP API as E2E_MAILPIT_URL, to read the mail a journey caused.
+# HTTP API as E2E_MAILPIT_URL, to read the mail a journey caused. It also has a stand-in
+# for an OpenAI-compatible endpoint (e2e/compose.ai.yml), which the server is configured to
+# use for AI suggestions; the command gets the address of the stub as E2E_AI_STUB_URL, to
+# read back what the server sent it.
 #
 # A browser can sign in only at the origin the server is configured with: the
 # session cookie is Secure and a mutation must come from APP_ORIGIN, which production
@@ -74,22 +77,32 @@ read_mailpit_url() {
   mailpit_url="http://${address}"
 }
 
+# The address of the AI stub, which Docker published on a port of its own on the loopback
+# address. Sets ai_stub_url.
+read_ai_stub_url() {
+  local address
+  address="$(compose port ai-stub 8080 2>/dev/null | tail -n 1 || true)"
+  [[ "$address" =~ ^127\.0\.0\.1:[0-9]+$ ]] || fail "the address of the AI stub could not be read from docker compose"
+  ai_stub_url="http://${address}"
+}
+
 main_e2e() {
-  local code=0 tls_port setup_token="" mailpit_url=""
+  local code=0 tls_port setup_token="" mailpit_url="" ai_stub_url=""
   (($# > 0)) || fail "usage: with-stack.sh <command> [argument...]"
   command -v openssl >/dev/null 2>&1 || fail "openssl is required and was not found on PATH"
   tls_port="$(pick_port)" || fail "no free port found on 127.0.0.1"
   export SMOKE_APP_ORIGIN="https://127.0.0.1:${tls_port}" SMOKE_AVOID_PORT="$tls_port"
-  export SMOKE_EXTRA_COMPOSE_FILES="$root/compose.e2e.yml"
+  export SMOKE_EXTRA_COMPOSE_FILES="$root/compose.e2e.yml $root/e2e/compose.ai.yml"
   start_stack
   read_setup_token
   read_mailpit_url
+  read_ai_stub_url
   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj "/CN=127.0.0.1" \
     -addext "subjectAltName=IP:127.0.0.1" -keyout "$work/tls.key" -out "$work/tls.crt" >/dev/null 2>&1 ||
     fail "openssl could not generate the certificate of the TLS proxy"
   E2E_BASE_URL="http://127.0.0.1:${port}" E2E_APP_ORIGIN="$SMOKE_APP_ORIGIN" \
     E2E_TLS_KEY_FILE="$work/tls.key" E2E_TLS_CERT_FILE="$work/tls.crt" E2E_SETUP_TOKEN="$setup_token" \
-    E2E_MAILPIT_URL="$mailpit_url" "$@" || code=$?
+    E2E_MAILPIT_URL="$mailpit_url" E2E_AI_STUB_URL="$ai_stub_url" "$@" || code=$?
   # The cleanup trap tears the stack down and keeps this status.
   exit "$code"
 }

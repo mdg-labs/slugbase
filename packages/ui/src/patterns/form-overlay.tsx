@@ -18,6 +18,11 @@ export interface FormOverlayProps {
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
   description?: ReactNode;
+  /**
+   * Controls that belong with the title, such as an action on the form as a whole. They stand in the header after the title and the description, not
+   * inside the description, so they are not what assistive technology reads as the overlay's description and may hold block content.
+   */
+  headerAction?: ReactNode;
   /** The name of the button that closes the overlay. */
   closeLabel: string;
   /** The form: its fields and its own submit and cancel buttons. */
@@ -28,7 +33,7 @@ export interface FormOverlayProps {
  * A form over the page (doc 03 `form-overlay`), for an action that needs a few fields without leaving the page: a
  * coss Dialog, and a bottom Drawer below the `md` breakpoint.
  */
-export function FormOverlay({ open, onOpenChange, title, description, closeLabel, children }: FormOverlayProps): ReactElement {
+export function FormOverlay({ open, onOpenChange, title, description, headerAction, closeLabel, children }: FormOverlayProps): ReactElement {
   const narrow = useIsMobile();
   if (narrow) {
     return (
@@ -37,6 +42,7 @@ export function FormOverlay({ open, onOpenChange, title, description, closeLabel
           <DrawerHeader className="pe-14">
             <DrawerTitle>{title}</DrawerTitle>
             {description === undefined ? null : <DrawerDescription>{description}</DrawerDescription>}
+            {headerAction === undefined ? null : <div data-slot="form-overlay-header-action">{headerAction}</div>}
           </DrawerHeader>
           <DrawerPanel>{children}</DrawerPanel>
           <DrawerClose aria-label={closeLabel} className="absolute end-2 top-2 z-1" render={<Button size="icon" variant="ghost" />}>
@@ -52,6 +58,7 @@ export function FormOverlay({ open, onOpenChange, title, description, closeLabel
         <DialogHeader className="pe-14">
           <DialogTitle>{title}</DialogTitle>
           {description === undefined ? null : <DialogDescription>{description}</DialogDescription>}
+          {headerAction === undefined ? null : <div data-slot="form-overlay-header-action">{headerAction}</div>}
         </DialogHeader>
         <DialogPanel>{children}</DialogPanel>
       </DialogPopup>

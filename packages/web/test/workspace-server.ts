@@ -98,7 +98,7 @@ export function stubWorkspaceServer(options: WorkspaceServerOptions = {}) {
       const current = members.find(({ id }) => id === active);
       return current === undefined
         ? problem(404, "not_found", "req-workspace")
-        : json({ ...current, role: "owner", memberCount: 1, createdAt: "2026-09-01T08:00:00.000Z", version: 1 }, { headers: { ETag: '"1"' } });
+        : json({ ...current, role: "owner", memberCount: 1, aiEnabled: true, createdAt: "2026-09-01T08:00:00.000Z", version: 1 }, { headers: { ETag: '"1"' } });
     }
     if (pathname === WORKSPACES_PATH && request.method === "POST") {
       if (options.post !== undefined) {

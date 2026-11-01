@@ -204,7 +204,7 @@ describe("the General page", () => {
     await waitFor(() => {
       expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Name" }).disabled).toBe(true);
     });
-    expect(document.querySelector<HTMLButtonElement>("button[type='submit'][data-loading]")?.disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>("button[type='submit'][data-loading]")?.getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
       release();
       await gate;

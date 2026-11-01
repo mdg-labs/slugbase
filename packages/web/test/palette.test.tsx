@@ -1,4 +1,5 @@
 import type { ComponentTypes } from "@slugbase/contracts";
+import { feedbackToast } from "@slugbase/ui/patterns";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
@@ -623,5 +624,66 @@ describe("choosing an item", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(window.location.search).toContain(`bookmark=${RECENT.id}`);
     });
+  });
+});
+
+describe("closing the palette with a toast standing", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  /** Raises a toast, which is a dialog that says `aria-modal="false"` and takes no focus from the page, and returns it. */
+  async function raiseToast(): Promise<HTMLElement> {
+    await act(async () => {
+      feedbackToast.success("Bookmark saved.");
+      await Promise.resolve();
+    });
+    const toast = (await screen.findByText("Bookmark saved.")).closest<HTMLElement>("[role='dialog']");
+    if (toast === null) {
+      throw new Error("the toast is not a dialog");
+    }
+    expect(toast.getAttribute("aria-modal")).toBe("false");
+    return toast;
+  }
+
+  /** The `?` key lists the shortcuts, which it does only where no modal dialog is open and focus is not in one. */
+  async function expectShortcutsWork(): Promise<void> {
+    await key({ key: "?" }, document.activeElement ?? document.body);
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  }
+
+  it("gives focus back to the trigger, not to the toast, when Esc closes it", async () => {
+    serve();
+    await openApp();
+    const toast = await raiseToast();
+    await openPalette();
+
+    await key({ key: "Escape" }, document.activeElement ?? window);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(trigger());
+    });
+    expect(toast.contains(document.activeElement)).toBe(false);
+    await expectShortcutsWork();
+  });
+
+  it("gives focus back to the trigger, not to the toast, after a command that navigates", async () => {
+    serve();
+    await openApp();
+    const toast = await raiseToast();
+    const dialog = await openPalette();
+
+    await click(await within(dialog).findByRole("option", { name: /Tags/ }));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/tags");
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(trigger());
+    });
+    expect(toast.contains(document.activeElement)).toBe(false);
+    await expectShortcutsWork();
   });
 });

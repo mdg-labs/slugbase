@@ -150,6 +150,7 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
     name: activeId === WORKSPACE_ID ? name : SECOND_WORKSPACE_NAME,
     role,
     memberCount: 2,
+    aiEnabled: aiEnabled.get(activeId) ?? true,
     createdAt: "2026-09-01T08:00:00.000Z",
     version,
   });

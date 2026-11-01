@@ -65,6 +65,23 @@ export interface AnchoredToastProviderProps extends ToastPrimitive.Provider.Prop
 }
 
 // @public (undocumented)
+export function Badge(input: BadgeProps): React_3.ReactElement;
+
+// @public (undocumented)
+export interface BadgeProps extends useRender.ComponentProps<"span"> {
+    // (undocumented)
+    size?: VariantProps<typeof badgeVariants>["size"];
+    // (undocumented)
+    variant?: VariantProps<typeof badgeVariants>["variant"];
+}
+
+// @public (undocumented)
+export const badgeVariants: (props?: ({
+    size?: "lg" | "sm" | "default" | null | undefined;
+    variant?: "default" | "error" | "info" | "success" | "warning" | "destructive" | "outline" | "secondary" | null | undefined;
+} & ClassProp) | undefined) => string;
+
+// @public (undocumented)
 export function Breadcrumb(input: React_2.ComponentProps<"nav">): React_2.ReactElement;
 
 // @public (undocumented)
@@ -102,7 +119,7 @@ export const BREAKPOINTS: {
     readonly xl: 1280;
 };
 
-// @public (undocumented)
+// @public
 export function Button(input: ButtonProps): React_2.ReactElement;
 
 // @public (undocumented)
@@ -118,7 +135,7 @@ export interface ButtonProps extends useRender.ComponentProps<"button"> {
 // @public (undocumented)
 export const buttonVariants: (props?: ({
     size?: "lg" | "sm" | "xl" | "default" | "icon" | "icon-lg" | "icon-sm" | "icon-xl" | "icon-xs" | "xs" | null | undefined;
-    variant?: "link" | "default" | "destructive" | "destructive-outline" | "ghost" | "outline" | "secondary" | null | undefined;
+    variant?: "link" | "default" | "destructive" | "outline" | "secondary" | "destructive-outline" | "ghost" | null | undefined;
 } & ClassProp) | undefined) => string;
 
 // @public (undocumented)
