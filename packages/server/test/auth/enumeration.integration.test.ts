@@ -205,6 +205,7 @@ describe("POST /api/v1/auth/login (T8)", () => {
 // the headers and the body agree, each path queues the one mail job, and none is faster than another. What the
 // worker then sends, and to whom, is its decision and not visible to the requester.
 const EMAIL_LIMIT_KEY = /^[0-9a-f]{64}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Rounds per order of the latency tests of the requests that take a few milliseconds (every one but the registration).
 // A host that is busy delays most of the calls of a stretch several times over; the more calls a side makes, the surer
@@ -217,10 +218,19 @@ describe("the requests for an emailed link (T8)", () => {
   // The latency tests seed hundreds of accounts they never sign in to, each with a password hash as a real account has one.
   const fixtureHash = hashPassword("a long password for the accounts seeded in bulk");
 
-  async function mailJobCount(): Promise<number> {
-    const rows = await database().app<{ count: number }[]>`SELECT count(*)::int AS count FROM pgboss.job WHERE name = 'mail.send'`;
-    return rows[0]?.count ?? -1;
+  /** The `mail.send` jobs waiting in the queue: no worker runs in this suite, so a job stays where the request queued it. */
+  async function queuedMailJobs(): Promise<readonly { readonly id: string; readonly data: Record<string, unknown> }[]> {
+    return database().app<{ id: string; data: Record<string, unknown> }[]>`SELECT id, data FROM pgboss.job WHERE name = 'mail.send' ORDER BY id`;
   }
+
+  // The template each request queues. The job carries it and the identifier of the account it concerns and nothing else:
+  // the address and the message are made when a worker runs it, so the mail port is not reached in the request.
+  const QUEUED_TEMPLATE: Readonly<Record<string, string>> = {
+    "POST /auth/register": "verifyEmail",
+    "POST /auth/verify-email/resend": "verifyEmail",
+    "POST /auth/password/forgot": "passwordReset",
+    "POST /me/email": "emailChange",
+  };
 
   interface Target {
     readonly name: string;
@@ -293,19 +303,28 @@ describe("the requests for an emailed link (T8)", () => {
   }
 
   describe.each(requestFlows.map((flow) => [flow.name, flow] as const))("%s", (_name, flow) => {
-    it("answers an address with a verified account, an unverified one and an unknown one with the same status, headers and body, and queues the one mail job on every path", async () => {
+    it("answers an address with a verified account, an unverified one and an unknown one with the same status, headers and body, and queues the one mail job on every path, sending none in the request", async () => {
       const world = serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, TRUSTED_PROXY_HOPS: "1", RATE_LIMIT_REGISTER_IP: "1000/hour" }, mail });
       const cookie = await sessionFor(world, flow);
       const answers: { name: string; answer: Awaited<ReturnType<typeof answerOf>> }[] = [];
       let hop = 0;
       for (const { name, email } of await targets()) {
         hop += 1;
-        const before = await mailJobCount();
+        const before = new Set((await queuedMailJobs()).map((job) => job.id));
+        mail.clear();
         // Each request comes from its own address, so the rate-limit headers, which count per address, read the same too.
         const response = await flow.call(world, email, { forwardedFor: `198.51.100.${String(hop)}` }, cookie);
         expect(response.headers.get("set-cookie"), name).toBeNull();
         answers.push({ name, answer: await answerOf(response) });
-        expect(await mailJobCount(), name).toBe(before + 1);
+        // The mail port is asked for nothing while the request is in flight, on any path: a handler that sent in-line on
+        // one of them would not show in the latency tests, whose mail port answers at once. The one new job is the way the
+        // mail goes, with the same template and the same fields on every path.
+        expect(mail.sent, name).toEqual([]);
+        const queued = (await queuedMailJobs()).filter((job) => !before.has(job.id));
+        expect(queued, name).toHaveLength(1);
+        const { accountId, ...rest } = queued[0]?.data ?? {};
+        expect(rest, name).toEqual({ template: QUEUED_TEMPLATE[flow.name] });
+        expect(String(accountId), name).toMatch(UUID);
       }
       const [first, ...rest] = answers;
       expect(first?.answer.status).toBe(202);
