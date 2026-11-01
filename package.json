@@ -72,7 +72,9 @@
       "minimatch@<11.0.1": "^11.0.1"
     },
     "patchedDependencies": {
-      "postgres@3.4.9": "patches/postgres@3.4.9.patch"
+      "postgres@3.4.9": "patches/postgres@3.4.9.patch",
+      "@stoplight/spectral-core@1.24.0": "patches/@stoplight__spectral-core@1.24.0.patch",
+      "@redocly/openapi-core@1.34.20": "patches/@redocly__openapi-core@1.34.20.patch"
     }
   }
 }
