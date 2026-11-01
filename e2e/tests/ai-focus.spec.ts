@@ -341,6 +341,8 @@ test.describe("focus in the bookmark modal", () => {
     await expect(dialog).toHaveCount(0);
     const toast = page.getByRole("dialog").filter({ hasText: en("bookmarks.modal.saved.created") });
     await expect(toast).toBeVisible();
+    // The toast's timer does not run while the pointer rests on its stack, so the steps below do not race it.
+    await toast.hover();
     const trigger = page.getByRole("button", { name: en("palette.trigger"), exact: true });
 
     await test.step("Esc closes the palette and the focus is on the trigger", async () => {
