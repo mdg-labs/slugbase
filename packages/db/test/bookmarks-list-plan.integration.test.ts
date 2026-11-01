@@ -70,6 +70,8 @@ afterAll(async () => {
 interface PlanNode {
   "Node Type": string;
   "Index Name"?: string;
+  "Index Cond"?: string;
+  Filter?: string;
   Plans?: PlanNode[];
 }
 
@@ -121,8 +123,8 @@ async function median(work: () => Promise<unknown>): Promise<number> {
 // transaction. Each bound is 5 % and 16 blocks over the most that read touched in 12 runs of this file on PostgreSQL 17 and 18, rounded up to ten, and the higher of the two versions where they differ (the page of the forwarding bookmarks by oldest touched 3 438 to 3 452 blocks on PostgreSQL 17 and 2 664 to 2 700 on 18, the deep page by title_desc 41 003 to 41 008 and 40 513 to 40 529).
 // The median time of each read is reported at the end and not asserted. What this does not hold: the 100 ms. A regression that costs CPU and reads no more blocks
 // passes. And a bound above the 1 659 pages of the table cannot tell a scan of the table from the plan it holds. These reads are over it: the deep page by title (an index walk that filters 40 000 entries with the keyset
-// condition), the pages of the pinned filter by title, most used and last opened, of the with-a-slug filter by most used and last opened, of the forwarding filter in every sort, and the page of one canonical URL, which reads
-// 1 659 blocks in every sort and is a sequential scan of the table in the sort by recency. For those reads the bound holds the plan's own cost, and only the unfiltered pages above are also checked for a scan and a sort.
+// condition, which `lower()` being no leakproof function makes unavoidable under the policy of `bookmarks`; see the deep title page below), the pages of the pinned filter by title, most used and last opened, of the with-a-slug filter by most used and last opened,
+// and of the forwarding filter in every sort. For those reads the bound holds the plan's own cost, and only the unfiltered pages above and the page of one canonical URL are also checked for a scan and the index they read.
 const BLOCKS_OF_SORT: Readonly<Record<BookmarkSort, { first: number; deep: number }>> = {
   recent: { first: 30, deep: 30 },
   oldest: { first: 30, deep: 30 },
@@ -202,7 +204,7 @@ describe("the filters on a workspace of 50 000 bookmarks", () => {
     pinned: { recent: 150, oldest: 270, title_asc: 2360, title_desc: 2370, most_used: 23_450, recently_opened: 22_940 },
     "with a slug": { recent: 50, oldest: 70, title_asc: 500, title_desc: 500, most_used: 4330, recently_opened: 21_630 },
     forwarding: { recent: 2870, oldest: 3650, title_asc: 47_830, title_desc: 48_400, most_used: 47_850, recently_opened: 47_890 },
-    "of one canonical URL": { recent: 1760, oldest: 1760, title_asc: 1760, title_desc: 1760, most_used: 1760, recently_opened: 1760 },
+    "of one canonical URL": { recent: 30, oldest: 30, title_asc: 30, title_desc: 30, most_used: 30, recently_opened: 30 },
   };
 
 
@@ -220,6 +222,21 @@ describe("the filters on a workspace of 50 000 bookmarks", () => {
       expect(blocks, `${name}, ${sort}`).toBeLessThan(bound);
     }
   }, HOOK_TIMEOUT_MS);
+
+  it.each(BOOKMARK_SORTS)("plans a page of one canonical URL, sorted by %s, from the index of the URL: an index condition, no sequential scan", async (sort) => {
+    const request: BookmarkListRequest = { filter: { ownerId: accountId, urlCanonical: "https://example.com/12345" }, sort, after: undefined, limit: PAGE + 1 };
+    const statement = await inTenant((tx) => Promise.resolve(listQuery(tx, request).toSQL()));
+
+    const nodes = await planOf(statement);
+
+    expect(nodes.map((node) => node["Node Type"])).not.toContain("Seq Scan");
+    const reads = nodes.filter((node) => node["Index Name"] !== undefined);
+    expect(reads.map((node) => node["Index Name"])).toEqual(["bookmarks_owner_url_idx"]);
+    expect(reads[0]?.["Index Cond"]).toContain("url_canonical = ");
+    expect(reads[0]?.Filter).toBeUndefined();
+    const rows = await inTenant((tx) => bookmarkRepository(tx).list(request));
+    expect(rows.map((row) => row.bookmark.url)).toEqual(["https://example.com/12345"]);
+  });
 
   it("counts the library, up to the cap, within the work of its plan", async () => {
     const bound = 400;
@@ -246,5 +263,49 @@ describe("the filters on a workspace of 50 000 bookmarks", () => {
 
   it("refuses to plan a statement in a transaction opened without a workspace", async () => {
     await expect(db.tenant.withTenant({ accountId, requestId: "bookmarks-plan-test" }, (tx) => Promise.resolve(listQuery(tx, { filter: { ownerId: accountId }, sort: "recent", after: undefined, limit: 1 })))).rejects.toBeInstanceOf(TenantContextError);
+  });
+});
+
+// The deep page by title reads 40 000 entries of `bookmarks_owner_title_idx` and drops them with a filter, 40 500 blocks, against about 50 when the keyset condition is an index condition. The index can serve it: as a role that
+// bypasses the policy the condition is one, and the page touches 52 blocks. As `slugbase_app` it cannot, because the policy of `bookmarks` is `FORCE`d and a condition of the query is an index condition only if everything in it is leakproof
+// (doc 05 section 4), and `lower()` is not: the comparison of the sort key (`lower(title)`, which the index is on) is a filter over what the index returns for the owner. `lower()` cannot be marked leakproof without a superuser;
+// a generated column of the lower-cased title rewrites the table under an `ACCESS EXCLUSIVE` lock, which the migration check refuses once a release tag holds `bookmarks` (`v0.1.0` does not); a plain nullable column of it does not rewrite and would serve the page, but needs the writes that fill it, column grants in `src/sql/`,
+// a backfill job and a later release; a system operation serves it too, but lives in `src/sql/`. None is built here (tracked in #691). When the page is served by an index condition this test fails, and the bound of the deep pages
+// by title above is lowered to what the index condition touches.
+describe("the deep page by title on a workspace of 50 000 bookmarks", () => {
+  async function deepStatement(sort: "title_asc" | "title_desc"): Promise<{ sql: string; params: unknown[] }> {
+    const after = await deepPosition(sort);
+    return inTenant((tx) => Promise.resolve(listQuery(tx, { filter: { ownerId: accountId }, sort, after, limit: PAGE + 1 }).toSQL()));
+  }
+
+  /** The nodes of the plan of a statement as `slugbase_system` with the tenant settings of `withTenant`: the role the policy of `bookmarks` does not bind. */
+  async function systemPlanOf(statement: { sql: string; params: unknown[] }): Promise<PlanNode[]> {
+    const plan = await db.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true)`;
+      const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: PlanNode }[] }[]>(`EXPLAIN (FORMAT JSON) ${statement.sql}`, statement.params as never[]);
+      return rows[0]?.["QUERY PLAN"][0]?.Plan;
+    });
+    if (plan === undefined) {
+      throw new Error("EXPLAIN returned no plan");
+    }
+    return nodesOf(plan);
+  }
+
+  it("is not an index condition for slugbase_app because lower() is not leakproof, and is one for a role the policy does not bind", async () => {
+    const [{ leakproof } = { leakproof: undefined }] = await db.owner<{ leakproof: boolean }[]>`SELECT proleakproof AS leakproof FROM pg_proc WHERE oid = 'lower(text)'::regprocedure`;
+    expect(leakproof).toBe(false);
+
+    for (const sort of ["title_asc", "title_desc"] as const) {
+      const statement = await deepStatement(sort);
+      const bound = await planOf(statement);
+      const unbound = await systemPlanOf(statement);
+
+      const boundRead = bound.find((node) => node["Index Name"] === "bookmarks_owner_title_idx");
+      const unboundRead = unbound.find((node) => node["Index Name"] === "bookmarks_owner_title_idx");
+      expect(boundRead?.["Index Cond"], sort).not.toContain("lower(title)");
+      expect(boundRead?.Filter, sort).toContain("lower(title)");
+      expect(unboundRead?.["Index Cond"], sort).toContain("lower(title)");
+    }
   });
 });

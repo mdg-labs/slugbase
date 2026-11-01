@@ -256,7 +256,8 @@ Constraints and indexes:
 | `bookmarks_owner_recent_idx` | `(workspace_id, owner_id, created_at DESC, id DESC) WHERE plan_archived_at IS NULL` | `scope=mine`, `sort=recent` keyset |
 | `bookmarks_owner_opened_idx` | `(workspace_id, owner_id, last_opened_at DESC NULLS LAST, id DESC) WHERE plan_archived_at IS NULL` | `recently_opened` |
 | `bookmarks_owner_popular_idx` | `(workspace_id, owner_id, open_count DESC, id DESC) WHERE plan_archived_at IS NULL` | `most_used`, dashboard quick access |
-| `bookmarks_owner_title_idx` | `(workspace_id, owner_id, lower(title), id)` | Alphabetical |
+| `bookmarks_owner_title_idx` | `(workspace_id, owner_id, lower(title), id)` | Alphabetical; the keyset condition of a deep page is a filter over the owner's entries for `slugbase_app`, since `lower()` is not leakproof (§4) |
+| `bookmarks_owner_url_idx` | `(workspace_id, owner_id, url_canonical) WHERE plan_archived_at IS NULL` | `GET /bookmarks?url=` (the duplicate warning of doc 04 §10.6), in every sort |
 | `bookmarks_pinned_idx` | `(workspace_id, owner_id, pinned_at DESC) WHERE pinned_at IS NOT NULL AND plan_archived_at IS NULL` | Pinned |
 | `bookmarks_archived_idx` | `(workspace_id, plan_archived_at) WHERE plan_archived_at IS NOT NULL` | Restore on re-upgrade |
 
