@@ -36,6 +36,19 @@
       ],
       "outputs": ["coverage/**"]
     },
+    "@slugbase/e2e#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/compose.yml",
+        "$TURBO_ROOT$/compose.e2e.yml",
+        "$TURBO_ROOT$/compose.pg17.yml",
+        "$TURBO_ROOT$/.env.example",
+        "$TURBO_ROOT$/.github/workflows/e2e.yml",
+        "$TURBO_ROOT$/packages/web/src/i18n/locales/*.json"
+      ],
+      "outputs": []
+    },
     "@slugbase/tooling#typecheck": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/docs-check/**"],
