@@ -1,9 +1,8 @@
-import { ArrowLeftRightIcon, BookmarkIcon, FolderIcon, FolderPlusIcon, ForwardIcon, HomeIcon, LogOutIcon, PlusIcon, SettingsIcon, SunMoonIcon, TagIcon } from "@slugbase/ui/patterns";
+import { ArrowLeftRightIcon, BookmarkIcon, DownloadIcon, FolderIcon, FolderPlusIcon, ForwardIcon, HomeIcon, LogOutIcon, PlusIcon, SettingsIcon, SunMoonIcon, TagIcon, UploadIcon } from "@slugbase/ui/patterns";
 import { registerCommand, type PaletteCommand } from "./commands.ts";
 
 /**
- * The commands every palette has (doc 02 section 9.2): the pages of the app and the actions that need no page of their own.
- * Import and Export join the actions when the import and export pages exist.
+ * The commands every palette has (doc 02 section 9.2): the pages of the app and the actions that need no page of their own, Import and Export among them.
  */
 export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
   {
@@ -99,6 +98,28 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     icon: <FolderPlusIcon aria-hidden="true" />,
     run: ({ navigate }) => {
       navigate({ to: "/folders", search: { create: 1 } });
+    },
+  },
+  {
+    id: "action.import",
+    group: "actions",
+    order: 24,
+    name: (t) => t("palette.command.import.name"),
+    keywords: (t) => t("palette.command.import.keywords"),
+    icon: <UploadIcon aria-hidden="true" />,
+    run: ({ navigate }) => {
+      navigate({ to: "/settings/account/data" });
+    },
+  },
+  {
+    id: "action.export",
+    group: "actions",
+    order: 26,
+    name: (t) => t("palette.command.export.name"),
+    keywords: (t) => t("palette.command.export.keywords"),
+    icon: <DownloadIcon aria-hidden="true" />,
+    run: ({ navigate }) => {
+      navigate({ to: "/settings/account/data" });
     },
   },
   {

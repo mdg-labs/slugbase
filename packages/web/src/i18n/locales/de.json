@@ -2302,6 +2302,37 @@
           "minutes": "Zu viele Importe. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
         }
       }
+    },
+    "export": {
+      "title": "Lesezeichen exportieren",
+      "description": "Lade die Lesezeichen dieses Workspaces als Datei herunter.",
+      "format": {
+        "label": "Dateiformat",
+        "json": {
+          "label": "SlugBase-JSON (empfohlen)",
+          "description": "Behält alles: Ordner, Tags, Slugs, Anheftungen und Weiterleitung. Am besten für ein Backup und für den Umzug zu einer anderen SlugBase."
+        },
+        "netscape": {
+          "label": "Netscape-HTML",
+          "description": "Für Browser und andere Lesezeichen-Werkzeuge. Beschreibungen, Anheftungen und Weiterleitung fehlen darin."
+        }
+      },
+      "includeShared": "Mit mir geteilte Lesezeichen einbeziehen",
+      "download": "Herunterladen",
+      "loading": "Dein Export wird vorbereitet …",
+      "success": "Download gestartet",
+      "failure": "Der Export wurde nicht heruntergeladen",
+      "error": {
+        "signedOut": "Du wurdest abgemeldet. Melde dich erneut an, um zu exportieren.",
+        "unavailable": "Der Server ist ausgelastet. Versuche es gleich noch einmal.",
+        "network": "Der Server ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
+        "failed": "Der Export konnte nicht erstellt werden. Versuche es erneut.",
+        "rateLimited": {
+          "unknown": "Zu viele Exporte. Versuche es später erneut.",
+          "seconds": "Zu viele Exporte. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+          "minutes": "Zu viele Exporte. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
+        }
+      }
     }
   },
   "configFailure": {
@@ -3106,6 +3137,14 @@
       "newFolder": {
         "name": "Neuer Ordner",
         "keywords": "hinzufügen erstellen gruppe"
+      },
+      "import": {
+        "name": "Lesezeichen importieren",
+        "keywords": "hochladen datei browser html json netscape einlesen"
+      },
+      "export": {
+        "name": "Lesezeichen exportieren",
+        "keywords": "herunterladen backup sicherung datei browser html json netscape"
       },
       "switchWorkspace": {
         "name": "Workspace wechseln",

@@ -2302,6 +2302,37 @@
           "minutes": "Too many imports. Try again in {count, plural, one {# minute} other {# minutes}}."
         }
       }
+    },
+    "export": {
+      "title": "Export bookmarks",
+      "description": "Download your bookmarks in this workspace as a file.",
+      "format": {
+        "label": "File format",
+        "json": {
+          "label": "SlugBase JSON (recommended)",
+          "description": "Keeps everything: folders, tags, slugs, pins and forwarding. Best for a backup and for moving to another SlugBase."
+        },
+        "netscape": {
+          "label": "Netscape HTML",
+          "description": "For browsers and other bookmark tools. Descriptions, pins and forwarding are left out."
+        }
+      },
+      "includeShared": "Include bookmarks shared with me",
+      "download": "Download",
+      "loading": "Preparing your export…",
+      "success": "Download started",
+      "failure": "The export was not downloaded",
+      "error": {
+        "signedOut": "You have been signed out. Sign in again to export.",
+        "unavailable": "The server is busy. Try again in a moment.",
+        "network": "The server could not be reached. Check your connection and try again.",
+        "failed": "The export could not be made. Try again.",
+        "rateLimited": {
+          "unknown": "Too many exports. Try again later.",
+          "seconds": "Too many exports. Try again in {count, plural, one {# second} other {# seconds}}.",
+          "minutes": "Too many exports. Try again in {count, plural, one {# minute} other {# minutes}}."
+        }
+      }
     }
   },
   "configFailure": {
@@ -3106,6 +3137,14 @@
       "newFolder": {
         "name": "New folder",
         "keywords": "add create group"
+      },
+      "import": {
+        "name": "Import bookmarks",
+        "keywords": "upload file browser html json netscape bring in"
+      },
+      "export": {
+        "name": "Export bookmarks",
+        "keywords": "download backup file browser html json netscape"
       },
       "switchWorkspace": {
         "name": "Switch workspace",
