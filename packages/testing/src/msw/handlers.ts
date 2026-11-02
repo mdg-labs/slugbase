@@ -29,8 +29,21 @@ const MOCK_SET_COOKIE = "slugbase_session=mock-session; Path=/; HttpOnly; SameSi
 // address a client can follow; the mock sends the application root.
 const MOCK_LOCATION = "/";
 
-// The export declares its `Content-Disposition` as an attachment named after the day, a pattern a schema of type string cannot satisfy.
+// The exports declare their `Content-Disposition` as an attachment named after the day, a pattern a schema of type string cannot satisfy: the JSON export's file is a .json, the Netscape export's a .html.
 const MOCK_CONTENT_DISPOSITION = 'attachment; filename="slugbase-export-2026-01-01.json"';
+const MOCK_NETSCAPE_CONTENT_DISPOSITION = 'attachment; filename="slugbase-export-2026-01-01.html"';
+
+const MOCK_NETSCAPE_FILE = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+    <DT><H3>Reading</H3>
+    <DL><p>
+        <DT><A HREF="https://example.com/" SHORTCUTURL="example" TAGS="later">Example</A>
+    </DL><p>
+</DL><p>
+`;
 
 function headerValue(document: OpenApiDocument, name: string, schema: unknown): string {
   switch (name.toLowerCase()) {
@@ -39,7 +52,7 @@ function headerValue(document: OpenApiDocument, name: string, schema: unknown): 
     case "location":
       return MOCK_LOCATION;
     case "content-disposition":
-      return MOCK_CONTENT_DISPOSITION;
+      return JSON.stringify(schema).includes("\\.html") ? MOCK_NETSCAPE_CONTENT_DISPOSITION : MOCK_CONTENT_DISPOSITION;
     default:
       return String(fixtureFor(document, schema));
   }
@@ -90,6 +103,8 @@ export function baseFixtures(document: OpenApiDocument): Readonly<Record<string,
       setupTokenRequired: false,
     },
     getOpenApiDocument: document,
+    // The file of the Netscape export: the answer is bytes of text/html that a schema cannot describe, and the mock gives a file a browser would read, one section and one link.
+    exportNetscape: MOCK_NETSCAPE_FILE,
     // The document of an export: a schema alone would give its arrays one entry each, and the lists that are empty by contract must stay empty.
     exportJson: {
       format: "slugbase-export",

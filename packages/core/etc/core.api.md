@@ -2986,6 +2986,9 @@ export interface ErrorReportPort extends Port {
 }
 
 // @public
+export function escapeHtml(text: string): string;
+
+// @public
 export const EXPORT_PAGE_SIZE = 500;
 
 // @public
@@ -3022,6 +3025,12 @@ export interface ExportFolderRow {
     // (undocumented)
     readonly name: string;
 }
+
+// @public
+export function exportNetscapeFilename(exportedAt: Date): string;
+
+// @public
+export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId">): ReadableStream<Uint8Array>;
 
 // @public (undocumented)
 export interface ExportStartAsk {
@@ -5669,6 +5678,26 @@ export const METADATA_TITLE_MAX_LENGTH = 300;
 // @public (undocumented)
 export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;
 
+// @public
+export interface NetscapeBookmarkRow {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly slug: string | null;
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export interface NetscapeExportStore {
+    folderBookmarks(ownerId: string, folderId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
+    sections(ownerId: string, after: string | undefined, limit: number): Promise<readonly NetscapeSectionRow[]>;
+    unfiledBookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
+}
+
 // @public (undocumented)
 export type NetscapeFile = {
     readonly kind: "parsed";
@@ -5678,6 +5707,21 @@ export type NetscapeFile = {
 | {
     readonly kind: "too_many";
 };
+
+// @public
+export interface NetscapeSectionRow {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface NetscapeStreamDependencies {
+    readonly onFailure: (error: unknown) => void;
+    readonly page: <T>(read: (store: NetscapeExportStore) => Promise<T>) => Promise<T>;
+    readonly pageSize?: number;
+}
 
 // @public (undocumented)
 export interface NewAccountAcceptance {

@@ -3562,6 +3562,12 @@ export const EXPORT_DISPOSITION_PATTERN: RegExp;
 export const EXPORT_FORMAT = "slugbase-export";
 
 // @public
+export const EXPORT_NETSCAPE_CONTENT_TYPE = "text/html; charset=utf-8";
+
+// @public
+export const EXPORT_NETSCAPE_DISPOSITION_PATTERN: RegExp;
+
+// @public
 export const EXPORT_REF_PATTERN: RegExp;
 
 // @public
@@ -3630,6 +3636,34 @@ export const exportJson: {
     readonly scope: "read";
     readonly responses: {
         readonly 200: StreamResponse<    {
+        "Content-Disposition": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const exportNetscape: {
+    readonly method: "get";
+    readonly path: "/api/v1/export/netscape";
+    readonly operationId: "exportNetscape";
+    readonly tag: "export";
+    readonly summary: "Export my bookmarks as a browser bookmark file";
+    readonly auth: "member";
+    readonly rate: "bulk";
+    readonly scope: "read";
+    readonly responses: {
+        readonly 200: StreamResponse<    {
+        "Content-Type": {
+        description: string;
+        schema: z.ZodLiteral<"text/html; charset=utf-8">;
+        };
         "Content-Disposition": {
         description: string;
         schema: z.ZodString;
@@ -9833,6 +9867,61 @@ export interface OperationTypes {
                 };
                 content: {
                     "application/json": ComponentTypes["schemas"]["ExportDocument"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    exportNetscape: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Content-Disposition": string;
+                    "Content-Type": "text/html; charset=utf-8";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
             401: {
@@ -16666,6 +16755,23 @@ export interface paths {
             cookie?: never;
         };
         get: OperationTypes["exportJson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/export/netscape": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["exportNetscape"];
         put?: never;
         post?: never;
         delete?: never;

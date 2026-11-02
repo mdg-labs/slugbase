@@ -192,11 +192,10 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
 }
 
 /**
- * The document as a stream of bytes. A page is read only when the client asks for more, so at most one page is held, whatever the size of the export. The stream errors, and the
- * connection with it, when a page cannot be read; `onFailure` is told first.
+ * The pieces of a document as a stream of bytes. A piece is read only when the client asks for more, so at most one page is held, whatever the size of the export. The stream errors, and the
+ * connection with it, when a piece cannot be read; `onFailure` is told first.
  */
-export function exportStream(dependencies: ExportStreamDependencies, ask: ExportStreamAsk): ReadableStream<Uint8Array> {
-  const source = pieces(dependencies, ask);
+export function pieceStream(source: AsyncGenerator<string, void, undefined>, onFailure: (error: unknown) => void): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>(
     {
@@ -209,7 +208,7 @@ export function exportStream(dependencies: ExportStreamDependencies, ask: Export
             controller.enqueue(encoder.encode(next.value));
           }
         } catch (error) {
-          dependencies.onFailure(error);
+          onFailure(error);
           controller.error(error);
         }
       },
@@ -219,4 +218,9 @@ export function exportStream(dependencies: ExportStreamDependencies, ask: Export
     },
     { highWaterMark: 0 },
   );
+}
+
+/** The document as a stream of bytes; see `pieceStream`. */
+export function exportStream(dependencies: ExportStreamDependencies, ask: ExportStreamAsk): ReadableStream<Uint8Array> {
+  return pieceStream(pieces(dependencies, ask), dependencies.onFailure);
 }

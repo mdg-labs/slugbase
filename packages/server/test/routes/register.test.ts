@@ -416,6 +416,16 @@ describe("a route of an operation with a binary response", () => {
     expect(Buffer.from(await response.arrayBuffer()).equals(Buffer.from(BYTES))).toBe(true);
   });
 
+  it("keeps the parameters a handler adds to the media type the operation declares, and replaces a media type that is another one, parameters or not", async () => {
+    const same = serveImage(() => ({ status: 200, body: BYTES, headers: { "X-Content-Type-Options": "nosniff", "content-type": "Image/PNG; charset=binary" } }));
+    const other = serveImage(() => ({ status: 200, body: BYTES, headers: { "X-Content-Type-Options": "nosniff", "content-type": "text/html; charset=utf-8" } }));
+    const near = serveImage(() => ({ status: 200, body: BYTES, headers: { "X-Content-Type-Options": "nosniff", "content-type": "image/png-but-html; charset=utf-8" } }));
+
+    expect((await same.fetch(new Request("http://localhost/api/v1/images/1"))).headers.get("content-type")).toBe("Image/PNG; charset=binary");
+    expect((await other.fetch(new Request("http://localhost/api/v1/images/1"))).headers.get("content-type")).toBe("image/png");
+    expect((await near.fetch(new Request("http://localhost/api/v1/images/1"))).headers.get("content-type")).toBe("image/png");
+  });
+
   it("answers 500, and not a body, for a handler that hands over text where the operation declares bytes", async () => {
     const server = serveImage(() => ({ status: 200, body: "<svg/>" as unknown as Uint8Array, headers: { "X-Content-Type-Options": "nosniff" } }));
 
@@ -459,6 +469,35 @@ describe("a route of an operation with a streamed response", () => {
     expect(response.headers.get("content-type")).toBe("application/json");
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="rows.json"');
     expect(await response.json()).toEqual({ rows: [1] });
+  });
+
+  it("keeps the parameters a handler adds to the media type the operation declares, and never answers a media type it does not, text/html included", async () => {
+    const withCharset = serveRows(() => ({ status: 200, body: streamOf("{}"), headers: { "Content-Disposition": 'attachment; filename="rows.json"', "content-type": "application/json; charset=utf-8" } }));
+    const html = serveRows(() => ({ status: 200, body: streamOf("<script>alert(1)</script>"), headers: { "Content-Disposition": 'attachment; filename="rows.json"', "content-type": "text/html; charset=utf-8" } }));
+    const list = serveRows(() => ({ status: 200, body: streamOf("{}"), headers: { "Content-Disposition": 'attachment; filename="rows.json"', "content-type": "application/json, text/html" } }));
+
+    expect((await withCharset.fetch(new Request("http://localhost/api/v1/rows"))).headers.get("content-type")).toBe("application/json; charset=utf-8");
+    expect((await html.fetch(new Request("http://localhost/api/v1/rows"))).headers.get("content-type")).toBe("application/json");
+    expect((await list.fetch(new Request("http://localhost/api/v1/rows"))).headers.get("content-type")).toBe("application/json");
+  });
+
+  it("answers a declared text/html stream with the charset the handler gives it, which the response stage accepts, and with the bare type for a handler that names another one", async () => {
+    const getPage = defineOperation({
+      method: "get",
+      path: "/api/v1/page",
+      operationId: "getPage",
+      tag: "rows",
+      auth: "anonymous",
+      rate: "none",
+      responses: { 200: streamResponse("a page", "text/html"), 404: problemResponse("not found") },
+    });
+    const serve = (contentType: string) => compose([moduleOf(route(getPage).handle(() => ({ status: 200, body: streamOf("<p>"), headers: { "content-type": contentType } })))], documentFor([getPage]));
+
+    const response = await serve("text/html; charset=utf-8").fetch(new Request("http://localhost/api/v1/page"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(await response.text()).toBe("<p>");
+    expect((await serve("text/plain; charset=utf-8").fetch(new Request("http://localhost/api/v1/page"))).headers.get("content-type")).toBe("text/html");
   });
 
   it("answers 500, and not a body, for a handler that hands over text where the operation declares a stream", async () => {

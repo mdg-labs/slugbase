@@ -144,6 +144,11 @@ describe("the generated handlers", () => {
         expect(Buffer.from(await response.arrayBuffer()).subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), operation.operationId).toBe(true);
         continue;
       }
+      if (response.headers.get("content-type") === "text/html") {
+        // The Netscape export answers a bookmark file: bytes of text that no schema describes.
+        expect(await response.text(), operation.operationId).toMatch(/^<!DOCTYPE NETSCAPE-Bookmark-file-1>/);
+        continue;
+      }
       if (schema !== undefined && operation.method !== "head") {
         expect(response.headers.get("content-type"), operation.operationId).toContain("application/json");
         const body: unknown = await response.json();
@@ -160,6 +165,18 @@ describe("the generated handlers", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="slugbase-export-\d{4}-\d{2}-\d{2}\.json"$/);
     expect(await response.json()).toMatchObject({ format: "slugbase-export", version: 1, goPreferences: [], shared: [] });
+  });
+
+  it("answer the Netscape export as an html attachment named after the day, with a file a browser would read", async () => {
+    const exported = operations.find((operation) => operation.operationId === "exportNetscape");
+    expect(exported).toBeDefined();
+    const response = await answer(exported as Declared);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html");
+    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="slugbase-export-\d{4}-\d{2}-\d{2}\.html"$/);
+    const text = await response.text();
+    expect(text).toMatch(/^<!DOCTYPE NETSCAPE-Bookmark-file-1>/);
+    expect(text).toContain("<H3>Reading</H3>");
   });
 
   it("answer the same bytes every time", async () => {

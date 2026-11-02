@@ -430,6 +430,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/export/netscape": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export my bookmarks as a browser bookmark file */
+        get: operations["exportNetscape"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/favicons/{host}": {
         parameters: {
             query?: never;
@@ -6244,6 +6261,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExportDocument"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again. Exports take from the bulk limit */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportNetscape: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin and the forwarding flag are left out. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only, before the first byte. A failure after the first byte ends the connection with the file unfinished */
+            200: {
+                headers: {
+                    /** @description An attachment named slugbase-export-<date>.html, the date being the UTC day of the export; the name holds no workspace name */
+                    "Content-Disposition": string;
+                    /** @description text/html with the character set UTF-8, the character set the file is written in */
+                    "Content-Type": "text/html; charset=utf-8";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
             /** @description There is no session, or its second factor is not complete */

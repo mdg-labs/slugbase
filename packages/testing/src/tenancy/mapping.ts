@@ -72,8 +72,9 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *
  * - Audit log: the query parameter `actorAccountId` of `listAuditEvents` takes a member identifier and `entityId` a bookmark identifier. The operation lists the events of the workspace of the
  *   request and filters them, so an identifier of workspace B in either matches no event of A's log: the answer is an empty `200` and not `404`, which `runApiMatrix` is told by its `emptyAnswers` option.
- * - Export: `exportJson` takes no input at all and so no entry. It reads the caller's own bookmarks, folders and tags of the workspace of the request through statements that name the workspace and the
- *   owner (`packages/db/src/repositories/export.ts`), over the tables whose scoped repositories are below, so the API mode holds it to an answer that names nothing of B and a workspace B whose rows are as they were.
+ * - Export: `exportJson` and `exportNetscape` take no input at all and so no entry. They read the caller's own bookmarks, folders and tags of the workspace of the request through statements that name the workspace and the
+ *   owner (`packages/db/src/repositories/export.ts`: the pages of the JSON document, and for the Netscape file the owner's folders, the bookmarks of one folder by its identifier and the bookmarks of none, `sections`, `folderBookmarks` and `unfiledBookmarks`), over the tables whose scoped repositories
+ *   are below, so the API mode holds each to an answer that names nothing of B and a workspace B whose rows are as they were.
  * - Import: the body input `slug` of a bookmark of `importJson`, in the export document (`bookmarks[].slug`) and in the plain array (`[].slug`), is the slug the file gives the bookmark and not the identifier of a row, so
  *   the default maps it to a bookmark like the other inputs named slug and judges it with the rest of the call. The matrix sends the operation as a dry run: it reads the caller's own canonical URLs and
  *   the counter of the workspace of the request (`packages/db/src/repositories/import.ts`) and writes nothing, so a value of B in the file is answered `200` as it would be for any text, which `runApiMatrix` is told by its

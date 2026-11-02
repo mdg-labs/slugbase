@@ -5,8 +5,10 @@ import {
   AUDIT_EVENT_CATEGORIES,
   defineOperation,
   EXPORT_DISPOSITION_PATTERN,
+  EXPORT_NETSCAPE_DISPOSITION_PATTERN,
   ExportDocumentSchema,
   exportJson,
+  exportNetscape,
   jsonResponse,
   operations,
   problemResponse,
@@ -103,6 +105,37 @@ describe("the export document", () => {
   it("holds no go preferences and no shared bookmarks yet", () => {
     expect(ExportDocumentSchema.safeParse({ ...EXPORT, goPreferences: [{ slug: "a", ref: "b1" }] }).success).toBe(false);
     expect(ExportDocumentSchema.safeParse({ ...EXPORT, shared: [{ url: "https://example.com/" }] }).success).toBe(false);
+  });
+});
+
+describe("the Netscape export operation", () => {
+  const netscape = document.paths["/api/v1/export/netscape"]?.["get"] as Obj;
+
+  it("is GET /api/v1/export/netscape, a member's read in the bulk bucket that a read token may call, in the tag of the JSON export", () => {
+    expect(exportNetscape).toMatchObject({ method: "get", path: "/api/v1/export/netscape", operationId: "exportNetscape", tag: "export", auth: "member", rate: "bulk", scope: "read" });
+    expect(exportNetscape).not.toHaveProperty("entitlement");
+    expect(operations).toContain(exportNetscape);
+    expect(netscape).toMatchObject({ operationId: "exportNetscape", "x-slugbase-auth": "member", "x-slugbase-rate": "bulk", "x-slugbase-scope": "read" });
+  });
+
+  it("answers a text/html attachment of opaque bytes, with a dated .html file name that holds no workspace name", () => {
+    const responses = netscape["responses"] as Record<string, { content?: Obj; headers?: Record<string, { schema: { pattern: string } }> }>;
+    expect(Object.keys(responses).sort()).toEqual(["200", "401", "404", "429", "503"]);
+    expect(responses["200"]?.content).toEqual({ "text/html": { schema: { type: "string", format: "binary" } } });
+    const pattern = new RegExp(responses["200"]?.headers?.["Content-Disposition"]?.schema.pattern ?? "(none)");
+    expect(pattern.test('attachment; filename="slugbase-export-2026-11-02.html"')).toBe(true);
+    expect(pattern.test('attachment; filename="slugbase-export-2026-11-02.json"')).toBe(false);
+    expect(pattern.test('attachment; filename="slugbase-export-Home.html"')).toBe(false);
+    expect(EXPORT_NETSCAPE_DISPOSITION_PATTERN.test('attachment; filename="slugbase-export-2026-11-02.html"')).toBe(true);
+  });
+
+  it("describes what the file holds and leaves out, so a caller reads what the operation does", () => {
+    const description = (netscape["responses"] as Record<string, { description: string }>)["200"]?.description ?? "";
+    expect(description).toMatch(/SHORTCUTURL/);
+    expect(description).toMatch(/TAGS/);
+    expect(description).toMatch(/HTML-escaped/);
+    expect(description).toMatch(/Plan-archived bookmarks are included/);
+    expect(description).toMatch(/export\.created/);
   });
 });
 

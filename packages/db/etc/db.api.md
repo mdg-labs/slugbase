@@ -62,6 +62,7 @@ import type { InvitationSignupResult } from '@slugbase/core';
 import type { InvitationSignupSession } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
+import type { NetscapeExportStore } from '@slugbase/core';
 import { NewBookmark } from '@slugbase/core';
 import { PgColumn } from 'drizzle-orm/pg-core';
 import { PgTable } from 'drizzle-orm/pg-core';
@@ -623,7 +624,7 @@ export interface EntitlementUsage {
 }
 
 // @public (undocumented)
-export type ExportRepository = ExportStore;
+export type ExportRepository = ExportStore & NetscapeExportStore;
 
 // @public
 export function exportRepository(tx: TenantTx): ExportRepository;

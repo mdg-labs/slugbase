@@ -71,6 +71,21 @@ interface UntypedResult {
   readonly headers?: Readonly<Record<string, string>>;
 }
 
+/** The media type of a `Content-Type` value: what is before the first `;`, lowercased and trimmed. */
+function mediaTypeOf(contentType: string | null): string | undefined {
+  return contentType?.split(";")[0]?.trim().toLowerCase();
+}
+
+/**
+ * Sets the `Content-Type` of a binary answer to the media type its operation declares. A handler may add parameters to that type (`text/html; charset=utf-8`) by returning a value whose media type is
+ * the declared one; a value of any other media type is replaced, so a handler can never answer a type its operation does not declare.
+ */
+function setContentType(headers: Headers, declaredMediaType: string): void {
+  if (mediaTypeOf(headers.get("content-type")) !== declaredMediaType) {
+    headers.set("content-type", declaredMediaType);
+  }
+}
+
 function respond(operation: OperationDefinition, result: UntypedResult): Response {
   const responses: Readonly<Partial<Record<number, JsonResponse | EmptyResponse | BinaryResponse | { readonly kind: "problem" }>>> = operation.responses;
   const declared = responses[result.status];
@@ -82,14 +97,14 @@ function respond(operation: OperationDefinition, result: UntypedResult): Respons
     if (!(result.body instanceof ReadableStream)) {
       throw new Error(`${operation.operationId} answered ${String(result.status)} without the stream it declares`);
     }
-    headers.set("content-type", declared.mediaType);
+    setContentType(headers, declared.mediaType);
     return new Response(result.body, { status: result.status, headers });
   }
   if (declared.kind === "binary") {
     if (!(result.body instanceof Uint8Array)) {
       throw new Error(`${operation.operationId} answered ${String(result.status)} without the bytes it declares`);
     }
-    headers.set("content-type", declared.mediaType);
+    setContentType(headers, declared.mediaType);
     return new Response(result.body, { status: result.status, headers });
   }
   if (declared.kind === "json") {

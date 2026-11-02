@@ -23,6 +23,12 @@ export const EXPORT_REF_PATTERN = /^b[1-9][0-9]*$/;
 /** The `Content-Disposition` of the answer: an attachment named after the day of the export, holding no workspace name. */
 export const EXPORT_DISPOSITION_PATTERN = /^attachment; filename="slugbase-export-\d{4}-\d{2}-\d{2}\.json"$/;
 
+/** The `Content-Type` of the Netscape export: HTML in UTF-8, which the browser that imports the file reads the characters of the file in. */
+export const EXPORT_NETSCAPE_CONTENT_TYPE = "text/html; charset=utf-8";
+
+/** The `Content-Disposition` of the Netscape export: an attachment named after the day of the export, holding no workspace name. */
+export const EXPORT_NETSCAPE_DISPOSITION_PATTERN = /^attachment; filename="slugbase-export-\d{4}-\d{2}-\d{2}\.html"$/;
+
 export const ExportFolderSchema = z
   .strictObject({
     name: z.string().min(1).max(FOLDER_NAME_MAX_LENGTH).describe("The folder's name, as the caller entered it"),
@@ -79,6 +85,44 @@ export const exportJson = defineOperation({
           "Content-Disposition": {
             description: "An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name",
             schema: z.string().regex(EXPORT_DISPOSITION_PATTERN),
+          },
+        },
+      },
+    ),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Exports take from the bulk limit"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+// The lossy export for browsers (doc 02 section 13.2, doc 04 sections 7 and 10.9, doc 10 T13 and T14, Q29 and Q33): the same content as a Netscape bookmark file, one section per folder, which a browser
+// imports and the Netscape import of this API reads back. It names no field a browser has no place for (the description, the pin, the forwarding flag, the folder's icon and colour), and a bookmark filed
+// in several folders is in each of them. The `Content-Type` is `text/html; charset=utf-8` and the answer is an attachment that is never rendered in the origin of the application: a response that is
+// not served as an attachment with `nosniff` would let a title run as script there.
+
+export const exportNetscape = defineOperation({
+  method: "get",
+  path: "/api/v1/export/netscape",
+  operationId: "exportNetscape",
+  tag: "export",
+  summary: "Export my bookmarks as a browser bookmark file",
+  auth: "member",
+  rate: "bulk",
+  scope: "read",
+  responses: {
+    200: streamResponse(
+      "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin and the forwarding flag are left out. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only, before the first byte. A failure after the first byte ends the connection with the file unfinished",
+      "text/html",
+      {
+        headers: {
+          "Content-Type": {
+            description: "text/html with the character set UTF-8, the character set the file is written in",
+            schema: z.literal(EXPORT_NETSCAPE_CONTENT_TYPE),
+          },
+          "Content-Disposition": {
+            description: "An attachment named slugbase-export-<date>.html, the date being the UTC day of the export; the name holds no workspace name",
+            schema: z.string().regex(EXPORT_NETSCAPE_DISPOSITION_PATTERN),
           },
         },
       },
