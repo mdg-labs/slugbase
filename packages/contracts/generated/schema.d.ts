@@ -413,6 +413,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/export/json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export my content as SlugBase JSON */
+        get: operations["exportJson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/favicons/{host}": {
         parameters: {
             query?: never;
@@ -1813,7 +1830,7 @@ export interface components {
             action: string;
             actor: components["schemas"]["AuditEventActor"];
             /** @description The group the action belongs to; null for an action the catalog no longer holds */
-            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share") | null;
+            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export") | null;
             /**
              * Format: date-time
              * @description When the change was made, RFC 3339 UTC
@@ -2452,6 +2469,67 @@ export interface components {
             upgradeAvailable: boolean;
             /** @description What the limits are compared with */
             usage: components["schemas"]["EntitlementUsage"];
+        };
+        ExportBookmark: {
+            /** @description The bookmark's description; null when it has none */
+            description: string | null;
+            /** @description The names of the caller's folders the bookmark is filed in, sorted by the bytes of the name; each is the name of an entry of the document's folders */
+            folders: string[];
+            /** @description Whether /go forwards to the bookmark by its slug; true only for a bookmark with a slug */
+            forwarding: boolean;
+            /** @description Whether the bookmark is pinned */
+            pinned: boolean;
+            /** @description Whether a downgrade of the plan archived the bookmark: it is exported with everything else, flagged */
+            planArchived: boolean;
+            /** @description The export-local reference of the bookmark, `b1`, `b2` and so on in the order of the list; the entries of goPreferences name a bookmark by it */
+            ref: string;
+            /** @description The bookmark's slug; null when it has none */
+            slug: string | null;
+            /** @description The names of the caller's tags the bookmark carries, sorted by the bytes of the name; each is the name of an entry of the document's tags */
+            tags: string[];
+            /** @description The bookmark's title */
+            title: string;
+            /** @description The bookmark's address, an http or https URL, as it is stored */
+            url: string;
+        };
+        ExportDocument: {
+            /** @description Every bookmark the caller owns, plan-archived ones included and flagged, in the order of their creation */
+            bookmarks: components["schemas"]["ExportBookmark"][];
+            /**
+             * Format: date-time
+             * @description When the export began, in UTC: the one timestamp the document holds
+             */
+            exportedAt: string;
+            /** @description Every folder the caller owns, used or not, sorted by the bytes of the name */
+            folders: components["schemas"]["ExportFolder"][];
+            /**
+             * @description Always slugbase-export: the document is a SlugBase export
+             * @constant
+             */
+            format: "slugbase-export";
+            /** @description The caller's remembered slug choices; always empty in this release */
+            goPreferences: unknown[];
+            /** @description The bookmarks other members shared with the caller; always empty in this release */
+            shared: unknown[];
+            /** @description The name of every tag the caller owns, used or not, sorted by the bytes of the name */
+            tags: string[];
+            /**
+             * @description The version of the format; a reader refuses a version newer than it supports
+             * @constant
+             */
+            version: 1;
+            workspace: {
+                /** @description The name of the workspace the content was exported from */
+                name: string;
+            };
+        };
+        ExportFolder: {
+            /** @description The folder's colour, 1 to 8: the number of the --folder-N theme token */
+            color: number;
+            /** @description The folder's icon, a lucide icon name */
+            icon: string;
+            /** @description The folder's name, as the caller entered it */
+            name: string;
         };
         Folder: {
             /** @description How many bookmarks are filed in the folder; plan-archived bookmarks are not counted */
@@ -3841,7 +3919,7 @@ export interface operations {
             query?: {
                 actorAccountId?: string;
                 action?: string | string[];
-                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share";
+                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export";
                 entityType?: string;
                 entityId?: string;
                 from?: string;
@@ -5980,6 +6058,66 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportJson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The export is recorded in the workspace's audit log as export.created with counts only, before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON */
+            200: {
+                headers: {
+                    /** @description An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name */
+                    "Content-Disposition": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportDocument"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again. Exports take from the bulk limit */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

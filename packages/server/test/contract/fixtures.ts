@@ -393,6 +393,9 @@ export const FIXTURES: ContractFixtures = {
   // The dashboard names no identifier either: it reads the caller's own counts, quick access, pinned bookmarks and tags in the workspace of the request. Workspace B holds bookmarks that forward by
   // a slug, a tag and a folder, all named matrix-..., so a row of B in an answer would show.
   getDashboard: {},
+  // The export names no identifier either: it streams the caller's own bookmarks, folders and tags in the workspace of the request. Workspace B holds rows named matrix-..., so a row of B in the
+  // document would show; the walker reads the whole document and checks it against the declared schema.
+  exportJson: {},
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

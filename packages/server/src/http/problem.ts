@@ -388,6 +388,14 @@ export function responseStage(validation: ResponseValidation): ResponseStage {
       return;
     }
     const declaredNow = problem ? undefined : declaredResponse(context, response.status);
+    if (declaredNow?.kind === "binary" && declaredNow.stream === true) {
+      // A stream is never read here: its media type is checked and the body goes on as it is, so the server holds no more of an export than the client has asked for.
+      if ((response.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase() !== declaredNow.mediaType) {
+        await response.body?.cancel();
+        throw mismatch("", "wrong_content_type");
+      }
+      return;
+    }
     if (declaredNow?.kind === "binary") {
       // Bytes are checked as bytes: reading them as text would change them.
       const bytes = new Uint8Array(await response.arrayBuffer());

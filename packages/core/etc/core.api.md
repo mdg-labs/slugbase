@@ -663,10 +663,27 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "export.created": {
+        readonly category: "export";
+        readonly metadata: {
+            readonly bookmarks: {
+                readonly type: "count";
+            };
+            readonly folders: {
+                readonly type: "count";
+            };
+            readonly tags: {
+                readonly type: "count";
+            };
+            readonly shared: {
+                readonly type: "count";
+            };
+        };
+    };
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -2931,6 +2948,112 @@ export interface ErrorReportContext {
 export interface ErrorReportPort extends Port {
     // (undocumented)
     capture(error: unknown, context?: ErrorReportContext): Promise<void>;
+}
+
+// @public
+export const EXPORT_PAGE_SIZE = 500;
+
+// @public
+export interface ExportBookmarkRow {
+    // (undocumented)
+    readonly description: string | null;
+    readonly folders: readonly string[];
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly pinned: boolean;
+    // (undocumented)
+    readonly planArchived: boolean;
+    // (undocumented)
+    readonly slug: string | null;
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export function exportFilename(exportedAt: Date): string;
+
+// @public (undocumented)
+export interface ExportFolderRow {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface ExportStartAsk {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly actor: AuditActor;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface ExportStartDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    readonly store: ExportStore;
+}
+
+// @public (undocumented)
+export type ExportStartOutcome = {
+    readonly kind: "started";
+    readonly summary: ExportSummary;
+}
+/** The workspace of the request cannot be read (it is being deleted); nothing is recorded. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface ExportStore {
+    bookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportBookmarkRow[]>;
+    folders(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportFolderRow[]>;
+    summary(ownerId: string): Promise<ExportSummary | undefined>;
+    tags(ownerId: string, after: string | undefined, limit: number): Promise<readonly string[]>;
+}
+
+// @public
+export function exportStream(dependencies: ExportStreamDependencies, ask: ExportStreamAsk): ReadableStream<Uint8Array>;
+
+// @public (undocumented)
+export interface ExportStreamAsk {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly exportedAt: Date;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public (undocumented)
+export interface ExportStreamDependencies {
+    readonly onFailure: (error: unknown) => void;
+    readonly page: <T>(read: (store: ExportStore) => Promise<T>) => Promise<T>;
+    readonly pageSize?: number;
+}
+
+// @public
+export interface ExportSummary {
+    readonly bookmarks: number;
+    // (undocumented)
+    readonly folders: number;
+    // (undocumented)
+    readonly tags: number;
+    // (undocumented)
+    readonly workspaceName: string;
 }
 
 // @public
@@ -6048,6 +6171,9 @@ export interface SlugUse {
     readonly othersUseCount: number;
     readonly takenByOwner: boolean;
 }
+
+// @public
+export function startExport(input: ExportStartDependencies, ask: ExportStartAsk): Promise<ExportStartOutcome>;
 
 // @public
 export interface StoredOnboarding {

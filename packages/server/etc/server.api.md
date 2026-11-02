@@ -27,6 +27,7 @@ import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
 import type { QueuedJob } from '@slugbase/db';
 import { RegistrationSettings } from '@slugbase/core';
+import { StreamResponse } from '@slugbase/contracts';
 import type { TenantPrincipal } from '@slugbase/core';
 import type { TenantResolver } from '@slugbase/core';
 import type { TenantTx } from '@slugbase/db';
@@ -1010,6 +1011,9 @@ export type ResponseResult<R> = {
     [S in keyof R & number]: R[S] extends JsonResponse<infer Schema, infer H> ? {
         readonly status: S;
         readonly body: z.input<Schema>;
+    } & ResponseHeadersOf<H> : R[S] extends StreamResponse<infer H> ? {
+        readonly status: S;
+        readonly body: ReadableStream<Uint8Array>;
     } & ResponseHeadersOf<H> : R[S] extends BinaryResponse<infer H> ? {
         readonly status: S;
         readonly body: Uint8Array;

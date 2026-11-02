@@ -328,7 +328,7 @@ export const AUDIT_ACTION_FILTER_MAX = 20;
 export const AUDIT_ACTOR_TYPES: readonly ["account", "api_token", "system"];
 
 // @public
-export const AUDIT_EVENT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share"];
+export const AUDIT_EVENT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export"];
 
 // @public (undocumented)
 export const AuditEventActorSchema: z.ZodObject<{
@@ -358,6 +358,7 @@ export const AuditEventListQuerySchema: z.ZodObject<{
         bookmark: "bookmark";
         share: "share";
         workspace: "workspace";
+        export: "export";
     }>>;
     entityType: z.ZodOptional<z.ZodString>;
     entityId: z.ZodOptional<z.ZodUUID>;
@@ -389,6 +390,7 @@ export const AuditEventListSchema: z.ZodObject<{
             bookmark: "bookmark";
             share: "share";
             workspace: "workspace";
+            export: "export";
         }>>;
         entity: z.ZodNullable<z.ZodObject<{
             type: z.ZodString;
@@ -420,6 +422,7 @@ export const AuditEventSchema: z.ZodObject<{
         bookmark: "bookmark";
         share: "share";
         workspace: "workspace";
+        export: "export";
     }>>;
     entity: z.ZodNullable<z.ZodObject<{
         type: z.ZodString;
@@ -444,6 +447,8 @@ export interface BinaryResponse<H extends ResponseHeaders = ResponseHeaders> {
     readonly kind: "binary";
     // (undocumented)
     readonly mediaType: string;
+    readonly schema?: z.ZodType;
+    readonly stream?: boolean;
 }
 
 // @public
@@ -1237,7 +1242,7 @@ export interface ComponentTypes {
         AuditEvent: {
             action: string;
             actor: ComponentTypes["schemas"]["AuditEventActor"];
-            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share") | null;
+            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export") | null;
             createdAt: string;
             entity: ComponentTypes["schemas"]["AuditEventEntity"] | null;
             id: string;
@@ -1540,6 +1545,36 @@ export interface ComponentTypes {
             entitlements: ComponentTypes["schemas"]["EntitlementSet"];
             upgradeAvailable: boolean;
             usage: ComponentTypes["schemas"]["EntitlementUsage"];
+        };
+        ExportBookmark: {
+            description: string | null;
+            folders: string[];
+            forwarding: boolean;
+            pinned: boolean;
+            planArchived: boolean;
+            ref: string;
+            slug: string | null;
+            tags: string[];
+            title: string;
+            url: string;
+        };
+        ExportDocument: {
+            bookmarks: ComponentTypes["schemas"]["ExportBookmark"][];
+            exportedAt: string;
+            folders: ComponentTypes["schemas"]["ExportFolder"][];
+            format: "slugbase-export";
+            goPreferences: unknown[];
+            shared: unknown[];
+            tags: string[];
+            version: 1;
+            workspace: {
+                name: string;
+            };
+        };
+        ExportFolder: {
+            color: number;
+            icon: string;
+            name: string;
         };
         Folder: {
             bookmarkCount: number;
@@ -3455,6 +3490,93 @@ export const EntitlementUsageSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public
+export const EXPORT_DISPOSITION_PATTERN: RegExp;
+
+// @public
+export const EXPORT_FORMAT = "slugbase-export";
+
+// @public
+export const EXPORT_REF_PATTERN: RegExp;
+
+// @public
+export const EXPORT_VERSION = 1;
+
+// @public (undocumented)
+export const ExportBookmarkSchema: z.ZodObject<{
+    ref: z.ZodString;
+    url: z.ZodString;
+    title: z.ZodString;
+    description: z.ZodNullable<z.ZodString>;
+    slug: z.ZodNullable<z.ZodString>;
+    forwarding: z.ZodBoolean;
+    pinned: z.ZodBoolean;
+    planArchived: z.ZodBoolean;
+    folders: z.ZodArray<z.ZodString>;
+    tags: z.ZodArray<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ExportDocumentSchema: z.ZodObject<{
+    format: z.ZodLiteral<"slugbase-export">;
+    version: z.ZodLiteral<1>;
+    exportedAt: z.ZodISODateTime;
+    workspace: z.ZodObject<{
+        name: z.ZodString;
+    }, z.core.$strict>;
+    folders: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+    }, z.core.$strict>>;
+    tags: z.ZodArray<z.ZodString>;
+    bookmarks: z.ZodArray<z.ZodObject<{
+        ref: z.ZodString;
+        url: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        planArchived: z.ZodBoolean;
+        folders: z.ZodArray<z.ZodString>;
+        tags: z.ZodArray<z.ZodString>;
+    }, z.core.$strict>>;
+    goPreferences: z.ZodArray<z.ZodUnknown>;
+    shared: z.ZodArray<z.ZodUnknown>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ExportFolderSchema: z.ZodObject<{
+    name: z.ZodString;
+    icon: z.ZodString;
+    color: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const exportJson: {
+    readonly method: "get";
+    readonly path: "/api/v1/export/json";
+    readonly operationId: "exportJson";
+    readonly tag: "export";
+    readonly summary: "Export my content as SlugBase JSON";
+    readonly auth: "member";
+    readonly rate: "bulk";
+    readonly scope: "read";
+    readonly responses: {
+        readonly 200: StreamResponse<    {
+        "Content-Disposition": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public
 export const FAVICON_CACHE_MAX_AGE_SECONDS = 604800;
 
 // @public
@@ -5158,6 +5280,7 @@ export const listAuditEvents: {
                 bookmark: "bookmark";
                 share: "share";
                 workspace: "workspace";
+                export: "export";
             }>>;
             entityType: z.ZodOptional<z.ZodString>;
             entityId: z.ZodOptional<z.ZodUUID>;
@@ -5189,6 +5312,7 @@ export const listAuditEvents: {
         bookmark: "bookmark";
         share: "share";
         workspace: "workspace";
+        export: "export";
         }>>;
         entity: z.ZodNullable<z.ZodObject<{
         type: z.ZodString;
@@ -9215,6 +9339,60 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    exportJson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Content-Disposition": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ExportDocument"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     fetchBookmarkMetadata: {
         parameters: {
             query?: never;
@@ -10762,7 +10940,7 @@ export interface OperationTypes {
             query?: {
                 actorAccountId?: string;
                 action?: string | string[];
-                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share";
+                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export";
                 entityType?: string;
                 entityId?: string;
                 from?: string;
@@ -15782,6 +15960,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/export/json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["exportJson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/favicons/{host}": {
         parameters: {
             query?: never;
@@ -18440,6 +18635,20 @@ export const startOidcSignIn: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public
+export interface StreamResponse<H extends ResponseHeaders = ResponseHeaders> extends BinaryResponse<H> {
+    // (undocumented)
+    readonly stream: true;
+}
+
+// @public
+export function streamResponse<H extends ResponseHeaders = ResponseHeaders>(description: string, mediaType: string, options?: StreamResponseOptions<H>): StreamResponse<H>;
+
+// @public (undocumented)
+export interface StreamResponseOptions<H extends ResponseHeaders = ResponseHeaders> extends JsonResponseOptions<H> {
+    readonly schema?: z.ZodType;
+}
 
 // @public (undocumented)
 export const suggestBookmarkDetails: {

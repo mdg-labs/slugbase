@@ -316,6 +316,9 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
       if (kind === "json" && !(isRecord(response) && response["schema"] instanceof z.ZodType)) {
         need(`response ${status} needs a Zod schema`);
       }
+      if (kind === "binary" && isRecord(response) && response["schema"] !== undefined && !(response["schema"] instanceof z.ZodType)) {
+        need(`response ${status} schema must be a Zod schema`);
+      }
       const headers = isRecord(response) ? response["headers"] : undefined;
       if (headers !== undefined) {
         if (!isRecord(headers)) {
@@ -448,7 +451,7 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
     } else if (response.kind === "binary") {
       const built: JsonObject = {
         description: response.description,
-        content: { [response.mediaType]: { schema: { type: "string", format: "binary" } } },
+        content: { [response.mediaType]: { schema: response.schema === undefined ? { type: "string", format: "binary" } : (converter.convert(response.schema, "output") ?? {}) } },
       };
       if (response.headers !== undefined) {
         built["headers"] = buildHeaders(response.headers, converter);

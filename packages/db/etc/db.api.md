@@ -25,6 +25,7 @@ import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { DashboardStore } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
+import type { ExportStore } from '@slugbase/core';
 import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderShareStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
@@ -619,6 +620,12 @@ export interface EntitlementUsage {
     readonly bookmarksUsed: number;
     readonly seatsUsed: number;
 }
+
+// @public (undocumented)
+export type ExportRepository = ExportStore;
+
+// @public
+export function exportRepository(tx: TenantTx): ExportRepository;
 
 // @public
 export type FaviconRecord = {

@@ -29,12 +29,17 @@ const MOCK_SET_COOKIE = "slugbase_session=mock-session; Path=/; HttpOnly; SameSi
 // address a client can follow; the mock sends the application root.
 const MOCK_LOCATION = "/";
 
+// The export declares its `Content-Disposition` as an attachment named after the day, a pattern a schema of type string cannot satisfy.
+const MOCK_CONTENT_DISPOSITION = 'attachment; filename="slugbase-export-2026-01-01.json"';
+
 function headerValue(document: OpenApiDocument, name: string, schema: unknown): string {
   switch (name.toLowerCase()) {
     case "set-cookie":
       return MOCK_SET_COOKIE;
     case "location":
       return MOCK_LOCATION;
+    case "content-disposition":
+      return MOCK_CONTENT_DISPOSITION;
     default:
       return String(fixtureFor(document, schema));
   }
@@ -85,6 +90,31 @@ export function baseFixtures(document: OpenApiDocument): Readonly<Record<string,
       setupTokenRequired: false,
     },
     getOpenApiDocument: document,
+    // The document of an export: a schema alone would give its arrays one entry each, and the lists that are empty by contract must stay empty.
+    exportJson: {
+      format: "slugbase-export",
+      version: 1,
+      exportedAt: "2026-01-01T00:00:00.000Z",
+      workspace: { name: "Mock workspace" },
+      folders: [{ name: "Reading", icon: "folder", color: 1 }],
+      tags: ["later"],
+      bookmarks: [
+        {
+          ref: "b1",
+          url: "https://example.com/",
+          title: "Example",
+          description: null,
+          slug: "example",
+          forwarding: true,
+          pinned: false,
+          planArchived: false,
+          folders: ["Reading"],
+          tags: ["later"],
+        },
+      ],
+      goPreferences: [],
+      shared: [],
+    },
   };
 }
 

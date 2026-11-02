@@ -72,6 +72,8 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *
  * - Audit log: the query parameter `actorAccountId` of `listAuditEvents` takes a member identifier and `entityId` a bookmark identifier. The operation lists the events of the workspace of the
  *   request and filters them, so an identifier of workspace B in either matches no event of A's log: the answer is an empty `200` and not `404`, which `runApiMatrix` is told by its `emptyAnswers` option.
+ * - Export: `exportJson` takes no input at all and so no entry. It reads the caller's own bookmarks, folders and tags of the workspace of the request through statements that name the workspace and the
+ *   owner (`packages/db/src/repositories/export.ts`), over the tables whose scoped repositories are below, so the API mode holds it to an answer that names nothing of B and a workspace B whose rows are as they were.
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and

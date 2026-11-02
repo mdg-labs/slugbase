@@ -516,7 +516,8 @@
                   "invitation",
                   "team",
                   "bookmark",
-                  "share"
+                  "share",
+                  "export"
                 ],
                 "type": "string"
               },
@@ -2508,6 +2509,208 @@
           "entitlements",
           "usage",
           "upgradeAvailable"
+        ],
+        "type": "object"
+      },
+      "ExportBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bookmark's description; null when it has none"
+          },
+          "folders": {
+            "description": "The names of the caller's folders the bookmark is filed in, sorted by the bytes of the name; each is the name of an entry of the document's folders",
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "forwarding": {
+            "description": "Whether /go forwards to the bookmark by its slug; true only for a bookmark with a slug",
+            "type": "boolean"
+          },
+          "pinned": {
+            "description": "Whether the bookmark is pinned",
+            "type": "boolean"
+          },
+          "planArchived": {
+            "description": "Whether a downgrade of the plan archived the bookmark: it is exported with everything else, flagged",
+            "type": "boolean"
+          },
+          "ref": {
+            "description": "The export-local reference of the bookmark, `b1`, `b2` and so on in the order of the list; the entries of goPreferences name a bookmark by it",
+            "pattern": "^b[1-9][0-9]*$",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bookmark's slug; null when it has none"
+          },
+          "tags": {
+            "description": "The names of the caller's tags the bookmark carries, sorted by the bytes of the name; each is the name of an entry of the document's tags",
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          },
+          "url": {
+            "description": "The bookmark's address, an http or https URL, as it is stored",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "url",
+          "title",
+          "description",
+          "slug",
+          "forwarding",
+          "pinned",
+          "planArchived",
+          "folders",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "ExportDocument": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarks": {
+            "description": "Every bookmark the caller owns, plan-archived ones included and flagged, in the order of their creation",
+            "items": {
+              "$ref": "#/components/schemas/ExportBookmark"
+            },
+            "type": "array"
+          },
+          "exportedAt": {
+            "description": "When the export began, in UTC: the one timestamp the document holds",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "folders": {
+            "description": "Every folder the caller owns, used or not, sorted by the bytes of the name",
+            "items": {
+              "$ref": "#/components/schemas/ExportFolder"
+            },
+            "type": "array"
+          },
+          "format": {
+            "const": "slugbase-export",
+            "description": "Always slugbase-export: the document is a SlugBase export",
+            "type": "string"
+          },
+          "goPreferences": {
+            "description": "The caller's remembered slug choices; always empty in this release",
+            "items": {},
+            "maxItems": 0,
+            "type": "array"
+          },
+          "shared": {
+            "description": "The bookmarks other members shared with the caller; always empty in this release",
+            "items": {},
+            "maxItems": 0,
+            "type": "array"
+          },
+          "tags": {
+            "description": "The name of every tag the caller owns, used or not, sorted by the bytes of the name",
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "const": 1,
+            "description": "The version of the format; a reader refuses a version newer than it supports",
+            "type": "number"
+          },
+          "workspace": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "The name of the workspace the content was exported from",
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "exportedAt",
+          "workspace",
+          "folders",
+          "tags",
+          "bookmarks",
+          "goPreferences",
+          "shared"
+        ],
+        "type": "object"
+      },
+      "ExportFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "description": "The folder's colour, 1 to 8: the number of the --folder-N theme token",
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "icon": {
+            "description": "The folder's icon, a lucide icon name",
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "description": "The folder's name, as the caller entered it",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "icon",
+          "color"
         ],
         "type": "object"
       },
@@ -6266,7 +6469,8 @@
                 "invitation",
                 "team",
                 "bookmark",
-                "share"
+                "share",
+                "export"
               ],
               "type": "string"
             }
@@ -9473,6 +9677,91 @@
         ],
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
+      }
+    },
+    "/api/v1/export/json": {
+      "get": {
+        "operationId": "exportJson",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDocument"
+                }
+              }
+            },
+            "description": "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The export is recorded in the workspace's audit log as export.created with counts only, before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
+            "headers": {
+              "Content-Disposition": {
+                "description": "An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name",
+                "required": true,
+                "schema": {
+                  "pattern": "^attachment; filename=\"slugbase-export-\\d{4}-\\d{2}-\\d{2}\\.json\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again. Exports take from the bulk limit",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Export my content as SlugBase JSON",
+        "tags": [
+          "export"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "bulk",
         "x-slugbase-scope": "read"
       }
     },
@@ -19825,6 +20114,9 @@
     },
     {
       "name": "entitlements"
+    },
+    {
+      "name": "export"
     },
     {
       "name": "favicons"

@@ -570,6 +570,8 @@ Every bookmark body also carries `tags`, the caller's own tags on it as `{ id, n
 
 The JSON export is a versioned document (doc 02 §13.3). Its JSON Schema is generated from the Zod definition into `packages/contracts/generated/`, committed and drift-checked with the rest of the contract artefacts; future format versions stay importable. Both exports are recorded as `export.created` audit events, and the imports as `import.completed`, with counts only.
 
+`GET /export/json` is a streamed response (the contract's `streamResponse`, beside `binaryResponse`): the handler answers a stream of bytes, the response stage checks only its `Content-Type` and never reads the body, and the document of the operation publishes the schema of the whole export as the body of `application/json`, so the contract walker and the mock check a complete document while the server holds no more than one page of it. The answer is `Content-Disposition: attachment; filename="slugbase-export-<UTC date>.json"`, which holds no workspace name, and nothing is stored on the server. The export is recorded as `export.created` before the first byte; a failure after the first byte ends the connection with the document unfinished, so a truncated file does not parse. Until the selection parameters and `includeShared` exist the operation takes none and answers the caller's own bookmarks, folders and tags, with `goPreferences` and `shared` as empty lists.
+
 ### 10.10 instance (CE instance admin)
 
 Mounted on both editions; on Cloud no account carries the flag, so every call is 403 (Q44).

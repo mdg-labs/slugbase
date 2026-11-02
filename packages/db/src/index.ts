@@ -64,6 +64,8 @@ export type { StoredAiSuggestion } from "./schema/ai.ts";
 export { urlMetadataRepository } from "./repositories/url-metadata.ts";
 export type { UrlMetadataFields, UrlMetadataRecord, UrlMetadataRepository, UrlMetadataResult } from "./repositories/url-metadata.ts";
 export type { UrlMetadataStatus } from "./schema/url-metadata.ts";
+export { exportRepository } from "./repositories/export.ts";
+export type { ExportRepository } from "./repositories/export.ts";
 export { dashboardRepository } from "./repositories/dashboard.ts";
 export type { DashboardRepository } from "./repositories/dashboard.ts";
 export { searchRepository } from "./repositories/search.ts";

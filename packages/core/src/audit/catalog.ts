@@ -6,7 +6,7 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share", "export"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -86,6 +86,8 @@ export const AUDIT_ACTIONS = {
   "share.revoked": { category: "share", metadata: { targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
   // A member shared several of their bookmarks with one member or team in one request (doc 02 section 5.8): the number of shares made and the target, and nothing about the bookmarks.
   "share.bulk_granted": { category: "share", metadata: { count: COUNT, targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
+  // A member exported their own content (doc 02 section 13.2): how many bookmarks (plan-archived ones included), folders and tags the document holds and how many shared bookmarks, and nothing about any of them.
+  "export.created": { category: "export", metadata: { bookmarks: COUNT, folders: COUNT, tags: COUNT, shared: COUNT } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

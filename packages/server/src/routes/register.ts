@@ -8,6 +8,7 @@ import {
   type EmptyResponse,
   type JsonResponse,
   type OperationDefinition,
+  type StreamResponse,
 } from "@slugbase/contracts";
 import type { z } from "zod";
 import type { ChainContext, RouteBinding } from "../http/chain.ts";
@@ -41,11 +42,13 @@ export type ResponseHeadersOf<H> = keyof H extends never
 export type ResponseResult<R> = {
   [S in keyof R & number]: R[S] extends JsonResponse<infer Schema, infer H>
     ? { readonly status: S; readonly body: z.input<Schema> } & ResponseHeadersOf<H>
-    : R[S] extends BinaryResponse<infer H>
-      ? { readonly status: S; readonly body: Uint8Array } & ResponseHeadersOf<H>
-      : R[S] extends EmptyResponse
-        ? { readonly status: S; readonly body?: never; readonly headers?: Readonly<Record<string, string>> }
-        : never;
+    : R[S] extends StreamResponse<infer H>
+      ? { readonly status: S; readonly body: ReadableStream<Uint8Array> } & ResponseHeadersOf<H>
+      : R[S] extends BinaryResponse<infer H>
+        ? { readonly status: S; readonly body: Uint8Array } & ResponseHeadersOf<H>
+        : R[S] extends EmptyResponse
+          ? { readonly status: S; readonly body?: never; readonly headers?: Readonly<Record<string, string>> }
+          : never;
 }[keyof R & number];
 
 /**
@@ -75,6 +78,13 @@ function respond(operation: OperationDefinition, result: UntypedResult): Respons
     throw new Error(`${operation.operationId} answered ${String(result.status)}, which it does not declare as a body or empty response`);
   }
   const headers = new Headers(result.headers);
+  if (declared.kind === "binary" && declared.stream === true) {
+    if (!(result.body instanceof ReadableStream)) {
+      throw new Error(`${operation.operationId} answered ${String(result.status)} without the stream it declares`);
+    }
+    headers.set("content-type", declared.mediaType);
+    return new Response(result.body, { status: result.status, headers });
+  }
   if (declared.kind === "binary") {
     if (!(result.body instanceof Uint8Array)) {
       throw new Error(`${operation.operationId} answered ${String(result.status)} without the bytes it declares`);

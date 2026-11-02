@@ -153,6 +153,15 @@ describe("the generated handlers", () => {
     }
   });
 
+  it("answer the export as an attachment named after the day, with a document that is the format's", async () => {
+    const exported = operations.find((operation) => operation.operationId === "exportJson");
+    expect(exported).toBeDefined();
+    const response = await answer(exported as Declared);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="slugbase-export-\d{4}-\d{2}-\d{2}\.json"$/);
+    expect(await response.json()).toMatchObject({ format: "slugbase-export", version: 1, goPreferences: [], shared: [] });
+  });
+
   it("answer the same bytes every time", async () => {
     const first = build();
     const second = build();

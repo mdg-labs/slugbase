@@ -6,6 +6,7 @@ import {
   jsonResponse,
   operations,
   problemResponse,
+  streamResponse,
   type OperationDefinition,
 } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
@@ -419,6 +420,51 @@ describe("a route of an operation with a binary response", () => {
     const server = serveImage(() => ({ status: 200, body: "<svg/>" as unknown as Uint8Array, headers: { "X-Content-Type-Options": "nosniff" } }));
 
     const response = await server.fetch(new Request("http://localhost/api/v1/images/1"));
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toMatch(/^application\/problem\+json/);
+  });
+});
+
+describe("a route of an operation with a streamed response", () => {
+  const getRows = defineOperation({
+    method: "get",
+    path: "/api/v1/rows",
+    operationId: "getRows",
+    tag: "rows",
+    auth: "anonymous",
+    rate: "none",
+    responses: {
+      200: streamResponse("rows", "application/json", {
+        schema: z.strictObject({ rows: z.array(z.number()) }),
+        headers: { "Content-Disposition": { description: "an attachment", schema: z.literal('attachment; filename="rows.json"') } },
+      }),
+      404: problemResponse("not found"),
+    },
+  });
+
+  function serveRows(handle: Parameters<ReturnType<typeof route<typeof getRows>>["handle"]>[0]) {
+    const module = moduleOf(route(getRows).handle(handle));
+    return compose([module], documentFor([getRows]));
+  }
+
+  const streamOf = (text: string): ReadableStream<Uint8Array> => new Response(text).body as ReadableStream<Uint8Array>;
+
+  it("answers the stream of the handler with the media type the operation declares, whatever the handler sets, and the headers it documents", async () => {
+    const server = serveRows(() => ({ status: 200, body: streamOf('{"rows":[1]}'), headers: { "Content-Disposition": 'attachment; filename="rows.json"', "content-type": "text/html" } }));
+
+    const response = await server.fetch(new Request("http://localhost/api/v1/rows"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="rows.json"');
+    expect(await response.json()).toEqual({ rows: [1] });
+  });
+
+  it("answers 500, and not a body, for a handler that hands over text where the operation declares a stream", async () => {
+    const server = serveRows(() => ({ status: 200, body: "{}" as unknown as ReadableStream<Uint8Array>, headers: { "Content-Disposition": 'attachment; filename="rows.json"' } }));
+
+    const response = await server.fetch(new Request("http://localhost/api/v1/rows"));
 
     expect(response.status).toBe(500);
     expect(response.headers.get("content-type")).toMatch(/^application\/problem\+json/);
