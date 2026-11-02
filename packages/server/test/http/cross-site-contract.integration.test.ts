@@ -44,6 +44,13 @@ const committed = loadOpenApiDocument();
 const origin = serverConfig({ NODE_ENV: "test" }).APP_ORIGIN;
 const operations = readOperations(committed).operations;
 
+/** Whether the contract declares the operation's body as a multipart upload: the one declaration that makes `multipart/form-data` a content type the rule admits. */
+function takesUpload(operation: DocumentedOperation): boolean {
+  const body = operation.entry["requestBody"];
+  const content = typeof body === "object" && body !== null && "content" in body ? body.content : undefined;
+  return typeof content === "object" && content !== null && "multipart/form-data" in content;
+}
+
 function audienceOf(operation: DocumentedOperation): unknown {
   return operation.entry["x-slugbase-audience"];
 }
@@ -227,6 +234,10 @@ describe("the document under test", () => {
     expect(mutations.length).toBeGreaterThan(0);
     expect(browserMutations.length + audienceMutations.length).toBe(mutations.length);
   });
+
+  it("declares a multipart body for the Netscape import alone", () => {
+    expect(operations.filter(takesUpload).map((operation) => operation.operationId)).toEqual(["importNetscape"]);
+  });
 });
 
 describe.each(browserMutations.map((operation) => [`${operation.method.toUpperCase()} ${operation.path}`, operation] as const))(
@@ -251,7 +262,13 @@ describe.each(browserMutations.map((operation) => [`${operation.method.toUpperCa
       expectRefused(await answerOf(operation, { origin: "https://evil.example", fetchSite: "cross-site" }));
     });
 
-    it.each(Object.entries(CONTENT_TYPES))("refuses a body sent as %s", async (_label, contentType) => {
+    it.each(Object.entries(CONTENT_TYPES))("refuses a body sent as %s", async (label, contentType) => {
+      if (takesUpload(operation) && label === "a multipart form") {
+        // The upload route is the one that declares it: the rule lets the content type through, and the route's own answer is held to what the operation declares.
+        expectPassesTheRule(operation, await answerOf(operation, { contentType }));
+        expect(await answerOf(operation, { contentType, cookie: false })).toEqual({ status: 401, code: "unauthenticated" });
+        return;
+      }
       expectRefused(await answerOf(operation, { contentType }));
       expectRefused(await answerOf(operation, { contentType, cookie: false }));
     });

@@ -205,10 +205,10 @@ describe("declaration checks", () => {
       expect(problemsOf([headed]).join("\n")).toContain("response 201 documents headers");
     });
 
-    it("is declared by createBookmark, createInvitation and importJson in the committed document, as a header parameter of those operations only", () => {
+    it("is declared by createBookmark, createInvitation, importJson and importNetscape in the committed document, as a header parameter of those operations only", () => {
       const parsed = JSON.parse(committed) as { paths: Record<string, Record<string, Obj>> };
       const declaring = Object.values(parsed.paths).flatMap((item) => Object.values(item)).filter((entry) => entry["x-slugbase-idempotency"] === true);
-      expect(declaring.map((entry) => entry["operationId"]).sort()).toEqual(["createBookmark", "createInvitation", "importJson"]);
+      expect(declaring.map((entry) => entry["operationId"]).sort()).toEqual(["createBookmark", "createInvitation", "importJson", "importNetscape"]);
       for (const entry of declaring) {
         const headers = (entry["parameters"] as Obj[]).filter((parameter) => parameter["in"] === "header");
         expect(headers.map((parameter) => [parameter["name"], parameter["in"], parameter["required"]])).toEqual([["Idempotency-Key", "header", false]]);
@@ -226,6 +226,43 @@ describe("declaration checks", () => {
       const problems = problemsOf([{ ...base, maxBodyBytes: value }]);
       expect(problems.join("\n")).toContain("maxBodyBytes must be a positive integer");
     }
+  });
+
+  describe("an upload", () => {
+    const upload = { field: "file", description: "The file" };
+
+    it("is published as a multipart/form-data body of the one required binary part, with no other property, and no application/json body", () => {
+      const built = JSON.parse(JSON.stringify(buildOpenApiDocument([defineOperation({ ...base, request: { upload } })]))) as { paths: Record<string, Record<string, Obj>> };
+      const body = built.paths["/api/v1/things"]?.["post"]?.["requestBody"];
+
+      expect(body).toEqual({
+        required: true,
+        content: {
+          "multipart/form-data": {
+            schema: { type: "object", properties: { file: { type: "string", format: "binary", description: "The file" } }, required: ["file"], additionalProperties: false },
+          },
+        },
+      });
+    });
+
+    it("is declared by the Netscape import alone in the committed document", () => {
+      const parsed = JSON.parse(committed) as { paths: Record<string, Record<string, Obj>> };
+      const multipart = Object.values(parsed.paths)
+        .flatMap((item) => Object.values(item))
+        .filter((entry) => JSON.stringify(entry["requestBody"] ?? {}).includes("multipart/form-data"));
+
+      expect(multipart.map((entry) => entry["operationId"])).toEqual(["importNetscape"]);
+      expect(Object.keys(((multipart[0]?.["requestBody"] as Obj)["content"] as Obj))).toEqual(["multipart/form-data"]);
+    });
+
+    it("refuses a field that is no plain name, no description, a JSON body beside it, and a get or a delete", () => {
+      for (const bad of [{ ...upload, field: "" }, { ...upload, field: "1file" }, { ...upload, field: "__proto__" }, { ...upload, field: "a-b" }, { ...upload, field: "f".repeat(65) }, { ...upload, description: "" }, { field: "file" }, "file"]) {
+        expect(problemsOf([{ ...base, request: { upload: bad } }]).join("\n"), JSON.stringify(bad)).toContain("request.upload must be { field, description }");
+      }
+      expect(problemsOf([{ ...base, request: { upload, body: z.strictObject({}) } }]).join("\n")).toContain("request.upload and request.body are not declared together");
+      expect(problemsOf([{ ...base, method: "get", request: { upload } }]).join("\n")).toContain("a get operation does not take an upload");
+      expect(problemsOf([{ ...base, method: "delete", request: { upload } }]).join("\n")).toContain("a delete operation does not take an upload");
+    });
   });
 
   it("names the operation that has no policy", () => {

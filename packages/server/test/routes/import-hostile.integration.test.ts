@@ -2,8 +2,9 @@ import { IMPORT_MAX_BYTES, IMPORT_MAX_BOOKMARKS, IMPORT_MAX_NEW_NAMES, ImportRes
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HOOK_TIMEOUT_MS, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
+import { NETSCAPE, multipart, upload } from "./netscape-upload.ts";
 
-// The hostile files of POST /api/v1/import/json (doc 08 section 3.5 `import/hostile`, doc 10 T1 and T13), through the whole chain over the migrated database. The failure scenario: a file the
+// The hostile files of POST /api/v1/import/json and POST /api/v1/import/netscape (doc 08 section 3.5 `import/hostile`, doc 10 T1 and T13), through the whole chain over the migrated database. The failure scenario: a file the
 // importer must not trust, an oversized body, a body nested a hundred thousand deep that is sent with an Idempotency-Key, malformed JSON, five megabytes of empty objects, `javascript:` and
 // `data:` addresses, control characters, huge strings, script-laden titles and prototype-pollution keys, a folder or tag name or a folder icon of a hundred thousand
 // characters, and a file of more new folders and tags than one import may create, is each rejected or neutralised: no `500`, no polluted prototype, no stored key for a refused request, and no row of any workspace written, the caller's or another's.
@@ -438,6 +439,158 @@ describe("POST /import/json with a hostile file", { timeout: TEST_TIMEOUT_MS }, 
     expect(response.status).toBe(200);
     expect(result.created).toBe(1);
     expect(result.skipped.map((entry) => [entry.url, entry.reason])).toEqual([["https://example.com/mine", "duplicate"]]);
+    expect(await written()).toEqual(before);
+  });
+});
+
+describe("POST /import/netscape with a hostile file", { timeout: TEST_TIMEOUT_MS }, () => {
+  const DRY = `${NETSCAPE}?dryRun=true`;
+  const link = (path: string, title: string) => `<DT><A HREF="https://example.com/${path}">${title}</A>\n`;
+
+  /** The file's one link twice, so that the answer echoes the title the importer made of it (the second is a duplicate of the first). */
+  const twice = (title: string) => `<DL>${link("x", title)}${link("x", title)}</DL>`;
+
+  async function dryRun(world: World, person: Person, content: string | Uint8Array) {
+    const response = await upload(world, person, content, { path: DRY });
+    return { response, result: response.status === 200 ? ImportResultSchema.parse(await response.clone().json()) : undefined };
+  }
+
+  it("reads unclosed and nested tags, a 5 MiB line, a million nested lists, NUL bytes and an entity bomb to an answer, without a 500, and writes nothing", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const before = await written();
+    const files: [string, string][] = [
+      ["an unclosed tag, quote and comment", `<DL>${link("1", "one")}<A HREF="https://example.com/2" TAGS="a,b<!-- never closed`],
+      ["tags nested without a close", `${"<DL><DT><H3>f</H3><B><I><A HREF=\"https://example.com/n\">".repeat(4000)}x`],
+      ["a 5 MiB line", `<DL><DT><A HREF="https://example.com/x">${"a".repeat(IMPORT_MAX_BYTES - 200)}</A></DL>`],
+      ["a million nested lists", `<DL>${"<DL>".repeat(1_000_000)}${link("deep", "deep")}${"</DL>".repeat(100_000)}</DL>`],
+      ["a 5 MiB title of entities", `<DL><DT><A HREF="https://example.com/x">${"&amp;".repeat(1_000_000)}</A></DL>`],
+      ["character references past the code points", `<DL><DT><A HREF="https://example.com/x">${"&#x10FFFF;&#0;&#xD800;&#99999999;&#xFFFFFFF;&bogus;".repeat(50_000)}</A></DL>`],
+      ["NUL bytes through a tag, an attribute and a scheme", `<DL><DT><A\u0000 HREF="ja\u0000vascript:alert(1)">a</A><DT><A HREF="https://exa\u0000mple.com/ok">b\u0000c</A></DL>${"\u0000".repeat(100_000)}`],
+    ];
+
+    for (const [label, html] of files) {
+      expect(html.length, label).toBeLessThanOrEqual(IMPORT_MAX_BYTES);
+      const { response, result } = await dryRun(world, a, html);
+      expect(response.status, label).toBe(200);
+      expect(result?.detected.bookmarks, label).toBeGreaterThanOrEqual(0);
+    }
+    expect(await written()).toEqual(before);
+  });
+
+  it("makes of every title plain text cut to 300 characters, whatever the file holds: a script, a 5 MiB title and control characters", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const titles = new Map<string, string>([
+      ["escaped markup", "&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;"],
+      ["control characters", "Tab&#9;Nul&#1;Bell&#7;Esc&#27;C1&#133;End"],
+      ["a title of 2.5 MiB", "t".repeat(Math.floor(IMPORT_MAX_BYTES / 2) - 400)],
+    ]);
+    const expected = ["<script>alert(1)</script><img src=x onerror=alert(1)>", "Tab NulBellEscC1End", "t".repeat(300)];
+
+    const seen: string[] = [];
+    for (const [label, title] of titles) {
+      const { result } = await dryRun(world, a, twice(title));
+      expect(result?.skipped, label).toHaveLength(1);
+      seen.push(result?.skipped[0]?.title ?? "");
+    }
+
+    expect(seen.map((title) => title.replaceAll(/\s+/g, " "))).toEqual(expected);
+    for (const title of seen) {
+      expect(title).not.toMatch(/\p{Cc}/u);
+    }
+  });
+
+  it("neither runs nor stores a script, a style or a comment: a link inside one is no bookmark, and what is stored is plain text and an http or https address", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const html =
+      '<TITLE><A HREF="https://example.com/in-title">no</A></TITLE><!-- <A HREF="https://example.com/in-comment">no</A> -->' +
+      '<SCRIPT>document.write(\'<A HREF="https://example.com/in-script">no</A>\')</SCRIPT><STYLE><A HREF="https://example.com/in-style">no</A></STYLE>' +
+      `<DL>${link("kept", "&lt;b onmouseover=alert(1)&gt;kept&lt;/b&gt;")}<DT><A HREF="javascript:alert(1)">bookmarklet</A><DT><A HREF="data:text/html,x">data</A><DT><A HREF="place:sort=8">place</A></DL>`;
+
+    const response = await upload(world, a, html);
+    const result = ImportResultSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(result).toMatchObject({ detected: { bookmarks: 4 }, created: 1 });
+    expect(result.failed.map((entry) => entry.reason)).toEqual(["url_not_allowed", "url_not_allowed", "url_not_allowed"]);
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ url: string; title: string }[]>`SELECT url, title FROM bookmarks ORDER BY url`;
+    });
+    expect(rows.map((row) => [row.url, row.title])).toEqual([
+      ["https://example.com/kept", "<b onmouseover=alert(1)>kept</b>"],
+      ["https://example.com/mine", "Existing"],
+      ["https://example.com/theirs", "Existing"],
+    ]);
+  });
+
+  it("refuses a file of more than 5 000 links with 422 and a bounded errors[], and reads one of exactly 5 000, with nothing written by the first", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const before = await written();
+    const links = (count: number) => `<DL>${Array.from({ length: count }, (_, index) => link(String(index), String(index))).join("")}</DL>`;
+
+    const over = await upload(world, a, links(IMPORT_MAX_BOOKMARKS + 1), { path: DRY, headers: { [KEY_HEADER]: crypto.randomUUID() } });
+    const flood = await upload(world, a, `<DL>${'<DT><A HREF="https://example.com/x">y</A>'.repeat(100_000)}</DL>`, { path: DRY });
+
+    expect(over.status).toBe(422);
+    expect(await problemOf(over)).toMatchObject({ code: "validation_failed", errors: [{ path: "", code: "too_big" }] });
+    expect(flood.status).toBe(422);
+    expect(await keyCount()).toBe(0);
+    expect(await written()).toEqual(before);
+    const exactly = await dryRun(world, a, links(IMPORT_MAX_BOOKMARKS));
+    expect(exactly.result?.created).toBe(IMPORT_MAX_BOOKMARKS);
+  });
+
+  it("is exact about the 5 MiB: a file of 5 MiB is read, one byte more is 413, and a request over 5 MiB with its envelope is 413 before its parts are read", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const before = await written();
+    const padded = (size: number) => `<DL>${link("x", "x")}</DL>${" ".repeat(size - `<DL>${link("x", "x")}</DL>`.length)}`;
+
+    const exactly = await upload(world, a, padded(IMPORT_MAX_BYTES), { path: DRY });
+    const over = await upload(world, a, padded(IMPORT_MAX_BYTES + 1), { path: DRY });
+    const envelope = await upload(world, a, padded(IMPORT_MAX_BYTES + 64 * 1024), { path: DRY });
+
+    expect(exactly.status).toBe(200);
+    expect(ImportResultSchema.parse(await exactly.json()).created).toBe(1);
+    expect(over.status).toBe(413);
+    expect((await problemOf(over)).code).toBe("payload_too_large");
+    expect(envelope.status).toBe(413);
+    expect((await problemOf(envelope)).code).toBe("payload_too_large");
+    expect(await written()).toEqual(before);
+  });
+
+  it("answers 400 or 422 to a body that is not a well-formed upload, never a 500, stores no key for it and writes nothing", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const before = await written();
+    const part = (name: string, body: string) => `--b\r\nContent-Disposition: form-data; name="${name}"; filename="f.html"\r\nContent-Type: text/html\r\n\r\n${body}\r\n`;
+    const cases: [string, string | Uint8Array, string, number][] = [
+      ["no boundary", part("file", "<DL></DL>") + "--b--\r\n", "multipart/form-data", 400],
+      ["an empty body", "", "multipart/form-data; boundary=b", 400],
+      ["a body that is cut off", part("file", "<DL></DL>").slice(0, 40), "multipart/form-data; boundary=b", 400],
+      ["a body that never ends", part("file", "<DL></DL>"), "multipart/form-data; boundary=b", 400],
+      ["another boundary", part("file", "<DL></DL>") + "--b--\r\n", "multipart/form-data; boundary=other", 400],
+      ["binary garbage", new Uint8Array(Array.from({ length: 4096 }, (_, index) => (index * 37) % 256)), "multipart/form-data; boundary=b", 400],
+      ["NUL bytes in a part header", `--b\r\nContent-Disposition: form-data; name="fi\u0000le"\r\n\r\nx\r\n--b--\r\n`, "multipart/form-data; boundary=b", 422],
+      ["a part of another name", part("other", "<DL></DL>") + "--b--\r\n", "multipart/form-data; boundary=b", 422],
+      ["a file part twice", part("file", "<DL></DL>") + part("file", "<DL></DL>") + "--b--\r\n", "multipart/form-data; boundary=b", 422],
+      ["no file part", "--b--\r\n", "multipart/form-data; boundary=b", 422],
+      ["a file part that is text", `--b\r\nContent-Disposition: form-data; name="file"\r\n\r\n<DL></DL>\r\n--b--\r\n`, "multipart/form-data; boundary=b", 422],
+      ["50 000 empty parts", "--b\r\nContent-Disposition: form-data; name=\"x\"\r\n\r\n\r\n".repeat(50_000) + "--b--\r\n", "multipart/form-data; boundary=b", 422],
+    ];
+
+    for (const [label, body, contentType, status] of cases) {
+      const response = await multipart(world, a, body, contentType, { [KEY_HEADER]: crypto.randomUUID() }, DRY);
+      expect(response.status, label).toBe(status);
+      const problem = await problemOf(response);
+      expect(problem.code, label).toBe(status === 400 ? "bad_request" : "validation_failed");
+      expect(problem.errors?.length ?? 0, label).toBeLessThanOrEqual(100);
+    }
+    expect(await keyCount()).toBe(0);
     expect(await written()).toEqual(before);
   });
 });

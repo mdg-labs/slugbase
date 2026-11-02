@@ -19,6 +19,9 @@ type JsonObject = { [key: string]: Json };
 const COMPONENT_PREFIX = "#/components/schemas/";
 const DEFS_PREFIX = "#/$defs/";
 
+/** The name of the part of an upload: a plain identifier, so it is never a name an object member could be confused with. */
+const UPLOAD_FIELD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+
 /** One or more operation declarations the generator refuses to publish. */
 export class OperationDeclarationError extends Error {
   readonly problems: readonly string[];
@@ -283,6 +286,18 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
     if (body !== undefined && !(body instanceof z.ZodType)) {
       need("request.body must be a Zod schema");
     }
+    const upload = request?.["upload"];
+    if (upload !== undefined) {
+      if (!isRecord(upload) || typeof upload["field"] !== "string" || !UPLOAD_FIELD.test(upload["field"]) || typeof upload["description"] !== "string" || upload["description"] === "") {
+        need("request.upload must be { field, description }: a field name of letters, digits and underscores that starts with a letter, and a description");
+      }
+      if (body !== undefined) {
+        need("request.upload and request.body are not declared together: an operation has one request body");
+      }
+      if (method === "get" || method === "delete") {
+        need(`a ${method} operation does not take an upload`);
+      }
+    }
     if (typeof path === "string") {
       const declared = pathParameters(path).sort();
       const params = request?.["params"];
@@ -421,6 +436,18 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
   }
   if (parameters.length > 0) {
     entry["parameters"] = parameters;
+  }
+
+  if (op.request?.upload !== undefined) {
+    const { field, description } = op.request.upload;
+    entry["requestBody"] = {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: { type: "object", properties: { [field]: { type: "string", format: "binary", description } }, required: [field], additionalProperties: false },
+        },
+      },
+    };
   }
 
   if (op.request?.body !== undefined) {

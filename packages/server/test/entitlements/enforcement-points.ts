@@ -50,6 +50,7 @@ export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "createWorkspace", entitlement: "workspaces.ownMax", decidedBy: "handler", test: WORKSPACE_LIMIT },
   { operationId: "createBookmark", entitlement: "bookmarks.max", decidedBy: "handler", test: BOOKMARK_LIMIT },
   { operationId: "importJson", entitlement: "bookmarks.max", decidedBy: "handler", test: IMPORT_LIMIT },
+  { operationId: "importNetscape", entitlement: "bookmarks.max", decidedBy: "handler", test: IMPORT_LIMIT },
   { operationId: "listShareTargets", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
   { operationId: "listShareTargets", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
   { operationId: "listBookmarkShares", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },

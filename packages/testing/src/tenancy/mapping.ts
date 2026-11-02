@@ -84,6 +84,11 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   `it("reads no slug, folder or tag of B, creates its folders and tags in A only, and writes no link in B, for an import …")` (the checks of the slugs, folders and tags, the question which of the file's names the database takes for one, which reads no row, the get-or-create of folders and tags by name, and
  *   the links of the new bookmarks).
  *
+ * - Netscape import: `importNetscape` takes no identifier and so no entry. Its body is `multipart/form-data` with the one binary part `file`, which the classifier walks as a request body of that media type (a string of `format: binary`, named
+ *   nothing like an identifier), and what the file lists (links, folder names, `TAGS`) is read into the bookmarks the JSON import takes and matched among the caller's own rows by name, so a name or an address of B is no row of B to A. The API mode
+ *   calls it once for every principal of A, as a dry run that writes nothing, with the one-link file of the fixtures of the contract test; the import that writes goes through the same service and the same scoped repository as `importJson`, and
+ *   is held to the workspace of the request by `packages/server/test/routes/import-netscape.integration.test.ts`.
+ *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
  * `bookmark` rows, so a caller that runs these operations adds `team` and `invitation` identifiers to workspace B, or the matrix reports

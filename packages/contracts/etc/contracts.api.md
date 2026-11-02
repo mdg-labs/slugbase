@@ -4846,6 +4846,15 @@ export const IMPORT_MAX_NEW_NAMES = 10000;
 // @public
 export const IMPORT_NAME_MAX_LENGTH = 1000;
 
+// @public
+export const IMPORT_NETSCAPE_ENVELOPE_BYTES: number;
+
+// @public
+export const IMPORT_NETSCAPE_FIELD = "file";
+
+// @public
+export const IMPORT_NETSCAPE_MAX_FILE_BYTES: number;
+
 // @public (undocumented)
 export const IMPORT_SKIPPED_REASONS: readonly ["duplicate", "bookmark_limit_reached"];
 
@@ -5031,6 +5040,86 @@ export const importJson: {
         readonly 404: ProblemResponse;
         readonly 409: ProblemResponse;
         readonly 413: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const importNetscape: {
+    readonly method: "post";
+    readonly path: "/api/v1/import/netscape";
+    readonly operationId: "importNetscape";
+    readonly tag: "import";
+    readonly summary: "Import a browser bookmark file";
+    readonly auth: "member";
+    readonly rate: "bulk";
+    readonly idempotency: true;
+    readonly maxBodyBytes: number;
+    readonly request: {
+        readonly query: z.ZodObject<{
+            dryRun: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            skipDuplicates: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+        }, z.core.$strict>;
+        readonly upload: {
+            readonly field: "file";
+            readonly description: "The bookmark file a browser exports (Netscape bookmark HTML, as Chrome, Edge, Firefox and Safari write it), of up to 5 MiB, read as UTF-8";
+        };
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        detected: z.ZodObject<{
+        bookmarks: z.ZodNumber;
+        folders: z.ZodNumber;
+        tags: z.ZodNumber;
+        }, z.core.$strict>;
+        created: z.ZodNumber;
+        skipped: z.ZodArray<z.ZodObject<{
+        reason: z.ZodEnum<{
+        duplicate: "duplicate";
+        bookmark_limit_reached: "bookmark_limit_reached";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+        }, z.core.$strict>>;
+        failed: z.ZodArray<z.ZodObject<{
+        reason: z.ZodEnum<{
+        url_not_allowed: "url_not_allowed";
+        url_invalid: "url_invalid";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+        }, z.core.$strict>>;
+        slugsDropped: z.ZodNumber;
+        droppedSlugs: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        reason: z.ZodEnum<{
+        slug_invalid: "slug_invalid";
+        slug_conflict: "slug_conflict";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+        }, z.core.$strict>>;
+        foldersCreated: z.ZodNumber;
+        tagsCreated: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 413: ProblemResponse;
+        readonly 415: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
@@ -6869,6 +6958,7 @@ export interface OperationRequest {
     readonly params?: z.ZodObject;
     // (undocumented)
     readonly query?: z.ZodObject;
+    readonly upload?: OperationUpload;
 }
 
 // @public
@@ -10983,6 +11073,118 @@ export interface OperationTypes {
                 };
             };
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    importNetscape: {
+        parameters: {
+            query?: {
+                dryRun?: "true" | "false";
+                skipDuplicates?: "true" | "false";
+            };
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ImportResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16033,6 +16235,12 @@ export interface OperationTypes {
     };
 }
 
+// @public
+export interface OperationUpload {
+    readonly description: string;
+    readonly field: string;
+}
+
 // @public (undocumented)
 export type OtherResponseStatus = 200 | 201 | 202 | 204 | 302 | 500 | 502 | 503;
 
@@ -16627,6 +16835,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["importJson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/import/netscape": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["importNetscape"];
         delete?: never;
         options?: never;
         head?: never;

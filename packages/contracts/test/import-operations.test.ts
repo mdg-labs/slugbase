@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_BYTES, IMPORT_NAME_MAX_LENGTH, ImportBookmarkSchema, ImportEnvelopeSchema, ImportQuerySchema, ImportRequestSchema, ImportResultSchema, importJson, operations } from "../src/index.ts";
+import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_BYTES, IMPORT_NAME_MAX_LENGTH, ImportBookmarkSchema, ImportEnvelopeSchema, ImportQuerySchema, ImportRequestSchema, ImportResultSchema, IMPORT_NETSCAPE_ENVELOPE_BYTES, IMPORT_NETSCAPE_FIELD, IMPORT_NETSCAPE_MAX_FILE_BYTES, importJson, importNetscape, operations } from "../src/index.ts";
 
 // The import preview of doc 04 section 10.9 and doc 02 section 13.1: POST /api/v1/import/json is a member's write in the bulk bucket that accepts an Idempotency-Key and a body of up to 5 MiB. Its
 // request is the export document or a plain array of bookmarks in strict schemas; a bad bookmark is not the request's failure, a file that is not the format is.
@@ -35,6 +35,54 @@ describe("the import operation", () => {
     }
     expect(JSON.stringify(document.components.schemas["ImportEnvelope"])).not.toContain('"items":{}');
     expect(((documented["requestBody"] as Obj)["content"] as Obj)["application/json"]).toMatchObject({ schema: { anyOf: [{ $ref: "#/components/schemas/ImportEnvelope" }, { type: "array", maxItems: 5000 }] } });
+  });
+});
+
+describe("the Netscape import operation", () => {
+  const entry = document.paths["/api/v1/import/netscape"]?.["post"] as Obj;
+
+  it("is POST /api/v1/import/netscape, a member's operation in the bulk bucket with an idempotency key, no token scope and a body limit of 5 MiB and the envelope of an upload", () => {
+    expect(importNetscape).toMatchObject({ method: "post", path: "/api/v1/import/netscape", operationId: "importNetscape", tag: "import", auth: "member", rate: "bulk", idempotency: true });
+    expect(importNetscape).not.toHaveProperty("scope");
+    expect(importNetscape.maxBodyBytes).toBe(IMPORT_NETSCAPE_MAX_FILE_BYTES + IMPORT_NETSCAPE_ENVELOPE_BYTES);
+    expect(IMPORT_NETSCAPE_MAX_FILE_BYTES).toBe(IMPORT_MAX_BYTES);
+    expect(operations).toContain(importNetscape);
+    expect(entry).toMatchObject({ operationId: "importNetscape", "x-slugbase-auth": "member", "x-slugbase-rate": "bulk", "x-slugbase-idempotency": true });
+    expect(entry).not.toHaveProperty("x-slugbase-scope");
+  });
+
+  it("declares its body as multipart/form-data with the one file, takes the query of the JSON import and answers its result", () => {
+    expect(IMPORT_NETSCAPE_FIELD).toBe("file");
+    expect(importNetscape.request).toMatchObject({ query: ImportQuerySchema, upload: { field: "file" } });
+    expect(importNetscape.request).not.toHaveProperty("body");
+    expect((entry["requestBody"] as Obj)["content"]).toMatchObject({ "multipart/form-data": { schema: { properties: { file: { type: "string", format: "binary" } }, required: ["file"], additionalProperties: false } } });
+    expect(Object.keys(entry["responses"] as Obj).sort()).toEqual(["200", "400", "401", "403", "404", "409", "413", "415", "422", "429", "503"]);
+    expect(JSON.stringify((entry["responses"] as Obj)["200"])).toContain("#/components/schemas/ImportResult");
+    const parameters = entry["parameters"] as { name: string; in: string }[];
+    expect(parameters.filter((parameter) => parameter.in === "query").map((parameter) => parameter.name)).toEqual(["dryRun", "skipDuplicates"]);
+  });
+});
+
+describe("the descriptions of the two imports", () => {
+  const answerOf = (path: string): string => String((((document.paths[path]?.["post"] as Obj)["responses"] as Obj)["200"] as Obj)["description"]);
+  const json = answerOf("/api/v1/import/json");
+  const netscape = answerOf("/api/v1/import/netscape");
+
+  it("tell the folders of the file apart: the JSON import makes every folder the file lists, the Netscape import only those a created link sits directly in", () => {
+    expect(json).toContain("the folders and tags the file lists exist afterwards whether a bookmark uses them or not");
+    expect(netscape).not.toContain("exist afterwards");
+    expect(netscape).not.toContain("whether a bookmark uses them or not");
+    expect(netscape).toContain("a folder that no created link sits directly in");
+    expect(netscape).toContain("is not created");
+  });
+
+  it("leave the rules of a JSON file out of the Netscape import: it names no slug, forwarding, pinned state, description or plan-archived flag", () => {
+    expect(netscape).not.toContain(json);
+    for (const phrase of ["forwarding", "pinned", "plan-archived", "descriptions", "is dropped from its bookmark"]) {
+      expect(json, phrase).toContain(phrase);
+      expect(netscape, phrase).not.toContain(phrase);
+    }
+    expect(netscape).toContain("A file names no slug");
   });
 });
 

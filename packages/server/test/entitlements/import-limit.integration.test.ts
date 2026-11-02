@@ -5,6 +5,7 @@ import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { queuedJobCount } from "../invitations/support.ts";
 import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
+import { NETSCAPE, bookmarkFile, upload } from "../routes/netscape-upload.ts";
 
 // T11 at the import of bookmarks (doc 01 section 7.5, doc 02 section 13.1, doc 04 sections 3.2 and 10.9, doc 05 section 2.2, doc 10 T11), through the whole chain over the migrated database: `importJson` takes the
 // workspace's `bookmarks.max` from the entitlement source before its transaction opens and judges it against the counter under the workspace's row lock, so it creates up to the limit and reports the rest as skipped
@@ -168,6 +169,71 @@ describe("importJson at bookmarks.max", { timeout: TEST_TIMEOUT_MS }, () => {
     const { owner, workspaceId } = await ownerAndWorkspace(world);
 
     const refused = await importAs(world, owner, urls(2));
+
+    expect(refused.status).toBe(503);
+    expect(await written(workspaceId)).toEqual({ rows: 0, counter: 0, audit: 0, jobs: 0 });
+  });
+});
+
+describe("importNetscape at bookmarks.max", { timeout: TEST_TIMEOUT_MS }, () => {
+  const links = (count: number, prefix = "page") => bookmarkFile(urls(count, prefix));
+  const uploaded = async (world: World, as: Person, html: string, path = NETSCAPE) => {
+    const response = await upload(world, as, html, { path });
+    expect(response.status).toBe(200);
+    return ImportResultSchema.parse(await response.json());
+  };
+
+  it("creates up to the limit through the capacity of the JSON import and reports the rest as skipped with bookmark_limit_reached, in the order of the file", async () => {
+    const world = harness.serve({ env: RELAXED, entitlementSource: ceiling(3) });
+    const { owner, workspaceId } = await ownerAndWorkspace(world);
+
+    const result = await uploaded(world, owner, links(5));
+
+    expect(result.created).toBe(3);
+    expect(result.skipped.map((entry) => [entry.position, entry.reason])).toEqual([
+      [4, "bookmark_limit_reached"],
+      [5, "bookmark_limit_reached"],
+    ]);
+    expect(await written(workspaceId)).toEqual({ rows: 3, counter: 3, audit: 1, jobs: 3 });
+  });
+
+  it("shares the room with the JSON import and the bookmarks made by hand, a counter at the ceiling creates nothing, and an upload under a ceiling of zero still records the import", async () => {
+    const world = harness.serve({ env: RELAXED, entitlementSource: ceiling(4) });
+    const { owner, member, workspaceId } = await ownerAndWorkspace(world);
+    expect((await send(world, "POST", "/api/v1/bookmarks", { cookie: member.cookie }, { url: "https://example.com/by-hand", title: "By hand" })).status).toBe(201);
+    await imported(world, member, urls(1, "json"));
+
+    const result = await uploaded(world, owner, links(4, "upload"));
+    const full = await uploaded(world, member, links(2, "again"));
+
+    expect(result.created).toBe(2);
+    expect(full).toMatchObject({ created: 0 });
+    expect(full.skipped.map((entry) => entry.reason)).toEqual(["bookmark_limit_reached", "bookmark_limit_reached"]);
+    expect(await written(workspaceId)).toMatchObject({ rows: 4, counter: 4, audit: 3 });
+  });
+
+  it("judges a dry run against the same ceiling and counter as the write, and writes nothing", async () => {
+    const world = harness.serve({ env: RELAXED, entitlementSource: ceiling(2) });
+    const { owner, workspaceId } = await ownerAndWorkspace(world);
+
+    const preview = await uploaded(world, owner, links(3), `${NETSCAPE}?dryRun=true`);
+    expect(await written(workspaceId)).toEqual({ rows: 0, counter: 0, audit: 0, jobs: 0 });
+    const result = await uploaded(world, owner, links(3));
+
+    expect(preview).toEqual(result);
+    expect(await written(workspaceId)).toEqual({ rows: 2, counter: 2, audit: 1, jobs: 2 });
+  });
+
+  it("answers 503 and writes nothing when the entitlement source cannot say how many bookmarks the workspace may hold", async () => {
+    const source: EntitlementSource = {
+      available: true,
+      forWorkspace: () => Promise.reject(new PortUnavailable("entitlements", "unavailable")),
+      forAccount: (): Promise<AccountEntitlementValues> => Promise.reject(new PortUnavailable("entitlements", "unavailable")),
+    };
+    const world = harness.serve({ env: RELAXED, entitlementSource: source });
+    const { owner, workspaceId } = await ownerAndWorkspace(world);
+
+    const refused = await upload(world, owner, links(2));
 
     expect(refused.status).toBe(503);
     expect(await written(workspaceId)).toEqual({ rows: 0, counter: 0, audit: 0, jobs: 0 });

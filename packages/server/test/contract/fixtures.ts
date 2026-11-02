@@ -401,6 +401,11 @@ export const FIXTURES: ContractFixtures = {
   // `@slugbase/testing` (the places and the bookmarks of a transaction acting in A) and by `import-write.integration.test.ts`. The matrix picks the `slug` of a bookmark of the file (in the export document and in the plain array)
   // by its name; it is text the caller writes, so a value of workspace B in it is answered 200 as any other text is, and the file's bookmark is a failure or a creation of the answer that quotes nothing of B.
   importJson: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }], foreign: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }] }, foreignAnswer: { status: 200 } },
+  // The upload is a browser's bookmark file. The operation takes no identifier, so the matrix has nothing of workspace B to put in it: the file's links, folders and tags are text, matched among the caller's own.
+  importNetscape: {
+    query: { dryRun: "true" },
+    upload: { field: "file", filename: "bookmarks.html", type: "text/html", content: '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<DL><p>\n<DT><A HREF="https://example.com/walker">Walker bookmark</A>\n</DL><p>\n' },
+  },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

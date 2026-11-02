@@ -3,7 +3,7 @@ import type { Database } from "@slugbase/db";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ChainContext, MatchedRoute, RequestStage, ValidatedInput } from "../../src/http/chain.ts";
-import { createIdempotency, requestHash } from "../../src/http/idempotency.ts";
+import { createIdempotency, requestHash, uploadDigest } from "../../src/http/idempotency.ts";
 import { ProblemError } from "../../src/http/problem.ts";
 
 // The parts of stage 9a that need no database: which requests it looks at, how it reads the header, and what a
@@ -102,5 +102,58 @@ describe("the hash of a request", () => {
 
   it("tells a field that is absent from one that is null", () => {
     expect(hash(keyed, { body: { a: null } })).not.toBe(hash(keyed, { body: {} }));
+  });
+});
+
+describe("the hash of an upload", () => {
+  const form = (content: string, extra: Record<string, string> = {}, filename = "bookmarks.html"): FormData => {
+    const data = new FormData();
+    data.set("file", new File([content], filename, { type: "text/html" }));
+    for (const [name, value] of Object.entries(extra)) {
+      data.set(name, value);
+    }
+    return data;
+  };
+  const digest = async (data: FormData): Promise<string> => {
+    // Serialised by two encoders, each of which picks its own boundary.
+    const response = new Response(data);
+    return uploadDigest(new Request("http://localhost/", { method: "POST", headers: { "content-type": response.headers.get("content-type") ?? "" }, body: new Uint8Array(await response.arrayBuffer()) }));
+  };
+
+  it("is the same for the same file whatever the boundary, the filename and the media type of the request, and differs for another file, even of the same size", async () => {
+    const first = await digest(form("<DL><DT><A HREF=\"https://e.test/a\">a</A></DL>"));
+
+    expect(await digest(form("<DL><DT><A HREF=\"https://e.test/a\">a</A></DL>"))).toBe(first);
+    expect(await digest(form("<DL><DT><A HREF=\"https://e.test/a\">a</A></DL>", {}, "renamed.htm"))).toBe(first);
+    expect(await digest(form("<DL><DT><A HREF=\"https://e.test/b\">a</A></DL>"))).not.toBe(first);
+    expect(await digest(form(""))).not.toBe(first);
+  });
+
+  it("covers every part, the name of each, and whether it is text or a file, and is no mistake for where one part ends and the next begins", async () => {
+    const base = await digest(form("x"));
+    const hashes = new Set([base, await digest(form("x", { other: "1" })), await digest(form("x", { other: "2" })), await digest(form("xother", {})), await digest(form("x", { other: "" }))]);
+    const asText = new FormData();
+    asText.set("file", "x");
+
+    expect(hashes.size).toBe(5);
+    expect(await digest(asText)).not.toBe(base);
+  });
+
+  it("digests a body that is not multipart as the bytes it is, so that the same key for another body is another request", async () => {
+    const send = (body: string) => uploadDigest(new Request("http://localhost/", { method: "POST", headers: { "content-type": "application/json" }, body }));
+
+    expect(await send("[]")).toBe(await send("[]"));
+    expect(await send("[]")).not.toBe(await send("[ ]"));
+    expect(await send("[]")).toMatch(/^bytes:/);
+  });
+
+  it("is added to the hash of the request only when there is one, so that no other request changes its hash", () => {
+    const base = requestHash(fake(keyed, undefined, { body: { title: "a" } }), "createNote");
+    const withUpload = (digest: string) => requestHash(fake(keyed, undefined, { body: { title: "a" } }), "createNote", digest);
+
+    expect(requestHash(fake(keyed, undefined, { body: { title: "a" } }), "createNote", undefined).equals(base)).toBe(true);
+    expect(withUpload("parts:1").equals(base)).toBe(false);
+    expect(withUpload("parts:1").equals(withUpload("parts:2"))).toBe(false);
+    expect(withUpload("parts:1").equals(withUpload("parts:1"))).toBe(true);
   });
 });

@@ -5660,6 +5660,16 @@ export const METADATA_TITLE_MAX_LENGTH = 300;
 export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;
 
 // @public (undocumented)
+export type NetscapeFile = {
+    readonly kind: "parsed";
+    readonly bookmarks: readonly ImportFileBookmark[];
+}
+/** The file has more than `IMPORT_MAX_BOOKMARKS` links. */
+| {
+    readonly kind: "too_many";
+};
+
+// @public (undocumented)
 export interface NewAccountAcceptance {
     readonly accountId: string;
     // (undocumented)
@@ -5989,6 +5999,9 @@ export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: 
 
 // @public
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
+
+// @public
+export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile;
 
 // @public
 export function parsePageIcons(input: PageMetadataInput): readonly string[];

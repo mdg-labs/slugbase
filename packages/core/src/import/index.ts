@@ -8,6 +8,8 @@ export type {
   ImportRefusal,
   ImportRefusalReason,
 } from "./preview.ts";
+export { parseNetscapeBookmarks } from "./netscape.ts";
+export type { NetscapeFile } from "./netscape.ts";
 export { IMPORT_BATCH_SIZE, importBookmarks } from "./run.ts";
 export type {
   ImportAsk,

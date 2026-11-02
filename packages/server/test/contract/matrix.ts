@@ -69,6 +69,7 @@ export function matrixRequest({ send, origin, fixtures, credentialsOf }: MatrixR
         method: call.operation.method,
         url: withQuery(call.url, base.query),
         body: overlay(base.body, call.body),
+        ...(base.upload === undefined ? {} : { upload: base.upload }),
         credentials: credentialsOf(call.principal),
         origin,
       }),

@@ -22,6 +22,15 @@ export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 /** The longest folder or tag name, or folder icon, an import file may hold; a name over it makes the file invalid, and one within it is cut to the stored limit of 64 or 40 characters. */
 export const IMPORT_NAME_MAX_LENGTH = 1000;
 
+/** The largest browser bookmark file `POST /api/v1/import/netscape` reads, in bytes: the file part of the upload, not the request (doc 04 section 10.9). */
+export const IMPORT_NETSCAPE_MAX_FILE_BYTES = IMPORT_MAX_BYTES;
+
+/** What the multipart envelope of an upload of the largest file may add to the request body: its boundaries and part headers. */
+export const IMPORT_NETSCAPE_ENVELOPE_BYTES = 16 * 1024;
+
+/** The name of the part of the upload that holds the file. */
+export const IMPORT_NETSCAPE_FIELD = "file";
+
 /** The most new folders and tags together that one import may create (doc 02 section 16); names the caller has already do not count. A file that would create more is refused for the whole request. */
 export const IMPORT_MAX_NEW_NAMES = 10_000;
 
@@ -121,6 +130,9 @@ export const ImportResultSchema = z
   })
   .meta({ id: "ImportResult" });
 
+const IMPORT_ANSWER =
+  "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused, the slugs dropped and the folders and tags created. The bookmarks are created in the order of the file, each filed in its own folders, tagged with its own tags and with its slug, forwarding and pinned state, in one transaction with the counter, the folders, the tags and one import.completed audit event, so a failure leaves none of them. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing; an existing one keeps its icon and colour, and the folders and tags the file lists exist afterwards whether a bookmark uses them or not. A slug outside the grammar, one the caller has already or one an earlier bookmark of the file keeps is dropped from its bookmark with forwarding off, and the bookmark is still imported; a slug the caller takes on another bookmark in a request that runs at the same time is dropped the same way. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true";
+
 export const importJson = defineOperation({
   method: "post",
   path: "/api/v1/import/json",
@@ -135,7 +147,7 @@ export const importJson = defineOperation({
   request: { query: ImportQuerySchema, body: ImportRequestSchema },
   responses: {
     200: jsonResponse(
-      "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused, the slugs dropped and the folders and tags created. The bookmarks are created in the order of the file, each filed in its own folders, tagged with its own tags and with its slug, forwarding and pinned state, in one transaction with the counter, the folders, the tags and one import.completed audit event, so a failure leaves none of them. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing; an existing one keeps its icon and colour, and the folders and tags the file lists exist afterwards whether a bookmark uses them or not. A slug outside the grammar, one the caller has already or one an earlier bookmark of the file keeps is dropped from its bookmark with forwarding off, and the bookmark is still imported; a slug the caller takes on another bookmark in a request that runs at the same time is dropped the same way. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true",
+      IMPORT_ANSWER,
       ImportResultSchema,
     ),
     400: problemResponse("The body is not valid JSON, or the Idempotency-Key header is not a UUID"),
@@ -146,6 +158,46 @@ export const importJson = defineOperation({
     413: problemResponse("The request body is over 5 MiB (payload_too_large)"),
     422: problemResponse(
       "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. A bad URL or an over-long title is no reason for it: see the answer",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Imports take from the bulk limit"),
+    503: problemResponse("The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"),
+  },
+});
+
+const NETSCAPE_ANSWER =
+  "What the import did, or with dryRun=true what it would do and nothing is written, in the shape importJson answers. Each link of the file (an A element with an HREF) is one bookmark in the order of the file, filed in the one folder named by the H3 element of the list it sits in (a folder inside a folder gives its own name, not a path) and tagged with the names of its TAGS attribute, split at commas, at most 1 000 of them; a link with no title takes the host of its address. The file is read as text and nothing in it is run or followed. The counts of what the file holds say how many links it has and how many distinct folders and tags they name, compared without regard to case, those of links that fail or are skipped included; the bookmarks left out are the duplicates by canonical URL and, as bookmark_limit_reached, those past the room the workspace had left under its bookmarks.max, read from the workspace's counter; the links whose address is not an http or https URL (a bookmarklet, a place: query) are failed with url_not_allowed. Only the folders and tags of the bookmarks that are created are made, in one transaction with the bookmarks, the counter and one import.completed audit event, so a failure leaves none of them: a folder that no created link sits directly in, because it holds only other folders, or nothing, or only links that fail or are skipped, is not created, and foldersCreated and tagsCreated count what was made. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing with the default icon and colour; an existing one keeps its own. A file names no slug, so no bookmark has one and slugsDropped is 0 with droppedSlugs empty. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles are cut to 300 characters, and all text is plain text. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true";
+
+export const importNetscape = defineOperation({
+  method: "post",
+  path: "/api/v1/import/netscape",
+  operationId: "importNetscape",
+  tag: "import",
+  summary: "Import a browser bookmark file",
+  auth: "member",
+  rate: "bulk",
+  idempotency: true,
+  maxBodyBytes: IMPORT_NETSCAPE_MAX_FILE_BYTES + IMPORT_NETSCAPE_ENVELOPE_BYTES,
+  request: {
+    query: ImportQuerySchema,
+    upload: {
+      field: IMPORT_NETSCAPE_FIELD,
+      description: "The bookmark file a browser exports (Netscape bookmark HTML, as Chrome, Edge, Firefox and Safari write it), of up to 5 MiB, read as UTF-8",
+    },
+  },
+  responses: {
+    200: jsonResponse(
+      NETSCAPE_ANSWER,
+      ImportResultSchema,
+    ),
+    400: problemResponse("The body is not well-formed multipart/form-data, or the Idempotency-Key header is not a UUID"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), including one whose content type is neither JSON nor multipart/form-data, or the credential is an API token, which cannot call this operation (forbidden)"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    409: problemResponse("The Idempotency-Key was used before for another request, with another file included (idempotency_conflict)"),
+    413: problemResponse("The request body is over 5 MiB plus the envelope of the upload, or the file part is over 5 MiB (payload_too_large)"),
+    415: problemResponse("The request is not multipart/form-data (unsupported_media_type): one sent as JSON, or one that carries an API token, which is held to JSON before it is authenticated"),
+    422: problemResponse(
+      "The upload is not one file (validation_failed; errors names each part): the file part is missing or is not a file, or the request carries another part. A file with more than 5 000 links is refused whole with one error, with the path empty and the code too_big. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. A bad link or an over-long title is no reason for it: see the answer",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Imports take from the bulk limit"),
     503: problemResponse("The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"),

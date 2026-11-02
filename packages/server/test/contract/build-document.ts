@@ -80,6 +80,18 @@ function entryOf(operation: OperationDefinition): Record<string, unknown> {
     ...(operation.request?.body === undefined
       ? {}
       : { requestBody: { required: true, content: { "application/json": { schema: schemaOf(operation.request.body, "input") } } } }),
+    ...(operation.request?.upload === undefined
+      ? {}
+      : {
+          requestBody: {
+            required: true,
+            content: {
+              "multipart/form-data": {
+                schema: { type: "object", properties: { [operation.request.upload.field]: { type: "string", format: "binary" } }, required: [operation.request.upload.field], additionalProperties: false },
+              },
+            },
+          },
+        }),
     responses,
   };
 }

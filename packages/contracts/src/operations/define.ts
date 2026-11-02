@@ -194,6 +194,18 @@ export type OperationResponses = { [S in OtherResponseStatus]?: JsonResponse | E
   [S in ProblemResponseStatus]: S extends 429 ? RateLimitedResponse : ProblemResponse;
 }>;
 
+/**
+ * The one file a multipart request carries. The operation's body is `multipart/form-data` with exactly one required binary part named `field`; the
+ * request pipeline does not parse it, so a handler reads the part itself and is given no body (a route that declares an upload is registered with
+ * `acceptsMultipart`, doc 04 section 5.1). Published as that media type with the part as `type: string, format: binary` and no other property.
+ */
+export interface OperationUpload {
+  /** The name of the form part, a plain identifier. */
+  readonly field: string;
+  /** What the file is, published as the description of the part. */
+  readonly description: string;
+}
+
 export interface OperationRequest {
   readonly params?: z.ZodObject;
   readonly query?: z.ZodObject;
@@ -205,6 +217,8 @@ export interface OperationRequest {
   readonly headers?: z.ZodObject;
   /** Object bodies must be strict: unknown fields are a 422 (doc 04 section 2.3). */
   readonly body?: z.ZodType;
+  /** A multipart body of one file, in place of a JSON `body`; the two are never declared together. */
+  readonly upload?: OperationUpload;
 }
 
 export interface OperationDefinition {

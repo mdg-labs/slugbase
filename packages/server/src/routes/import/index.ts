@@ -1,4 +1,5 @@
-import { IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation } from "@slugbase/contracts";
+import { IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation, importNetscape as importNetscapeOperation, type ImportQuerySchema, type ImportRequest } from "@slugbase/contracts";
+import type { z } from "zod";
 import { createAuditWriter, importBookmarks, previewImport, type AuditActor, type BookmarkEntitlements, type ImportStore } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, importRepository, type TenantTx } from "@slugbase/db";
 import { ascendingUuidv7, uuidv7 } from "../../auth/uuidv7.ts";
@@ -8,6 +9,7 @@ import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
 import { route } from "../register.ts";
+import { uploadedBookmarks } from "./upload.ts";
 
 // POST /api/v1/import/json (doc 04 section 10.9, doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13). It acts in the workspace the request is bound to and names none; the authorization stage lets a member
 // through by a session or by an API token of the write scope, the body-limits stage refuses a body over 5 MiB, the validation stage refuses a file that is not the format, and the request is in the `bulk` rate bucket.
@@ -19,6 +21,9 @@ import { route } from "../register.ts";
 // files and tags each bookmark by its own names; a slug the caller has already, or that an earlier bookmark of the file keeps, is dropped from its bookmark, which is still imported, and listed in the answer. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
 // A file that would create more than 10 000 new folders and tags together is `422 validation_failed` with the field code `too_many_new_names`, in the dry run and in the write: the write decides it before it takes the
 // workspace's row, and the refusal that is only known under the lock throws inside the transaction, so nothing is committed. Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
+
+// POST /api/v1/import/netscape (doc 04 section 10.9, doc 02 section 13.1) takes a browser's bookmark file as a multipart upload (`upload.ts`), reads it into bookmarks and hands them to the same function as the JSON import, so the
+// two have one set of rules, caps, dry run, room under `bookmarks.max`, audit event and answer, and the one place that decides each of them. It declares no token scope, so only a session reaches it; it is the only route that accepts multipart.
 
 const NO_WORKSPACE = "No such resource.";
 
@@ -68,44 +73,51 @@ export interface ImportRoutesOptions {
   readonly entitlements: BookmarkEntitlements;
 }
 
+type ImportQuery = z.output<typeof ImportQuerySchema>;
+
+/** The import of a file the caller has read into bookmarks: a dry run, or the one transaction that writes it. Both routes of the import end here. */
+async function runImport(context: ChainContext, query: ImportQuery, file: ImportRequest, entitlements: BookmarkEntitlements) {
+  const tenant = tenantOf(context);
+  const ceiling = await entitlements.limit(tenant.accountId, tenant.workspaceId, context.req.raw);
+  if (ceiling === undefined) {
+    throw new ProblemError("not_found", NO_WORKSPACE);
+  }
+  const skipDuplicates = query.skipDuplicates !== "false";
+  if (query.dryRun === "true") {
+    const previewed = await tenant.withTenant((tx) => previewImport({ store: importRepository(tx) }, { file, skipDuplicates, ceiling }));
+    if (previewed.kind === "unavailable") {
+      throw new ProblemError("not_found", NO_WORKSPACE);
+    }
+    if (previewed.kind === "too_many_names") {
+      throw tooManyNames(previewed.newNames);
+    }
+    return { status: 200 as const, body: previewed.result };
+  }
+  const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+  const outcome = await tenant.withTenant(async (tx) => {
+    const profile = await accountProfileRepository(tx).profile();
+    if (profile === undefined) {
+      return { kind: "unavailable" } as const;
+    }
+    const imported = await importBookmarks(
+      { store: storeOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newBookmarkId: ascendingUuidv7(), newId: uuidv7 },
+      { file, skipDuplicates, ceiling, workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor: auditActorOf(context, tenant.accountId, profile.displayName), ipPrefix },
+    );
+    if (imported.kind === "too_many_names") {
+      throw tooManyNames(imported.newNames);
+    }
+    return imported;
+  });
+  if (outcome.kind === "unavailable") {
+    throw new ProblemError("not_found", NO_WORKSPACE);
+  }
+  return { status: 200 as const, body: outcome.result };
+}
+
 export function importRoutes({ entitlements }: ImportRoutesOptions): RouteBinding[] {
   return [
-    route(importJsonOperation).handle(async ({ query, body }, context) => {
-      const tenant = tenantOf(context);
-      const ceiling = await entitlements.limit(tenant.accountId, tenant.workspaceId, context.req.raw);
-      if (ceiling === undefined) {
-        throw new ProblemError("not_found", NO_WORKSPACE);
-      }
-      const skipDuplicates = query.skipDuplicates !== "false";
-      if (query.dryRun === "true") {
-        const previewed = await tenant.withTenant((tx) => previewImport({ store: importRepository(tx) }, { file: body, skipDuplicates, ceiling }));
-        if (previewed.kind === "unavailable") {
-          throw new ProblemError("not_found", NO_WORKSPACE);
-        }
-        if (previewed.kind === "too_many_names") {
-          throw tooManyNames(previewed.newNames);
-        }
-        return { status: 200, body: previewed.result };
-      }
-      const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
-      const outcome = await tenant.withTenant(async (tx) => {
-        const profile = await accountProfileRepository(tx).profile();
-        if (profile === undefined) {
-          return { kind: "unavailable" } as const;
-        }
-        const imported = await importBookmarks(
-          { store: storeOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newBookmarkId: ascendingUuidv7(), newId: uuidv7 },
-          { file: body, skipDuplicates, ceiling, workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor: auditActorOf(context, tenant.accountId, profile.displayName), ipPrefix },
-        );
-        if (imported.kind === "too_many_names") {
-          throw tooManyNames(imported.newNames);
-        }
-        return imported;
-      });
-      if (outcome.kind === "unavailable") {
-        throw new ProblemError("not_found", NO_WORKSPACE);
-      }
-      return { status: 200, body: outcome.result };
-    }),
+    route(importJsonOperation).handle(({ query, body }, context) => runImport(context, query, body, entitlements)),
+    // The only multipart route: the upload is read by the handler, and what it lists goes through the same service as a JSON file.
+    route(importNetscapeOperation).handle(async ({ query }, context) => runImport(context, query, await uploadedBookmarks(context), entitlements), { acceptsMultipart: true }),
   ];
 }
