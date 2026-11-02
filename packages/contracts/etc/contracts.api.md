@@ -1696,6 +1696,69 @@ export interface ComponentTypes {
             items: ComponentTypes["schemas"]["Identity"][];
             nextCursor: string | null;
         };
+        ImportBookmark: {
+            description?: string | null;
+            folders?: string[];
+            forwarding?: boolean;
+            pinned?: boolean;
+            planArchived?: boolean;
+            ref?: string;
+            slug?: string | null;
+            tags?: string[];
+            title?: string | null;
+            url: string;
+        };
+        ImportDroppedSlug: {
+            position: number;
+            reason: "slug_invalid" | "slug_conflict";
+            slug: string;
+            title: string;
+            url: string;
+        };
+        ImportEnvelope: {
+            bookmarks: ComponentTypes["schemas"]["ImportBookmark"][];
+            exportedAt?: string;
+            folders?: ComponentTypes["schemas"]["ImportFolder"][];
+            format: "slugbase-export";
+            goPreferences?: string[];
+            shared?: string[];
+            tags?: string[];
+            version: number;
+            workspace?: {
+                name: string;
+            };
+        };
+        ImportFailed: {
+            position: number;
+            reason: "url_not_allowed" | "url_invalid";
+            title: string;
+            url: string;
+        };
+        ImportFolder: {
+            color?: number;
+            icon?: string;
+            name: string;
+        };
+        ImportResult: {
+            created: number;
+            detected: {
+                bookmarks: number;
+                folders: number;
+                tags: number;
+            };
+            droppedSlugs: ComponentTypes["schemas"]["ImportDroppedSlug"][];
+            failed: ComponentTypes["schemas"]["ImportFailed"][];
+            foldersCreated: number;
+            skipped: ComponentTypes["schemas"]["ImportSkipped"][];
+            slugsDropped: number;
+            tagsCreated: number;
+        };
+        ImportSkipped: {
+            position: number;
+            reason: "duplicate" | "bookmark_limit_reached";
+            title: string;
+            url: string;
+        };
         InspectInvitationRequest: {
             token: string;
         };
@@ -4764,6 +4827,311 @@ export const IdentitySchema: z.ZodObject<{
 export const IfMatchHeaderSchema: z.ZodObject<{
     "If-Match": z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
+
+// @public (undocumented)
+export const IMPORT_FAILED_REASONS: readonly ["url_not_allowed", "url_invalid"];
+
+// @public
+export const IMPORT_MAX_BOOKMARKS = 5000;
+
+// @public
+export const IMPORT_MAX_BYTES: number;
+
+// @public (undocumented)
+export const IMPORT_SKIPPED_REASONS: readonly ["duplicate", "bookmark_limit_reached"];
+
+// @public (undocumented)
+export const IMPORT_SLUG_DROPPED_REASONS: readonly ["slug_invalid", "slug_conflict"];
+
+// @public (undocumented)
+export const ImportBookmarkSchema: z.ZodObject<{
+    ref: z.ZodOptional<z.ZodString>;
+    url: z.ZodString;
+    title: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    forwarding: z.ZodOptional<z.ZodBoolean>;
+    pinned: z.ZodOptional<z.ZodBoolean>;
+    planArchived: z.ZodOptional<z.ZodBoolean>;
+    folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ImportDroppedSlugSchema: z.ZodObject<{
+    slug: z.ZodString;
+    reason: z.ZodEnum<{
+        slug_invalid: "slug_invalid";
+        slug_conflict: "slug_conflict";
+    }>;
+    position: z.ZodNumber;
+    title: z.ZodString;
+    url: z.ZodString;
+}, z.core.$strict>;
+
+// @public
+export const ImportEnvelopeSchema: z.ZodObject<{
+    format: z.ZodLiteral<"slugbase-export">;
+    version: z.ZodNumber;
+    exportedAt: z.ZodOptional<z.ZodISODateTime>;
+    workspace: z.ZodOptional<z.ZodObject<{
+        name: z.ZodString;
+    }, z.core.$strict>>;
+    folders: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        icon: z.ZodOptional<z.ZodString>;
+        color: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>>>;
+    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    bookmarks: z.ZodArray<z.ZodObject<{
+        ref: z.ZodOptional<z.ZodString>;
+        url: z.ZodString;
+        title: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        forwarding: z.ZodOptional<z.ZodBoolean>;
+        pinned: z.ZodOptional<z.ZodBoolean>;
+        planArchived: z.ZodOptional<z.ZodBoolean>;
+        folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    }, z.core.$strict>>;
+    goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    shared: z.ZodOptional<z.ZodArray<z.ZodString>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ImportFailedSchema: z.ZodObject<{
+    reason: z.ZodEnum<{
+        url_not_allowed: "url_not_allowed";
+        url_invalid: "url_invalid";
+    }>;
+    position: z.ZodNumber;
+    title: z.ZodString;
+    url: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export type ImportFileBookmark = z.infer<typeof ImportBookmarkSchema>;
+
+// @public (undocumented)
+export const importJson: {
+    readonly method: "post";
+    readonly path: "/api/v1/import/json";
+    readonly operationId: "importJson";
+    readonly tag: "import";
+    readonly summary: "Preview an import of SlugBase JSON";
+    readonly auth: "member";
+    readonly rate: "bulk";
+    readonly scope: "write";
+    readonly idempotency: true;
+    readonly maxBodyBytes: number;
+    readonly request: {
+        readonly query: z.ZodObject<{
+            dryRun: z.ZodOptional<z.ZodLiteral<"true">>;
+            skipDuplicates: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+        }, z.core.$strict>;
+        readonly body: z.ZodUnion<readonly [z.ZodObject<{
+            format: z.ZodLiteral<"slugbase-export">;
+            version: z.ZodNumber;
+            exportedAt: z.ZodOptional<z.ZodISODateTime>;
+            workspace: z.ZodOptional<z.ZodObject<{
+                name: z.ZodString;
+            }, z.core.$strict>>;
+            folders: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                name: z.ZodString;
+                icon: z.ZodOptional<z.ZodString>;
+                color: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>>>;
+            tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            bookmarks: z.ZodArray<z.ZodObject<{
+                ref: z.ZodOptional<z.ZodString>;
+                url: z.ZodString;
+                title: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                forwarding: z.ZodOptional<z.ZodBoolean>;
+                pinned: z.ZodOptional<z.ZodBoolean>;
+                planArchived: z.ZodOptional<z.ZodBoolean>;
+                folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            }, z.core.$strict>>;
+            goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            shared: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        }, z.core.$strict>, z.ZodArray<z.ZodObject<{
+            ref: z.ZodOptional<z.ZodString>;
+            url: z.ZodString;
+            title: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+            description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+            slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+            forwarding: z.ZodOptional<z.ZodBoolean>;
+            pinned: z.ZodOptional<z.ZodBoolean>;
+            planArchived: z.ZodOptional<z.ZodBoolean>;
+            folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        }, z.core.$strict>>]>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        detected: z.ZodObject<{
+        bookmarks: z.ZodNumber;
+        folders: z.ZodNumber;
+        tags: z.ZodNumber;
+        }, z.core.$strict>;
+        created: z.ZodNumber;
+        skipped: z.ZodArray<z.ZodObject<{
+        reason: z.ZodEnum<{
+        duplicate: "duplicate";
+        bookmark_limit_reached: "bookmark_limit_reached";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+        }, z.core.$strict>>;
+        failed: z.ZodArray<z.ZodObject<{
+        reason: z.ZodEnum<{
+        url_not_allowed: "url_not_allowed";
+        url_invalid: "url_invalid";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+        }, z.core.$strict>>;
+        slugsDropped: z.ZodNumber;
+        droppedSlugs: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        reason: z.ZodEnum<{
+        slug_invalid: "slug_invalid";
+        slug_conflict: "slug_conflict";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+        }, z.core.$strict>>;
+        foldersCreated: z.ZodNumber;
+        tagsCreated: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 413: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ImportQuerySchema: z.ZodObject<{
+    dryRun: z.ZodOptional<z.ZodLiteral<"true">>;
+    skipDuplicates: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export type ImportRequest = z.infer<typeof ImportRequestSchema>;
+
+// @public (undocumented)
+export const ImportRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
+    format: z.ZodLiteral<"slugbase-export">;
+    version: z.ZodNumber;
+    exportedAt: z.ZodOptional<z.ZodISODateTime>;
+    workspace: z.ZodOptional<z.ZodObject<{
+        name: z.ZodString;
+    }, z.core.$strict>>;
+    folders: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        icon: z.ZodOptional<z.ZodString>;
+        color: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>>>;
+    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    bookmarks: z.ZodArray<z.ZodObject<{
+        ref: z.ZodOptional<z.ZodString>;
+        url: z.ZodString;
+        title: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        forwarding: z.ZodOptional<z.ZodBoolean>;
+        pinned: z.ZodOptional<z.ZodBoolean>;
+        planArchived: z.ZodOptional<z.ZodBoolean>;
+        folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    }, z.core.$strict>>;
+    goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    shared: z.ZodOptional<z.ZodArray<z.ZodString>>;
+}, z.core.$strict>, z.ZodArray<z.ZodObject<{
+    ref: z.ZodOptional<z.ZodString>;
+    url: z.ZodString;
+    title: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    forwarding: z.ZodOptional<z.ZodBoolean>;
+    pinned: z.ZodOptional<z.ZodBoolean>;
+    planArchived: z.ZodOptional<z.ZodBoolean>;
+    folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+}, z.core.$strict>>]>;
+
+// @public (undocumented)
+export type ImportResult = z.infer<typeof ImportResultSchema>;
+
+// @public (undocumented)
+export const ImportResultSchema: z.ZodObject<{
+    detected: z.ZodObject<{
+        bookmarks: z.ZodNumber;
+        folders: z.ZodNumber;
+        tags: z.ZodNumber;
+    }, z.core.$strict>;
+    created: z.ZodNumber;
+    skipped: z.ZodArray<z.ZodObject<{
+        reason: z.ZodEnum<{
+            duplicate: "duplicate";
+            bookmark_limit_reached: "bookmark_limit_reached";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+    }, z.core.$strict>>;
+    failed: z.ZodArray<z.ZodObject<{
+        reason: z.ZodEnum<{
+            url_not_allowed: "url_not_allowed";
+            url_invalid: "url_invalid";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+    }, z.core.$strict>>;
+    slugsDropped: z.ZodNumber;
+    droppedSlugs: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        reason: z.ZodEnum<{
+            slug_invalid: "slug_invalid";
+            slug_conflict: "slug_conflict";
+        }>;
+        position: z.ZodNumber;
+        title: z.ZodString;
+        url: z.ZodString;
+    }, z.core.$strict>>;
+    foldersCreated: z.ZodNumber;
+    tagsCreated: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ImportSkippedSchema: z.ZodObject<{
+    reason: z.ZodEnum<{
+        duplicate: "duplicate";
+        bookmark_limit_reached: "bookmark_limit_reached";
+    }>;
+    position: z.ZodNumber;
+    title: z.ZodString;
+    url: z.ZodString;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const inspectInvitation: {
@@ -10531,6 +10899,108 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    importJson: {
+        parameters: {
+            query?: {
+                dryRun?: "true";
+                skipDuplicates?: "true" | "false";
+            };
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ImportEnvelope"] | ComponentTypes["schemas"]["ImportBookmark"][];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ImportResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     inspectInvitation: {
         parameters: {
             query?: never;
@@ -16130,6 +16600,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/import/json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["importJson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -17373,6 +17860,8 @@ export type ProblemCode = (typeof PROBLEM_CATALOG)[number]["code"];
 // @public (undocumented)
 export const ProblemCodeSchema: z.ZodEnum<{
     not_found: "not_found";
+    bookmark_limit_reached: "bookmark_limit_reached";
+    url_not_allowed: "url_not_allowed";
     bad_request: "bad_request";
     unauthenticated: "unauthenticated";
     mfa_required: "mfa_required";
@@ -17399,12 +17888,10 @@ export const ProblemCodeSchema: z.ZodEnum<{
     payload_too_large: "payload_too_large";
     unsupported_media_type: "unsupported_media_type";
     validation_failed: "validation_failed";
-    bookmark_limit_reached: "bookmark_limit_reached";
     seat_limit_reached: "seat_limit_reached";
     workspace_limit_reached: "workspace_limit_reached";
     weak_password: "weak_password";
     invalid_code: "invalid_code";
-    url_not_allowed: "url_not_allowed";
     rate_limited: "rate_limited";
     internal: "internal";
     upstream_failed: "upstream_failed";
@@ -17443,6 +17930,8 @@ export const ProblemSchema: z.ZodObject<{
     status: z.ZodNumber;
     code: z.ZodEnum<{
         not_found: "not_found";
+        bookmark_limit_reached: "bookmark_limit_reached";
+        url_not_allowed: "url_not_allowed";
         bad_request: "bad_request";
         unauthenticated: "unauthenticated";
         mfa_required: "mfa_required";
@@ -17469,12 +17958,10 @@ export const ProblemSchema: z.ZodObject<{
         payload_too_large: "payload_too_large";
         unsupported_media_type: "unsupported_media_type";
         validation_failed: "validation_failed";
-        bookmark_limit_reached: "bookmark_limit_reached";
         seat_limit_reached: "seat_limit_reached";
         workspace_limit_reached: "workspace_limit_reached";
         weak_password: "weak_password";
         invalid_code: "invalid_code";
-        url_not_allowed: "url_not_allowed";
         rate_limited: "rate_limited";
         internal: "internal";
         upstream_failed: "upstream_failed";

@@ -588,6 +588,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/import/json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview an import of SlugBase JSON */
+        post: operations["importJson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -2793,6 +2810,130 @@ export interface components {
             items: components["schemas"]["Identity"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
+        };
+        ImportBookmark: {
+            /** @description The bookmark's description; cut to 1 000 characters. A blank one is none */
+            description?: string | null;
+            /** @description The names of the folders the bookmark is filed in */
+            folders?: string[];
+            /** @description Whether /go forwards to the bookmark by its slug */
+            forwarding?: boolean;
+            /** @description Whether the bookmark is pinned */
+            pinned?: boolean;
+            /** @description Whether a downgrade of the plan archived the bookmark when the file was made; it is ignored */
+            planArchived?: boolean;
+            /** @description The export-local reference of the bookmark, `b1`, `b2` and so on in the order of the list; the entries of goPreferences name a bookmark by it */
+            ref?: string;
+            /** @description The bookmark's slug */
+            slug?: string | null;
+            /** @description The names of the tags the bookmark carries */
+            tags?: string[];
+            /** @description The bookmark's title; cut to 300 characters. A missing or blank title becomes the host of the URL */
+            title?: string | null;
+            /** @description The bookmark's address. It must be an http or https URL once normalised; anything else makes this bookmark a failure, not the file */
+            url: string;
+        };
+        ImportDroppedSlug: {
+            /** @description The place of the bookmark in the file, counted from 1 */
+            position: number;
+            /**
+             * @description slug_invalid: outside the slug grammar; slug_conflict: another bookmark of the caller has it
+             * @enum {string}
+             */
+            reason: "slug_invalid" | "slug_conflict";
+            /** @description The slug that was dropped, cut to 2 048 characters */
+            slug: string;
+            /** @description The bookmark's title, cut to 300 characters; empty for a bookmark whose URL failed and that had no title */
+            title: string;
+            /** @description The bookmark's address, cut to 2 048 characters */
+            url: string;
+        };
+        ImportEnvelope: {
+            /** @description The bookmarks of the file, at most 5 000 */
+            bookmarks: components["schemas"]["ImportBookmark"][];
+            /**
+             * Format: date-time
+             * @description When the export began, in UTC: the one timestamp the document holds
+             */
+            exportedAt?: string;
+            /** @description The folders of the file */
+            folders?: components["schemas"]["ImportFolder"][];
+            /**
+             * @description Always slugbase-export: the document is a SlugBase export
+             * @constant
+             */
+            format: "slugbase-export";
+            /** @description The caller's remembered slug choices; always empty in a version 1 file */
+            goPreferences?: string[];
+            /** @description The bookmarks other members shared with the exporter; always empty in a version 1 file, and never read */
+            shared?: string[];
+            /** @description The tags of the file */
+            tags?: string[];
+            /** @description The version of the format; a version newer than 1 is refused with 422 and an error at version */
+            version: number;
+            workspace?: {
+                /** @description The name of the workspace the content was exported from */
+                name: string;
+            };
+        };
+        ImportFailed: {
+            /** @description The place of the bookmark in the file, counted from 1 */
+            position: number;
+            /**
+             * @description url_not_allowed: not an http or https URL; url_invalid: empty, over-long or malformed
+             * @enum {string}
+             */
+            reason: "url_not_allowed" | "url_invalid";
+            /** @description The bookmark's title, cut to 300 characters; empty for a bookmark whose URL failed and that had no title */
+            title: string;
+            /** @description The bookmark's address, cut to 2 048 characters */
+            url: string;
+        };
+        ImportFolder: {
+            /** @description The folder's colour */
+            color?: number;
+            /** @description The folder's icon */
+            icon?: string;
+            /** @description The folder's name */
+            name: string;
+        };
+        ImportResult: {
+            /** @description The bookmarks the import creates */
+            created: number;
+            /** @description What the file holds */
+            detected: {
+                /** @description The bookmarks in the file */
+                bookmarks: number;
+                /** @description The distinct folder names in the file, compared without regard to case */
+                folders: number;
+                /** @description The distinct tag names in the file, compared without regard to case */
+                tags: number;
+            };
+            /** @description The slugs that are dropped; empty until the import reads slugs */
+            droppedSlugs: components["schemas"]["ImportDroppedSlug"][];
+            /** @description The bookmarks whose URL the import refuses, in the order of the file */
+            failed: components["schemas"]["ImportFailed"][];
+            /** @description The folders the import creates; 0 until the import reads folders */
+            foldersCreated: number;
+            /** @description The bookmarks the import leaves out, in the order of the file */
+            skipped: components["schemas"]["ImportSkipped"][];
+            /** @description The bookmarks that lose their slug; 0 until the import reads slugs */
+            slugsDropped: number;
+            /** @description The tags the import creates; 0 until the import reads tags */
+            tagsCreated: number;
+        };
+        ImportSkipped: {
+            /** @description The place of the bookmark in the file, counted from 1 */
+            position: number;
+            /**
+             * @description duplicate: the caller has a bookmark with this canonical URL or an earlier bookmark of the file has; bookmark_limit_reached: the workspace has no room left
+             * @enum {string}
+             */
+            reason: "duplicate" | "bookmark_limit_reached";
+            /** @description The bookmark's title, cut to 300 characters; empty for a bookmark whose URL failed and that had no title */
+            title: string;
+            /** @description The bookmark's address, cut to 2 048 characters */
+            url: string;
         };
         InspectInvitationRequest: {
             /** @description The token of the invitation link, from the path of /invite/<token> */
@@ -7392,6 +7533,119 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    importJson: {
+        parameters: {
+            query?: {
+                dryRun?: "true";
+                skipDuplicates?: "true" | "false";
+            };
+            header?: {
+                /** @description A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with Idempotency-Replayed: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account */
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportEnvelope"] | components["schemas"]["ImportBookmark"][];
+            };
+        };
+        responses: {
+            /** @description What an import of the file would do, and nothing is written: the counts of what the file holds, the number of bookmarks it would create, the bookmarks it would leave out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace has left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL it would refuse. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description The body is not valid JSON, or the Idempotency-Key header is not a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The Idempotency-Key was used before for another request (idempotency_conflict) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request body is over 5 MiB (payload_too_large) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. Also dryRun not true, or missing (an error at dryRun). A bad URL or an over-long title is no reason for it: see the answer */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again. Imports take from the bulk limit */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running */
             503: {
                 headers: {
                     [name: string]: unknown;

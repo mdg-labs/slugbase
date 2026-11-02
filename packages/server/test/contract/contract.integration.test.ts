@@ -123,8 +123,8 @@ beforeAll(async () => {
 
 function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
   // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
-  // more often than the default limits of one address allow; the matrix makes a write call for each of its principals on every operation that writes.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_WRITE_IP: "1000/min", RATE_LIMIT_WRITE_ACCOUNT: "1000/min", RATE_LIMIT_LOGIN_IP: "1000/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_BULK_IP: "1000/hour", RATE_LIMIT_BULK_ACCOUNT: "1000/hour" });
+  // more often than the default limits of one address allow; the matrix makes a write call for each of its principals on every operation that writes, and a bulk call (the bulk request, its preview, the export and the import preview) in many variants.
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_WRITE_IP: "1000/min", RATE_LIMIT_WRITE_ACCOUNT: "1000/min", RATE_LIMIT_LOGIN_IP: "1000/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_BULK_IP: "10000/hour", RATE_LIMIT_BULK_ACCOUNT: "10000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -367,12 +367,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the ninety-nine that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the seventy-eight whose policy has a role below it (the forty-six of a member, the fifteen
+    // One valid request for each operation. Each of the hundred that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the seventy-nine whose policy has a role below it (the forty-seven of a member, the fifteen
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
-    // Each of the twenty-three that declare the write scope answers 403 token_scope to a token that may only read, each of the nine that declare an entitlement answers
-    // 403 to an account without it (the seven of sharing declare none: their handlers decide the entitlement by the kind of target), and each of the forty-one that name a member, a recipient, a team, an invitation, a bookmark, a share, a slug, a host, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 103 + 17 + 79 + 24 + 10 + 41);
+    // Each of the twenty-four that declare the write scope answers 403 token_scope to a token that may only read, each of the nine that declare an entitlement answers
+    // 403 to an account without it (the seven of sharing declare none: their handlers decide the entitlement by the kind of target), and each of the forty-two that name a member, a recipient, a team, an invitation, a bookmark, a share, a slug, a host, a tag or a folder, or an input that can carry one, answers for one of workspace B.
+    expect(report.calls).toBe(operations.length + 104 + 17 + 80 + 25 + 10 + 42);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -591,7 +591,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
   }
 
-  it("passes for the sixty-four tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its shares of bookmarks and folders, its remembered choices and its audit log as they were", { timeout: MATRIX_TIMEOUT_MS }, async () => {
+  it("passes for the sixty-five tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its shares of bookmarks and folders, its remembered choices and its audit log as they were", { timeout: MATRIX_TIMEOUT_MS }, async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -669,7 +669,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const listings: unknown[] = [];
     const selections: unknown[] = [];
     const scoped: { readonly operation: string; readonly scope: string; readonly body: unknown }[] = [];
-    const mapping = { rowId: "bookmark", "listAuditEvents.actorAccountId": "member", "listAuditEvents.entityId": "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "bulkBookmarks.teamId": "team", "previewBulkBookmarks.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
+    const mapping = { rowId: "bookmark", "listAuditEvents.actorAccountId": "member", "listAuditEvents.entityId": "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "bulkBookmarks.teamId": "team", "previewBulkBookmarks.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "importJson.bookmarks[].slug": "bookmark", "importJson.[].slug": "bookmark", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
     const request = async (call: ApiCall): Promise<ApiResponse> => {
       if (call.operation.operationId === "createBookmarkShare" || call.operation.operationId === "createFolderShare") {
         const fields = isRecord(call.body) ? call.body : {};
@@ -686,6 +686,11 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       // handler with the identifiers of B in turn, and the one that names the folder (the preview: the tags) of B is the answer the matrix judges. The others are held to what the
       // handler answers for them in the assertions after the run.
       const operationId = call.operation.operationId;
+      // The import preview takes a file that is a plain array or the export document, and the fixture holds the array: the call that puts the slug in a bookmark of the document (an object with `bookmarks`) is sent as a whole document.
+      if (operationId === "importJson" && isRecord(call.body)) {
+        const slugs = Array.isArray(call.body.bookmarks) ? call.body.bookmarks : [];
+        return send({ ...call, body: { format: "slugbase-export", version: 1, bookmarks: slugs.map((bookmark: unknown) => ({ url: "https://example.com/walker", ...(isRecord(bookmark) ? bookmark : {}) })) } });
+      }
       const response =
         operationId === "bulkBookmarks" || operationId === "previewBulkBookmarks" ? await sendVariants(call, { send, sendByFilter, sendShare, sendShareByFilter }, variants) : await send(call);
       if ("instanceAdmin" in call.principal) {
@@ -730,7 +735,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const tenantScoped = classification.operations.filter((operation) => operation.kind === "tenant-scoped").map((operation) => operation.operationId);
     const runs = await Promise.all(
       Array.from({ length: MATRIX_PARTS }, (_, part) =>
-        runApiMatrix({ document: documentOf(new Set(tenantScoped.filter((_, index) => index % MATRIX_PARTS === part))), fixture, mapping, emptyAnswers: { resolveSlug: 200, getFavicon: 202, listAuditEvents: 200 }, request }),
+        runApiMatrix({ document: documentOf(new Set(tenantScoped.filter((_, index) => index % MATRIX_PARTS === part))), fixture, mapping, emptyAnswers: { resolveSlug: 200, getFavicon: 202, listAuditEvents: 200, importJson: 200 }, request }),
       ),
     );
     const matrix = {
@@ -754,8 +759,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.tenantScoped).toBe(64);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(64);
+    expect(report.tenantScoped).toBe(65);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(65);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
     // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
     // 200 that reports nothing affected, a filter on the folder and the tags of B matches nothing, and a folder or a tag of B is the declared 404 whichever action names it. Where it is not (a token that
@@ -792,6 +797,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The search names none (one of the eighteen calls that name nothing): its text is the one the rows of B are named after.
     // The suggestion names none (one of the nineteen calls that name nothing): its prefix is the one the slugs of B begin with.
     // The dashboard names none (one of the twenty calls that name nothing): it reads the caller's own rows, and no token may call it.
+    // The import preview names each of the two bookmarks of B once in the `slug` of a bookmark of the export document and once in the `slug` of a bookmark of the plain array: the four calls at the end of the sum. It writes nothing, and a slug of B is text to it.
     // The export names none either (one of the calls that name nothing): it reads the caller's own rows, and every token may call it.
     // The page-metadata lookup names none: its URL is no identifier of any workspace, and it reads and writes the cache of the workspace of the request.
     // The AI suggestion names none either: its URL and language are no identifier of any workspace, and it reads and writes the caller's own cache in the workspace of the request (it is one of the calls that name nothing, and so counted in the first term of the sum).
@@ -801,7 +807,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The search for share targets names none, the list of the shares of a bookmark names each of the two bookmarks of B once, the grant each of the two bookmarks with each of the three members of B and the team of B once (as the two requests that carry the member and the team apart), and the revocation each of the two bookmarks with the share of B once. The list of the shares of a folder names the one folder of B once, the grant the folder with each of the three members of B and the team of B once, and the revocation the folder with the share of B once.
     // The bulk request and its preview name each of the two bookmarks of B in `ids` once for each of the two in `filter.hasSlug` and for each of the three members of B in `accountId`: twelve calls each, of which the four they had before are in the sum above and the further eight each are added at its end.
     // The audit log names none once, each of the three members of B in `actorAccountId` once and each of the two bookmarks of B in `entityId` once; the three are empty pages, as the caller has no event they match.
-    const calls = 25 + (3 + 3 + 3 + 3 * 3 + 3) + (1 + 3 + 2) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2);
+    const calls = 25 + (3 + 3 + 3 + 3 * 3 + 3) + (1 + 3 + 2) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);
@@ -834,7 +840,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       await tx`SET LOCAL ROLE slugbase_system`;
       return tx<{ actor_type: string }[]>`SELECT actor_type::text AS actor_type FROM audit_events WHERE workspace_id = ${probe.fixture.a.id} AND action = 'export.created' ORDER BY actor_type`;
     })).toEqual([...Array.from({ length: 3 }, () => ({ actor_type: "account" })), ...Array.from({ length: 6 }, () => ({ actor_type: "api_token" }))]);
-    for (const document of exports as { format: string; bookmarks: unknown[]; folders: { name: string }[]; tags: string[]; goPreferences: unknown[]; shared: unknown[] }[]) {
+    for (const { workspace, ...document } of exports as { format: string; workspace: { name: string }; bookmarks: unknown[]; folders: { name: string }[]; tags: string[]; goPreferences: unknown[]; shared: unknown[] }[]) {
+      // The name of A's own workspace is in the document, as it is when the export runs: before or after the renaming that another part of the matrix makes at the same time. It is never B's.
+      expect(["Matrix workspace A", "Walker's renamed workspace"]).toContain(workspace.name);
       expect(document).toMatchObject({ format: "slugbase-export", bookmarks: [], goPreferences: [], shared: [] });
       expect(document.tags.filter((name) => name !== "Walker tag")).toEqual([]);
       expect(document.folders.filter((folder) => folder.name !== "Walker folder")).toEqual([]);

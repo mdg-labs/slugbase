@@ -396,6 +396,10 @@ export const FIXTURES: ContractFixtures = {
   // The export names no identifier either: it streams the caller's own bookmarks, folders and tags in the workspace of the request. Workspace B holds rows named matrix-..., so a row of B in the
   // document would show; the walker reads the whole document and checks it against the declared schema.
   exportJson: {},
+  // The import preview names no identifier of any workspace: it reads the caller's own canonical URLs and the counter of the workspace of the request, and writes nothing. The matrix picks the `slug` of a bookmark of the file
+  // (in the export document and in the plain array) by its name; it is text the caller writes, so a value of workspace B in it is answered 200 as any other text is, and the file's bookmark is a failure or a creation of the answer
+  // that quotes nothing of B.
+  importJson: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }], foreign: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }] }, foreignAnswer: { status: 200 } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

@@ -99,6 +99,7 @@ describe("the package entry point", () => {
         "folderRepository",
         "goRepository",
         "idempotencyRepository",
+        "importRepository",
         "instanceRepository",
         "invitationAcceptanceRepository",
         "invitationRepository",

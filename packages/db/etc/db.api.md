@@ -32,6 +32,7 @@ import type { FolderStore } from '@slugbase/core';
 import type { GoPreferenceStore } from '@slugbase/core';
 import type { GoStore } from '@slugbase/core';
 import type { GoSuggestStore } from '@slugbase/core';
+import type { ImportPreviewStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -776,6 +777,12 @@ export type IdentityUnlinkOutcome = "unlinked"
 | "not_found"
 /** The account has no password and no other identity; nothing changed. */
 | "last_sign_in_method";
+
+// @public (undocumented)
+export type ImportRepository = ImportPreviewStore;
+
+// @public
+export function importRepository(tx: TenantTx): ImportRepository;
 
 // @public (undocumented)
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {

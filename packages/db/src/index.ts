@@ -66,6 +66,8 @@ export type { UrlMetadataFields, UrlMetadataRecord, UrlMetadataRepository, UrlMe
 export type { UrlMetadataStatus } from "./schema/url-metadata.ts";
 export { exportRepository } from "./repositories/export.ts";
 export type { ExportRepository } from "./repositories/export.ts";
+export { importRepository } from "./repositories/import.ts";
+export type { ImportRepository } from "./repositories/import.ts";
 export { dashboardRepository } from "./repositories/dashboard.ts";
 export type { DashboardRepository } from "./repositories/dashboard.ts";
 export { searchRepository } from "./repositories/search.ts";

@@ -4,6 +4,9 @@
 
 ```ts
 
+import { ImportFileBookmark } from '@slugbase/contracts';
+import { ImportRequest } from '@slugbase/contracts';
+import { ImportResult } from '@slugbase/contracts';
 import type { ProblemCode } from '@slugbase/contracts';
 import type { SHARE_TARGET_KINDS } from '@slugbase/contracts';
 
@@ -2204,6 +2207,9 @@ export interface BookmarkShareStore {
 // @public
 export type BookmarkShareUse = "read" | "grant" | "revoke";
 
+// @public
+export function bookmarksOfFile(file: ImportRequest): readonly ImportFileBookmark[];
+
 // @public (undocumented)
 export type BookmarkSort = (typeof BOOKMARK_SORTS)[number];
 
@@ -2451,6 +2457,9 @@ export function checkSuggestion(value: {
 export function chooseSlugBookmark(input: GoChooseDependencies, ask: GoChooseAsk): Promise<GoChooseOutcome>;
 
 // @public
+export function cleanText(value: string, max: number): string;
+
+// @public
 export interface ClientErrorReportPort extends Port {
     // (undocumented)
     dsn(request: ClientErrorReportRequest): Promise<string | null>;
@@ -2533,6 +2542,9 @@ export interface CredentialToken {
 
 // @public (undocumented)
 export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
+
+// @public
+export function cutCodePoints(value: string, max: number): string;
 
 // @public (undocumented)
 export interface Dashboard {
@@ -4145,6 +4157,59 @@ export class ImageRefused extends Error {
     // (undocumented)
     readonly code: ImageRefusalCode;
 }
+
+// @public
+export interface ImportBookmark {
+    readonly canonical: string;
+    // (undocumented)
+    readonly description: string | null;
+    readonly position: number;
+    readonly title: string;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface ImportPreviewAsk {
+    readonly ceiling: EntitlementLimit;
+    // (undocumented)
+    readonly file: ImportRequest;
+    readonly skipDuplicates: boolean;
+}
+
+// @public (undocumented)
+export interface ImportPreviewDependencies {
+    // (undocumented)
+    readonly store: ImportPreviewStore;
+}
+
+// @public (undocumented)
+export type ImportPreviewOutcome =
+/** The workspace cannot be read: it is being deleted, or the caller is no member of it. */
+    {
+    readonly kind: "unavailable";
+} | {
+    readonly kind: "previewed";
+    readonly result: ImportResult;
+};
+
+// @public
+export interface ImportPreviewStore {
+    bookmarkCount(): Promise<number | undefined>;
+    existingCanonicalUrls(canonicals: readonly string[]): Promise<ReadonlySet<string>>;
+}
+
+// @public
+export interface ImportRefusal {
+    // (undocumented)
+    readonly position: number;
+    // (undocumented)
+    readonly reason: ImportRefusalReason;
+    readonly title: string;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export type ImportRefusalReason = "url_not_allowed" | "url_invalid";
 
 // @public
 export function inspectInvitation(input: {
@@ -5820,6 +5885,9 @@ export class PersonalWorkspaceUnavailableError extends Error {
 }
 
 // @public
+export function plainText(value: string): string;
+
+// @public
 export interface Port {
     readonly available: boolean;
 }
@@ -5844,6 +5912,9 @@ export function previewBulkShare(input: BookmarkBulkSharePreviewDependencies, as
 
 // @public
 export function previewBulkTags(input: BookmarkBulkPreviewDependencies, ask: BookmarkBulkPreviewAsk): Promise<BookmarkBulkPreviewOutcome>;
+
+// @public
+export function previewImport(input: ImportPreviewDependencies, ask: ImportPreviewAsk): Promise<ImportPreviewOutcome>;
 
 // @public
 export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string, ownedMax: EntitlementLimit): Promise<PersonalWorkspaceOutcome>;
@@ -5879,6 +5950,9 @@ export function readBookmark(input: BookmarkReadDependencies, ask: BookmarkReadA
 
 // @public
 export function readFolder(input: FolderReadDependencies, ask: FolderReadAsk): Promise<FolderRecord | undefined>;
+
+// @public
+export function readImportBookmark(entry: ImportFileBookmark, position: number): ImportBookmark | ImportRefusal;
 
 // @public
 export function readTeam(input: TeamReadDependencies<"find">, ask: {

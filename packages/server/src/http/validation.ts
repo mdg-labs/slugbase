@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { refuseUncallableToken } from "./authorize.ts";
 import type { ChainContext, MatchedRoute, RequestStage, ValidatedInput } from "./chain.ts";
-import { ProblemError, VALIDATION_FAILED_DETAIL, fieldErrors, type ProblemFieldError } from "./problem.ts";
+import { MAX_FIELD_ERRORS, ProblemError, VALIDATION_FAILED_DETAIL, fieldErrors, type ProblemFieldError } from "./problem.ts";
 
 // Stage 8 of the chain (doc 01 section 4): the request is parsed with the Zod
 // schemas its operation declares, and what the handler receives is what they
@@ -85,7 +85,7 @@ async function validate(context: ChainContext, route: MatchedRoute): Promise<Val
   }
 
   if (errors.length > 0) {
-    throw new ProblemError("validation_failed", VALIDATION_FAILED_DETAIL, { errors });
+    throw new ProblemError("validation_failed", VALIDATION_FAILED_DETAIL, { errors: errors.slice(0, MAX_FIELD_ERRORS) });
   }
   return input;
 }
