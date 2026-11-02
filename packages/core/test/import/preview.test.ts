@@ -8,12 +8,18 @@ interface Calls {
   count: number;
   lookups: (readonly string[])[];
   slugs: (readonly string[])[];
+  sameNames: (readonly string[])[];
 }
 
-function store(options: { count?: number | undefined; existing?: readonly string[]; slugs?: readonly string[]; folders?: readonly string[]; tags?: readonly string[] } = {}): { store: ImportPreviewStore; calls: Calls } {
-  const calls: Calls = { count: 0, lookups: [], slugs: [] };
+/** The names the fake store tells apart: the same name whatever the case by default; `same` replaces the rule. */
+type Same = (a: string, b: string) => boolean;
+const caseless: Same = (a, b) => a.toLowerCase() === b.toLowerCase();
+
+function store(options: { count?: number | undefined; existing?: readonly string[]; slugs?: readonly string[]; folders?: readonly string[]; tags?: readonly string[]; same?: Same } = {}): { store: ImportPreviewStore; calls: Calls } {
+  const calls: Calls = { count: 0, lookups: [], slugs: [], sameNames: [] };
+  const same = options.same ?? caseless;
   const existing = new Set(options.existing ?? []);
-  const named = (have: readonly string[] | undefined, names: readonly string[]) => new Set(names.filter((name) => (have ?? []).some((other) => other.toLowerCase() === name.toLowerCase())));
+  const named = (have: readonly string[] | undefined, names: readonly string[]) => new Set(names.filter((name) => (have ?? []).some((other) => same(other, name))));
   return {
     calls,
     store: {
@@ -31,6 +37,10 @@ function store(options: { count?: number | undefined; existing?: readonly string
       },
       existingFolderNames: (names) => Promise.resolve(named(options.folders, names)),
       existingTagNames: (names) => Promise.resolve(named(options.tags, names)),
+      firstSameNames: (names) => {
+        calls.sameNames.push(names);
+        return Promise.resolve(names.map((name, index) => Math.max(0, names.findIndex((other, place) => place <= index && same(other, name)))));
+      },
     },
   };
 }
@@ -178,16 +188,16 @@ describe("previewImport", () => {
     expect(result.detected).toEqual({ bookmarks: 2, folders: 3, tags: 3 });
   });
 
-  it("reads a slug in its normal form, text outside the grammar as it is, a blank slug as none, and the names of the folders and tags as plain text cut to their limits without a repeat that differs in case", () => {
+  it("reads a slug in its normal form, text outside the grammar as it is, a blank slug as none, and the names of the folders and tags as plain text cut to their limits, each spelling once and the case left as it is", () => {
     expect(readImportBookmark({ url: "https://example.com/", slug: "  Mail-2 ", forwarding: true }, 1)).toMatchObject({ slug: { kind: "valid", slug: "mail-2" }, forwarding: true });
     expect(readImportBookmark({ url: "https://example.com/", slug: "-mail" }, 1)).toMatchObject({ slug: { kind: "invalid", text: "-mail" } });
     expect(readImportBookmark({ url: "https://example.com/", slug: "a\u0000b" }, 1)).toMatchObject({ slug: { kind: "invalid", text: "ab" } });
     expect(readImportBookmark({ url: "https://example.com/", slug: "a".repeat(65) }, 1)).toMatchObject({ slug: { kind: "invalid" } });
     expect(readImportBookmark({ url: "https://example.com/", slug: "   " }, 1)).toMatchObject({ slug: { kind: "none" } });
     expect(readImportBookmark({ url: "https://example.com/", slug: null }, 1)).toMatchObject({ slug: { kind: "none" }, forwarding: false });
-    expect(readImportBookmark({ url: "https://example.com/", folders: ["Work", " work ", "", "\u0000", "A/B", "x".repeat(70)], tags: ["T", "t", "y".repeat(50)] }, 1)).toMatchObject({
-      folders: ["Work", "A/B", "x".repeat(64)],
-      tags: ["T", "y".repeat(40)],
+    expect(readImportBookmark({ url: "https://example.com/", folders: ["Work", " work ", "Work", "", "\u0000", "A/B", "x".repeat(70)], tags: ["T", "t", "y".repeat(50)] }, 1)).toMatchObject({
+      folders: ["Work", "work", "A/B", "x".repeat(64)],
+      tags: ["T", "t", "y".repeat(40)],
     });
   });
 
@@ -251,6 +261,37 @@ describe("previewImport", () => {
     expect(result.foldersCreated).toBe(2);
     expect(result.tagsCreated).toBe(2);
     expect(result.detected).toEqual({ bookmarks: 2, folders: 4, tags: 4 });
+  });
+
+  it("takes which names are one from the store and never from JavaScript's lower case: a pair it folds together but the store tells apart is two, a pair it tells apart but the store folds together is one, and a name the caller has is matched by the store", async () => {
+    const dotted = new Set(["\u0130", "i"]);
+    const { result, calls } = await preview(
+      {
+        format: "slugbase-export",
+        version: 1,
+        folders: [{ name: "\u0130" }, { name: "\uA7CE" }],
+        tags: ["\uA7CE", "\uA7CF"],
+        bookmarks: [{ url: "https://example.com/a", folders: ["i", "\uA7CF"], tags: ["\u0130", "i"] }],
+      },
+      {},
+      { same: (a, b) => a === b || (dotted.has(a) && dotted.has(b)), folders: ["\uA7CF"] },
+    );
+
+    expect(calls.sameNames).toEqual([
+      ["\u0130", "\uA7CE", "i", "\uA7CF"],
+      ["\uA7CE", "\uA7CF", "\u0130", "i"],
+    ]);
+    expect(result).toMatchObject({ foldersCreated: 2, tagsCreated: 3, detected: { bookmarks: 1, folders: 3, tags: 3 } });
+  });
+
+  it("refuses an answer of the store that does not tell which names are the same", async () => {
+    const { store: fake } = store();
+    const answers = [[0], [1, 0], [0, 0, 1], [0, 0.5]];
+    for (const answer of answers) {
+      await expect(
+        previewImport({ store: { ...fake, firstSameNames: () => Promise.resolve(answer) } }, ask([{ url: "https://example.com/a", folders: ["a", "b"] }])),
+      ).rejects.toThrow(/which names are the same/);
+    }
   });
 
   it("asks the store about nothing when the file holds no slug, folder or tag", async () => {

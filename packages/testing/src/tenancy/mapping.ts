@@ -81,7 +81,7 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   `folders[].color`), the `tags` of the file and the `folders` and `tags` of a bookmark, and the `forwarding` and `pinned` flags. They are matched to the caller's own folders and tags of the workspace of the request by name, so a
  *   name that B has is no folder or tag of B to A. The import that writes is held to the workspace of the transaction by two cases of the `describe("the bulk operations across workspaces")` block of
  *   `test/tenancy-matrix.integration.test.ts`: `it("takes no place in B and writes no bookmark in B for an import …")` (the places taken under the counter and the bookmarks inserted, with their slugs) and
- *   `it("reads no slug, folder or tag of B, creates its folders and tags in A only, and writes no link in B, for an import …")` (the checks of the slugs, folders and tags, the get-or-create of folders and tags by name, and
+ *   `it("reads no slug, folder or tag of B, creates its folders and tags in A only, and writes no link in B, for an import …")` (the checks of the slugs, folders and tags, the question which of the file's names the database takes for one, which reads no row, the get-or-create of folders and tags by name, and
  *   the links of the new bookmarks).
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix

@@ -253,6 +253,65 @@ describe("POST /import/json, folders, tags and slugs", { timeout: TEST_TIMEOUT_M
     expect((await filedBy(shared.workspaceId, a.account.id)).find((row) => row.url === "https://example.com/other")?.slug).toBe("wanted");
   });
 
+  it("takes which folder and tag names are one from the database, so the counts of the dry run and of the import agree for names whose JavaScript lower case differs from the database's", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, shared } = await setup(world);
+    const names = ["\u0130", "i", "\u039F\u0394\u039F\u03A3", "\u03BF\u03B4\u03BF\u03C2", "\u03BF\u03B4\u03BF\u03C3", "\uA7CE", "\uA7CF"];
+    const distinct = (await database().owner<{ count: number }[]>`SELECT count(DISTINCT n::citext)::int AS count FROM unnest(${names}::text[]) AS n`)[0]?.count ?? 0;
+    const file = {
+      format: "slugbase-export",
+      version: 1,
+      folders: [{ name: names[0] }, { name: names[2] }],
+      tags: [names[0], names[2]],
+      bookmarks: [{ url: "https://example.com/a", folders: names.slice(1), tags: names.slice(1) }],
+    };
+
+    const previewed = await imported(world, a, file, PREVIEW);
+    const result = await imported(world, a, file);
+
+    expect(result).toEqual(previewed);
+    expect(result).toMatchObject({ created: 1, foldersCreated: distinct, tagsCreated: distinct, detected: { folders: distinct, tags: distinct } });
+    expect(await foldersOf(shared.workspaceId, a.account.id)).toHaveLength(distinct);
+    expect(await tagsOf(shared.workspaceId, a.account.id)).toHaveLength(distinct);
+  });
+
+  it("files a bookmark under the folder and tag the caller has of the exact name, and creates the other spelling, when JavaScript's lower case would take the two for one name and the database does not", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, shared } = await setup(world);
+    const [listed, owned] = ["\uA7CE", "\uA7CF"];
+    const same = (await database().owner<{ same: boolean }[]>`SELECT ${listed}::citext = ${owned}::citext AS same`)[0]?.same;
+    await imported(world, a, { format: "slugbase-export", version: 1, folders: [{ name: owned }], tags: [owned], bookmarks: [] });
+    const file = { format: "slugbase-export", version: 1, folders: [{ name: listed }], tags: [listed], bookmarks: [{ url: "https://example.com/a", folders: [owned], tags: [owned] }] };
+    const owner = (await foldersOf(shared.workspaceId, a.account.id))[0];
+
+    const previewed = await imported(world, a, file, PREVIEW);
+    const result = await imported(world, a, file);
+
+    expect(result).toEqual(previewed);
+    expect(result).toMatchObject({ created: 1, foldersCreated: same === true ? 0 : 1, tagsCreated: same === true ? 0 : 1 });
+    expect((await foldersOf(shared.workspaceId, a.account.id)).map((folder) => folder.name)).toEqual(same === true ? [owned] : [listed, owned]);
+    expect((await tagsOf(shared.workspaceId, a.account.id)).map((tag) => tag.name)).toEqual(same === true ? [owned] : [listed, owned]);
+    expect(await filedBy(shared.workspaceId, a.account.id)).toEqual([{ url: "https://example.com/a", slug: null, forwarding: false, pinned: false, folders: [owned], tags: [owned] }]);
+    expect((await foldersOf(shared.workspaceId, a.account.id)).find((folder) => folder.name === owned)?.id).toBe(owner?.id);
+  });
+
+  it("creates both spellings of a pair of names the database tells apart when the caller has neither, though JavaScript's lower case takes them for one", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, shared } = await setup(world);
+    const [first, second] = ["\uA7CE", "\uA7CF"] as const;
+    const pair = [first, second];
+    const same = (await database().owner<{ same: boolean }[]>`SELECT ${first}::citext = ${second}::citext AS same`)[0]?.same;
+    const file = { format: "slugbase-export", version: 1, folders: [{ name: first }], tags: [first], bookmarks: [{ url: "https://example.com/a", folders: [second], tags: [second] }] };
+
+    const previewed = await imported(world, a, file, PREVIEW);
+    const result = await imported(world, a, file);
+
+    expect(result).toEqual(previewed);
+    expect(result).toMatchObject({ foldersCreated: same === true ? 1 : 2, tagsCreated: same === true ? 1 : 2 });
+    expect((await foldersOf(shared.workspaceId, a.account.id)).map((folder) => folder.name)).toEqual(same === true ? [first] : pair);
+    expect((await filedBy(shared.workspaceId, a.account.id))[0]?.folders).toEqual(same === true ? [first] : [second]);
+  });
+
   it("writes nothing in a dry run, not a folder, tag, link or slug, and reports the counts of the import that follows", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);

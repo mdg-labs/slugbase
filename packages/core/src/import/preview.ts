@@ -27,8 +27,9 @@ import { cleanText } from "./text.ts";
 // can neither change the count nor make a bookmark a duplicate. A duplicate is a bookmark whose canonical URL the caller has on a bookmark that is not plan-archived already, or an earlier
 // bookmark of the file has.
 //
-// The preview also says what the import does with the file's folders, tags and slugs (doc 02 section 13.1, Q30), judged by the rules the import applies (`planSlugs`, `wantedFolders`, `wantedTags`). A folder or a tag
-// is matched by its name without regard to case, and one the caller has not is created; a name is plain text cut to its limit and a name that is empty then is none. A slug is kept by a bookmark that is imported when it is
+// The preview also says what the import does with the file's folders, tags and slugs (doc 02 section 13.1, Q30), judged by the rules the import applies (`planSlugs`, `planNames`). A folder or a tag
+// is matched by its name without regard to case, and one the caller has not is created; a name is plain text cut to its limit and a name that is empty then is none. Which spellings are one name is the database's to say (`ImportPreviewStore.firstSameNames`, the comparison of its `citext` columns), for the preview and for the import alike, so the two cannot disagree on any
+// database: the file's names are never folded here. A slug is kept by a bookmark that is imported when it is
 // in the grammar, the caller has no bookmark with it, plan-archived or not, and no earlier bookmark that is imported has it; any other slug is dropped from its bookmark with forwarding off, and the bookmark is imported.
 
 /** What the preview reads of the database, in the transaction of the request. */
@@ -43,6 +44,11 @@ export interface ImportPreviewStore {
   existingFolderNames(names: readonly string[]): Promise<ReadonlySet<string>>;
   /** Those of `names`, as they were asked, that match a tag the caller has, without regard to case. */
   existingTagNames(names: readonly string[]): Promise<ReadonlySet<string>>;
+  /**
+   * For each of `names`, the place in `names` of the first one that the database compares as the same folder or tag name (the comparison of its `citext` columns): the answer for the first spelling of a name is its own place, and
+   * for any other spelling the place of an earlier one. It reads nothing of anyone.
+   */
+  firstSameNames(names: readonly string[]): Promise<readonly number[]>;
 }
 
 export interface ImportPreviewDependencies {
@@ -81,7 +87,7 @@ export interface ImportBookmark {
   readonly slug: { readonly kind: "none" } | { readonly kind: "valid"; readonly slug: string } | { readonly kind: "invalid"; readonly text: string };
   /** Whether the file has /go forward to the bookmark; it takes effect only with a slug the bookmark keeps. */
   readonly forwarding: boolean;
-  /** The names of the folders the file files the bookmark in: plain, cut, not empty, each once without regard to case. */
+  /** The names of the folders the file files the bookmark in: plain, cut, not empty, each spelling once. */
   readonly folders: readonly string[];
   /** The names of the tags the file gives the bookmark, by the same rules. */
   readonly tags: readonly string[];
@@ -111,19 +117,9 @@ export function bookmarksOfFile(file: ImportRequest): readonly ImportFileBookmar
   return Array.isArray(file) ? file : file.bookmarks;
 }
 
-/** The names as plain text cut to `max`, without the empty ones and without a repeat that differs in case only; the first spelling stands. */
+/** The names as plain text cut to `max`, without the empty ones and without a spelling repeated; the order of the file stands. Whether two spellings are one name is not decided here (`namesOf`). */
 function cleanNames(names: readonly string[] | undefined, max: number): string[] {
-  const seen = new Set<string>();
-  const clean: string[] = [];
-  for (const name of names ?? []) {
-    const text = cleanText(name, max);
-    const key = text.toLowerCase();
-    if (text !== "" && !seen.has(key)) {
-      seen.add(key);
-      clean.push(text);
-    }
-  }
-  return clean;
+  return [...new Set((names ?? []).map((name) => cleanText(name, max)).filter((name) => name !== ""))];
 }
 
 function readSlug(slug: string | null | undefined): ImportBookmark["slug"] {
@@ -161,45 +157,8 @@ export function isRefusal(read: ImportBookmark | ImportRefusal): read is ImportR
   return "reason" in read;
 }
 
-/** The distinct names, compared without regard to case, once each is plain text cut to `max`; a name that is blank is none. */
-function distinctNames(names: Iterable<string>, max: number): number {
-  const seen = new Set<string>();
-  for (const name of names) {
-    const clean = cleanText(name, max);
-    if (clean !== "") {
-      seen.add(clean.toLowerCase());
-    }
-  }
-  return seen.size;
-}
-
-function* folderNamesOf(file: ImportRequest): Generator<string> {
-  if (!Array.isArray(file)) {
-    for (const folder of file.folders ?? []) {
-      yield folder.name;
-    }
-  }
-  for (const entry of bookmarksOfFile(file)) {
-    yield* entry.folders ?? [];
-  }
-}
-
-function* tagNamesOf(file: ImportRequest): Generator<string> {
-  if (!Array.isArray(file)) {
-    yield* file.tags ?? [];
-  }
-  for (const entry of bookmarksOfFile(file)) {
-    yield* entry.tags ?? [];
-  }
-}
-
 export function entry(read: ImportBookmark | ImportRefusal): { position: number; title: string; url: string } {
   return { position: read.position, title: read.title, url: read.url };
-}
-
-/** What the file holds: its bookmarks, and its distinct folder and tag names. */
-export function detectedOf(file: ImportRequest, bookmarks: number): ImportResult["detected"] {
-  return { bookmarks, folders: distinctNames(folderNamesOf(file), FOLDER_NAME_MAX_LENGTH), tags: distinctNames(tagNamesOf(file), TAG_NAME_MAX_LENGTH) };
 }
 
 /** A folder the import makes sure the caller has. */
@@ -217,38 +176,91 @@ function colorOf(color: number | undefined): number {
   return color !== undefined && color >= FOLDER_COLOR_MIN && color <= FOLDER_COLOR_MAX ? color : FOLDER_DEFAULT_COLOR;
 }
 
-/**
- * The folders the import makes sure the caller has, one for each name without regard to case, the first spelling standing: those the file lists, with their icon and colour (an icon outside the list a folder may carry and a
- * colour outside 1 to 8 become the defaults), then those of the bookmarks that are created. A name is plain text cut to its limit and an empty one is none; a name is not split at a slash.
- */
-export function wantedFolders(file: ImportRequest, created: readonly ImportBookmark[]): WantedFolder[] {
-  const wanted = new Map<string, WantedFolder>();
-  for (const folder of Array.isArray(file) ? [] : (file.folders ?? [])) {
-    const name = cleanText(folder.name, FOLDER_NAME_MAX_LENGTH);
-    if (name !== "" && !wanted.has(name.toLowerCase())) {
-      wanted.set(name.toLowerCase(), { name, icon: iconOf(folder.icon), color: colorOf(folder.color) });
-    }
-  }
-  for (const bookmark of created) {
-    for (const name of bookmark.folders) {
-      if (!wanted.has(name.toLowerCase())) {
-        wanted.set(name.toLowerCase(), { name, icon: FOLDER_DEFAULT_ICON, color: FOLDER_DEFAULT_COLOR });
-      }
-    }
-  }
-  return [...wanted.values()];
+/** The names of one kind that the import deals with. */
+interface NameSet {
+  /** The names the import makes sure the caller has, one for each name the database tells apart, the first spelling standing. */
+  readonly wanted: readonly string[];
+  /** The wanted spelling of each spelling of a wanted name. */
+  readonly spelledAs: ReadonlyMap<string, string>;
+  /** The names of the file the database tells apart. */
+  readonly distinct: number;
 }
 
-/** The tags the import makes sure the caller has, by the rules of `wantedFolders`: those the file lists, then those of the bookmarks that are created. */
-export function wantedTags(file: ImportRequest, created: readonly ImportBookmark[]): string[] {
-  const wanted = new Map<string, string>();
-  for (const tag of [...(Array.isArray(file) ? [] : (file.tags ?? [])), ...created.flatMap((bookmark) => bookmark.tags)]) {
-    const name = cleanText(tag, TAG_NAME_MAX_LENGTH);
-    if (name !== "" && !wanted.has(name.toLowerCase())) {
-      wanted.set(name.toLowerCase(), name);
+/**
+ * Asks the database which of the file's spellings are one name. `listed` (the names of the document's lists) and `used` (those of the bookmarks that are created) are the names to make sure of, in that order, and `rest` the names
+ * of the whole file, which only the count of its distinct names reads. Each spelling is asked once, in that order, so the first spelling of a name is the one of the document's list if it has one, and the store is not asked when there is none.
+ */
+async function nameSet(store: ImportPreviewStore, listed: readonly string[], used: readonly string[], rest: readonly string[]): Promise<NameSet> {
+  const wantedSpellings = [...new Set([...listed, ...used])];
+  const spellings = [...new Set([...wantedSpellings, ...rest])];
+  if (spellings.length === 0) {
+    return { wanted: [], spelledAs: new Map(), distinct: 0 };
+  }
+  const first = await store.firstSameNames(spellings);
+  if (first.length !== spellings.length || first.some((place, index) => !Number.isInteger(place) || place < 0 || place > index || first[place] !== place)) {
+    throw new Error("the store did not answer which names are the same");
+  }
+  const spelledAs = new Map<string, string>();
+  const wanted: string[] = [];
+  spellings.forEach((spelling, index) => {
+    const place = first[index] ?? index;
+    if (place < wantedSpellings.length) {
+      spelledAs.set(spelling, spellings[place] ?? spelling);
+      if (place === index) {
+        wanted.push(spelling);
+      }
+    }
+  });
+  return { wanted, spelledAs, distinct: first.filter((place, index) => place === index).length };
+}
+
+/** What the import does with the names of the file's folders and tags. */
+export interface NamePlan {
+  /** The folders the import makes sure the caller has: those the file lists, with their icon and colour (an icon outside the list a folder may carry and a colour outside 1 to 8 become the defaults), then those of the bookmarks that are created. */
+  readonly folders: readonly WantedFolder[];
+  /** The tags the import makes sure the caller has, by the same rules. */
+  readonly tags: readonly string[];
+  /** The wanted folder a spelling of a folder name of a created bookmark stands for. */
+  readonly folderOf: ReadonlyMap<string, string>;
+  /** The wanted tag a spelling of a tag name of a created bookmark stands for. */
+  readonly tagOf: ReadonlyMap<string, string>;
+  /** The distinct folder and tag names of the whole file. */
+  readonly detected: { readonly folders: number; readonly tags: number };
+}
+
+/**
+ * The folders and tags the import makes sure the caller has, one for each name the database tells apart (`firstSameNames`), the first spelling standing: those the file lists, then those of the bookmarks that are created. A name is plain text cut
+ * to its limit and an empty one is none; a name is not split at a slash. Preview and import ask the store the same questions, so they count alike.
+ */
+export async function planNames(store: ImportPreviewStore, file: ImportRequest, created: readonly ImportBookmark[]): Promise<NamePlan> {
+  const listedFolders = new Map<string, WantedFolder>();
+  for (const folder of Array.isArray(file) ? [] : (file.folders ?? [])) {
+    const name = cleanText(folder.name, FOLDER_NAME_MAX_LENGTH);
+    if (name !== "" && !listedFolders.has(name)) {
+      listedFolders.set(name, { name, icon: iconOf(folder.icon), color: colorOf(folder.color) });
     }
   }
-  return [...wanted.values()];
+  const listedTags = [...new Set((Array.isArray(file) ? [] : (file.tags ?? [])).map((tag) => cleanText(tag, TAG_NAME_MAX_LENGTH)).filter((tag) => tag !== ""))];
+  const entries = bookmarksOfFile(file);
+  const folders = await nameSet(
+    store,
+    [...listedFolders.keys()],
+    created.flatMap((bookmark) => bookmark.folders),
+    entries.flatMap((entry) => cleanNames(entry.folders, FOLDER_NAME_MAX_LENGTH)),
+  );
+  const tags = await nameSet(
+    store,
+    listedTags,
+    created.flatMap((bookmark) => bookmark.tags),
+    entries.flatMap((entry) => cleanNames(entry.tags, TAG_NAME_MAX_LENGTH)),
+  );
+  return {
+    folders: folders.wanted.map((name) => listedFolders.get(name) ?? { name, icon: FOLDER_DEFAULT_ICON, color: FOLDER_DEFAULT_COLOR }),
+    tags: tags.wanted,
+    folderOf: folders.spelledAs,
+    tagOf: tags.spelledAs,
+    detected: { folders: folders.distinct, tags: tags.distinct },
+  };
 }
 
 /** What the bookmarks that are created do with their slugs. */
@@ -324,21 +336,20 @@ export async function previewImport({ store }: ImportPreviewDependencies, ask: I
   }
   const slugs = slugsToCheck(created);
   const plan = planSlugs(created, slugs.length > 0 ? await store.existingSlugs(slugs) : new Set<string>());
-  const folders = wantedFolders(ask.file, created);
-  const existingFolders = folders.length > 0 ? await store.existingFolderNames(folders.map((folder) => folder.name)) : new Set<string>();
-  const tags = wantedTags(ask.file, created);
-  const existingTags = tags.length > 0 ? await store.existingTagNames(tags) : new Set<string>();
+  const names = await planNames(store, ask.file, created);
+  const existingFolders = names.folders.length > 0 ? await store.existingFolderNames(names.folders.map((folder) => folder.name)) : new Set<string>();
+  const existingTags = names.tags.length > 0 ? await store.existingTagNames(names.tags) : new Set<string>();
   return {
     kind: "previewed",
     result: {
-      detected: detectedOf(ask.file, reads.length),
+      detected: { bookmarks: reads.length, ...names.detected },
       created: created.length,
       skipped,
       failed,
       slugsDropped: plan.dropped.length,
       droppedSlugs: plan.dropped,
-      foldersCreated: folders.filter((folder) => !existingFolders.has(folder.name)).length,
-      tagsCreated: tags.filter((tag) => !existingTags.has(tag)).length,
+      foldersCreated: names.folders.filter((folder) => !existingFolders.has(folder.name)).length,
+      tagsCreated: names.tags.filter((tag) => !existingTags.has(tag)).length,
     },
   };
 }

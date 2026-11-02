@@ -44,6 +44,7 @@ function storeOf(tx: TenantTx): ImportStore {
     existingSlugs: (slugs) => repository.existingSlugs(slugs),
     existingFolderNames: (names) => repository.existingFolderNames(names),
     existingTagNames: (names) => repository.existingTagNames(names),
+    firstSameNames: (names) => repository.firstSameNames(names),
     resolveFolders: (folders) => repository.resolveFolders(folders),
     resolveTags: (tags) => repository.resolveTags(tags),
     linkBookmarks: (links) => repository.linkBookmarks(links),

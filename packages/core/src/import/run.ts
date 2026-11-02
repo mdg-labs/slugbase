@@ -2,7 +2,7 @@ import type { ImportResult } from "@slugbase/contracts";
 import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
-import { bookmarksOfFile, detectedOf, entry, isRefusal, planSlugs, readImportBookmark, slugsToCheck, wantedFolders, wantedTags, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
+import { bookmarksOfFile, entry, isRefusal, planNames, planSlugs, readImportBookmark, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
 
 // The JSON import itself (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), in the one transaction the store and the audit writer are bound to. The file is judged exactly as the preview judges it
 // (`previewImport`): each bookmark's URL goes through the bookmark URL module, its text is made plain and cut, a duplicate by canonical URL is left out unless asked otherwise, and the workspace's room is spent in the order
@@ -11,7 +11,7 @@ import { bookmarksOfFile, detectedOf, entry, isRefusal, planSlugs, readImportBoo
 // `bookmark.created` in the same transaction. A plan-archived flag in the file is never read. The import is recorded as one `import.completed` audit event with counts only, written after the bookmarks, so a failure of
 // any write (the bookmarks, the counter, the jobs or the event) rejects, and the caller's transaction, which must not commit, leaves none of them. The service never starts a transaction and swallows no failure.
 //
-// The folders and tags of the file (doc 02 section 13.1, Q30) are made sure of once the places are taken, before the first bookmark is written: the store gets or creates each by name, without regard to case, and a
+// The folders and tags of the file (doc 02 section 13.1, Q30) are made sure of once the places are taken, before the first bookmark is written: the store gets or creates each by name, without regard to case, one for each name the database tells apart (`planNames`), and a
 // folder or tag the caller has keeps its icon and colour. The folders and tags the file lists exist afterwards whether a bookmark uses them or not; those a bookmark names are made sure of for the bookmarks that are
 // created. Each bookmark is filed and tagged by its own names, in the batch that writes it. A slug is kept by the bookmark that is created when `planSlugs` says so; the store inserts it only where the caller has no
 // bookmark with it at that moment, and a bookmark that loses its slug to a bookmark another transaction wrote since is still created, without the slug and without forwarding, and reported with the others.
@@ -124,9 +124,9 @@ function missing(kind: string): never {
   throw new Error(`the store did not resolve a ${kind} the import needs`);
 }
 
-/** The identifier of each name in `names`, by the lower-cased name; the store must have answered every one. */
-function idsByName(names: readonly string[], ids: ReadonlyMap<string, string>, kind: string): Map<string, string> {
-  return new Map(names.map((name) => [name.toLowerCase(), ids.get(name) ?? missing(kind)]));
+/** The identifier the store resolved for a spelling of a name: that of the wanted name it stands for. */
+function idOf(spelledAs: ReadonlyMap<string, string>, ids: ReadonlyMap<string, string>, name: string, kind: string): string {
+  return ids.get(spelledAs.get(name) ?? missing(kind)) ?? missing(kind);
 }
 
 /** Imports the file in the transaction the dependencies are bound to; nothing is written when the workspace cannot be reached. */
@@ -171,12 +171,9 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
 
   const slugs = slugsToCheck(created);
   const slugPlan = planSlugs(created, slugs.length > 0 ? await store.existingSlugs(slugs) : new Set<string>());
-  const folderWants = wantedFolders(ask.file, created);
-  const folders = folderWants.length > 0 ? await store.resolveFolders(folderWants.map((folder) => ({ id: newId(), ...folder }))) : NOTHING_RESOLVED;
-  const tagWants = wantedTags(ask.file, created);
-  const tags = tagWants.length > 0 ? await store.resolveTags(tagWants.map((name) => ({ id: newId(), name }))) : NOTHING_RESOLVED;
-  const folderIds = idsByName(folderWants.map((folder) => folder.name), folders.ids, "folder");
-  const tagIds = idsByName(tagWants, tags.ids, "tag");
+  const names = await planNames(store, ask.file, created);
+  const folders = names.folders.length > 0 ? await store.resolveFolders(names.folders.map((folder) => ({ id: newId(), ...folder }))) : NOTHING_RESOLVED;
+  const tags = names.tags.length > 0 ? await store.resolveTags(names.tags.map((name) => ({ id: newId(), name }))) : NOTHING_RESOLVED;
 
   const lost: ImportResult["droppedSlugs"] = [];
   for (let from = 0; from < created.length; from += IMPORT_BATCH_SIZE) {
@@ -210,8 +207,8 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
       throw new Error("the store reported a lost slug for a bookmark outside the batch");
     }
     const links: ImportLinks = {
-      folders: batch.flatMap(({ bookmark, row }) => bookmark.folders.map((name) => ({ bookmarkId: row.id, folderId: folderIds.get(name.toLowerCase()) ?? missing("folder") }))),
-      tags: batch.flatMap(({ bookmark, row }) => bookmark.tags.map((name) => ({ bookmarkId: row.id, tagId: tagIds.get(name.toLowerCase()) ?? missing("tag") }))),
+      folders: batch.flatMap(({ bookmark, row }) => bookmark.folders.map((name) => ({ bookmarkId: row.id, folderId: idOf(names.folderOf, folders.ids, name, "folder") }))),
+      tags: batch.flatMap(({ bookmark, row }) => bookmark.tags.map((name) => ({ bookmarkId: row.id, tagId: idOf(names.tagOf, tags.ids, name, "tag") }))),
     };
     if (links.folders.length > 0 || links.tags.length > 0) {
       await store.linkBookmarks(links);
@@ -220,7 +217,7 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
 
   const droppedSlugs = [...slugPlan.dropped, ...lost].sort((a, b) => a.position - b.position);
   const result: ImportResult = {
-    detected: detectedOf(ask.file, reads.length),
+    detected: { bookmarks: reads.length, ...names.detected },
     created: created.length,
     skipped,
     failed,

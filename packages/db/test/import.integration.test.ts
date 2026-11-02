@@ -1,7 +1,9 @@
+import { sql } from "drizzle-orm";
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { importRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
+import { tenantHandle } from "../src/tenant.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
@@ -681,7 +683,9 @@ describe("the slugs the import inserts", () => {
     const rivalHolds = new Promise<void>((resolve) => {
       rivalInserted = resolve;
     });
+    let rivalPid = 0;
     const rival = db.owner.begin(async (tx) => {
+      rivalPid = (await tx<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`)[0]?.pid ?? 0;
       await tx`SET LOCAL ROLE slugbase_system`;
       await tx`
         INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug)
@@ -692,15 +696,22 @@ describe("the slugs the import inserts", () => {
     try {
       await rivalHolds;
       const checked = await asMember(w, me, (tx) => importRepository(tx).existingSlugs([rivalSlug]));
+      let importerPid = 0;
       const importing = asMember(w, me, async (tx) => {
+        importerPid = (await tenantHandle(tx).execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`))[0]?.pid ?? 0;
         await importRepository(tx).takePlaces(null, 1);
         return importRepository(tx).insertBookmarks({ bookmarks: [newRow(me, id, rivalSlug, true)], jobs: [] });
       });
+      // The insert is the one that waits: its own backend waits for a transaction id and the rival's backend is what blocks it, whatever other test files do in the cluster. The probe runs on the application pool, as the rival holds a connection of the owner pool.
       const deadline = Date.now() + 10_000;
       for (;;) {
-        const queued = await db.owner<{ count: number }[]>`SELECT count(*)::int AS count FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'`;
-        if ((queued[0]?.count ?? 0) > 0) {
-          break;
+        if (importerPid !== 0) {
+          const waiting = await db.app<{ waits: boolean; blockedByRival: boolean }[]>`
+            SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = ${importerPid} AND NOT granted AND locktype = 'transactionid') AS waits,
+              ${rivalPid} = ANY (pg_blocking_pids(${importerPid})) AS "blockedByRival"`;
+          if (waiting[0]?.waits === true && waiting[0].blockedByRival) {
+            break;
+          }
         }
         if (Date.now() > deadline) {
           throw new Error("the insert did not wait for the rival's slug");
@@ -733,6 +744,28 @@ describe("the slugs the import inserts", () => {
       }),
     ).rejects.toThrow(/no slug/);
     expect((await counterAndRows(w)).rows).toBe(0);
+  });
+});
+
+describe("the names the import tells apart", () => {
+  it("answers for each name the place of the first one that citext compares as the same, the comparison the unique index of the names makes", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const names = ["Work", "WORK", "Caf\u00E9", "work", "\u00C4b", "\u00E4b", "\u039F\u0394\u039F\u03A3", "\u03BF\u03B4\u03BF\u03C2", "\u03BF\u03B4\u03BF\u03C3", "\u0130", "i", "\uA7CE", "\uA7CF", "Work"];
+    const compared = await db.owner<{ n: number; first: number }[]>`
+      SELECT a.n::integer - 1 AS n, min(b.n)::integer - 1 AS first
+      FROM unnest(${names}::text[]) WITH ORDINALITY AS a(name, n)
+      JOIN unnest(${names}::text[]) WITH ORDINALITY AS b(name, n) ON a.name::citext = b.name::citext
+      GROUP BY a.n ORDER BY a.n`;
+
+    const first = await asMember(w, me, (tx) => importRepository(tx).firstSameNames(names));
+    const created = await asMember(w, me, (tx) => importRepository(tx).resolveFolders(names.map((name) => ({ id: freshId(), name, icon: "folder", color: 1 }))));
+
+    expect([...first]).toEqual(compared.map((row) => row.first));
+    expect(first.slice(0, 4)).toEqual([0, 0, 2, 0]);
+    expect(first[13]).toBe(0);
+    expect(created.created).toBe(new Set(first).size);
+    expect([...(await asMember(w, me, (tx) => importRepository(tx).firstSameNames([])))]).toEqual([]);
   });
 });
 

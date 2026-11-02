@@ -53,6 +53,26 @@ async function existingNames(tx: TenantTx, table: typeof folders | typeof tags, 
   return new Set(found.map((row) => row.name));
 }
 
+interface FirstSameRow extends Record<string, unknown> {
+  first: number;
+}
+
+/**
+ * For each of `names`, the place of the first one that `citext` compares as the same name: the rows are partitioned by the comparison of the type the name columns have, so the answer is that of the comparison
+ * the unique indexes of the names use. It reads no table.
+ */
+async function firstSameNames(tx: TenantTx, names: readonly string[]): Promise<readonly number[]> {
+  if (names.length === 0) {
+    return [];
+  }
+  const asked = JSON.stringify(names);
+  const rows = await tenantHandle(tx).execute<FirstSameRow>(sql`
+    SELECT (min(v.n) OVER (PARTITION BY v.name::citext) - 1)::integer AS first
+    FROM jsonb_array_elements_text(${asked}::text::jsonb) WITH ORDINALITY AS v(name, n)
+    ORDER BY v.n`);
+  return rows.map((row) => row.first);
+}
+
 /** The store of the import, less the events: they reach the repository as the jobs that announce them. */
 export interface ImportRepository extends Omit<ImportStore, "insertBookmarks"> {
   /**
@@ -259,6 +279,10 @@ export function importRepository(tx: TenantTx): ImportRepository {
 
     async existingTagNames(names) {
       return existingNames(tx, tags, names);
+    },
+
+    firstSameNames(names) {
+      return firstSameNames(tx, names);
     },
 
     resolveFolders(wanted: readonly ImportFolderToResolve[]) {

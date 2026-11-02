@@ -4336,6 +4336,7 @@ export interface ImportPreviewStore {
     existingFolderNames(names: readonly string[]): Promise<ReadonlySet<string>>;
     existingSlugs(slugs: readonly string[]): Promise<ReadonlySet<string>>;
     existingTagNames(names: readonly string[]): Promise<ReadonlySet<string>>;
+    firstSameNames(names: readonly string[]): Promise<readonly number[]>;
 }
 
 // @public

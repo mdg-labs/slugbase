@@ -29,6 +29,8 @@ interface Options {
   /** The names of the folders and tags the caller has, in lower case. */
   folders?: readonly string[];
   tags?: readonly string[];
+  /** Whether two spellings are one name for the store; the same whatever the case when left out. */
+  same?: (a: string, b: string) => boolean;
 }
 
 function fixture(options: Options = {}) {
@@ -46,15 +48,19 @@ function fixture(options: Options = {}) {
     },
     existingFolderNames: () => Promise.reject(new Error("the import never asks which folders exist")),
     existingTagNames: () => Promise.reject(new Error("the import never asks which tags exist")),
+    firstSameNames: (names) => {
+      const same = options.same ?? ((a: string, b: string) => a.toLowerCase() === b.toLowerCase());
+      return Promise.resolve(names.map((name, index) => Math.max(0, names.findIndex((other, place) => place <= index && same(other, name)))));
+    },
     resolveFolders: (folders) => {
       written.order.push("folders");
       written.folders.push(folders);
-      return Promise.resolve({ ids: new Map(folders.map((folder) => [folder.name, `folder:${folder.name.toLowerCase()}`])), created: folders.filter((folder) => !(options.folders ?? []).includes(folder.name.toLowerCase())).length });
+      return Promise.resolve({ ids: new Map(folders.map((folder) => [folder.name, `folder:${folder.name}`])), created: folders.filter((folder) => !(options.folders ?? []).includes(folder.name.toLowerCase())).length });
     },
     resolveTags: (tags) => {
       written.order.push("tags");
       written.tags.push(tags);
-      return Promise.resolve({ ids: new Map(tags.map((tag) => [tag.name, `tag:${tag.name.toLowerCase()}`])), created: tags.filter((tag) => !(options.tags ?? []).includes(tag.name.toLowerCase())).length });
+      return Promise.resolve({ ids: new Map(tags.map((tag) => [tag.name, `tag:${tag.name}`])), created: tags.filter((tag) => !(options.tags ?? []).includes(tag.name.toLowerCase())).length });
     },
     linkBookmarks: (links) => {
       written.order.push("link");
@@ -280,18 +286,45 @@ describe("importBookmarks", () => {
     ]);
     expect(written.links).toHaveLength(1);
     expect(written.links[0]?.folders).toEqual([
-      { bookmarkId: rows[0]?.id, folderId: "folder:work" },
-      { bookmarkId: rows[0]?.id, folderId: "folder:home" },
-      { bookmarkId: rows[1]?.id, folderId: "folder:work" },
+      { bookmarkId: rows[0]?.id, folderId: "folder:Work" },
+      { bookmarkId: rows[0]?.id, folderId: "folder:Home" },
+      { bookmarkId: rows[1]?.id, folderId: "folder:Work" },
     ]);
     expect(written.links[0]?.tags).toEqual([
-      { bookmarkId: rows[0]?.id, tagId: "tag:news" },
-      { bookmarkId: rows[1]?.id, tagId: "tag:news" },
-      { bookmarkId: rows[1]?.id, tagId: "tag:later" },
+      { bookmarkId: rows[0]?.id, tagId: "tag:News" },
+      { bookmarkId: rows[1]?.id, tagId: "tag:News" },
+      { bookmarkId: rows[1]?.id, tagId: "tag:Later" },
     ]);
     expect(written.folders[0]?.map((folder) => folder.name)).toEqual(["Work", "Home"]);
     expect(written.tags[0]?.map((tag) => tag.name)).toEqual(["News", "Later"]);
     expect(outcome).toMatchObject({ result: { foldersCreated: 2, tagsCreated: 2, slugsDropped: 0 } });
+  });
+
+  it("makes sure of one folder and one tag for each name the store tells apart, the first spelling standing, and files a bookmark under the row of its spelling's name", async () => {
+    const dotted = new Set(["\u0130", "i"]);
+    const { written, dependencies } = fixture({ same: (a, b) => a === b || (dotted.has(a) && dotted.has(b)) });
+
+    const outcome = await importBookmarks(
+      dependencies,
+      ask([
+        { url: "https://example.com/a", folders: ["\u0130"], tags: ["\uA7CE"] },
+        { url: "https://example.com/b", folders: ["i", "\uA7CF"], tags: ["\uA7CF"] },
+      ]),
+    );
+
+    const rows = written.batches.flatMap((batch) => batch.bookmarks);
+    expect(written.folders[0]?.map((folder) => folder.name)).toEqual(["\u0130", "\uA7CF"]);
+    expect(written.tags[0]?.map((tag) => tag.name)).toEqual(["\uA7CE", "\uA7CF"]);
+    expect(written.links[0]?.folders).toEqual([
+      { bookmarkId: rows[0]?.id, folderId: "folder:\u0130" },
+      { bookmarkId: rows[1]?.id, folderId: "folder:\u0130" },
+      { bookmarkId: rows[1]?.id, folderId: "folder:\uA7CF" },
+    ]);
+    expect(written.links[0]?.tags).toEqual([
+      { bookmarkId: rows[0]?.id, tagId: "tag:\uA7CE" },
+      { bookmarkId: rows[1]?.id, tagId: "tag:\uA7CF" },
+    ]);
+    expect(outcome).toMatchObject({ result: { foldersCreated: 2, tagsCreated: 2, detected: { folders: 2, tags: 2 } } });
   });
 
   it("creates the folders and tags the document lists, with the file's icon and colour, whether a bookmark uses them or not, and falls back to the defaults for an unknown icon or an out-of-range colour", async () => {

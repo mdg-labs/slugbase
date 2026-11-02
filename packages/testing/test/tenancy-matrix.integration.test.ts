@@ -1152,6 +1152,7 @@ describe("the bulk operations across workspaces", () => {
         folderOfB: [...(await repository.existingFolderNames(["import-b"]))],
         tagOfB: [...(await repository.existingTagNames(["import-b"]))],
         folderOfA: [...(await repository.existingFolderNames(["IMPORT-A"]))],
+        sameNames: [...(await repository.firstSameNames(["import-b", "IMPORT-B", "import-a"]))],
         folderOfAResolved: (await repository.resolveFolders([{ id: createdFolder, name: "IMPORT-A", icon: "folder", color: 1 }])).ids.get("IMPORT-A"),
         tagOfAResolved: (await repository.resolveTags([{ id: createdTag, name: "import-A" }])).ids.get("import-A"),
       };
@@ -1175,7 +1176,7 @@ describe("the bulk operations across workspaces", () => {
         );
     }
 
-    expect(results).toEqual({ slugOfB: [], folderOfB: [], tagOfB: [], folderOfA: ["IMPORT-A"], folderOfAResolved: FOLDER_OF_A, tagOfAResolved: TAG_OF_A });
+    expect(results).toEqual({ slugOfB: [], folderOfB: [], tagOfB: [], folderOfA: ["IMPORT-A"], sameNames: [0, 0, 2], folderOfAResolved: FOLDER_OF_A, tagOfAResolved: TAG_OF_A });
     expect(created.folder.created).toBe(1);
     expect(created.folder.ids.get("import-b")).toBe(createdFolder);
     expect(created.tag.created).toBe(1);
