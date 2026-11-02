@@ -1,13 +1,13 @@
-import { IMPORT_MAX_BYTES, IMPORT_MAX_BOOKMARKS, IMPORT_MAX_NEW_NAMES, ImportResultSchema } from "@slugbase/contracts";
+import { IMPORT_MAX_BYTES, IMPORT_MAX_BOOKMARKS, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, ImportResultSchema } from "@slugbase/contracts";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HOOK_TIMEOUT_MS, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
-import { NETSCAPE, multipart, upload } from "./netscape-upload.ts";
+import { NETSCAPE, bookmarkFile, multipart, upload } from "./netscape-upload.ts";
 
 // The hostile files of POST /api/v1/import/json and POST /api/v1/import/netscape (doc 08 section 3.5 `import/hostile`, doc 10 T1 and T13), through the whole chain over the migrated database. The failure scenario: a file the
 // importer must not trust, an oversized body, a body nested a hundred thousand deep that is sent with an Idempotency-Key, malformed JSON, five megabytes of empty objects, `javascript:` and
 // `data:` addresses, control characters, huge strings, script-laden titles and prototype-pollution keys, a folder or tag name or a folder icon of a hundred thousand
-// characters, and a file of more new folders and tags than one import may create, is each rejected or neutralised: no `500`, no polluted prototype, no stored key for a refused request, and no row of any workspace written, the caller's or another's.
+// characters, a file of more new folders and tags than one import may create, and a file of more folder and tag links than one import may make, is each rejected or neutralised: no `500`, no polluted prototype, no stored key for a refused request, and no row of any workspace written, the caller's or another's.
 
 const TEST_TIMEOUT_MS = 120_000;
 const IMPORT = "/api/v1/import/json?dryRun=true";
@@ -67,6 +67,49 @@ async function keyCount(): Promise<number> {
     return tx<{ count: number }[]>`SELECT count(*)::int AS count FROM idempotency_keys`;
   });
   return rows[0]?.count ?? -1;
+}
+
+/** Runs `work` while another transaction holds the workspace row as the import's `sys_bookmark_count_take_many` does (`FOR NO KEY UPDATE`, as the system role that sees the row), so that a request that takes the lock waits for it. */
+async function whileRowHeld(workspaceId: string, work: () => Promise<void>): Promise<void> {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let locked: () => void = () => undefined;
+  const lockTaken = new Promise<void>((resolve) => {
+    locked = resolve;
+  });
+  const holder = database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    const rows = await tx`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR NO KEY UPDATE`;
+    expect(rows).toHaveLength(1);
+    locked();
+    await held;
+  });
+  try {
+    await lockTaken;
+    await work();
+  } finally {
+    release();
+    await holder;
+  }
+}
+
+/** The answer of `request`, which must come within 15 seconds: a request that waited for the row held above would not. */
+async function answeredAtOnce(request: Promise<Response>, label: string): Promise<Response> {
+  const answered = await Promise.race([request, new Promise<null>((resolve) => {
+    setTimeout(() => {
+      resolve(null);
+    }, 15_000);
+  })]);
+  expect(answered, label).not.toBeNull();
+  return answered as Response;
+}
+
+/** `bookmarks` bookmarks of the same `perBookmark` tags each, and `extra` more tags on the first: a file of `bookmarks * perBookmark + extra` links that creates `perBookmark + extra` names. */
+function linkedFile(bookmarks: number, perBookmark: number, extra: number): { url: string; tags: string[] }[] {
+  const names = Array.from({ length: perBookmark + extra }, (_, index) => `tag-${String(index).padStart(3, "0")}`);
+  return Array.from({ length: bookmarks }, (_, index) => ({ url: `https://example.com/${String(index)}`, tags: index === 0 ? names : names.slice(0, perBookmark) }));
 }
 
 async function setup(world: World) {
@@ -398,6 +441,51 @@ describe("POST /import/json with a hostile file", { timeout: TEST_TIMEOUT_MS }, 
     expect(rows[0]?.count).toBe(IMPORT_MAX_NEW_NAMES);
   });
 
+  it("refuses a file of 100 001 folder and tag links with 422 while another transaction holds the workspace row, in the dry run and in the write, and writes nothing; a file of exactly 100 000 imports", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, workspaceA } = await setup(world);
+    const before = await written();
+    const refusals = [linkedFile(IMPORT_MAX_BOOKMARKS, 20, 1), linkedFile(1000, 100, 1)];
+
+    await whileRowHeld(workspaceA.workspaceId, async () => {
+      for (const body of refusals) {
+        for (const path of [IMPORT, "/api/v1/import/json"]) {
+          const response = await answeredAtOnce(json(world, a, body, { [KEY_HEADER]: crypto.randomUUID() }, path), path);
+          const problem = await problemOf(response);
+          expect(response.status, path).toBe(422);
+          expect(problem.code).toBe("validation_failed");
+          expect(problem.errors).toEqual([{ path: "", code: "too_many_links" }]);
+        }
+      }
+    });
+    expect(await keyCount()).toBe(0);
+    expect(await written()).toEqual(before);
+
+    const exactly = await json(world, a, linkedFile(IMPORT_MAX_BOOKMARKS, 20, 0), { [KEY_HEADER]: crypto.randomUUID() }, "/api/v1/import/json");
+    const result = ImportResultSchema.parse(await exactly.json());
+
+    expect(exactly.status).toBe(200);
+    expect(result).toMatchObject({ created: IMPORT_MAX_BOOKMARKS, tagsCreated: 20, foldersCreated: 0 });
+    expect(await written()).toMatchObject({ tag_links: IMPORT_MAX_LINKS, tags: 20 });
+  });
+
+  it("counts the links of the bookmarks that are created, the spellings of one name once, and the links of names the caller has", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const names = Array.from({ length: 100 }, (_, index) => `tag-${String(index).padStart(3, "0")}`);
+    const spelled = [...names, ...names.map((name) => name.toUpperCase())];
+    const send = (bookmarks: { url: string; tags: string[] }[], path = IMPORT) => json(world, a, bookmarks, {}, path);
+    const same = Array.from({ length: 1000 }, (_, index) => ({ url: `https://example.com/${String(index)}`, tags: spelled }));
+
+    // A thousand bookmarks of 100 names, each written twice, make 100 000 links; the same bookmark twice in the file makes the links of one.
+    const inside = await send([...same, { url: "https://example.com/0", tags: ["extra"] }]);
+    expect(inside.status).toBe(200);
+    expect(ImportResultSchema.parse(await inside.json())).toMatchObject({ created: 1000, tagsCreated: 100 });
+    const over = await send([...same, { url: "https://example.com/over", tags: ["extra"] }]);
+    expect(over.status).toBe(422);
+    expect((await problemOf(over)).errors).toEqual([{ path: "", code: "too_many_links" }]);
+  });
+
   it("counts only the names the caller does not have, compared as the database compares them, so a file whose names exist imports at any size", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a } = await setup(world);
@@ -561,6 +649,32 @@ describe("POST /import/netscape with a hostile file", { timeout: TEST_TIMEOUT_MS
     expect(envelope.status).toBe(413);
     expect((await problemOf(envelope)).code).toBe("payload_too_large");
     expect(await written()).toEqual(before);
+  });
+
+  it("refuses a file of 100 001 folder and tag links with 422 while another transaction holds the workspace row, in the dry run and in the write, and writes nothing; a file of exactly 100 000 imports", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, workspaceA } = await setup(world);
+    const before = await written();
+    const file = (extra: number) => bookmarkFile(linkedFile(IMPORT_MAX_BOOKMARKS, 20, extra).map(({ url, tags }) => ({ url, tags })));
+
+    await whileRowHeld(workspaceA.workspaceId, async () => {
+      for (const path of [DRY, NETSCAPE]) {
+        const response = await answeredAtOnce(upload(world, a, file(1), { path, headers: { [KEY_HEADER]: crypto.randomUUID() } }), path);
+        const problem = await problemOf(response);
+        expect(response.status, path).toBe(422);
+        expect(problem.code).toBe("validation_failed");
+        expect(problem.errors).toEqual([{ path: "", code: "too_many_links" }]);
+      }
+    });
+    expect(await keyCount()).toBe(0);
+    expect(await written()).toEqual(before);
+
+    const exactly = await upload(world, a, file(0), { headers: { [KEY_HEADER]: crypto.randomUUID() } });
+    const result = ImportResultSchema.parse(await exactly.json());
+
+    expect(exactly.status).toBe(200);
+    expect(result).toMatchObject({ created: IMPORT_MAX_BOOKMARKS, tagsCreated: 20 });
+    expect(await written()).toMatchObject({ tag_links: IMPORT_MAX_LINKS, tags: 20 });
   });
 
   it("answers 400 or 422 to a body that is not a well-formed upload, never a 500, stores no key for it and writes nothing", async () => {

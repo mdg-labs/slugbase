@@ -1,4 +1,4 @@
-import { IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import { previewImport, readImportBookmark, type ImportPreviewAsk, type ImportPreviewStore } from "../../src/index.ts";
 
@@ -356,6 +356,44 @@ describe("previewImport", () => {
       await expect(outcomeOf(file, { ceiling: 1 })).resolves.toMatchObject({ kind: "previewed", result: { created: 1, tagsCreated: 10_000 } });
       await expect(outcomeOf(file, { ceiling: 2 })).resolves.toEqual({ kind: "too_many_names", newNames: 10_100 });
       await expect(outcomeOf({ ...file, bookmarks: [{ url: "https://example.com/1", tags: [...names("a", 6000), ...names("a", 6000).map((name) => name.toUpperCase())] }] })).resolves.toMatchObject({ kind: "previewed", result: { tagsCreated: 10_000 } });
+    });
+  });
+
+  describe("the most folder and tag links one import may make", () => {
+    const pool = (count: number) => Array.from({ length: count }, (_, index) => `t${String(index)}`);
+    // `bookmarks` bookmarks of `perBookmark` tags each, all from a pool of 100 names, so no name is new beyond the pool.
+    const linked = (bookmarks: number, perBookmark: number, extra: readonly string[] = []): { url: string; tags: string[] }[] =>
+      Array.from({ length: bookmarks }, (_, index) => ({ url: `https://example.com/${String(index)}`, tags: [...pool(perBookmark), ...(index === 0 ? extra : [])] }));
+    const outcomeOf = (file: ImportRequest, overrides: Partial<ImportPreviewAsk> = {}, options: Parameters<typeof store>[0] = {}) => previewImport({ store: store(options).store }, ask(file, overrides));
+
+    it("refuses a file that would make more links than that, folders and tags together, and imports one that makes exactly that many", async () => {
+      const exactly = linked(1000, 100);
+
+      await expect(outcomeOf(exactly)).resolves.toMatchObject({ kind: "previewed", result: { created: 1000, tagsCreated: 100 } });
+      await expect(outcomeOf(linked(1000, 100, ["extra"]))).resolves.toEqual({ kind: "too_many_links", links: IMPORT_MAX_LINKS + 1 });
+      await expect(outcomeOf(Array.from({ length: 1000 }, (_, index) => ({ url: `https://example.com/${String(index)}`, folders: pool(50), tags: pool(50 + (index === 0 ? 1 : 0)) })))).resolves.toEqual({ kind: "too_many_links", links: IMPORT_MAX_LINKS + 1 });
+    });
+
+    it("counts the names of one bookmark the store tells apart once, and the links of the bookmarks that are created alone", async () => {
+      const spelled = [...pool(100), ...pool(100).map((name) => name.toUpperCase())];
+      const file: ImportRequest = [
+        ...Array.from({ length: 1000 }, (_, index) => ({ url: `https://example.com/${String(index)}`, tags: spelled })),
+        { url: "https://example.com/0", tags: pool(100) },
+        { url: "https://example.com/over", tags: ["x"] },
+      ];
+
+      await expect(outcomeOf(file, { ceiling: 1000 })).resolves.toMatchObject({ kind: "previewed", result: { created: 1000 } });
+      await expect(outcomeOf(file, { ceiling: 1001 })).resolves.toEqual({ kind: "too_many_links", links: IMPORT_MAX_LINKS + 1 });
+    });
+
+    it("counts a link of a name the caller has, so only the names are free", async () => {
+      await expect(outcomeOf(linked(1000, 100, ["extra"]), {}, { tags: pool(100) })).resolves.toEqual({ kind: "too_many_links", links: IMPORT_MAX_LINKS + 1 });
+    });
+
+    it("answers the names refusal first when a file is over both limits", async () => {
+      const file: ImportRequest = [{ url: "https://example.com/a", tags: Array.from({ length: IMPORT_MAX_NEW_NAMES + 1 }, (_, index) => `n${String(index)}`) }];
+
+      await expect(outcomeOf(file)).resolves.toMatchObject({ kind: "too_many_names" });
     });
   });
 });

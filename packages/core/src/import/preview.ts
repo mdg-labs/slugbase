@@ -8,6 +8,7 @@ import {
   FOLDER_DEFAULT_ICON,
   FOLDER_ICONS,
   FOLDER_NAME_MAX_LENGTH,
+  IMPORT_MAX_LINKS,
   IMPORT_MAX_NEW_NAMES,
   TAG_NAME_MAX_LENGTH,
   type ImportFileBookmark,
@@ -35,6 +36,9 @@ import { cleanText } from "./text.ts";
 //
 // One import creates at most `IMPORT_MAX_NEW_NAMES` folders and tags together (doc 02 section 7, doc 04 section 10.9), so that a request cannot hold the workspace's row lock for the time it takes to write a
 // great many rows. Only the names the caller does not have count, as the database compares them (`missingNames`); a file that would create more is refused whole, by the preview and by the import alike.
+//
+// One import also makes at most `IMPORT_MAX_LINKS` folder and tag links together (`linksOf`), for the same reason: names the caller has already are free, but each bookmark that is created is linked once to each folder and each tag
+// it names, so a file of a few names that repeat can still make a great many rows. Only the bookmarks that are created count, and the spellings of one name on one bookmark, as the database compares them, are one link.
 
 /** What the preview reads of the database, in the transaction of the request. */
 export interface ImportPreviewStore {
@@ -72,7 +76,9 @@ export type ImportPreviewOutcome =
   | { readonly kind: "unavailable" }
   | { readonly kind: "previewed"; readonly result: ImportResult }
   /** The file would create more than `IMPORT_MAX_NEW_NAMES` new folders and tags together: `newNames` of them. */
-  | { readonly kind: "too_many_names"; readonly newNames: number };
+  | { readonly kind: "too_many_names"; readonly newNames: number }
+  /** The bookmarks that would be created would make more than `IMPORT_MAX_LINKS` folder and tag links together: `links` of them. */
+  | { readonly kind: "too_many_links"; readonly links: number };
 
 /** A bookmark of the file whose URL is one a bookmark can have, with its text made plain and cut to its limits. */
 export interface ImportBookmark {
@@ -290,6 +296,15 @@ export function overNewNames(missing: { readonly folders: number; readonly tags:
   return total > IMPORT_MAX_NEW_NAMES ? total : undefined;
 }
 
+/** The folder and tag links together when the bookmarks of `created` would make more than one import may, and undefined otherwise: one link for each folder and each tag a bookmark names, spellings of one name counted once. */
+export function overLinks(created: readonly ImportBookmark[], names: NamePlan): number | undefined {
+  let links = 0;
+  for (const bookmark of created) {
+    links += new Set(bookmark.folders.map((name) => names.folderOf.get(name) ?? name)).size + new Set(bookmark.tags.map((name) => names.tagOf.get(name) ?? name)).size;
+  }
+  return links > IMPORT_MAX_LINKS ? links : undefined;
+}
+
 /** What the bookmarks that are created do with their slugs. */
 export interface SlugPlan {
   /** The slug each bookmark keeps, by its position in the file. */
@@ -368,6 +383,10 @@ export async function previewImport({ store }: ImportPreviewDependencies, ask: I
   const over = overNewNames(missing);
   if (over !== undefined) {
     return { kind: "too_many_names", newNames: over };
+  }
+  const links = overLinks(created, names);
+  if (links !== undefined) {
+    return { kind: "too_many_links", links };
   }
   return {
     kind: "previewed",

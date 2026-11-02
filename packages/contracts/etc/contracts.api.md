@@ -4841,6 +4841,9 @@ export const IMPORT_MAX_BOOKMARKS = 5000;
 export const IMPORT_MAX_BYTES: number;
 
 // @public
+export const IMPORT_MAX_LINKS = 100000;
+
+// @public
 export const IMPORT_MAX_NEW_NAMES = 10000;
 
 // @public

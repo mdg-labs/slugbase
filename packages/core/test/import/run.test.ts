@@ -1,4 +1,4 @@
-import { IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import { createAuditWriter, IMPORT_BATCH_SIZE, importBookmarks, type AuditRecord, type ImportAsk, type ImportFolderToResolve, type ImportLinks, type ImportNewBookmark, type ImportPlaces, type ImportStore, type ImportTagToResolve } from "../../src/index.ts";
 
@@ -556,5 +556,95 @@ describe("importBookmarks and the new folders and tags", () => {
     expect(written.folders).toEqual([]);
     expect(written.tags).toEqual([]);
     expect(written.audit).toEqual([]);
+  });
+});
+
+describe("importBookmarks and the folder and tag links", () => {
+  const pool = (count: number) => Array.from({ length: count }, (_, index) => `t${String(index)}`);
+  // `bookmarks` bookmarks of `perBookmark` tags each from one pool, so only the pool's names are new.
+  const linked = (bookmarks: number, perBookmark: number, extra: readonly string[] = []): { url: string; tags: string[] }[] =>
+    Array.from({ length: bookmarks }, (_, index) => ({ url: `https://example.com/${String(index)}`, tags: [...pool(perBookmark), ...(index === 0 ? extra : [])] }));
+
+  it("refuses a file that would make more links than one import may before it takes any place, and writes nothing", async () => {
+    for (const file of [
+      linked(1000, 100, ["extra"]),
+      Array.from({ length: 1000 }, (_, index) => ({ url: `https://example.com/${String(index)}`, folders: pool(50), tags: pool(index === 0 ? 51 : 50) })),
+    ] satisfies ImportRequest[]) {
+      const { written, dependencies } = fixture();
+
+      const outcome = await importBookmarks(dependencies, ask(file));
+
+      expect(outcome).toEqual({ kind: "too_many_links", links: IMPORT_MAX_LINKS + 1 });
+      expect(written.takes).toEqual([]);
+      expect(written.order).not.toContain("take");
+      expect(written.batches).toEqual([]);
+      expect(written.folders).toEqual([]);
+      expect(written.tags).toEqual([]);
+      expect(written.links).toEqual([]);
+      expect(written.audit).toEqual([]);
+    }
+  });
+
+  it("imports a file of exactly the most links", async () => {
+    const { written, dependencies } = fixture();
+
+    const outcome = await importBookmarks(dependencies, ask(linked(1000, 100)));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 1000, tagsCreated: 100 } });
+    expect(written.links.reduce((total, batch) => total + batch.tags.length, 0)).toBe(IMPORT_MAX_LINKS);
+    expect(written.audit).toHaveLength(1);
+  });
+
+  it("counts the spellings of one name on a bookmark once, and counts the links of a name the caller has", async () => {
+    const spelled = [...pool(100), ...pool(100).map((name) => name.toUpperCase())];
+    const file: ImportRequest = Array.from({ length: 1000 }, (_, index) => ({ url: `https://example.com/${String(index)}`, tags: spelled }));
+    const imported = fixture({ tags: pool(100) });
+    const over = fixture({ tags: pool(100) });
+
+    await expect(importBookmarks(imported.dependencies, ask(file))).resolves.toMatchObject({ kind: "imported", result: { created: 1000, tagsCreated: 0 } });
+    await expect(importBookmarks(over.dependencies, ask([...file, { url: "https://example.com/over", tags: ["x"] }]))).resolves.toEqual({ kind: "too_many_links", links: IMPORT_MAX_LINKS + 1 });
+    expect(over.written.takes).toEqual([]);
+  });
+
+  it("sends the store one pair for each bookmark and each folder or tag, however many spellings of the name the bookmark has", async () => {
+    const { written, dependencies } = fixture();
+
+    await importBookmarks(dependencies, ask([{ url: "https://example.com/a", folders: ["Work", "WORK", "work"], tags: ["T1", "t1", "T2", "T1"] }, { url: "https://example.com/b", tags: ["t1", "T1"] }]));
+
+    const pairs = written.links.flatMap((batch) => [...batch.folders.map((link) => ["folder", link.bookmarkId, link.folderId]), ...batch.tags.map((link) => ["tag", link.bookmarkId, link.tagId])]);
+    expect(pairs).toHaveLength(4);
+    expect(new Set(pairs.map((pair) => pair.join("|"))).size).toBe(4);
+    expect(pairs.filter((pair) => pair[0] === "folder")).toHaveLength(1);
+    expect(pairs.filter((pair) => pair[0] === "tag" && pair[1] === written.batches[0]?.bookmarks[0]?.id)).toHaveLength(2);
+  });
+
+  it("counts the links of the bookmarks that are created and not those of a bookmark left out for a duplicate or for the limit", async () => {
+    const file = [...linked(1000, 100), { url: "https://example.com/0", tags: ["x"] }, { url: "https://example.com/over", tags: ["x"] }];
+    const inside = fixture({ room: 1000 });
+    const over = fixture({ room: 1001 });
+
+    await expect(importBookmarks(inside.dependencies, ask(file, { ceiling: 1000 }))).resolves.toMatchObject({ kind: "imported", result: { created: 1000 } });
+    await expect(importBookmarks(over.dependencies, ask(file, { ceiling: 1001 }))).resolves.toEqual({ kind: "too_many_links", links: IMPORT_MAX_LINKS + 1 });
+  });
+
+  it("counts again under the lock when the places taken cover more bookmarks than the counter showed, and answers too_many_links without writing a bookmark, a link or an audit event", async () => {
+    // The counter shows one place left, so the count before the lock sees one bookmark and 100 links; the places taken then cover all 1001.
+    const { written, dependencies } = fixture({ counter: 1999 });
+
+    const outcome = await importBookmarks(dependencies, ask(linked(1001, 100), { ceiling: 2000 }));
+
+    expect(outcome).toEqual({ kind: "too_many_links", links: 100_100 });
+    expect(written.takes).toEqual([{ ceiling: 2000, wanted: 1001 }]);
+    expect(written.batches).toEqual([]);
+    expect(written.folders).toEqual([]);
+    expect(written.tags).toEqual([]);
+    expect(written.links).toEqual([]);
+    expect(written.audit).toEqual([]);
+  });
+
+  it("answers the names refusal first when a file is over both limits", async () => {
+    const { dependencies } = fixture();
+
+    await expect(importBookmarks(dependencies, ask([{ url: "https://example.com/a", tags: Array.from({ length: IMPORT_MAX_NEW_NAMES + 1 }, (_, index) => `n${String(index)}`) }]))).resolves.toMatchObject({ kind: "too_many_names" });
   });
 });

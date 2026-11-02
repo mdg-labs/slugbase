@@ -1,4 +1,4 @@
-import { IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation, importNetscape as importNetscapeOperation, type ImportQuerySchema, type ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation, importNetscape as importNetscapeOperation, type ImportQuerySchema, type ImportRequest } from "@slugbase/contracts";
 import type { z } from "zod";
 import { createAuditWriter, importBookmarks, previewImport, type AuditActor, type BookmarkEntitlements, type ImportStore } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, importRepository, type TenantTx } from "@slugbase/db";
@@ -20,7 +20,8 @@ import { uploadedBookmarks } from "./upload.ts";
 // chooses), and records one `import.completed` audit event with the account or the token as the actor. Between the places and the bookmarks it gets or creates the folders and tags of the file for the caller by name, and it
 // files and tags each bookmark by its own names; a slug the caller has already, or that an earlier bookmark of the file keeps, is dropped from its bookmark, which is still imported, and listed in the answer. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
 // A file that would create more than 10 000 new folders and tags together is `422 validation_failed` with the field code `too_many_new_names`, in the dry run and in the write: the write decides it before it takes the
-// workspace's row, and the refusal that is only known under the lock throws inside the transaction, so nothing is committed. Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
+// workspace's row, and the refusal that is only known under the lock throws inside the transaction, so nothing is committed. A file whose bookmarks would make more than 100 000 folder and tag links together is refused the same
+// way, with the field code `too_many_links`. Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
 
 // POST /api/v1/import/netscape (doc 04 section 10.9, doc 02 section 13.1) takes a browser's bookmark file as a multipart upload (`upload.ts`), reads it into bookmarks and hands them to the same function as the JSON import, so the
 // two have one set of rules, caps, dry run, room under `bookmarks.max`, audit event and answer, and the one place that decides each of them. It declares no token scope, so only a session reaches it; it is the only route that accepts multipart.
@@ -32,6 +33,14 @@ function tooManyNames(newNames: number): ProblemError {
     "validation_failed",
     `The file would create ${String(newNames)} new folders and tags together; one import creates at most ${String(IMPORT_MAX_NEW_NAMES)}. Names you already have do not count.`,
     { errors: [{ path: "", code: "too_many_new_names" }] },
+  );
+}
+
+function tooManyLinks(links: number): ProblemError {
+  return new ProblemError(
+    "validation_failed",
+    `The file would make ${String(links)} folder and tag links together; one import makes at most ${String(IMPORT_MAX_LINKS)}. A bookmark counts one link for each folder and each tag it names.`,
+    { errors: [{ path: "", code: "too_many_links" }] },
   );
 }
 
@@ -91,6 +100,9 @@ async function runImport(context: ChainContext, query: ImportQuery, file: Import
     if (previewed.kind === "too_many_names") {
       throw tooManyNames(previewed.newNames);
     }
+    if (previewed.kind === "too_many_links") {
+      throw tooManyLinks(previewed.links);
+    }
     return { status: 200 as const, body: previewed.result };
   }
   const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
@@ -105,6 +117,9 @@ async function runImport(context: ChainContext, query: ImportQuery, file: Import
     );
     if (imported.kind === "too_many_names") {
       throw tooManyNames(imported.newNames);
+    }
+    if (imported.kind === "too_many_links") {
+      throw tooManyLinks(imported.links);
     }
     return imported;
   });

@@ -2,7 +2,7 @@ import type { ImportResult } from "@slugbase/contracts";
 import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
-import { bookmarksOfFile, entry, isRefusal, missingNames, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
+import { bookmarksOfFile, entry, isRefusal, missingNames, overLinks, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
 
 // The JSON import itself (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), in the one transaction the store and the audit writer are bound to. The file is judged exactly as the preview judges it
 // (`previewImport`): each bookmark's URL goes through the bookmark URL module, its text is made plain and cut, a duplicate by canonical URL is left out unless asked otherwise, and the workspace's room is spent in the order
@@ -15,9 +15,12 @@ import { bookmarksOfFile, entry, isRefusal, missingNames, overNewNames, planName
 // file over the limit never takes the row lock. When the places taken then cover more bookmarks than that count assumed (the counter moved in between), the count is made again under the lock, and a file over the limit is
 // answered `too_many_names` with the places taken, so the caller's transaction must not commit that outcome.
 //
+// One import also makes at most `IMPORT_MAX_LINKS` folder and tag links together (`overLinks`), which names the caller has do not lessen. It is decided at the same two places, after the names: before the places are taken, from the
+// bookmarks the counter shows room for, and again under the lock when the places taken cover another number of bookmarks; the outcome is `too_many_links` and the caller's transaction must not commit it either.
+//
 // The folders and tags of the file (doc 02 section 13.1, Q30) are made sure of once the places are taken, before the first bookmark is written: the store gets or creates each by name, without regard to case, one for each name the database tells apart (`planNames`), and a
 // folder or tag the caller has keeps its icon and colour. The folders and tags the file lists exist afterwards whether a bookmark uses them or not; those a bookmark names are made sure of for the bookmarks that are
-// created. Each bookmark is filed and tagged by its own names, in the batch that writes it. A slug is kept by the bookmark that is created when `planSlugs` says so; the store inserts it only where the caller has no
+// created. Each bookmark is filed and tagged by its own names, one pair for each folder or tag however many spellings of its name the bookmark has (the count of `overLinks` is the number of pairs the store gets), in the batch that writes it. A slug is kept by the bookmark that is created when `planSlugs` says so; the store inserts it only where the caller has no
 // bookmark with it at that moment, and a bookmark that loses its slug to a bookmark another transaction wrote since is still created, without the slug and without forwarding, and reported with the others.
 
 /** The most bookmarks one insert statement writes. */
@@ -120,7 +123,9 @@ export type ImportOutcome =
   | { readonly kind: "unavailable" }
   | { readonly kind: "imported"; readonly result: ImportResult }
   /** The file would create `newNames` new folders and tags together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
-  | { readonly kind: "too_many_names"; readonly newNames: number };
+  | { readonly kind: "too_many_names"; readonly newNames: number }
+  /** The bookmarks the import would create would make `links` folder and tag links together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
+  | { readonly kind: "too_many_links"; readonly links: number };
 
 type Placed = { readonly kind: "refused"; readonly refusal: ImportRefusal } | { readonly kind: "duplicate"; readonly bookmark: ImportBookmark } | { readonly kind: "candidate"; readonly bookmark: ImportBookmark };
 
@@ -163,6 +168,10 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
   if (assumedOver !== undefined) {
     return { kind: "too_many_names", newNames: assumedOver };
   }
+  const assumedLinks = overLinks(assumed, names);
+  if (assumedLinks !== undefined) {
+    return { kind: "too_many_links", links: assumedLinks };
+  }
 
   const places = await store.takePlaces(ask.ceiling === "unlimited" ? null : ask.ceiling, wanted);
   if (places.kind === "unavailable") {
@@ -192,6 +201,10 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
     const over = overNewNames(await missingNames(store, names));
     if (over !== undefined) {
       return { kind: "too_many_names", newNames: over };
+    }
+    const links = overLinks(created, names);
+    if (links !== undefined) {
+      return { kind: "too_many_links", links };
     }
   }
 
@@ -232,8 +245,8 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
       throw new Error("the store reported a lost slug for a bookmark outside the batch");
     }
     const links: ImportLinks = {
-      folders: batch.flatMap(({ bookmark, row }) => bookmark.folders.map((name) => ({ bookmarkId: row.id, folderId: idOf(names.folderOf, folders.ids, name, "folder") }))),
-      tags: batch.flatMap(({ bookmark, row }) => bookmark.tags.map((name) => ({ bookmarkId: row.id, tagId: idOf(names.tagOf, tags.ids, name, "tag") }))),
+      folders: batch.flatMap(({ bookmark, row }) => [...new Set(bookmark.folders.map((name) => idOf(names.folderOf, folders.ids, name, "folder")))].map((folderId) => ({ bookmarkId: row.id, folderId }))),
+      tags: batch.flatMap(({ bookmark, row }) => [...new Set(bookmark.tags.map((name) => idOf(names.tagOf, tags.ids, name, "tag")))].map((tagId) => ({ bookmarkId: row.id, tagId }))),
     };
     if (links.folders.length > 0 || links.tags.length > 0) {
       await store.linkBookmarks(links);

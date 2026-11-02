@@ -4295,6 +4295,11 @@ export type ImportOutcome =
 | {
     readonly kind: "too_many_names";
     readonly newNames: number;
+}
+/** The bookmarks the import would create would make `links` folder and tag links together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
+| {
+    readonly kind: "too_many_links";
+    readonly links: number;
 };
 
 // @public
@@ -4337,6 +4342,11 @@ export type ImportPreviewOutcome =
 | {
     readonly kind: "too_many_names";
     readonly newNames: number;
+}
+/** The bookmarks that would be created would make more than `IMPORT_MAX_LINKS` folder and tag links together: `links` of them. */
+| {
+    readonly kind: "too_many_links";
+    readonly links: number;
 };
 
 // @public
