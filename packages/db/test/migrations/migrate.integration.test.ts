@@ -874,6 +874,11 @@ await migrate({
 
   it.each([
     [
+      "a primary key",
+      "ALTER TABLE owned_target ADD CONSTRAINT owned_idx PRIMARY KEY (a)",
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target (a);",
+    ],
+    [
       "a deferrable unique constraint",
       "ALTER TABLE owned_target ADD CONSTRAINT owned_idx UNIQUE (a) DEFERRABLE INITIALLY DEFERRED",
       "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target (a);",
