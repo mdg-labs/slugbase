@@ -61,6 +61,7 @@ existing line by adding its PR number.
 - **lock order** — two functions lock the same pair of rows in opposite orders (a child row through an `UPDATE`, then its parent `FOR UPDATE`, against parent first, then a `DELETE` of its children), so concurrent calls for one parent deadlock and one aborts — PR 494
 - **race settled in one shape only** — a re-read after racing writes reconciles the case where both writers' values are present but not the case where the racer replaced ours, so the racer's value stands and the log reports ours as applied — PR 500
 - **policies disagree on visibility** — a write that one table's RLS policy still admits reads a related row through another table's policy that already hides it (a workspace being deleted), so the result carries NULL where its type promises a value and the job using it fails on every retry — PR 514
+- **catalog column wider than its name** — a catalog check reads a column by what it usually means (`pg_constraint.conindid` as the index a constraint owns) without filtering on the kinds that set it for another reason (a foreign key names the index it references), so a valid state is refused — PR 696
 
 ## Optional capabilities
 
@@ -108,6 +109,9 @@ existing line by adding its PR number.
 - **poll ended by one outcome** — a loop that polls until a promise settles marks done on fulfilment only, so a rejection is unhandled and the loop runs to the test timeout instead of reporting it — PR 685
 - **cache key without the files read** — a test reads files outside its package (root compose files, another package's catalogs), and the task's inputs omit them, so a change there replays a cached pass — PR 685
 - **split moves the state** — splitting a test so that an assertion (an axe pass) runs in a test of its own sets up only the starting state, so the assertion no longer checks the state the original test reached after its actions — PR 629
+- **journey leaves its data** — a browser journey on a shared account creates rows through the API or a real save and never removes them, so they pile up across journeys and engines and reach later lists and counts, while a file header may still say nothing is made — PR 696
+- **URL pathname as a file path** — a test derives a path with `new URL(…, import.meta.url).pathname`, which stays percent-encoded, so a checkout path with a space or a non-ASCII character names a file that does not exist; `fileURLToPath` decodes it — PR 696
+- **tool behaviour restated from memory** — a comment beside a command describes what the tool does (how `--shard` divides tests) in words that differ from what it does and from the design doc, so the next change to the shard count reasons from the wrong model — PR 696
 
 ## Web UI
 
