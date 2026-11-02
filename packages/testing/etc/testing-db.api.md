@@ -13,6 +13,19 @@ import { TestSql } from '@slugbase/db/testing';
 import { testTemplateName } from '@slugbase/db/testing';
 import { withTestDatabase } from '@slugbase/db/testing';
 
+// @public
+export function assertBookmarkCountMatches(database: Pick<TestDatabase, "owner">): Promise<void>;
+
+// @public
+export interface BookmarkCountDrift {
+    readonly counter: number;
+    readonly rows: number;
+    readonly workspaceId: string;
+}
+
+// @public
+export function bookmarkCountDrift(database: Pick<TestDatabase, "owner">): Promise<BookmarkCountDrift[]>;
+
 export { createTestDatabase }
 
 export { dropTestTemplate }

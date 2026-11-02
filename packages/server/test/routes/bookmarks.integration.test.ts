@@ -1,5 +1,5 @@
-import { useTestDatabase } from "@slugbase/testing/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { queuedJobCount } from "../invitations/support.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
@@ -26,6 +26,8 @@ beforeEach(async () => {
   await database().owner`TRUNCATE workspaces CASCADE`;
   await database().owner`TRUNCATE pgboss.job`;
 });
+
+afterEach(() => assertBookmarkCountMatches(database()));
 
 interface Problem {
   readonly code: string;
@@ -326,6 +328,7 @@ describe("getBookmark", () => {
     await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
       await tx`UPDATE bookmarks SET plan_archived_at = now() WHERE id = ${made.id}`;
+      await tx`UPDATE workspaces SET bookmark_count = bookmark_count - 1 WHERE id = (SELECT workspace_id FROM bookmarks WHERE id = ${made.id})`;
     });
 
     expect((await read(world, owner, made.id)).status).toBe(404);

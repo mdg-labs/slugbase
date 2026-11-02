@@ -1,6 +1,6 @@
 import { ImportResultSchema } from "@slugbase/contracts";
-import { useTestDatabase } from "@slugbase/testing/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 import { NETSCAPE, bookmarkFile, multipart, upload, type FileLink } from "./netscape-upload.ts";
 
@@ -24,6 +24,8 @@ beforeEach(async () => {
   await database().owner`TRUNCATE workspaces CASCADE`;
   await database().owner`TRUNCATE pgboss.job`;
 });
+
+afterEach(() => assertBookmarkCountMatches(database()));
 
 async function asSystem<T>(work: (tx: ReturnType<typeof database>["owner"]) => Promise<T>): Promise<T> {
   return database().owner.begin(async (tx) => {

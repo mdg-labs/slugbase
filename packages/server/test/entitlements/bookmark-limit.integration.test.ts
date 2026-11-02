@@ -1,7 +1,7 @@
 import { PortUnavailable, type AccountEntitlementValues, type EntitlementSource } from "@slugbase/core";
 import { LimitedEntitlementSource } from "@slugbase/testing";
-import { useTestDatabase } from "@slugbase/testing/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { queuedJobCount } from "../invitations/support.ts";
 import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
@@ -28,6 +28,8 @@ beforeEach(async () => {
   await database().owner`TRUNCATE workspaces CASCADE`;
   await database().owner`TRUNCATE pgboss.job`;
 });
+
+afterEach(() => assertBookmarkCountMatches(database()));
 
 const ceiling = (value: number | "unlimited", upgrade = false): LimitedEntitlementSource => {
   const source = new LimitedEntitlementSource().grant("bookmarks.max", value);

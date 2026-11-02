@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ImportResultSchema } from "@slugbase/contracts";
-import { useTestDatabase } from "@slugbase/testing/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // POST /api/v1/import/json, the folders, tags and slugs of the file (doc 04 section 10.9, doc 02 section 13.1, Q30, doc 10 T2 and T13), through the whole chain over the migrated database. The failure scenario:
@@ -28,6 +28,8 @@ beforeEach(async () => {
   await database().owner`TRUNCATE workspaces CASCADE`;
   await database().owner`TRUNCATE pgboss.job`;
 });
+
+afterEach(() => assertBookmarkCountMatches(database()));
 
 const asPerson = (as: Person): Record<string, string> => ({ cookie: as.cookie });
 
@@ -198,7 +200,10 @@ describe("POST /import/json, folders, tags and slugs", { timeout: TEST_TIMEOUT_M
     const world = harness.serve({ env: RELAXED });
     const { a, b, shared } = await setup(world);
     await imported(world, a, [{ url: "https://example.com/old", slug: "taken" }, { url: "https://example.com/archived", slug: "archived" }]);
-    await asSystem((tx) => tx`UPDATE bookmarks SET plan_archived_at = now() WHERE owner_id = ${a.account.id} AND slug = 'archived'`);
+    await asSystem(async (tx) => {
+      const archived = await tx`UPDATE bookmarks SET plan_archived_at = now() WHERE owner_id = ${a.account.id} AND slug = 'archived'`;
+      await tx`UPDATE workspaces SET bookmark_count = bookmark_count - ${archived.count} WHERE id = ${shared.workspaceId}`;
+    });
     await imported(world, b, [{ url: "https://example.com/members", slug: "members" }]);
     const file = [
       { url: "https://example.com/1", slug: "Fresh", forwarding: true },

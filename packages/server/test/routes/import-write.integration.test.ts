@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { ImportResultSchema } from "@slugbase/contracts";
 import { LimitedEntitlementSource } from "@slugbase/testing";
-import { useTestDatabase } from "@slugbase/testing/db";
+import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // POST /api/v1/import/json, the import that writes (doc 04 section 10.9, doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), through the whole chain over the migrated database. The failure
@@ -32,6 +32,8 @@ beforeEach(async () => {
   await database().owner`TRUNCATE workspaces CASCADE`;
   await database().owner`TRUNCATE pgboss.job`;
 });
+
+afterEach(() => assertBookmarkCountMatches(database()));
 
 const asPerson = (as: Person): Record<string, string> => ({ cookie: as.cookie });
 
