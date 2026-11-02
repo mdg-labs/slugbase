@@ -284,7 +284,7 @@ Per member, per workspace: a mapping slug → bookmark. Listed and removable on 
 
 - Owned by a member, in a workspace. Name 1–64 characters, unique per owner (case-insensitive); optional lucide icon from a curated set (about 60 names) and a colour, one of the eight folder tokens (Q21). Flat — no nesting in v1 (Q33).
 - A bookmark can be in many folders; only the bookmark's owner can file it, and only into their own folders.
-- Operations: create, rename, change icon/colour, delete (bookmarks stay; only the associations go), share (§8). No folder limit on any plan (old §23.4-3).
+- Operations: create, rename, change icon/colour, delete (bookmarks stay; only the associations go), share (§8). No folder limit on any plan (old §23.4-3); one import creates at most 10 000 new folders and tags together (§13.1).
 - The folders page lists folders with scope (mine / shared with me), bookmark count, sharing summary; sort by name, count, recently updated.
 
 ### 7.2 Tags
@@ -412,6 +412,7 @@ The only notifications in v1 are transactional emails (no notification centre, d
 
 - **Formats**: SlugBase JSON (§13.3), and Netscape bookmark HTML as exported by Chrome, Firefox, Safari and Edge (max 5 MiB). Browser folders become SlugBase folders by their leaf name (path flattening, Q33); `TAGS` attributes (Firefox) become tags.
 - **Limits**: max 5 000 bookmarks per import; subject to `bookmarks.max` — an import that would exceed it imports up to the limit and reports the rest as skipped with the reason (there is no all-or-nothing failure).
+- **New folders and tags**: one import creates at most 10 000 folders and tags together (`IMPORT_MAX_NEW_NAMES`), so that a single request cannot hold the workspace row lock while it writes a great many rows. Only names the caller does not have count, compared as the database compares them (case-insensitive), so a file whose names exist imports at any size. A file that would create more is refused whole with `422 validation_failed` in the dry run and in the write, nothing is written, and the decision is made before the write takes the workspace row lock (only when the counter falls between that read and the lock, so that more of the file's bookmarks are imported than the decision assumed, is it made again under the lock, and a refusal there rolls the transaction back); the import wizard shows the error. The Netscape import inherits the limit.
 - **Conflicts** (Q30): folders and tags are matched by name (case-insensitive) or created; a slug that conflicts with an existing own slug, or is invalid, is dropped from that bookmark (the bookmark is still imported) and reported; duplicates by canonical URL are imported unless "skip duplicates" is checked (default checked).
 - An import is **synchronous**: one request answers with the full result (created, skipped with reasons, failed, slugs dropped, folders and tags created). It runs in one transaction in batches, accepts an idempotency key, and is recorded in the audit log with counts only (`import.completed`, §10). The transaction takes the places under `bookmarks.max` from the workspace's counter under the workspace row lock and raises the counter by the number of bookmarks it creates (never a count of the rows), so two imports at the limit minus one together create one; a failure of any write rolls back every bookmark, the counter and the event, and a retry with the same idempotency key answers the stored result. The bookmarks are created in the order of the file with ascending identifiers, so an export of them lists them in that order; a plan-archived flag in the file is ignored, so it never changes the counter. Each created bookmark announces `bookmark.created` like one created by hand, but the `bookmark.fetchMetadata` job of §5.4 is **not** queued: up to 5 000 outbound fetches for a file the member supplied would be an amplification, and the job only fills a cache. A **dry run** returns the same result without writing anything; the import wizard uses it for its preview. Hostile input (oversized or deeply nested files, `javascript:` and `data:` URLs, control characters, prototype-pollution keys, script-laden titles) is rejected or neutralised, never executed, and nothing outside the member's workspace is touched. The Netscape upload is the only multipart route.
 
@@ -465,6 +466,7 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 | Page sizes | 24 / 48 / 96; max 100 via API | config | §5.7 |
 | Select-all cap | 5 000 IDs (`BOOKMARK_SELECT_ALL_CAP` in `@slugbase/contracts`) | fixed | §5.7 |
 | Import max bookmarks / HTML size | 5 000 / 5 MiB | config | §13.1 |
+| Import max new folders and tags together | 10 000 (`IMPORT_MAX_NEW_NAMES` in `@slugbase/contracts`) | fixed | §7, §13.1 |
 | Metadata cache / AI cache | 7 days / 30 days | config | §5.4, §14 |
 | Metadata HTML read cap / sync budget | 512 KiB / 3 s | config | §5.4 |
 | Favicon max size | 64 KiB | config | §5.4 |

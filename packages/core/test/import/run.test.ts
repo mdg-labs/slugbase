@@ -1,4 +1,4 @@
-import type { ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import { createAuditWriter, IMPORT_BATCH_SIZE, importBookmarks, type AuditRecord, type ImportAsk, type ImportFolderToResolve, type ImportLinks, type ImportNewBookmark, type ImportPlaces, type ImportStore, type ImportTagToResolve } from "../../src/index.ts";
 
@@ -20,6 +20,8 @@ interface Options {
   room?: number;
   existing?: readonly string[];
   unavailable?: boolean;
+  /** The counter the import reads before it takes the places; 0 when left out, and undefined for a workspace that cannot be read. */
+  counter?: number | undefined;
   failBatch?: number;
   failAudit?: boolean;
   /** The slugs the caller has already. */
@@ -36,7 +38,10 @@ interface Options {
 function fixture(options: Options = {}) {
   const written: Written = { takes: [], batches: [], order: [], audit: [], slugLookups: [], folders: [], tags: [], links: [] };
   const store: ImportStore = {
-    bookmarkCount: () => Promise.reject(new Error("the import never reads the counter outside the lock")),
+    bookmarkCount: () => {
+      written.order.push("count");
+      return Promise.resolve("counter" in options ? options.counter : 0);
+    },
     existingCanonicalUrls: (canonicals) => {
       written.order.push("lookup");
       return Promise.resolve(new Set(canonicals.filter((canonical) => (options.existing ?? []).includes(canonical))));
@@ -46,10 +51,14 @@ function fixture(options: Options = {}) {
       written.slugLookups.push(slugs);
       return Promise.resolve(new Set(slugs.filter((slug) => (options.slugs ?? []).includes(slug))));
     },
-    existingFolderNames: () => Promise.reject(new Error("the import never asks which folders exist")),
-    existingTagNames: () => Promise.reject(new Error("the import never asks which tags exist")),
+    existingFolderNames: (names) => Promise.resolve(new Set(names.filter((name) => (options.folders ?? []).includes(name.toLowerCase())))),
+    existingTagNames: (names) => Promise.resolve(new Set(names.filter((name) => (options.tags ?? []).includes(name.toLowerCase())))),
     firstSameNames: (names) => {
-      const same = options.same ?? ((a: string, b: string) => a.toLowerCase() === b.toLowerCase());
+      if (options.same === undefined) {
+        const firsts = new Map<string, number>();
+        return Promise.resolve(names.map((name, index) => firsts.get(name.toLowerCase()) ?? (firsts.set(name.toLowerCase(), index), index)));
+      }
+      const same = options.same;
       return Promise.resolve(names.map((name, index) => Math.max(0, names.findIndex((other, place) => place <= index && same(other, name)))));
     },
     resolveFolders: (folders) => {
@@ -140,7 +149,7 @@ describe("importBookmarks", () => {
     const outcome = await importBookmarks(dependencies, ask(urls("https://example.com/mine", "https://example.com/new", "bogus", "https://example.com/new/", "https://example.com/other"), { ceiling: 10 }));
 
     expect(written.takes).toEqual([{ ceiling: 10, wanted: 2 }]);
-    expect(written.order).toEqual(["lookup", "take", "insert", "audit"]);
+    expect(written.order).toEqual(["lookup", "count", "take", "insert", "audit"]);
     expect(outcome).toMatchObject({ kind: "imported", result: { created: 2 } });
     expect(written.batches.flatMap((batch) => batch.bookmarks.map((bookmark) => bookmark.url))).toEqual(["https://example.com/new", "https://example.com/other"]);
   });
@@ -263,7 +272,7 @@ describe("importBookmarks", () => {
 
     await importBookmarks(dependencies, ask([{ url: "https://example.com/a", slug: "a", folders: ["F"], tags: ["T"] }]));
 
-    expect(written.order).toEqual(["lookup", "take", "slugs", "folders", "tags", "insert", "link", "audit"]);
+    expect(written.order).toEqual(["lookup", "count", "take", "slugs", "folders", "tags", "insert", "link", "audit"]);
   });
 
   it("files and tags each bookmark by its own names and keeps its slug, forwarding and pin, matching names without regard to case", async () => {
@@ -453,6 +462,99 @@ describe("importBookmarks", () => {
     const failing = { ...dependencies, store: { ...dependencies.store, linkBookmarks: () => Promise.reject(new Error("the link failed")) } };
 
     await expect(importBookmarks(failing, ask([{ url: "https://example.com/a", tags: ["T"] }]))).rejects.toThrow("the link failed");
+    expect(written.audit).toEqual([]);
+  });
+
+  it("is unavailable, before it takes any place, when the counter of the workspace cannot be read", async () => {
+    const { written, dependencies } = fixture({ counter: undefined });
+
+    await expect(importBookmarks(dependencies, ask(urls("https://example.com/")))).resolves.toEqual({ kind: "unavailable" });
+    expect(written.takes).toEqual([]);
+    expect(written.order).toEqual(["lookup", "count"]);
+  });
+});
+
+describe("importBookmarks and the new folders and tags", () => {
+  const names = (prefix: string, count: number, from = 0) => Array.from({ length: count }, (_, index) => `${prefix}${String(from + index)}`);
+  const withNames = (count: number, kind: "tags" | "folders" = "tags", prefix = "n"): ImportRequest => [{ url: "https://example.com/a", [kind]: names(prefix, count) }];
+
+  it("refuses a file of more new folders and tags together than one import may create before it takes any place, and writes nothing", async () => {
+    for (const file of [
+      withNames(IMPORT_MAX_NEW_NAMES + 1),
+      withNames(IMPORT_MAX_NEW_NAMES + 1, "folders"),
+      [{ url: "https://example.com/a", folders: names("f", 5001), tags: names("t", 5000) }],
+      { format: "slugbase-export" as const, version: 1, folders: names("f", 4000).map((name) => ({ name })), tags: names("t", 3000), bookmarks: [{ url: "https://example.com/a", folders: names("g", 1000), tags: names("u", 2001) }] },
+    ] satisfies ImportRequest[]) {
+      const { written, dependencies } = fixture();
+
+      const outcome = await importBookmarks(dependencies, ask(file));
+
+      expect(outcome).toEqual({ kind: "too_many_names", newNames: IMPORT_MAX_NEW_NAMES + 1 });
+      expect(written.takes).toEqual([]);
+      expect(written.order).not.toContain("take");
+      expect(written.batches).toEqual([]);
+      expect(written.folders).toEqual([]);
+      expect(written.tags).toEqual([]);
+      expect(written.audit).toEqual([]);
+    }
+  });
+
+  it("imports a file of exactly the most new names", async () => {
+    const { written, dependencies } = fixture();
+
+    const outcome = await importBookmarks(dependencies, ask([{ url: "https://example.com/a", folders: names("f", 5000), tags: names("t", 5000) }]));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 1, foldersCreated: 5000, tagsCreated: 5000 } });
+    expect(written.audit).toHaveLength(1);
+  });
+
+  it("does not count the names the caller has, matched by the store, so any size of file whose names exist imports", async () => {
+    const known = names("t", 2 * IMPORT_MAX_NEW_NAMES);
+    const { dependencies } = fixture({ tags: known.map((name) => name.toLowerCase()) });
+
+    const outcome = await importBookmarks(dependencies, ask([{ url: "https://example.com/a", tags: known.map((name) => name.toUpperCase()) }]));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { tagsCreated: 0, detected: { tags: 2 * IMPORT_MAX_NEW_NAMES } } });
+  });
+
+  it("counts the names the store tells apart, not the spellings: spellings of one name are one", async () => {
+    const { dependencies } = fixture();
+    const spelled = names("t", IMPORT_MAX_NEW_NAMES).flatMap((name) => [name, name.toUpperCase()]);
+
+    const outcome = await importBookmarks(dependencies, ask([{ url: "https://example.com/a", tags: spelled }]));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { tagsCreated: IMPORT_MAX_NEW_NAMES } });
+  });
+
+  it("counts the names of the bookmarks that are created and not those of a bookmark left out for a duplicate or for the limit", async () => {
+    const file: ImportRequest = [
+      { url: "https://example.com/1", tags: names("a", 6000) },
+      { url: "https://example.com/1", tags: names("b", 6000) },
+      { url: "https://example.com/2", tags: names("c", 4000) },
+      { url: "https://example.com/3", tags: names("d", 6000) },
+    ];
+    const inside = fixture({ room: 2 });
+    const over = fixture({ room: 3 });
+
+    await expect(importBookmarks(inside.dependencies, ask(file, { ceiling: 2 }))).resolves.toMatchObject({ kind: "imported", result: { created: 2, tagsCreated: 10_000 } });
+    await expect(importBookmarks(over.dependencies, ask(file, { ceiling: 3 }))).resolves.toEqual({ kind: "too_many_names", newNames: 16_000 });
+  });
+
+  it("counts again under the lock when the places taken cover more bookmarks than the counter showed, and answers too_many_names without writing a bookmark or an audit event", async () => {
+    const file: ImportRequest = [
+      { url: "https://example.com/1", tags: names("a", 6000) },
+      { url: "https://example.com/2", tags: names("b", 6000) },
+    ];
+    // The counter shows no room, so the count before the lock sees no bookmark; the places taken then cover both.
+    const { written, dependencies } = fixture({ counter: 2 });
+
+    const outcome = await importBookmarks(dependencies, ask(file, { ceiling: 2 }));
+
+    expect(outcome).toEqual({ kind: "too_many_names", newNames: 12_000 });
+    expect(written.takes).toEqual([{ ceiling: 2, wanted: 2 }]);
+    expect(written.batches).toEqual([]);
+    expect(written.folders).toEqual([]);
+    expect(written.tags).toEqual([]);
     expect(written.audit).toEqual([]);
   });
 });

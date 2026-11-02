@@ -1,4 +1,4 @@
-import type { ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import { previewImport, readImportBookmark, type ImportPreviewAsk, type ImportPreviewStore } from "../../src/index.ts";
 
@@ -19,7 +19,13 @@ function store(options: { count?: number | undefined; existing?: readonly string
   const calls: Calls = { count: 0, lookups: [], slugs: [], sameNames: [] };
   const same = options.same ?? caseless;
   const existing = new Set(options.existing ?? []);
-  const named = (have: readonly string[] | undefined, names: readonly string[]) => new Set(names.filter((name) => (have ?? []).some((other) => same(other, name))));
+  const named = (have: readonly string[] | undefined, names: readonly string[]) => {
+    if (options.same === undefined) {
+      const lower = new Set((have ?? []).map((name) => name.toLowerCase()));
+      return new Set(names.filter((name) => lower.has(name.toLowerCase())));
+    }
+    return new Set(names.filter((name) => (have ?? []).some((other) => same(other, name))));
+  };
   return {
     calls,
     store: {
@@ -39,6 +45,10 @@ function store(options: { count?: number | undefined; existing?: readonly string
       existingTagNames: (names) => Promise.resolve(named(options.tags, names)),
       firstSameNames: (names) => {
         calls.sameNames.push(names);
+        if (options.same === undefined) {
+          const firsts = new Map<string, number>();
+          return Promise.resolve(names.map((name, index) => firsts.get(name.toLowerCase()) ?? (firsts.set(name.toLowerCase(), index), index)));
+        }
         return Promise.resolve(names.map((name, index) => Math.max(0, names.findIndex((other, place) => place <= index && same(other, name)))));
       },
     },
@@ -52,7 +62,7 @@ async function preview(file: ImportRequest, overrides: Partial<ImportPreviewAsk>
   const { store: fake, calls } = store(options);
   const outcome = await previewImport({ store: fake }, ask(file, overrides));
   if (outcome.kind !== "previewed") {
-    throw new Error("the workspace was unavailable");
+    throw new Error(`the preview was ${outcome.kind}`);
   }
   return { result: outcome.result, calls };
 }
@@ -311,5 +321,41 @@ describe("previewImport", () => {
 
     expect(result.skipped).toEqual([{ position: 2, title: "second", url: "https://example.com/a", reason: "duplicate" }]);
     expect(JSON.stringify(result)).not.toContain("secret");
+  });
+
+  describe("the most new folders and tags one import may create", () => {
+    const names = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => `${prefix}${String(index)}`);
+    const outcomeOf = (file: ImportRequest, overrides: Partial<ImportPreviewAsk> = {}, options: Parameters<typeof store>[0] = {}) => previewImport({ store: store(options).store }, ask(file, overrides));
+
+    it("refuses a file that would create more, folders and tags together, and imports one that would create exactly that many", async () => {
+      await expect(outcomeOf([{ url: "https://example.com/a", tags: names("t", IMPORT_MAX_NEW_NAMES + 1) }])).resolves.toEqual({ kind: "too_many_names", newNames: IMPORT_MAX_NEW_NAMES + 1 });
+      await expect(outcomeOf([{ url: "https://example.com/a", folders: names("f", 5001), tags: names("t", 5000) }])).resolves.toEqual({ kind: "too_many_names", newNames: IMPORT_MAX_NEW_NAMES + 1 });
+      await expect(outcomeOf([{ url: "https://example.com/a", folders: names("f", 5000), tags: names("t", 5000) }])).resolves.toMatchObject({ kind: "previewed", result: { foldersCreated: 5000, tagsCreated: 5000 } });
+    });
+
+    it("counts the names the store says the caller has as no new name, whatever their number", async () => {
+      const known = names("t", 3 * IMPORT_MAX_NEW_NAMES);
+
+      const outcome = await outcomeOf([{ url: "https://example.com/a", tags: known.map((name) => name.toUpperCase()) }], {}, { tags: known });
+
+      expect(outcome).toMatchObject({ kind: "previewed", result: { tagsCreated: 0, detected: { tags: 3 * IMPORT_MAX_NEW_NAMES } } });
+    });
+
+    it("counts the names the store tells apart, and those of the bookmarks that are created and of the document's lists alone", async () => {
+      const file: ImportRequest = {
+        format: "slugbase-export",
+        version: 1,
+        tags: names("listed", 4000),
+        bookmarks: [
+          { url: "https://example.com/1", tags: names("a", 6000) },
+          { url: "https://example.com/1", tags: names("b", 6000) },
+          { url: "https://example.com/2", tags: names("c", 100) },
+        ],
+      };
+
+      await expect(outcomeOf(file, { ceiling: 1 })).resolves.toMatchObject({ kind: "previewed", result: { created: 1, tagsCreated: 10_000 } });
+      await expect(outcomeOf(file, { ceiling: 2 })).resolves.toEqual({ kind: "too_many_names", newNames: 10_100 });
+      await expect(outcomeOf({ ...file, bookmarks: [{ url: "https://example.com/1", tags: [...names("a", 6000), ...names("a", 6000).map((name) => name.toUpperCase())] }] })).resolves.toMatchObject({ kind: "previewed", result: { tagsCreated: 10_000 } });
+    });
   });
 });

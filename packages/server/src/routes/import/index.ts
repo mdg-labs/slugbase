@@ -1,4 +1,4 @@
-import { importJson as importJsonOperation } from "@slugbase/contracts";
+import { IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation } from "@slugbase/contracts";
 import { createAuditWriter, importBookmarks, previewImport, type AuditActor, type BookmarkEntitlements, type ImportStore } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, importRepository, type TenantTx } from "@slugbase/db";
 import { ascendingUuidv7, uuidv7 } from "../../auth/uuidv7.ts";
@@ -17,9 +17,18 @@ import { route } from "../register.ts";
 // the file with ascending identifiers, queues `bookmark.created` for each (the page's metadata is not fetched: the file is the member's, and a fetch for each of up to 5 000 bookmarks is an amplification the member
 // chooses), and records one `import.completed` audit event with the account or the token as the actor. Between the places and the bookmarks it gets or creates the folders and tags of the file for the caller by name, and it
 // files and tags each bookmark by its own names; a slug the caller has already, or that an earlier bookmark of the file keeps, is dropped from its bookmark, which is still imported, and listed in the answer. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
-// Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
+// A file that would create more than 10 000 new folders and tags together is `422 validation_failed` with the field code `too_many_new_names`, in the dry run and in the write: the write decides it before it takes the
+// workspace's row, and the refusal that is only known under the lock throws inside the transaction, so nothing is committed. Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
 
 const NO_WORKSPACE = "No such resource.";
+
+function tooManyNames(newNames: number): ProblemError {
+  return new ProblemError(
+    "validation_failed",
+    `The file would create ${String(newNames)} new folders and tags together; one import creates at most ${String(IMPORT_MAX_NEW_NAMES)}. Names you already have do not count.`,
+    { errors: [{ path: "", code: "too_many_new_names" }] },
+  );
+}
 
 function tenantOf(context: ChainContext): RequestTenant {
   const tenant = context.get("tenant");
@@ -73,6 +82,9 @@ export function importRoutes({ entitlements }: ImportRoutesOptions): RouteBindin
         if (previewed.kind === "unavailable") {
           throw new ProblemError("not_found", NO_WORKSPACE);
         }
+        if (previewed.kind === "too_many_names") {
+          throw tooManyNames(previewed.newNames);
+        }
         return { status: 200, body: previewed.result };
       }
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
@@ -81,10 +93,14 @@ export function importRoutes({ entitlements }: ImportRoutesOptions): RouteBindin
         if (profile === undefined) {
           return { kind: "unavailable" } as const;
         }
-        return importBookmarks(
+        const imported = await importBookmarks(
           { store: storeOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newBookmarkId: ascendingUuidv7(), newId: uuidv7 },
           { file: body, skipDuplicates, ceiling, workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor: auditActorOf(context, tenant.accountId, profile.displayName), ipPrefix },
         );
+        if (imported.kind === "too_many_names") {
+          throw tooManyNames(imported.newNames);
+        }
+        return imported;
       });
       if (outcome.kind === "unavailable") {
         throw new ProblemError("not_found", NO_WORKSPACE);

@@ -8,6 +8,7 @@ import {
   FOLDER_DEFAULT_ICON,
   FOLDER_ICONS,
   FOLDER_NAME_MAX_LENGTH,
+  IMPORT_MAX_NEW_NAMES,
   TAG_NAME_MAX_LENGTH,
   type ImportFileBookmark,
   type ImportRequest,
@@ -31,6 +32,9 @@ import { cleanText } from "./text.ts";
 // is matched by its name without regard to case, and one the caller has not is created; a name is plain text cut to its limit and a name that is empty then is none. Which spellings are one name is the database's to say (`ImportPreviewStore.firstSameNames`, the comparison of its `citext` columns), for the preview and for the import alike, so the two cannot disagree on any
 // database: the file's names are never folded here. A slug is kept by a bookmark that is imported when it is
 // in the grammar, the caller has no bookmark with it, plan-archived or not, and no earlier bookmark that is imported has it; any other slug is dropped from its bookmark with forwarding off, and the bookmark is imported.
+//
+// One import creates at most `IMPORT_MAX_NEW_NAMES` folders and tags together (doc 02 section 7, doc 04 section 10.9), so that a request cannot hold the workspace's row lock for the time it takes to write a
+// great many rows. Only the names the caller does not have count, as the database compares them (`missingNames`); a file that would create more is refused whole, by the preview and by the import alike.
 
 /** What the preview reads of the database, in the transaction of the request. */
 export interface ImportPreviewStore {
@@ -66,7 +70,9 @@ export interface ImportPreviewAsk {
 export type ImportPreviewOutcome =
   /** The workspace cannot be read: it is being deleted, or the caller is no member of it. */
   | { readonly kind: "unavailable" }
-  | { readonly kind: "previewed"; readonly result: ImportResult };
+  | { readonly kind: "previewed"; readonly result: ImportResult }
+  /** The file would create more than `IMPORT_MAX_NEW_NAMES` new folders and tags together: `newNames` of them. */
+  | { readonly kind: "too_many_names"; readonly newNames: number };
 
 /** A bookmark of the file whose URL is one a bookmark can have, with its text made plain and cut to its limits. */
 export interface ImportBookmark {
@@ -117,7 +123,7 @@ export function bookmarksOfFile(file: ImportRequest): readonly ImportFileBookmar
   return Array.isArray(file) ? file : file.bookmarks;
 }
 
-/** The names as plain text cut to `max`, without the empty ones and without a spelling repeated; the order of the file stands. Whether two spellings are one name is not decided here (`namesOf`). */
+/** The names as plain text cut to `max`, without the empty ones and without a spelling repeated; the order of the file stands. Whether two spellings are one name is not decided here (`planNames`). */
 function cleanNames(names: readonly string[] | undefined, max: number): string[] {
   return [...new Set((names ?? []).map((name) => cleanText(name, max)).filter((name) => name !== ""))];
 }
@@ -214,6 +220,11 @@ async function nameSet(store: ImportPreviewStore, listed: readonly string[], use
   return { wanted, spelledAs, distinct: first.filter((place, index) => place === index).length };
 }
 
+/** The places left under the workspace's ceiling when `used` bookmarks count. */
+export function roomUnder(ceiling: EntitlementLimit, used: number): number {
+  return ceiling === "unlimited" ? Number.POSITIVE_INFINITY : Math.max(0, ceiling - used);
+}
+
 /** What the import does with the names of the file's folders and tags. */
 export interface NamePlan {
   /** The folders the import makes sure the caller has: those the file lists, with their icon and colour (an icon outside the list a folder may carry and a colour outside 1 to 8 become the defaults), then those of the bookmarks that are created. */
@@ -261,6 +272,22 @@ export async function planNames(store: ImportPreviewStore, file: ImportRequest, 
     tagOf: tags.spelledAs,
     detected: { folders: folders.distinct, tags: tags.distinct },
   };
+}
+
+/** How many of the wanted folders and tags the caller does not have, matched by the database without regard to case: the ones the import creates. */
+export async function missingNames(store: ImportPreviewStore, names: NamePlan): Promise<{ readonly folders: number; readonly tags: number }> {
+  const existingFolders = names.folders.length > 0 ? await store.existingFolderNames(names.folders.map((folder) => folder.name)) : new Set<string>();
+  const existingTags = names.tags.length > 0 ? await store.existingTagNames(names.tags) : new Set<string>();
+  return {
+    folders: names.folders.filter((folder) => !existingFolders.has(folder.name)).length,
+    tags: names.tags.filter((tag) => !existingTags.has(tag)).length,
+  };
+}
+
+/** The new folders and tags together when they are more than one import may create, and undefined otherwise. */
+export function overNewNames(missing: { readonly folders: number; readonly tags: number }): number | undefined {
+  const total = missing.folders + missing.tags;
+  return total > IMPORT_MAX_NEW_NAMES ? total : undefined;
 }
 
 /** What the bookmarks that are created do with their slugs. */
@@ -313,7 +340,7 @@ export async function previewImport({ store }: ImportPreviewDependencies, ask: I
   const canonicals = [...new Set(reads.flatMap((read) => (isRefusal(read) ? [] : [read.canonical])))];
   const existing = ask.skipDuplicates && canonicals.length > 0 ? await store.existingCanonicalUrls(canonicals) : new Set<string>();
 
-  let room = ask.ceiling === "unlimited" ? Number.POSITIVE_INFINITY : Math.max(0, ask.ceiling - used);
+  let room = roomUnder(ask.ceiling, used);
   const created: ImportBookmark[] = [];
   const seen = new Set<string>();
   const skipped: ImportResult["skipped"] = [];
@@ -337,8 +364,11 @@ export async function previewImport({ store }: ImportPreviewDependencies, ask: I
   const slugs = slugsToCheck(created);
   const plan = planSlugs(created, slugs.length > 0 ? await store.existingSlugs(slugs) : new Set<string>());
   const names = await planNames(store, ask.file, created);
-  const existingFolders = names.folders.length > 0 ? await store.existingFolderNames(names.folders.map((folder) => folder.name)) : new Set<string>();
-  const existingTags = names.tags.length > 0 ? await store.existingTagNames(names.tags) : new Set<string>();
+  const missing = await missingNames(store, names);
+  const over = overNewNames(missing);
+  if (over !== undefined) {
+    return { kind: "too_many_names", newNames: over };
+  }
   return {
     kind: "previewed",
     result: {
@@ -348,8 +378,8 @@ export async function previewImport({ store }: ImportPreviewDependencies, ask: I
       failed,
       slugsDropped: plan.dropped.length,
       droppedSlugs: plan.dropped,
-      foldersCreated: names.folders.filter((folder) => !existingFolders.has(folder.name)).length,
-      tagsCreated: names.tags.filter((tag) => !existingTags.has(tag)).length,
+      foldersCreated: missing.folders,
+      tagsCreated: missing.tags,
     },
   };
 }

@@ -2,7 +2,7 @@ import type { ImportResult } from "@slugbase/contracts";
 import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
-import { bookmarksOfFile, entry, isRefusal, planNames, planSlugs, readImportBookmark, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
+import { bookmarksOfFile, entry, isRefusal, missingNames, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
 
 // The JSON import itself (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), in the one transaction the store and the audit writer are bound to. The file is judged exactly as the preview judges it
 // (`previewImport`): each bookmark's URL goes through the bookmark URL module, its text is made plain and cut, a duplicate by canonical URL is left out unless asked otherwise, and the workspace's room is spent in the order
@@ -10,6 +10,10 @@ import { bookmarksOfFile, entry, isRefusal, planNames, planSlugs, readImportBook
 // bookmarks, so two imports at the limit minus one together create one bookmark. The bookmarks are inserted in batches, in the order of the file, with identifiers that ascend in that order, and each is announced as
 // `bookmark.created` in the same transaction. A plan-archived flag in the file is never read. The import is recorded as one `import.completed` audit event with counts only, written after the bookmarks, so a failure of
 // any write (the bookmarks, the counter, the jobs or the event) rejects, and the caller's transaction, which must not commit, leaves none of them. The service never starts a transaction and swallows no failure.
+//
+// One import creates at most `IMPORT_MAX_NEW_NAMES` new folders and tags together (`missingNames`). The count is made before the places are taken, with the room the workspace's counter shows as the preview reads it, so that a
+// file over the limit never takes the row lock. When the places taken then cover more bookmarks than that count assumed (the counter moved in between), the count is made again under the lock, and a file over the limit is
+// answered `too_many_names` with the places taken, so the caller's transaction must not commit that outcome.
 //
 // The folders and tags of the file (doc 02 section 13.1, Q30) are made sure of once the places are taken, before the first bookmark is written: the store gets or creates each by name, without regard to case, one for each name the database tells apart (`planNames`), and a
 // folder or tag the caller has keeps its icon and colour. The folders and tags the file lists exist afterwards whether a bookmark uses them or not; those a bookmark names are made sure of for the bookmarks that are
@@ -114,7 +118,9 @@ export interface ImportAsk {
 export type ImportOutcome =
   /** The workspace cannot be reached; nothing was written. */
   | { readonly kind: "unavailable" }
-  | { readonly kind: "imported"; readonly result: ImportResult };
+  | { readonly kind: "imported"; readonly result: ImportResult }
+  /** The file would create `newNames` new folders and tags together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
+  | { readonly kind: "too_many_names"; readonly newNames: number };
 
 type Placed = { readonly kind: "refused"; readonly refusal: ImportRefusal } | { readonly kind: "duplicate"; readonly bookmark: ImportBookmark } | { readonly kind: "candidate"; readonly bookmark: ImportBookmark };
 
@@ -144,7 +150,19 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
     seen.add(read.canonical);
     return duplicate ? { kind: "duplicate", bookmark: read } : { kind: "candidate", bookmark: read };
   });
-  const wanted = placed.filter((item) => item.kind === "candidate").length;
+  const candidates = placed.flatMap((item) => (item.kind === "candidate" ? [item.bookmark] : []));
+  const wanted = candidates.length;
+
+  const used = await store.bookmarkCount();
+  if (used === undefined) {
+    return { kind: "unavailable" };
+  }
+  const assumed = candidates.slice(0, roomUnder(ask.ceiling, used));
+  let names = await planNames(store, ask.file, assumed);
+  const assumedOver = overNewNames(await missingNames(store, names));
+  if (assumedOver !== undefined) {
+    return { kind: "too_many_names", newNames: assumedOver };
+  }
 
   const places = await store.takePlaces(ask.ceiling === "unlimited" ? null : ask.ceiling, wanted);
   if (places.kind === "unavailable") {
@@ -169,9 +187,16 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
     }
   }
 
+  if (created.length !== assumed.length) {
+    names = await planNames(store, ask.file, created);
+    const over = overNewNames(await missingNames(store, names));
+    if (over !== undefined) {
+      return { kind: "too_many_names", newNames: over };
+    }
+  }
+
   const slugs = slugsToCheck(created);
   const slugPlan = planSlugs(created, slugs.length > 0 ? await store.existingSlugs(slugs) : new Set<string>());
-  const names = await planNames(store, ask.file, created);
   const folders = names.folders.length > 0 ? await store.resolveFolders(names.folders.map((folder) => ({ id: newId(), ...folder }))) : NOTHING_RESOLVED;
   const tags = names.tags.length > 0 ? await store.resolveTags(names.tags.map((name) => ({ id: newId(), name }))) : NOTHING_RESOLVED;
 

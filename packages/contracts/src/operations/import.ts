@@ -11,7 +11,7 @@ import { EXPORT_VERSION, ExportBookmarkSchema, ExportDocumentSchema } from "./ex
 // read. A bookmark that is the format but has a bad URL, or a title that is too long, is that bookmark's problem: it is reported in `failed` or cut to its limit, and the rest of the file is
 // unaffected. The schemas are strict objects, so a value nested deeper than the format allows is refused before anything reads it. No folder or tag name and no folder icon is longer
 // than `IMPORT_NAME_MAX_LENGTH`, so a single value cannot be an unbounded string; a name inside that bound is cut to its stored limit. The number of folders and tags a bookmark names has no cap of its own, because
-// a bookmark can hold more than 100 of each (the API caps one request, not the total) and the export emits them all; the rows of an import are bounded by the 5 MiB body limit and the `bulk` rate bucket.
+// a bookmark can hold more than 100 of each (the API caps one request, not the total) and the export emits them all; the rows of an import are bounded by `IMPORT_MAX_NEW_NAMES` (the new folders and tags together), the 5 MiB body limit and the `bulk` rate bucket.
 
 /** The most bookmarks one import file holds (doc 02 section 13.1). */
 export const IMPORT_MAX_BOOKMARKS = 5000;
@@ -21,6 +21,9 @@ export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
 /** The longest folder or tag name, or folder icon, an import file may hold; a name over it makes the file invalid, and one within it is cut to the stored limit of 64 or 40 characters. */
 export const IMPORT_NAME_MAX_LENGTH = 1000;
+
+/** The most new folders and tags together that one import may create (doc 02 section 16); names the caller has already do not count. A file that would create more is refused for the whole request. */
+export const IMPORT_MAX_NEW_NAMES = 10_000;
 
 const ImportNameSchema = z.string().max(IMPORT_NAME_MAX_LENGTH);
 
@@ -142,7 +145,7 @@ export const importJson = defineOperation({
     409: problemResponse("The Idempotency-Key was used before for another request (idempotency_conflict)"),
     413: problemResponse("The request body is over 5 MiB (payload_too_large)"),
     422: problemResponse(
-      "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer",
+      "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. A bad URL or an over-long title is no reason for it: see the answer",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Imports take from the bulk limit"),
     503: problemResponse("The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"),

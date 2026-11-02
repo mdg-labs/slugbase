@@ -4290,6 +4290,11 @@ export type ImportOutcome =
 } | {
     readonly kind: "imported";
     readonly result: ImportResult;
+}
+/** The file would create `newNames` new folders and tags together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
+| {
+    readonly kind: "too_many_names";
+    readonly newNames: number;
 };
 
 // @public
@@ -4327,6 +4332,11 @@ export type ImportPreviewOutcome =
 } | {
     readonly kind: "previewed";
     readonly result: ImportResult;
+}
+/** The file would create more than `IMPORT_MAX_NEW_NAMES` new folders and tags together: `newNames` of them. */
+| {
+    readonly kind: "too_many_names";
+    readonly newNames: number;
 };
 
 // @public
