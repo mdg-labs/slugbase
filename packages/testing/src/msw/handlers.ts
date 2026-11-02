@@ -105,7 +105,7 @@ export function baseFixtures(document: OpenApiDocument): Readonly<Record<string,
     getOpenApiDocument: document,
     // The file of the Netscape export: the answer is bytes of text/html that a schema cannot describe, and the mock gives a file a browser would read, one section and one link.
     exportNetscape: MOCK_NETSCAPE_FILE,
-    // The document of an export: a schema alone would give its arrays one entry each, and the lists that are empty by contract must stay empty.
+    // The document of an export: a schema alone would give its arrays one entry each. The mock answers the same document whatever the query, so the list of go preferences stays empty and so does `shared`, which only a request with includeShared=true fills.
     exportJson: {
       format: "slugbase-export",
       version: 1,

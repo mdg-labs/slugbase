@@ -1,4 +1,4 @@
-import { EXPORT_PAGE_SIZE, pieceStream, type ExportStreamAsk } from "./export.ts";
+import { EXPORT_PAGE_SIZE, pieceStream, type ExportSharedRow, type ExportStreamAsk } from "./export.ts";
 
 // The lossy export for browsers (doc 02 section 13.2, doc 04 sections 7 and 10.9, doc 10 T13 and T14, Q29 and Q33): the member's own bookmarks as a Netscape bookmark file, which Chrome, Edge, Firefox and
 // Safari import and `parseNetscapeBookmarks` reads back. It is one flat level of sections, an `<H3>` for each folder the member owns, used or not, and under it the bookmarks filed in it, so a bookmark in
@@ -13,6 +13,10 @@ import { EXPORT_PAGE_SIZE, pieceStream, type ExportStreamAsk } from "./export.ts
 // deleted, a bookmark moved to another folder or deleted during a download follows the rows as each page reads them, so the file shows the library page by page and not at one instant, and a bookmark
 // moved between folders may be in both sections or in neither. Only a failed read ends the file before its closing list. A tag whose name holds a comma is written as it is, and the format splits it at
 // the comma, which the file cannot express otherwise.
+//
+// With `includeShared` the bookmarks other members shared with the member that they can read (a direct share, a team's or a shared folder's) follow the unfiled ones at the top level, before the first
+// section, as links with the address, the title and the slug and no tags, written field by field from what the store answers: the owner's tags, folders and pin are no part of what the member
+// can read. They are read page by page like the rest, so a share that ends during a download drops the bookmark from the pages not yet read.
 
 /** The name of the attachment: the UTC day of the export, and nothing of the workspace. */
 export function exportNetscapeFilename(exportedAt: Date): string {
@@ -43,6 +47,8 @@ export interface NetscapeExportStore {
   folderBookmarks(ownerId: string, folderId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
   /** At most `limit` of the bookmarks `ownerId` owns that are filed in none of its folders, plan-archived ones included, whose identifier is greater than `after`, in the order of the identifier. */
   unfiledBookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
+  /** At most `limit` of the bookmarks of other members that `accountId` can read through a share, plan-archived ones never, whose identifier is greater than `after`, in the order of the identifier. */
+  shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
 }
 
 export interface NetscapeStreamDependencies {
@@ -70,14 +76,14 @@ const HEAD = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <DL><p>
 `;
 
-function link(row: NetscapeBookmarkRow, indent: string): string {
+function link(row: Pick<NetscapeBookmarkRow, "url" | "title" | "slug" | "tags">, indent: string): string {
   const slug = row.slug === null ? "" : ` SHORTCUTURL="${escapeHtml(row.slug)}"`;
   const tags = row.tags.length === 0 ? "" : ` TAGS="${escapeHtml(row.tags.join(","))}"`;
   return `${indent}<DT><A HREF="${escapeHtml(row.url)}"${slug}${tags}>${escapeHtml(row.title)}</A>\n`;
 }
 
 /** The pieces of the file in order, as text; a piece is at most a page. */
-async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId">): AsyncGenerator<string, void, undefined> {
+async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId" | "includeShared">): AsyncGenerator<string, void, undefined> {
   const owner = ask.accountId.toLowerCase();
   yield HEAD;
 
@@ -91,6 +97,21 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: NetscapeStreamDepe
     }
     if (rows.length < pageSize) {
       break;
+    }
+  }
+
+  if (ask.includeShared) {
+    let sharedAfter: string | undefined;
+    for (;;) {
+      const after = sharedAfter;
+      const rows = await page((store) => store.shared(owner, after, pageSize));
+      if (rows.length > 0) {
+        yield rows.map((row) => link({ url: row.url, title: row.title, slug: row.slug, tags: [] }, "    ")).join("");
+        sharedAfter = rows[rows.length - 1]?.id;
+      }
+      if (rows.length < pageSize) {
+        break;
+      }
     }
   }
 
@@ -127,6 +148,6 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: NetscapeStreamDepe
  * The Netscape bookmark file as a stream of bytes. A page is read only when the client asks for more, so at most one page is held, whatever the size of the export. The stream errors, and the connection
  * with it, when a page cannot be read; `onFailure` is told first, so a file that ends before its closing `</DL>` is one that failed.
  */
-export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId">): ReadableStream<Uint8Array> {
+export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId" | "includeShared">): ReadableStream<Uint8Array> {
   return pieceStream(pieces(dependencies, ask), dependencies.onFailure);
 }

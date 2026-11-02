@@ -1,4 +1,4 @@
-import { aiSuggestionRepository, bookmarkRepository, folderRepository, importRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
+import { aiSuggestionRepository, bookmarkRepository, exportRepository, folderRepository, importRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useTestDatabase } from "../src/db.ts";
@@ -310,7 +310,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { "listAuditEvents.actorAccountId": "member", "listAuditEvents.entityId": "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "bulkBookmarks.teamId": "team", "previewBulkBookmarks.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "importJson.bookmarks[].slug": "bookmark", "importJson.[].slug": "bookmark", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202, listAuditEvents: 200, importJson: 200 } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { "listAuditEvents.actorAccountId": "member", "listAuditEvents.entityId": "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "bulkBookmarks.teamId": "team", "previewBulkBookmarks.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "importJson.bookmarks[].slug": "bookmark", "importJson.[].slug": "bookmark", "importJson.shared[].slug": "bookmark", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202, listAuditEvents: 200, importJson: 200 } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -331,10 +331,10 @@ describe("the matrix over the committed contract and the repository registry", (
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
     // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for the team of B on each of the read, the change and the deletion of a team and once for each of the three members of B with the team of B on the replacement of its members, and once for each of the two bookmarks of B on the list of the shares of a bookmark, once for each of the two bookmarks of B with each of the three members of B and the team of B on the grant of a share, and once for each of the two bookmarks of B with the share of B on its revocation, and once for the folder of B on the list of the shares of a folder, once for the folder of B with each of the three members of B and the team of B on the grant of a share of a folder, and once for the folder of B with the share of B on its revocation, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice, and once for each of the two hosts of B on the favicon (answered the placeholder, 202, by a principal that reaches the handler).
     // The bulk request and its preview name each pair of a bookmark of B in `ids` and one in `filter.hasSlug` once for each of the three members of B in `accountId`: twelve calls each, the four they had before being in the sum above and the further eight each added at its end.
-    // The import preview names each of the two bookmarks of B once in the `slug` of a bookmark of the export document and once in the `slug` of a bookmark of the plain array: four calls for each principal, the last term of the sum.
+    // The import preview names each of the two bookmarks of B once in the `slug` of a bookmark of the export document and once in the `slug` of a bookmark of the plain array, and in the `slug` of an entry of the document's `shared` list: eight calls for each principal, the last term of the sum.
     // The Netscape export names none either, and is counted in the first term with the JSON export: it reads the caller's own bookmarks, folders and tags of the workspace of the request, section by section.
     // The Netscape import names none either, and is counted in the first term: its one file part is a stream of bytes and no identifier, and what the file lists is text matched among the caller's own rows.
-    expect(report.attempts).toBe(9 * 27 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2));
+    expect(report.attempts).toBe(9 * 27 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2));
     assertMatrixPassed(report);
   });
 
@@ -1315,6 +1315,51 @@ describe("the shared scope of folders across workspaces", () => {
     // The share is real in B, so a refusal in A is the workspace's and not an absent fixture.
     expect(inB).toEqual({ shared: [FOLDER_OF_B], bookmarks: 1 });
     expect(inA).toEqual({ shared: [], all: [FOLDER_OF_A], counted: 0, found: undefined, sharedWith: false, bookmarksAll: [], bookmarksShared: [] });
+  });
+});
+
+// The bookmarks shared with the caller that the export reads (`includeShared`) are read from the grants of the caller in the workspace the statement names. The member below belongs to both workspaces and
+// the owner of B shared a bookmark with them in B only, so the share is real, and the read in A, which holds none of it, must answer nothing and count nothing, whatever the member is in B.
+describe("the shared bookmarks of the export across workspaces", () => {
+  const MEMBER_OF_BOTH = "0192f3a0-3333-7000-8000-00000000a0a9";
+  const OWNER_OF_B = "0192f3a0-3333-7000-8000-00000000b0a9";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0b9";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0b9";
+
+  it("reads and counts no bookmark of B that is shared with the account in B, from a transaction acting in A", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    for (const [accountId, email] of [
+      [MEMBER_OF_BOTH, "shared-export-both@example.test"],
+      [OWNER_OF_B, "shared-export-b@example.test"],
+    ] as const) {
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+        await tx`INSERT INTO accounts (id, email, display_name) VALUES (${accountId}, ${email}, 'Matrix member') ON CONFLICT DO NOTHING`;
+      });
+    }
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_BOTH}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_BOTH}, 'member'), (${PROBE_WORKSPACE_B}, ${OWNER_OF_B}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${OWNER_OF_B} WHERE id = ${BOOKMARK_OF_B}`;
+      await tx`
+        INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+        VALUES ('0192f3a0-6666-7000-8000-00000000b0a9', ${PROBE_WORKSPACE_B}, ${BOOKMARK_OF_B}, ${MEMBER_OF_BOTH}, ${OWNER_OF_B}) ON CONFLICT DO NOTHING`;
+    });
+
+    const reads = (workspaceId: string) =>
+      database().tenant.withTenant({ accountId: MEMBER_OF_BOTH, workspaceId, requestId: "matrix-shared-export" }, async (tx) => ({
+        shared: (await exportRepository(tx).shared(MEMBER_OF_BOTH, undefined, 100)).map((row) => row.id),
+        counted: (await exportRepository(tx).summary(MEMBER_OF_BOTH, true))?.shared,
+      }));
+
+    // The share is real in B, so an empty answer in A is the workspace's and not an absent fixture.
+    expect(await reads(PROBE_WORKSPACE_B)).toEqual({ shared: [BOOKMARK_OF_B], counted: 1 });
+    expect(await reads(PROBE_WORKSPACE_A)).toEqual({ shared: [], counted: 0 });
   });
 });
 

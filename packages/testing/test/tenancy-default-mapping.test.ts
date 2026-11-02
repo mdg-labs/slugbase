@@ -101,6 +101,9 @@ describe("PATH_PARAMETER_MAPPING", () => {
         "transferWorkspaceOwnership.accountId",
         "listAuditEvents.actorAccountId",
         "listAuditEvents.entityId",
+        "importJson.bookmarks[].slug",
+        "importJson.[].slug",
+        "importJson.shared[].slug",
       ]),
     );
   });

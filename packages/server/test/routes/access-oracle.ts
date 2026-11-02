@@ -10,7 +10,9 @@
 // that name its shares, `share` and `see-recipients` (`FOLDER_ACTIONS`), for the relations of `FOLDER_RELATIONS`: no folder is filed in a folder, so the `folder`
 // relation has no meaning for it. `expectedForFolder` gives the cell, by the same columns and the same rule of doc 04 section 2.4 as a bookmark's.
 //
-// The export column of the doc has no row here: no export operation exists yet, so there is nothing to ask. Its row joins the table with the operation.
+// The `export` row is judged by what the document holds: the owner's bookmark is in the list of the member's own bookmarks of the JSON export, a recipient's
+// is in its list `shared` (and at the top level of the Netscape file), asked for with `includeShared`, and a member with no access finds it in neither, which is
+// the `hidden` outcome of a list.
 
 /** How a member M relates to a bookmark that O owns, in the active workspace. */
 export const RELATIONS = [
@@ -25,12 +27,12 @@ export const RELATIONS = [
 
 export type Relation = (typeof RELATIONS)[number];
 
-/** The rows of the matrix. `file` is filing into folders, and `see-recipients` is "See who else it is shared with". */
-export const ACTIONS = ["see", "open", "edit", "pin", "tag", "file", "delete", "share", "see-recipients"] as const;
+/** The rows of the matrix. `file` is filing into folders, `see-recipients` is "See who else it is shared with", and `export` is putting the bookmark in the member's export, shared bookmarks included. */
+export const ACTIONS = ["see", "open", "edit", "pin", "tag", "file", "delete", "share", "see-recipients", "export"] as const;
 
 export type Action = (typeof ACTIONS)[number];
 
-/** What a request for an action gets: it is done; refused with `403`; refused with `404`; or, for a list, answered without the bookmark in it. */
+/** What a request for an action gets: it is done; refused with `403`; refused with `404`; or, for a list or an export, answered without the bookmark in it. */
 export type Outcome = "allowed" | "forbidden" | "not_found" | "hidden";
 
 /** The columns of the doc's table. */
@@ -47,6 +49,7 @@ const MATRIX: Readonly<Record<Action, Readonly<Record<Column, boolean>>>> = {
   delete: { owner: true, viaShare: false, otherwise: false },
   share: { owner: true, viaShare: false, otherwise: false },
   "see-recipients": { owner: true, viaShare: false, otherwise: false },
+  export: { owner: true, viaShare: true, otherwise: false },
 };
 
 function columnOf(relation: Exclude<Relation, "former">): Column {
@@ -75,7 +78,7 @@ export function expected(relation: Relation, action: Action): Outcome {
   if (MATRIX[action][column]) {
     return "allowed";
   }
-  if (action === "see") {
+  if (action === "see" || action === "export") {
     return "hidden";
   }
   // Doc 04 section 2.4: 403 only when the caller can see the resource and may not perform the action; a resource the caller cannot see is 404.

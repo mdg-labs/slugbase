@@ -3030,7 +3030,22 @@ export interface ExportFolderRow {
 export function exportNetscapeFilename(exportedAt: Date): string;
 
 // @public
-export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId">): ReadableStream<Uint8Array>;
+export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId" | "includeShared">): ReadableStream<Uint8Array>;
+
+// @public
+export interface ExportSharedRow {
+    // (undocumented)
+    readonly description: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
 
 // @public (undocumented)
 export interface ExportStartAsk {
@@ -3038,6 +3053,7 @@ export interface ExportStartAsk {
     readonly accountId: string;
     // (undocumented)
     readonly actor: AuditActor;
+    readonly includeShared: boolean;
     // (undocumented)
     readonly ipPrefix: string | null;
     // (undocumented)
@@ -3065,7 +3081,8 @@ export type ExportStartOutcome = {
 export interface ExportStore {
     bookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportBookmarkRow[]>;
     folders(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportFolderRow[]>;
-    summary(ownerId: string): Promise<ExportSummary | undefined>;
+    shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
+    summary(ownerId: string, includeShared: boolean): Promise<ExportSummary | undefined>;
     tags(ownerId: string, after: string | undefined, limit: number): Promise<readonly string[]>;
 }
 
@@ -3078,6 +3095,7 @@ export interface ExportStreamAsk {
     readonly accountId: string;
     // (undocumented)
     readonly exportedAt: Date;
+    readonly includeShared: boolean;
     // (undocumented)
     readonly workspaceName: string;
 }
@@ -3094,6 +3112,7 @@ export interface ExportSummary {
     readonly bookmarks: number;
     // (undocumented)
     readonly folders: number;
+    readonly shared: number;
     // (undocumented)
     readonly tags: number;
     // (undocumented)
@@ -5695,6 +5714,7 @@ export interface NetscapeBookmarkRow {
 export interface NetscapeExportStore {
     folderBookmarks(ownerId: string, folderId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
     sections(ownerId: string, after: string | undefined, limit: number): Promise<readonly NetscapeSectionRow[]>;
+    shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
     unfiledBookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
 }
 

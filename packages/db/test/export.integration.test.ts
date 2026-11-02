@@ -2,10 +2,11 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { exportRepository } from "../src/index.ts";
-import { bookmarksStatement, folderBookmarksStatement, sectionsStatement, unfiledBookmarksStatement } from "../src/repositories/export.ts";
+import { bookmarksStatement, foldersStatement, folderBookmarksStatement, sectionsStatement, sharedStatement, summaryStatement, tagsStatement, unfiledBookmarksStatement } from "../src/repositories/export.ts";
 import type { TenantTx } from "../src/tenant.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { seedTeam, shareBookmark, shareThroughFolder } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The reads of the export (doc 02 section 13.2, doc 05 section 2.4, doc 10 T1 and T2). The failure scenario: another member's bookmark, folder or tag, a bookmark with no owner and anything of
@@ -244,8 +245,8 @@ describe("the summary of the export", () => {
     await tag(w, me, "t2");
     await tag(w, other, "t3");
 
-    expect(await asMember(w, me, (tx) => exportRepository(tx).summary(me))).toEqual({ workspaceName: "Home", bookmarks: 2, folders: 1, tags: 2 });
-    expect(await asMember(w, other, (tx) => exportRepository(tx).summary(other))).toEqual({ workspaceName: "Home", bookmarks: 1, folders: 1, tags: 1 });
+    expect(await asMember(w, me, (tx) => exportRepository(tx).summary(me, false))).toEqual({ workspaceName: "Home", bookmarks: 2, folders: 1, tags: 2, shared: 0 });
+    expect(await asMember(w, other, (tx) => exportRepository(tx).summary(other, false))).toEqual({ workspaceName: "Home", bookmarks: 1, folders: 1, tags: 1, shared: 0 });
   });
 
   it("is undefined for a workspace that is being deleted", async () => {
@@ -254,7 +255,181 @@ describe("the summary of the export", () => {
     await bookmark(w, me, { title: "One" });
     await asSystem(db, (tx) => tx`UPDATE workspaces SET deleting_at = now() WHERE id = ${w}`);
 
-    expect(await asMember(w, me, (tx) => exportRepository(tx).summary(me))).toBeUndefined();
+    expect(await asMember(w, me, (tx) => exportRepository(tx).summary(me, true))).toBeUndefined();
+  });
+});
+
+// The bookmarks other members shared with the member (doc 02 sections 8.2 and 13.2, doc 10 T1, T2 and T11). The failure scenario: a bookmark that is not shared with the member, one whose share has
+// ended, one of another workspace, one the member owns and one a downgrade archived is in no page, and no row carries the owner's tags, folders or pin.
+
+/** Every shared bookmark of the member, read page by page. */
+async function allShared(workspaceId: string, accountId: string, pageSize: number) {
+  const rows = [];
+  let after: string | undefined;
+  for (;;) {
+    const page = await asMember(workspaceId, accountId, (tx) => exportRepository(tx).shared(accountId, after, pageSize));
+    rows.push(...page);
+    if (page.length < pageSize) {
+      return rows;
+    }
+    after = page[page.length - 1]?.id;
+  }
+}
+
+async function nameOf(accountId: string, displayName: string): Promise<void> {
+  await asSystem(db, (tx) => tx`UPDATE accounts SET display_name = ${displayName} WHERE id = ${accountId}`);
+}
+
+describe("the shared bookmarks of the export", () => {
+  it("are the readable bookmarks of other members through a direct share, a team's and a shared folder's, each once even when two shares give it, with the readable fields and the name of the owner", async () => {
+    const me = await account();
+    const olga = await account();
+    const max = await account();
+    await nameOf(olga, "Olga Owner");
+    const w = await workspace([me, olga, max]);
+    const team = await seedTeam(db, w, [me]);
+    const direct = await bookmark(w, olga, { title: "Direct", description: "About it", slug: "direct", forwarding: true, pinnedAt: new Date() });
+    const viaTeam = await bookmark(w, olga, { title: "Via team" });
+    const viaFolder = await bookmark(w, olga, { title: "Via folder" });
+    const twice = await bookmark(w, olga, { title: "Twice" });
+    const notShared = await bookmark(w, olga, { title: "Not shared" });
+    const sharedWithMax = await bookmark(w, olga, { title: "For Max" });
+    await shareBookmark(db, w, direct, olga, { accountId: me });
+    await shareBookmark(db, w, viaTeam, olga, { teamId: team });
+    await shareThroughFolder(db, w, viaFolder, olga, { accountId: me });
+    await shareBookmark(db, w, twice, olga, { accountId: me });
+    await shareBookmark(db, w, twice, olga, { teamId: team });
+    await shareThroughFolder(db, w, twice, olga, { teamId: team });
+    await shareBookmark(db, w, sharedWithMax, olga, { accountId: max });
+    await tag(w, olga, "private-tag", [direct, notShared]);
+    await folder(w, olga, "Private folder", [direct]);
+
+    const rows = await allShared(w, me, 100);
+
+    expect(rows.map((row) => row.id)).toEqual([direct, viaTeam, viaFolder, twice].sort());
+    expect(rows.find((row) => row.id === direct)).toEqual({ id: direct, url: expect.stringContaining("https://example.com/") as string, title: "Direct", description: "About it", slug: "direct", ownerName: "Olga Owner" });
+    expect(rows.every((row) => row.ownerName === "Olga Owner")).toBe(true);
+    expect(Object.keys(rows[0] ?? {}).sort()).toEqual(["description", "id", "ownerName", "slug", "title", "url"]);
+    expect(JSON.stringify(rows)).not.toMatch(/private-tag|Private folder|pinned|forwarding|Not shared|For Max/);
+    expect((await allShared(w, max, 100)).map((row) => row.title)).toEqual(["For Max"]);
+  });
+
+  it("never hold the owner's own bookmark, though the owner is in a team it is shared with, in the read or in the count", async () => {
+    const me = await account();
+    const olga = await account();
+    const w = await workspace([me, olga]);
+    const team = await seedTeam(db, w, [me, olga]);
+    const own = await bookmark(w, olga, { title: "Olga's, shared with her own team" });
+    await shareBookmark(db, w, own, olga, { teamId: team });
+
+    expect((await allShared(w, olga, 100)).map((row) => row.title)).toEqual([]);
+    expect(await asMember(w, olga, (tx) => exportRepository(tx).summary(olga, true))).toMatchObject({ bookmarks: 1, shared: 0 });
+    expect((await allShared(w, me, 100)).map((row) => row.title)).toEqual(["Olga's, shared with her own team"]);
+  });
+
+  it("come in the order of their identifiers and resume after the last one, each exactly once, whatever the page size", async () => {
+    const me = await account();
+    const olga = await account();
+    const w = await workspace([me, olga]);
+    const ids: string[] = [];
+    for (let n = 0; n < 7; n += 1) {
+      const id = await bookmark(w, olga, { title: `Shared ${String(n)}` });
+      await shareBookmark(db, w, id, olga, { accountId: me });
+      ids.push(id);
+    }
+    for (const pageSize of [1, 2, 3, 7, 8, 500]) {
+      expect((await allShared(w, me, pageSize)).map((row) => row.id), `page size ${String(pageSize)}`).toEqual([...ids].sort());
+    }
+  });
+
+  it("leave out the member's own bookmarks, those nobody shared with them, plan-archived ones and those of another workspace, and a share another workspace holds names nothing here", async () => {
+    const me = await account();
+    const olga = await account();
+    const w = await workspace([me, olga]);
+    const elsewhere = await workspace([me, olga]);
+    const mine = await bookmark(w, me, { title: "Mine" });
+    await shareBookmark(db, w, mine, me, { accountId: olga });
+    const archived = await bookmark(w, olga, { title: "Archived", archived: true });
+    await shareBookmark(db, w, archived, olga, { accountId: me });
+    await bookmark(w, olga, { title: "Private" });
+    const shown = await bookmark(w, olga, { title: "Shown" });
+    await shareBookmark(db, w, shown, olga, { accountId: me });
+    const abroad = await bookmark(elsewhere, olga, { title: "Abroad" });
+    await shareBookmark(db, elsewhere, abroad, olga, { accountId: me });
+
+    expect((await allShared(w, me, 100)).map((row) => row.title)).toEqual(["Shown"]);
+    expect((await allShared(elsewhere, me, 100)).map((row) => row.title)).toEqual(["Abroad"]);
+    expect((await allShared(w, olga, 100)).map((row) => row.title)).toEqual(["Mine"]);
+  });
+
+  it("are no longer read once the share is revoked, the member leaves the team, or the bookmark leaves the shared folder", async () => {
+    const me = await account();
+    const olga = await account();
+    const w = await workspace([me, olga]);
+    const team = await seedTeam(db, w, [me]);
+    const byShare = await bookmark(w, olga, { title: "By share" });
+    const byTeam = await bookmark(w, olga, { title: "By team" });
+    const byFolder = await bookmark(w, olga, { title: "By folder" });
+    await shareBookmark(db, w, byShare, olga, { accountId: me });
+    await shareBookmark(db, w, byTeam, olga, { teamId: team });
+    const sharedFolder = await shareThroughFolder(db, w, byFolder, olga, { accountId: me });
+    expect((await allShared(w, me, 100)).map((row) => row.title).sort()).toEqual(["By folder", "By share", "By team"]);
+
+    await asSystem(db, (tx) => tx`DELETE FROM bookmark_shares WHERE bookmark_id = ${byShare}`);
+    expect((await allShared(w, me, 100)).map((row) => row.title).sort()).toEqual(["By folder", "By team"]);
+    await asSystem(db, (tx) => tx`DELETE FROM team_members WHERE team_id = ${team} AND account_id = ${me}`);
+    expect((await allShared(w, me, 100)).map((row) => row.title)).toEqual(["By folder"]);
+    await asSystem(db, (tx) => tx`DELETE FROM folder_bookmarks WHERE folder_id = ${sharedFolder} AND bookmark_id = ${byFolder}`);
+    expect(await allShared(w, me, 100)).toEqual([]);
+  });
+
+  it("name no owner for a bookmark whose owner has left, and still read it through its share", async () => {
+    const me = await account();
+    const olga = await account();
+    const w = await workspace([me, olga]);
+    const orphan = await bookmark(w, null, { title: "Orphan" });
+    await shareBookmark(db, w, orphan, olga, { accountId: me });
+    const kept = await bookmark(w, olga, { title: "Kept" });
+    await shareBookmark(db, w, kept, olga, { accountId: me });
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET owner_id = NULL WHERE id = ${kept}`);
+
+    const rows = await allShared(w, me, 100);
+
+    expect(rows.map((row) => [row.title, row.ownerName]).sort()).toEqual([
+      ["Kept", null],
+      ["Orphan", null],
+    ]);
+  });
+
+  it("are counted by the summary with includeShared, by the same rule, and not counted without it", async () => {
+    const me = await account();
+    const olga = await account();
+    const w = await workspace([me, olga]);
+    const team = await seedTeam(db, w, [me]);
+    await bookmark(w, me, { title: "Mine" });
+    const a = await bookmark(w, olga, { title: "A" });
+    const b = await bookmark(w, olga, { title: "B" });
+    const c = await bookmark(w, olga, { title: "C", archived: true });
+    await bookmark(w, olga, { title: "Private" });
+    await shareBookmark(db, w, a, olga, { accountId: me });
+    await shareBookmark(db, w, b, olga, { teamId: team });
+    await shareBookmark(db, w, b, olga, { accountId: me });
+    await shareBookmark(db, w, c, olga, { accountId: me });
+
+    expect(await asMember(w, me, (tx) => exportRepository(tx).summary(me, true))).toMatchObject({ bookmarks: 1, shared: 2 });
+    expect(await asMember(w, me, (tx) => exportRepository(tx).summary(me, false))).toMatchObject({ bookmarks: 1, shared: 0 });
+    expect(await asMember(w, olga, (tx) => exportRepository(tx).summary(olga, true))).toMatchObject({ bookmarks: 4, shared: 0 });
+  });
+
+  it("are read for the account of the transaction only, with a positive whole page size", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    await asMember(w, me, (tx) => {
+      expect(() => sharedStatement(tx, freshId(), undefined, 10)).toThrow("account of the transaction");
+      expect(() => sharedStatement(tx, me, undefined, 0)).toThrow("positive whole limit");
+      expect(() => summaryStatement(tx, freshId(), true)).toThrow("account of the transaction");
+      return Promise.resolve();
+    });
   });
 });
 
@@ -465,7 +640,9 @@ describe("the owner of a read", () => {
     const w = await workspace([me, other]);
     await asMember(w, me, async (tx) => {
       const repository = exportRepository(tx);
-      await expect(repository.summary(other)).rejects.toThrow("account of the transaction");
+      await expect(repository.summary(other, false)).rejects.toThrow("account of the transaction");
+      await expect(repository.summary(other, true)).rejects.toThrow("account of the transaction");
+      await expect(repository.shared(other, undefined, 10)).rejects.toThrow("account of the transaction");
       await expect(repository.folders(other, undefined, 10)).rejects.toThrow("account of the transaction");
       await expect(repository.tags(other, undefined, 10)).rejects.toThrow("account of the transaction");
       await expect(repository.bookmarks(other, undefined, 10)).rejects.toThrow("account of the transaction");
@@ -492,7 +669,7 @@ describe("the pages of the export on a workspace of 30 000 bookmarks", () => {
   const PAGE = 500;
   const SMALL_WORKSPACES = 2_000;
   const SMALL_BOOKMARKS = 50;
-  const FIXTURE_TABLES = ["bookmarks", "folders", "tags", "folder_bookmarks", "bookmark_tags"] as const;
+  const FIXTURE_TABLES = ["bookmarks", "folders", "tags", "folder_bookmarks", "bookmark_tags", "bookmark_shares"] as const;
 
   interface PlanNode {
     "Node Type": string;
@@ -535,6 +712,13 @@ describe("the pages of the export on a workspace of 30 000 bookmarks", () => {
         INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id)
         SELECT ${w}::uuid, f.id, b.id FROM bookmarks b JOIN folders f ON f.workspace_id = b.workspace_id AND f.owner_id = b.owner_id AND f.name = 'Folder ' || (1 + (right(b.url, 3))::int % 30)
         WHERE b.workspace_id = ${w} AND b.owner_id = ${me} AND right(b.url, 1) IN ('4', '5') AND right(b.url, 3) ~ '^[0-9]+$'`,
+    );
+    // Some of another member's bookmarks are shared with the member, and the member's own sit beside them.
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+        SELECT gen_random_uuid(), ${w}, b.id, ${me}, ${other} FROM bookmarks b WHERE b.workspace_id = ${w} AND b.owner_id = ${other} AND right(b.url, 2) = '01'`,
     );
     // Many small workspaces beside it, so no workspace dominates a table: the member's library is a small part of every table the export reads.
     await asSystem(db, (tx) => tx`INSERT INTO workspaces (id, name) SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, 'Small ' || n FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`);
@@ -613,6 +797,31 @@ describe("the pages of the export on a workspace of 30 000 bookmarks", () => {
     }
     expect((await planOfStatement((tx) => unfiledBookmarksStatement(tx, me, afterId, PAGE))).map((node) => node["Index Name"])).toContain("bookmarks_workspace_id_id_key");
     expect((await planOfStatement((tx) => folderBookmarksStatement(tx, me, big[0] ?? "", undefined, PAGE))).map((node) => node["Index Name"])).toContain("folder_bookmarks_pkey");
+  });
+
+  it("plans a page of the shared bookmarks driven from the grants of the member, reading each bookmark by its key and scanning no table of bookmarks or links", async () => {
+    const shared = await asMember(w, me, (tx) => exportRepository(tx).shared(me, undefined, PAGE));
+    expect(shared.length).toBeGreaterThan(0);
+    expect(shared.length).toBeLessThan(PAGE);
+    expect(shared.every((row) => row.ownerName === null || row.ownerName.length > 0)).toBe(true);
+    for (const nodes of [await planOfStatement((tx) => sharedStatement(tx, me, undefined, PAGE)), await planOfStatement((tx) => sharedStatement(tx, me, shared[3]?.id, PAGE))]) {
+      expect(nodes.filter((node) => node["Node Type"] === "Seq Scan" && ["bookmarks", "folder_bookmarks"].includes(node["Relation Name"] ?? ""))).toEqual([]);
+      expect(nodes.map((node) => node["Index Name"])).toContain("bookmarks_pkey");
+    }
+  });
+
+  it("plans the summary, a page of the folders and a page of the tags with no sequential scan of the tables of bookmarks, folders and tags", async () => {
+    const [name] = await asMember(w, me, (tx) => exportRepository(tx).tags(me, undefined, 1));
+    for (const nodes of [
+      await planOfStatement((tx) => summaryStatement(tx, me, true)),
+      await planOfStatement((tx) => summaryStatement(tx, me, false)),
+      await planOfStatement((tx) => foldersStatement(tx, me, undefined, PAGE)),
+      await planOfStatement((tx) => foldersStatement(tx, me, "Folder 1", PAGE)),
+      await planOfStatement((tx) => tagsStatement(tx, me, undefined, PAGE)),
+      await planOfStatement((tx) => tagsStatement(tx, me, name, PAGE)),
+    ]) {
+      expect(nodes.filter((node) => node["Node Type"] === "Seq Scan" && ["bookmarks", "folders", "tags"].includes(node["Relation Name"] ?? ""))).toEqual([]);
+    }
   });
 
   it("reads the member's whole library in pages that add up to it, each bookmark once", async () => {

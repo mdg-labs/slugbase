@@ -9,6 +9,7 @@ import {
   type AuditWriter,
   type ExportBookmarkRow,
   type ExportFolderRow,
+  type ExportSharedRow,
   type ExportStore,
   type ExportSummary,
 } from "../../src/index.ts";
@@ -25,20 +26,38 @@ function bookmark(index: number, overrides: Partial<ExportBookmarkRow> = {}): Ex
   return { id, url: `https://example.com/${String(index)}`, title: `Bookmark ${String(index)}`, description: null, slug: null, forwarding: false, pinned: false, planArchived: false, folders: [], tags: [], ...overrides };
 }
 
+function sharedRow(index: number, overrides: Partial<ExportSharedRow> = {}): ExportSharedRow {
+  const id = `0192f3a0-1111-7000-8000-${String(index).padStart(12, "0")}`;
+  return { id, url: `https://example.com/theirs/${String(index)}`, title: `Theirs ${String(index)}`, description: null, slug: null, ownerName: "Olga Owner", ...overrides };
+}
+
 interface Counters {
   folderPages: number;
   tagPages: number;
   bookmarkPages: number;
+  sharedPages: number;
   open: number;
   asked: { what: string; ownerId: string; after: string | undefined; limit: number }[];
 }
 
-function fakeStore(data: { summary?: ExportSummary | undefined; folders?: readonly ExportFolderRow[]; tags?: readonly string[]; bookmarks?: readonly ExportBookmarkRow[] }, counters: Counters): ExportStore {
+const counting = (): Counters => ({ folderPages: 0, tagPages: 0, bookmarkPages: 0, sharedPages: 0, open: 0, asked: [] });
+
+function fakeStore(
+  data: { summary?: ExportSummary | undefined; folders?: readonly ExportFolderRow[]; tags?: readonly string[]; bookmarks?: readonly ExportBookmarkRow[]; shared?: readonly ExportSharedRow[] },
+  counters: Counters,
+): ExportStore {
   const folders = data.folders ?? [];
   const tags = data.tags ?? [];
   const bookmarks = data.bookmarks ?? [];
+  const shared = data.shared ?? [];
   return {
-    summary: () => Promise.resolve("summary" in data ? data.summary : { workspaceName: "Home", bookmarks: bookmarks.length, folders: folders.length, tags: tags.length }),
+    summary: (_ownerId, includeShared) =>
+      Promise.resolve("summary" in data ? data.summary : { workspaceName: "Home", bookmarks: bookmarks.length, folders: folders.length, tags: tags.length, shared: includeShared ? shared.length : 0 }),
+    shared: (accountId, after, limit) => {
+      counters.sharedPages += 1;
+      counters.asked.push({ what: "shared", ownerId: accountId, after, limit });
+      return Promise.resolve(shared.filter((row) => after === undefined || row.id > after).slice(0, limit));
+    },
     folders: (ownerId, after, limit) => {
       counters.folderPages += 1;
       counters.asked.push({ what: "folders", ownerId, after, limit });
@@ -57,8 +76,8 @@ function fakeStore(data: { summary?: ExportSummary | undefined; folders?: readon
   };
 }
 
-function harness(data: Parameters<typeof fakeStore>[0], options: { pageSize?: number; failOnBookmarkPage?: number } = {}) {
-  const counters: Counters = { folderPages: 0, tagPages: 0, bookmarkPages: 0, open: 0, asked: [] };
+function harness(data: Parameters<typeof fakeStore>[0], options: { pageSize?: number; failOnBookmarkPage?: number; includeShared?: boolean } = {}) {
+  const counters = counting();
   const failures: unknown[] = [];
   const store = fakeStore(data, counters);
   const stream = exportStream(
@@ -78,7 +97,7 @@ function harness(data: Parameters<typeof fakeStore>[0], options: { pageSize?: nu
       onFailure: (error) => failures.push(error),
       ...(options.pageSize === undefined ? {} : { pageSize: options.pageSize }),
     },
-    { accountId: ME, workspaceName: "Home", exportedAt: AT },
+    { accountId: ME, workspaceName: "Home", exportedAt: AT, includeShared: options.includeShared ?? false },
   );
   return { stream, counters, failures };
 }
@@ -219,6 +238,118 @@ describe("the export stream", () => {
   });
 });
 
+describe("the shared list of the export", () => {
+  it("holds, for the bookmarks shared with the member, the readable fields and the flag and nothing else, in the order of the identifier across pages, and it parses against the contract's schema", async () => {
+    const shared = [sharedRow(1, { description: "About it", slug: "theirs" }), sharedRow(2, { ownerName: null }), sharedRow(3), sharedRow(4), sharedRow(5)];
+    const { stream } = harness({ bookmarks: [bookmark(1)], shared }, { includeShared: true, pageSize: 2 });
+
+    const text = await drain(stream);
+    const parsed = ExportDocumentSchema.parse(JSON.parse(text));
+
+    expect(parsed.bookmarks.map((entry) => entry.title)).toEqual(["Bookmark 1"]);
+    expect(parsed.shared).toEqual([
+      { url: "https://example.com/theirs/1", title: "Theirs 1", description: "About it", slug: "theirs", ownerName: "Olga Owner", shared: true },
+      { url: "https://example.com/theirs/2", title: "Theirs 2", description: null, slug: null, ownerName: null, shared: true },
+      { url: "https://example.com/theirs/3", title: "Theirs 3", description: null, slug: null, ownerName: "Olga Owner", shared: true },
+      { url: "https://example.com/theirs/4", title: "Theirs 4", description: null, slug: null, ownerName: "Olga Owner", shared: true },
+      { url: "https://example.com/theirs/5", title: "Theirs 5", description: null, slug: null, ownerName: "Olga Owner", shared: true },
+    ]);
+    expect(Object.keys(JSON.parse(text) as object)).toEqual(["format", "version", "exportedAt", "workspace", "folders", "tags", "bookmarks", "goPreferences", "shared"]);
+    expect(text).not.toContain("0192f3a0");
+  });
+
+  it("is the same document whatever the page size", async () => {
+    const shared = Array.from({ length: 9 }, (_, index) => sharedRow(index + 1));
+    const whole = await drain(harness({ shared }, { includeShared: true, pageSize: 500 }).stream);
+    const paged = await drain(harness({ shared }, { includeShared: true, pageSize: 2 }).stream);
+    expect(paged).toBe(whole);
+  });
+
+  it("asks the store for the member's shared bookmarks only when it is asked to, and writes an empty list otherwise", async () => {
+    const without = harness({ shared: [sharedRow(1)] });
+    expect(ExportDocumentSchema.parse(JSON.parse(await drain(without.stream))).shared).toEqual([]);
+    expect(without.counters.sharedPages).toBe(0);
+
+    const asking = harness({ shared: [sharedRow(1)] }, { includeShared: true });
+    await drain(asking.stream);
+    expect(asking.counters.asked.filter((entry) => entry.what === "shared")).toEqual([{ what: "shared", ownerId: ME.toLowerCase(), after: undefined, limit: EXPORT_PAGE_SIZE }]);
+  });
+
+  it("writes no field of a row beyond the readable ones, so a store that answered the owner's tags, folders, pin or recipients would still not reach the file", async () => {
+    const leaky = { ...sharedRow(1), tags: ["private-tag"], folders: ["Private folder"], pinned: true, forwarding: true, recipients: ["Max Member"], ownerId: "0192f3a0-bbbb-7000-8000-0000000000a1" } as ExportSharedRow;
+
+    const text = await drain(harness({ shared: [leaky] }, { includeShared: true }).stream);
+
+    expect(text).not.toMatch(/private-tag|Private folder|Max Member|recipients|"pinned":true|"forwarding":true|ownerId/);
+    expect(ExportDocumentSchema.parse(JSON.parse(text)).shared).toHaveLength(1);
+  });
+
+  it("follows the store from page to page, so a bookmark whose share ends during the export is left out of the pages not yet read and none is written twice", async () => {
+    const shared = [sharedRow(1), sharedRow(2), sharedRow(3), sharedRow(4)];
+    const counters = counting();
+    const store = fakeStore({ shared }, counters);
+    let pages = 0;
+    const stream = exportStream(
+      {
+        page: (read) => {
+          const reading = read({
+            ...store,
+            shared: async (accountId, after, limit) => {
+              pages += 1;
+              const rows = await store.shared(accountId, after, limit);
+              if (pages === 1) {
+                // The share of the third bookmark is revoked after the first page was read.
+                shared.splice(2, 1);
+              }
+              return rows;
+            },
+          });
+          return reading;
+        },
+        onFailure: () => undefined,
+        pageSize: 2,
+      },
+      { accountId: ME, workspaceName: "Home", exportedAt: AT, includeShared: true },
+    );
+
+    const parsed = ExportDocumentSchema.parse(JSON.parse(await drain(stream)));
+
+    expect(parsed.shared.map((entry) => entry.title)).toEqual(["Theirs 1", "Theirs 2", "Theirs 4"]);
+  });
+
+  it("errors the stream when a page of shared bookmarks cannot be read, so the document is left unfinished and does not parse", async () => {
+    const counters = counting();
+    const store = fakeStore({ shared: [sharedRow(1)] }, counters);
+    const failures: unknown[] = [];
+    const stream = exportStream(
+      { page: (read) => read({ ...store, shared: () => Promise.reject(new Error("connection lost")) }), onFailure: (error) => failures.push(error) },
+      { accountId: ME, workspaceName: "Home", exportedAt: AT, includeShared: true },
+    );
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let received = "";
+    let failure: unknown;
+    try {
+      for (;;) {
+        const read = await reader.read();
+        if (read.done) {
+          break;
+        }
+        received += decoder.decode(read.value, { stream: true });
+      }
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failures).toHaveLength(1);
+    expect(received).toContain('"shared":[');
+    expect(() => {
+      JSON.parse(received);
+    }).toThrow();
+  });
+});
+
 describe("the start of an export", () => {
   function auditor(): { audit: AuditWriter; written: AuditEventInput[] } {
     const written: AuditEventInput[] = [];
@@ -236,31 +367,52 @@ describe("the start of an export", () => {
   const ACTOR = { type: "account", accountId: ME, label: "Alex" } as const;
 
   it("records one export.created event with the counts of what the member owns, plan-archived bookmarks included, and nothing else", async () => {
-    const counters: Counters = { folderPages: 0, tagPages: 0, bookmarkPages: 0, open: 0, asked: [] };
+    const counters = counting();
     const { audit, written } = auditor();
     const outcome = await startExport(
-      { store: fakeStore({ summary: { workspaceName: "Home", bookmarks: 12, folders: 3, tags: 4 } }, counters), audit },
-      { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: "203.0.0.0/16" },
+      { store: fakeStore({ summary: { workspaceName: "Home", bookmarks: 12, folders: 3, tags: 4, shared: 0 } }, counters), audit },
+      { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: "203.0.0.0/16", includeShared: false },
     );
-    expect(outcome).toEqual({ kind: "started", summary: { workspaceName: "Home", bookmarks: 12, folders: 3, tags: 4 } });
+    expect(outcome).toEqual({ kind: "started", summary: { workspaceName: "Home", bookmarks: 12, folders: 3, tags: 4, shared: 0 } });
     expect(written).toEqual([
       { action: "export.created", workspaceId: WORKSPACE.toLowerCase(), actor: ACTOR, metadata: { bookmarks: "12", folders: "3", tags: "4", shared: "0" }, ipPrefix: "203.0.0.0/16" },
     ]);
     expect(counters.asked).toEqual([]);
   });
 
-  it("records nothing when the workspace cannot be read", async () => {
-    const counters: Counters = { folderPages: 0, tagPages: 0, bookmarkPages: 0, open: 0, asked: [] };
+  it("counts the shared bookmarks in the event only when the export holds them, and asks the store for them only then", async () => {
+    const asked: boolean[] = [];
+    const store: ExportStore = {
+      ...fakeStore({}, counting()),
+      summary: (_ownerId, includeShared) => {
+        asked.push(includeShared);
+        return Promise.resolve({ workspaceName: "Home", bookmarks: 2, folders: 1, tags: 1, shared: includeShared ? 7 : 0 });
+      },
+    };
     const { audit, written } = auditor();
-    const outcome = await startExport({ store: fakeStore({ summary: undefined }, counters), audit }, { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: null });
+
+    await startExport({ store, audit }, { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: null, includeShared: true });
+    await startExport({ store, audit }, { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: null, includeShared: false });
+
+    expect(asked).toEqual([true, false]);
+    expect(written.map((event) => event.metadata)).toEqual([
+      { bookmarks: "2", folders: "1", tags: "1", shared: "7" },
+      { bookmarks: "2", folders: "1", tags: "1", shared: "0" },
+    ]);
+  });
+
+  it("records nothing when the workspace cannot be read", async () => {
+    const counters = counting();
+    const { audit, written } = auditor();
+    const outcome = await startExport({ store: fakeStore({ summary: undefined }, counters), audit }, { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: null, includeShared: false });
     expect(outcome).toEqual({ kind: "unavailable" });
     expect(written).toEqual([]);
   });
 
   it("does not catch a failure of the audit writer, so the transaction that counted rolls back and no stream starts", async () => {
-    const counters: Counters = { folderPages: 0, tagPages: 0, bookmarkPages: 0, open: 0, asked: [] };
+    const counters = counting();
     const audit: AuditWriter = { write: () => Promise.reject(new Error("insert failed")) };
-    await expect(startExport({ store: fakeStore({}, counters), audit }, { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: null })).rejects.toThrow("insert failed");
+    await expect(startExport({ store: fakeStore({}, counters), audit }, { workspaceId: WORKSPACE, accountId: ME, actor: ACTOR, ipPrefix: null, includeShared: false })).rejects.toThrow("insert failed");
   });
 });
 

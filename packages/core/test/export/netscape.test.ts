@@ -5,6 +5,7 @@ import {
   exportNetscapeFilename,
   exportNetscapeStream,
   parseNetscapeBookmarks,
+  type ExportSharedRow,
   type NetscapeBookmarkRow,
   type NetscapeExportStore,
   type NetscapeSectionRow,
@@ -28,20 +29,23 @@ interface Data {
   /** The bookmarks of each folder by its name. */
   readonly filed?: Readonly<Record<string, readonly NetscapeBookmarkRow[]>>;
   readonly unfiled?: readonly NetscapeBookmarkRow[];
+  /** The bookmarks of other members shared with the member. */
+  readonly shared?: readonly ExportSharedRow[];
 }
 
 interface Counters {
   unfiledPages: number;
   folderPages: number;
   sectionPages: number;
+  sharedPages: number;
   open: number;
   asked: { what: string; ownerId: string; folderId?: string; after: string | undefined; limit: number }[];
 }
 
 const idOfFolder = (position: number): string => `0192f3a0-ffff-7000-8000-${String(position + 1).padStart(12, "0")}`;
 
-function harness(data: Data, options: { pageSize?: number; failOnSectionPage?: number; renameAfterSection?: (names: string[]) => void } = {}) {
-  const counters: Counters = { unfiledPages: 0, folderPages: 0, sectionPages: 0, open: 0, asked: [] };
+function harness(data: Data, options: { pageSize?: number; failOnSectionPage?: number; renameAfterSection?: (names: string[]) => void; includeShared?: boolean } = {}) {
+  const counters: Counters = { unfiledPages: 0, folderPages: 0, sectionPages: 0, sharedPages: 0, open: 0, asked: [] };
   const failures: unknown[] = [];
   const names = [...(data.folders ?? [])];
   const store: NetscapeExportStore = {
@@ -64,6 +68,11 @@ function harness(data: Data, options: { pageSize?: number; failOnSectionPage?: n
       options.renameAfterSection?.(names);
       return Promise.resolve(rows);
     },
+    shared: (accountId, after, limit) => {
+      counters.sharedPages += 1;
+      counters.asked.push({ what: "shared", ownerId: accountId, after, limit });
+      return Promise.resolve((data.shared ?? []).filter((entry) => after === undefined || entry.id > after).slice(0, limit));
+    },
     unfiledBookmarks: (ownerId, after, limit) => {
       counters.unfiledPages += 1;
       counters.asked.push({ what: "unfiledBookmarks", ownerId, after, limit });
@@ -83,7 +92,7 @@ function harness(data: Data, options: { pageSize?: number; failOnSectionPage?: n
       onFailure: (error) => failures.push(error),
       ...(options.pageSize === undefined ? {} : { pageSize: options.pageSize }),
     },
-    { accountId: ME },
+    { accountId: ME, includeShared: options.includeShared ?? false },
   );
   return { stream, counters, failures };
 }
@@ -300,6 +309,68 @@ describe("the Netscape file", () => {
     expect(received).toContain("<H3>B</H3>");
     expect(received.endsWith("</DL><p>\n</DL><p>\n")).toBe(false);
     expect(received).not.toContain("example.com/2");
+  });
+});
+
+describe("the shared bookmarks of the Netscape file", () => {
+  const theirs = (index: number, overrides: Partial<ExportSharedRow> = {}): ExportSharedRow => ({
+    id: `0192f3a0-1111-7000-8000-${String(index).padStart(12, "0")}`,
+    url: `https://example.com/theirs/${String(index)}`,
+    title: `Theirs ${String(index)}`,
+    description: "Their description",
+    slug: null,
+    ownerName: "Olga Owner",
+    ...overrides,
+  });
+
+  it("are at the top level after the member's own unfiled bookmarks and before the first section, with the address, the title and the slug, and without tags, description or owner", async () => {
+    const { stream, counters } = harness(
+      { folders: [folder("Reading")], filed: { Reading: [row(2, { tags: ["later"] })] }, unfiled: [row(1)], shared: [theirs(1, { slug: "their-slug" }), theirs(2)] },
+      { includeShared: true },
+    );
+
+    const text = await drain(stream);
+
+    expect(text).toContain('    <DT><A HREF="https://example.com/theirs/1" SHORTCUTURL="their-slug">Theirs 1</A>\n');
+    expect(text).toContain('    <DT><A HREF="https://example.com/theirs/2">Theirs 2</A>\n');
+    expect(text.indexOf("Bookmark 1")).toBeLessThan(text.indexOf("Theirs 1"));
+    expect(text.indexOf("Theirs 2")).toBeLessThan(text.indexOf("<H3>Reading</H3>"));
+    expect(text).not.toMatch(/TAGS="[^"]*"[^>]*>Theirs/);
+    expect(text).not.toMatch(/Their description|Olga Owner/);
+    expect(parse(text).map((entry) => [entry.title, entry.folders, entry.tags])).toEqual([
+      ["Bookmark 1", [], []],
+      ["Theirs 1", [], []],
+      ["Theirs 2", [], []],
+      ["Bookmark 2", ["Reading"], ["later"]],
+    ]);
+    expect(counters.asked.filter((entry) => entry.what === "shared")).toEqual([{ what: "shared", ownerId: ME.toLowerCase(), after: undefined, limit: EXPORT_PAGE_SIZE }]);
+  });
+
+  it("are left out, and not asked of the store, without the parameter", async () => {
+    const { stream, counters } = harness({ unfiled: [row(1)], shared: [theirs(1)] });
+
+    const text = await drain(stream);
+
+    expect(text).not.toContain("Theirs 1");
+    expect(counters.sharedPages).toBe(0);
+  });
+
+  it("are read page by page, each once, and a row that carried more than the readable fields writes no more", async () => {
+    const leaky = { ...theirs(5), tags: ["private-tag"], folders: ["Private folder"], pinned: true } as ExportSharedRow;
+    const { stream } = harness({ shared: [theirs(1), theirs(2), theirs(3), theirs(4), leaky] }, { includeShared: true, pageSize: 2 });
+
+    const text = await drain(stream);
+
+    expect(parse(text).map((entry) => entry.title)).toEqual(["Theirs 1", "Theirs 2", "Theirs 3", "Theirs 4", "Theirs 5"]);
+    expect(text).not.toMatch(/private-tag|Private folder/);
+  });
+
+  it("are escaped as the member's own are", async () => {
+    const hostile = `"><script>alert(1)</script>`;
+    const text = await drain(harness({ shared: [theirs(1, { title: hostile, url: `https://example.com/?a="${hostile}"`, slug: hostile })] }, { includeShared: true }).stream);
+
+    expect(text).not.toMatch(/<script/);
+    expect(parse(text).map((entry) => entry.title)).toEqual([hostile]);
   });
 });
 

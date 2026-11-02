@@ -1,4 +1,5 @@
-import { EXPORT_DISPOSITION_PATTERN, ExportDocumentSchema } from "@slugbase/contracts";
+import { EXPORT_DISPOSITION_PATTERN, ExportDocumentSchema, ImportResultSchema } from "@slugbase/contracts";
+import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
@@ -7,13 +8,16 @@ import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type Worl
 // workspace exports and finds none of A's bookmarks, folders or tags in the same workspace, A's tags never appear in B's document, and a member of another workspace finds nothing of A or B.
 // Besides that: the document holds every field of the format and none of the database's (identifiers, usage, timestamps), a plan-archived bookmark is in it flagged, content with no owner is not,
 // the answer is an attachment and is stored nowhere, an API token of the read scope can call it and is named in the audit log, the export is recorded once with counts only, and a document whose
-// reading fails after the first byte ends unfinished.
+// reading fails after the first byte ends unfinished. With includeShared=true the bookmarks shared with the caller are in the list `shared` as their readable fields alone; the failure scenario of that
+// parameter is a share that has ended, a bookmark of another workspace, and the owner's tags, folders and pin, none of which is ever in the document (T1, T2 and T11).
 
 const TEST_TIMEOUT_MS = 60_000;
 const EXPORT = "/api/v1/export/json";
 const BOOKMARKS = "/api/v1/bookmarks";
 const FOLDERS = "/api/v1/folders";
 const TAGS = "/api/v1/tags";
+const GRANTED: EntitlementCheck = (entitlement) => entitlement === "sharing.members" || entitlement === "sharing.teams" || entitlement === "teams.manage";
+const TEAMS = "/api/v1/teams";
 const RELAXED = { RATE_LIMIT_BULK_IP: "10000/hour", RATE_LIMIT_BULK_ACCOUNT: "10000/hour", RATE_LIMIT_WRITE_IP: "10000/min", RATE_LIMIT_WRITE_ACCOUNT: "10000/min" };
 
 const database = useTestDatabase();
@@ -366,6 +370,257 @@ describe("GET /export/json", () => {
       }).toThrow();
       expect(logged.map((entry) => entry.message)).toEqual(["An export ended before its last byte"]);
       expect(JSON.stringify(logged)).not.toContain("Title");
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+// includeShared=true (doc 02 sections 8.2 and 13.2): the bookmarks shared with the caller, as their readable fields and the flag.
+describe("GET /export/json?includeShared=true", () => {
+  const SHARED_EXPORT = `${EXPORT}?includeShared=true`;
+  const nameOf = (person: Person, displayName: string) => asSystem((tx) => tx`UPDATE accounts SET display_name = ${displayName} WHERE id = ${person.account.id}`);
+
+  async function sharedExport(world: World, headers: Record<string, string>, path = SHARED_EXPORT) {
+    const response = await send(world, "GET", path, headers);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    return { text, document: ExportDocumentSchema.parse(JSON.parse(text)) };
+  }
+
+  const share = async (world: World, owner: Person, path: string, target: Record<string, string>): Promise<string> => {
+    const response = await send(world, "POST", path, asPerson(owner), target);
+    expect(response.status).toBe(201);
+    return ((await response.json()) as { id: string }).id;
+  };
+
+  it(
+    "holds the bookmarks shared with the caller through a direct share, a team's and a shared folder's as the readable fields and the flag, and never the owner's tags, folders or pin or who else they are shared with",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b, c, shared } = await setup(world);
+      const d = await harness.person(world);
+      await nameOf(a, "Olga Owner");
+      await nameOf(d, "Dora Otherrecipient");
+      await nameOf(c, "Carl Elsewhere");
+      // D is a second recipient of the first bookmark, in the same workspace.
+      await asSystem((tx) => tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${shared.workspaceId}, ${d.account.id}, 'member')`);
+      const direct = await bookmark(world, a, "Direct", { slug: "direct-slug", forwarding: true, pinned: true, description: "About direct" });
+      const viaTeam = await bookmark(world, a, "Via team");
+      const viaFolder = await bookmark(world, a, "Via folder");
+      await bookmark(world, a, "Not shared");
+      const archivedShare = await bookmark(world, a, "Archived share");
+      const mine = await bookmark(world, b, "B's own bookmark");
+      const privateTag = await create(world, a, TAGS, { name: "owner-private-tag" });
+      const privateFolder = await create(world, a, FOLDERS, { name: "Owner private folder" });
+      const sharedFolder = await create(world, a, FOLDERS, { name: "Folder shared with B" });
+      const team = await create(world, a, TEAMS, { name: "Readers" });
+      expect((await send(world, "PUT", `${TEAMS}/${team}/members`, asPerson(a), { accountIds: [b.account.id] })).status).toBe(200);
+      expect((await send(world, "PATCH", `${BOOKMARKS}/${direct}`, asPerson(a), { tagIds: [privateTag], folderIds: [privateFolder] })).status).toBe(200);
+      expect((await send(world, "PATCH", `${BOOKMARKS}/${viaFolder}`, asPerson(a), { folderIds: [sharedFolder] })).status).toBe(200);
+      await share(world, a, `${BOOKMARKS}/${direct}/shares`, { accountId: b.account.id });
+      await share(world, a, `${BOOKMARKS}/${direct}/shares`, { accountId: d.account.id });
+      await share(world, a, `${BOOKMARKS}/${viaTeam}/shares`, { teamId: team });
+      await share(world, a, `${FOLDERS}/${sharedFolder}/shares`, { accountId: b.account.id });
+      await share(world, a, `${BOOKMARKS}/${archivedShare}/shares`, { accountId: b.account.id });
+      await archive(archivedShare);
+      await bookmark(world, c, "Elsewhere bookmark");
+
+      const { text, document } = await sharedExport(world, asPerson(b));
+
+      expect(document.shared.map((entry) => entry.title).sort()).toEqual(["Direct", "Via folder", "Via team"]);
+      expect(document.shared.find((entry) => entry.title === "Direct")).toEqual({
+        url: "https://example.com/Direct",
+        title: "Direct",
+        description: "About direct",
+        slug: "direct-slug",
+        ownerName: "Olga Owner",
+        shared: true,
+      });
+      for (const entry of document.shared) {
+        expect(Object.keys(entry).sort()).toEqual(["description", "ownerName", "shared", "slug", "title", "url"]);
+        expect(entry.ownerName).toBe("Olga Owner");
+      }
+      expect(document.bookmarks.map((entry) => entry.title)).toEqual(["B's own bookmark"]);
+      expect(text).not.toMatch(/owner-private-tag|Owner private folder|Folder shared with B|Not shared|Archived share|Elsewhere|Carl|Dora|Readers/);
+      for (const id of [direct, viaTeam, viaFolder, mine, shared.workspaceId, a.account.id, d.account.id]) {
+        expect(text).not.toContain(id);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "leaves the list empty without the parameter and with includeShared=false, and the owner's own bookmark is in the owner's bookmarks and not in their shared list",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b } = await setup(world);
+      const one = await bookmark(world, a, "Shared one");
+      await share(world, a, `${BOOKMARKS}/${one}/shares`, { accountId: b.account.id });
+      await bookmark(world, b, "B's own");
+
+      expect((await sharedExport(world, asPerson(b), EXPORT)).document.shared).toEqual([]);
+      expect((await sharedExport(world, asPerson(b), `${EXPORT}?includeShared=false`)).document.shared).toEqual([]);
+      expect((await sharedExport(world, asPerson(b))).document.shared.map((entry) => entry.title)).toEqual(["Shared one"]);
+      const owners = await sharedExport(world, asPerson(a));
+      expect(owners.document.shared).toEqual([]);
+      expect(owners.document.bookmarks.map((entry) => entry.title)).toEqual(["Shared one"]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "does not list the owner's own bookmark as shared with them when the owner is in the team it is shared with",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b, shared } = await setup(world);
+      const mine = await bookmark(world, a, "Owner's, shared with a team they are in");
+      const team = await create(world, a, TEAMS, { name: "Readers" });
+      expect((await send(world, "PUT", `${TEAMS}/${team}/members`, asPerson(a), { accountIds: [a.account.id, b.account.id] })).status).toBe(200);
+      await share(world, a, `${BOOKMARKS}/${mine}/shares`, { teamId: team });
+
+      const owners = await sharedExport(world, asPerson(a));
+      expect(owners.document.shared).toEqual([]);
+      expect(owners.document.bookmarks.map((entry) => entry.title)).toEqual(["Owner's, shared with a team they are in"]);
+      expect((await sharedExport(world, asPerson(b))).document.shared.map((entry) => entry.title)).toEqual(["Owner's, shared with a team they are in"]);
+      expect((await exportEvents(shared.workspaceId)).map((event) => event.metadata.shared)).toEqual(["0", "1"]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "refuses a value that is not true or false and a parameter the operation does not take, as 422, and records no export",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, shared } = await setup(world);
+
+      for (const query of ["includeShared=yes", "includeShared=", "includeShared=true&id=x", "other=1"]) {
+        const response = await send(world, "GET", `${EXPORT}?${query}`, asPerson(a));
+        expect(response.status, query).toBe(422);
+        expect(response.headers.get("content-type")).toContain("application/problem+json");
+      }
+      expect(await exportEvents(shared.workspaceId)).toEqual([]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "does not hold a bookmark in the next export after its share is revoked, the member leaves the team, or the bookmark leaves the shared folder",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b } = await setup(world);
+      const byShare = await bookmark(world, a, "By share");
+      const byTeam = await bookmark(world, a, "By team");
+      const byFolder = await bookmark(world, a, "By folder");
+      const folderId = await create(world, a, FOLDERS, { name: "Shared folder" });
+      const team = await create(world, a, TEAMS, { name: "Readers" });
+      expect((await send(world, "PUT", `${TEAMS}/${team}/members`, asPerson(a), { accountIds: [b.account.id] })).status).toBe(200);
+      expect((await send(world, "PATCH", `${BOOKMARKS}/${byFolder}`, asPerson(a), { folderIds: [folderId] })).status).toBe(200);
+      const shareId = await share(world, a, `${BOOKMARKS}/${byShare}/shares`, { accountId: b.account.id });
+      await share(world, a, `${BOOKMARKS}/${byTeam}/shares`, { teamId: team });
+      await share(world, a, `${FOLDERS}/${folderId}/shares`, { accountId: b.account.id });
+      const titles = async () => (await sharedExport(world, asPerson(b))).document.shared.map((entry) => entry.title).sort();
+      expect(await titles()).toEqual(["By folder", "By share", "By team"]);
+
+      expect((await send(world, "DELETE", `${BOOKMARKS}/${byShare}/shares/${shareId}`, asPerson(a))).status).toBe(204);
+      expect(await titles()).toEqual(["By folder", "By team"]);
+      expect((await send(world, "PUT", `${TEAMS}/${team}/members`, asPerson(a), { accountIds: [] })).status).toBe(200);
+      expect(await titles()).toEqual(["By folder"]);
+      expect((await send(world, "DELETE", `${FOLDERS}/${folderId}/bookmarks`, asPerson(a), { bookmarkIds: [byFolder] })).status).toBe(200);
+      expect(await titles()).toEqual([]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "holds the bookmarks of the workspace of the request only: one shared with the caller in another workspace of theirs is in no export of this one, whichever credential asks",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const [a, b, c] = await Promise.all([harness.person(world), harness.person(world), harness.person(world)]);
+      const workspaceA = await harness.workspaceOf([
+        { person: a, role: "owner" },
+        { person: b, role: "member" },
+      ]);
+      const inA = await bookmark(world, a, "Shared in A");
+      await share(world, a, `${BOOKMARKS}/${inA}/shares`, { accountId: b.account.id });
+      // B joins a second workspace, whose sessions act there from now on; C owns it and shares a bookmark with B.
+      const workspaceB = await harness.workspaceOf([
+        { person: c, role: "owner" },
+        { person: b, role: "member" },
+      ]);
+      const inB = await bookmark(world, c, "Shared in B");
+      await share(world, c, `${BOOKMARKS}/${inB}/shares`, { accountId: b.account.id });
+      const tokenIn = async (workspaceId: string) => bearer(await harness.token(workspaceId, b, "read"));
+
+      expect((await sharedExport(world, asPerson(b))).document.shared.map((entry) => entry.title)).toEqual(["Shared in B"]);
+      expect((await sharedExport(world, await tokenIn(workspaceA.workspaceId))).document.shared.map((entry) => entry.title)).toEqual(["Shared in A"]);
+      expect((await sharedExport(world, await tokenIn(workspaceB.workspaceId))).document.shared.map((entry) => entry.title)).toEqual(["Shared in B"]);
+      // C owns the bookmark in B and has no share anywhere else; A's workspace shows C nothing of A's.
+      expect((await sharedExport(world, asPerson(c))).document.shared).toEqual([]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "records the number of shared bookmarks in export.created, and none for an export that does not ask for them",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b, shared } = await setup(world);
+      for (const title of ["One", "Two", "Three"]) {
+        const id = await bookmark(world, a, title);
+        await share(world, a, `${BOOKMARKS}/${id}/shares`, { accountId: b.account.id });
+      }
+      await bookmark(world, b, "B's own");
+
+      await exportOf(world, b);
+      await sharedExport(world, asPerson(b));
+
+      expect((await exportEvents(shared.workspaceId)).map((event) => event.metadata)).toEqual([
+        { bookmarks: "1", folders: "0", tags: "0", shared: "0" },
+        { bookmarks: "1", folders: "0", tags: "0", shared: "3" },
+      ]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+  it(
+    "is ignored by an import: a re-import of a file with a shared list creates the member's own bookmarks only and never a copy of another member's, in the preview and in the write",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b, c, elsewhere } = await setup(world);
+      const theirs = await bookmark(world, a, "Theirs, shared with B", { slug: "theirs" });
+      await share(world, a, `${BOOKMARKS}/${theirs}/shares`, { accountId: b.account.id });
+      await bookmark(world, b, "B's own");
+      const file = (await sharedExport(world, asPerson(b))).text;
+      expect(ExportDocumentSchema.parse(JSON.parse(file)).shared).toHaveLength(1);
+      const importAs = (person: Person, query: string) => send(world, "POST", `/api/v1/import/json${query}`, asPerson(person), JSON.parse(file));
+
+      const preview = await importAs(c, "?dryRun=true");
+      expect(preview.status).toBe(200);
+      expect(ImportResultSchema.parse(await preview.json())).toMatchObject({ detected: { bookmarks: 1 }, created: 1, skipped: [], failed: [] });
+      const written = await importAs(c, "");
+      expect(written.status).toBe(200);
+      expect(ImportResultSchema.parse(await written.json())).toMatchObject({ created: 1, skipped: [], failed: [], slugsDropped: 0 });
+
+      const rows = await asSystem((tx) => tx<{ title: string; slug: string | null }[]>`SELECT title, slug FROM bookmarks WHERE workspace_id = ${elsewhere.workspaceId} ORDER BY title`);
+      expect(rows).toEqual([{ title: "B's own", slug: null }]);
+      expect(await asSystem((tx) => tx<{ title: string }[]>`SELECT title FROM bookmarks WHERE title LIKE 'Theirs%' AND owner_id IS DISTINCT FROM ${a.account.id}`)).toEqual([]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "is refused by an import in a shape the export does not write: an entry that holds a tag, a folder or an identifier is a 422 for the whole file and nothing is created",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { c, elsewhere } = await setup(world);
+      const entry = { url: "https://example.com/theirs", title: "Theirs", description: null, slug: null, ownerName: null, shared: true };
+      const envelope = { format: "slugbase-export", version: 1, bookmarks: [{ url: "https://example.com/mine" }] };
+
+      for (const shared of [[{ ...entry, tags: ["x"] }], [{ ...entry, id: "0192f3a0-aaaa-7000-8000-00000000a0b1" }], [{ ...entry, shared: false }], ["https://example.com/theirs"], [{}]]) {
+        const response = await send(world, "POST", "/api/v1/import/json", asPerson(c), { ...envelope, shared });
+        expect(response.status, JSON.stringify(shared)).toBe(422);
+      }
+      expect(await asSystem((tx) => tx`SELECT 1 FROM bookmarks WHERE workspace_id = ${elsewhere.workspaceId}`)).toEqual([]);
+      expect((await send(world, "POST", "/api/v1/import/json", asPerson(c), { ...envelope, shared: [entry] })).status).toBe(200);
     },
     TEST_TIMEOUT_MS,
   );

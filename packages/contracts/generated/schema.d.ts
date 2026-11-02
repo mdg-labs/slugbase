@@ -2560,8 +2560,8 @@ export interface components {
             format: "slugbase-export";
             /** @description The caller's remembered slug choices; always empty in this release */
             goPreferences: unknown[];
-            /** @description The bookmarks other members shared with the caller; always empty in this release */
-            shared: unknown[];
+            /** @description The bookmarks other members shared with the caller that the caller can read, plan-archived ones left out, in the order of their creation; empty unless the request asked for them with includeShared=true, and never read by an import */
+            shared: components["schemas"]["ExportSharedBookmark"][];
             /** @description The name of every tag the caller owns, used or not, sorted by the bytes of the name */
             tags: string[];
             /**
@@ -2581,6 +2581,23 @@ export interface components {
             icon: string;
             /** @description The folder's name, as the caller entered it */
             name: string;
+        };
+        ExportSharedBookmark: {
+            /** @description The bookmark's description; null when it has none */
+            description: string | null;
+            /** @description The display name of the member who owns the bookmark; null when the bookmark has no owner, because its owner has left the workspace */
+            ownerName: string | null;
+            /**
+             * @description Always true: the bookmark is another member's, shared with the caller, and a re-import never creates it
+             * @constant
+             */
+            shared: true;
+            /** @description The bookmark's slug as its owner set it; null when it has none */
+            slug: string | null;
+            /** @description The bookmark's title */
+            title: string;
+            /** @description The bookmark's address, an http or https URL, as it is stored */
+            url: string;
         };
         Folder: {
             /** @description How many bookmarks are filed in the folder; plan-archived bookmarks are not counted */
@@ -2899,8 +2916,8 @@ export interface components {
             format: "slugbase-export";
             /** @description The caller's remembered slug choices; always empty in a version 1 file */
             goPreferences?: string[];
-            /** @description The bookmarks other members shared with the exporter; always empty in a version 1 file, and never read */
-            shared?: string[];
+            /** @description The bookmarks other members shared with the exporter, as the export writes them (url, title, description, slug, ownerName and shared: true, each within the limits of the export); each is checked as the format and then ignored, so a re-import never creates a copy of another member's bookmark */
+            shared?: components["schemas"]["ExportSharedBookmark"][];
             /** @description The tags of the file, each of up to 1 000 characters: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters */
             tags?: string[];
             /** @description The version of the format; a version newer than 1 is refused with 422 and an error at version */
@@ -6245,14 +6262,16 @@ export interface operations {
     };
     exportJson: {
         parameters: {
-            query?: never;
+            query?: {
+                includeShared?: "true" | "false";
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The export is recorded in the workspace's audit log as export.created with counts only, before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON */
+            /** @description The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON */
             200: {
                 headers: {
                     /** @description An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name */
@@ -6274,6 +6293,15 @@ export interface operations {
             };
             /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query is not valid (validation_failed): includeShared is neither true nor false, or the request names a parameter the operation does not take */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6305,14 +6333,16 @@ export interface operations {
     };
     exportNetscape: {
         parameters: {
-            query?: never;
+            query?: {
+                includeShared?: "true" | "false";
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin and the forwarding flag are left out. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only, before the first byte. A failure after the first byte ends the connection with the file unfinished */
+            /** @description The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin and the forwarding flag are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the file unfinished */
             200: {
                 headers: {
                     /** @description An attachment named slugbase-export-<date>.html, the date being the UTC day of the export; the name holds no workspace name */
@@ -6336,6 +6366,15 @@ export interface operations {
             };
             /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query is not valid (validation_failed): includeShared is neither true nor false, or the request names a parameter the operation does not take */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

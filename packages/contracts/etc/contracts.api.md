@@ -1567,7 +1567,7 @@ export interface ComponentTypes {
             folders: ComponentTypes["schemas"]["ExportFolder"][];
             format: "slugbase-export";
             goPreferences: unknown[];
-            shared: unknown[];
+            shared: ComponentTypes["schemas"]["ExportSharedBookmark"][];
             tags: string[];
             version: 1;
             workspace: {
@@ -1578,6 +1578,14 @@ export interface ComponentTypes {
             color: number;
             icon: string;
             name: string;
+        };
+        ExportSharedBookmark: {
+            description: string | null;
+            ownerName: string | null;
+            shared: true;
+            slug: string | null;
+            title: string;
+            url: string;
         };
         Folder: {
             bookmarkCount: number;
@@ -1724,7 +1732,7 @@ export interface ComponentTypes {
             folders?: ComponentTypes["schemas"]["ImportFolder"][];
             format: "slugbase-export";
             goPreferences?: string[];
-            shared?: string[];
+            shared?: ComponentTypes["schemas"]["ExportSharedBookmark"][];
             tags?: string[];
             version: number;
             workspace?: {
@@ -3568,6 +3576,9 @@ export const EXPORT_NETSCAPE_CONTENT_TYPE = "text/html; charset=utf-8";
 export const EXPORT_NETSCAPE_DISPOSITION_PATTERN: RegExp;
 
 // @public
+export const EXPORT_OWNER_NAME_MAX_LENGTH = 100;
+
+// @public
 export const EXPORT_REF_PATTERN: RegExp;
 
 // @public
@@ -3614,7 +3625,14 @@ export const ExportDocumentSchema: z.ZodObject<{
         tags: z.ZodArray<z.ZodString>;
     }, z.core.$strict>>;
     goPreferences: z.ZodArray<z.ZodUnknown>;
-    shared: z.ZodArray<z.ZodUnknown>;
+    shared: z.ZodArray<z.ZodObject<{
+        url: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        ownerName: z.ZodNullable<z.ZodString>;
+        shared: z.ZodLiteral<true>;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -3634,6 +3652,14 @@ export const exportJson: {
     readonly auth: "member";
     readonly rate: "bulk";
     readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            includeShared: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+        }, z.core.$strict>;
+    };
     readonly responses: {
         readonly 200: StreamResponse<    {
         "Content-Disposition": {
@@ -3643,6 +3669,7 @@ export const exportJson: {
         }>;
         readonly 401: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
@@ -3658,6 +3685,14 @@ export const exportNetscape: {
     readonly auth: "member";
     readonly rate: "bulk";
     readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            includeShared: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+        }, z.core.$strict>;
+    };
     readonly responses: {
         readonly 200: StreamResponse<    {
         "Content-Type": {
@@ -3671,10 +3706,29 @@ export const exportNetscape: {
         }>;
         readonly 401: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const ExportQuerySchema: z.ZodObject<{
+    includeShared: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ExportSharedBookmarkSchema: z.ZodObject<{
+    url: z.ZodString;
+    title: z.ZodString;
+    description: z.ZodNullable<z.ZodString>;
+    slug: z.ZodNullable<z.ZodString>;
+    ownerName: z.ZodNullable<z.ZodString>;
+    shared: z.ZodLiteral<true>;
+}, z.core.$strict>;
 
 // @public
 export const FAVICON_CACHE_MAX_AGE_SECONDS = 604800;
@@ -4951,7 +5005,14 @@ export const ImportEnvelopeSchema: z.ZodObject<{
         tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
     goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    shared: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    shared: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        url: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        ownerName: z.ZodNullable<z.ZodString>;
+        shared: z.ZodLiteral<true>;
+    }, z.core.$strict>>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -5017,7 +5078,14 @@ export const importJson: {
                 tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
             }, z.core.$strict>>;
             goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
-            shared: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            shared: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                url: z.ZodString;
+                title: z.ZodString;
+                description: z.ZodNullable<z.ZodString>;
+                slug: z.ZodNullable<z.ZodString>;
+                ownerName: z.ZodNullable<z.ZodString>;
+                shared: z.ZodLiteral<true>;
+            }, z.core.$strict>>>;
         }, z.core.$strict>, z.ZodArray<z.ZodObject<{
             ref: z.ZodOptional<z.ZodString>;
             url: z.ZodString;
@@ -5205,7 +5273,14 @@ export const ImportRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
         tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
     goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    shared: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    shared: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        url: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        ownerName: z.ZodNullable<z.ZodString>;
+        shared: z.ZodLiteral<true>;
+    }, z.core.$strict>>>;
 }, z.core.$strict>, z.ZodArray<z.ZodObject<{
     ref: z.ZodOptional<z.ZodString>;
     url: z.ZodString;
@@ -9853,7 +9928,9 @@ export interface OperationTypes {
     // (undocumented)
     exportJson: {
         parameters: {
-            query?: never;
+            query?: {
+                includeShared?: "true" | "false";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9885,6 +9962,14 @@ export interface OperationTypes {
                     "application/problem+json": ComponentTypes["schemas"]["Problem"];
                 };
             };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
             429: {
                 headers: {
                     "Retry-After": number;
@@ -9907,7 +9992,9 @@ export interface OperationTypes {
     // (undocumented)
     exportNetscape: {
         parameters: {
-            query?: never;
+            query?: {
+                includeShared?: "true" | "false";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9933,6 +10020,14 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

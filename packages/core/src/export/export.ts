@@ -10,6 +10,11 @@ import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 // The document is deterministic, which the round trip of the import relies on: bookmarks in the order of their identifiers (UUIDv7, so the order of their creation), folders and tags by the bytes
 // of their names, the folders and tags of a bookmark by the bytes of their names, and the `ref` of a bookmark by its position, never a database identifier. A page is a keyset slice, not a
 // snapshot: a change made while the export runs is in the document or not, page by page, but no row is read twice.
+//
+// With `includeShared` the document's `shared` list holds the bookmarks other members shared with the member (doc 02 sections 8.2 and 13.2): `url`, `title`, `description`, `slug`, the name of the
+// owner (null when the bookmark has no owner) and the flag `shared: true`, written field by field from what the store answers, so a row that carried more (a tag, a folder, the pin, a recipient) would still
+// not reach the file. The store answers only what the member can read at the moment of each page, so a share that ends during the export drops the bookmark from the pages not yet read; a bookmark
+// a downgrade archived is never read. Without it nothing shared is asked of the store and the list is empty.
 
 /** The most rows one page of the export holds. */
 export const EXPORT_PAGE_SIZE = 500;
@@ -36,6 +41,17 @@ export interface ExportFolderRow {
   readonly color: number;
 }
 
+/** A bookmark shared with the member as the store reads it: the readable fields and nothing of the owner's own. The identifier only positions the next page; it is not written to the document. */
+export interface ExportSharedRow {
+  readonly id: string;
+  readonly url: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly slug: string | null;
+  /** The display name of the owner; null when the bookmark has no owner or its owner's name cannot be read. */
+  readonly ownerName: string | null;
+}
+
 /** What the member has to export, and the workspace it is in. */
 export interface ExportSummary {
   readonly workspaceName: string;
@@ -43,17 +59,21 @@ export interface ExportSummary {
   readonly bookmarks: number;
   readonly folders: number;
   readonly tags: number;
+  /** The bookmarks shared with the member that they can read, plan-archived ones left out; 0 when the summary was not asked for them. */
+  readonly shared: number;
 }
 
 export interface ExportStore {
-  /** The name of the workspace of the transaction and the counts of what `ownerId` owns in it; undefined when the workspace cannot be read. */
-  summary(ownerId: string): Promise<ExportSummary | undefined>;
+  /** The name of the workspace of the transaction and the counts of what `ownerId` owns in it, and with `includeShared` of the bookmarks shared with `ownerId` that it can read; undefined when the workspace cannot be read. */
+  summary(ownerId: string, includeShared: boolean): Promise<ExportSummary | undefined>;
   /** At most `limit` of the folders `ownerId` owns whose name sorts after `after` (the first page when undefined), by the bytes of the name. */
   folders(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportFolderRow[]>;
   /** At most `limit` names of the tags `ownerId` owns that sort after `after` (the first page when undefined), by the bytes of the name. */
   tags(ownerId: string, after: string | undefined, limit: number): Promise<readonly string[]>;
   /** At most `limit` of the bookmarks `ownerId` owns, plan-archived ones included, whose identifier is greater than `after` (the first page when undefined), in the order of the identifier. */
   bookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportBookmarkRow[]>;
+  /** At most `limit` of the bookmarks of other members that `accountId` can read through a share (directly, through a team or through a shared folder), plan-archived ones never, whose identifier is greater than `after` (the first page when undefined), in the order of the identifier. */
+  shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
 }
 
 export interface ExportStartDependencies {
@@ -67,6 +87,8 @@ export interface ExportStartAsk {
   readonly accountId: string;
   readonly actor: AuditActor;
   readonly ipPrefix: string | null;
+  /** Whether the export holds the bookmarks shared with the member, which the event then counts. */
+  readonly includeShared: boolean;
 }
 
 export type ExportStartOutcome =
@@ -76,7 +98,7 @@ export type ExportStartOutcome =
 
 /** Counts what the member owns and records the export as `export.created`, in the transaction the dependencies are bound to; nothing is written when the workspace cannot be read. */
 export async function startExport({ store, audit }: ExportStartDependencies, ask: ExportStartAsk): Promise<ExportStartOutcome> {
-  const summary = await store.summary(ask.accountId.toLowerCase());
+  const summary = await store.summary(ask.accountId.toLowerCase(), ask.includeShared);
   if (summary === undefined) {
     return { kind: "unavailable" };
   }
@@ -84,7 +106,7 @@ export async function startExport({ store, audit }: ExportStartDependencies, ask
     action: "export.created",
     workspaceId: ask.workspaceId.toLowerCase(),
     actor: ask.actor,
-    metadata: { bookmarks: String(summary.bookmarks), folders: String(summary.folders), tags: String(summary.tags), shared: "0" },
+    metadata: { bookmarks: String(summary.bookmarks), folders: String(summary.folders), tags: String(summary.tags), shared: String(summary.shared) },
     ipPrefix: ask.ipPrefix,
   });
   return { kind: "started", summary };
@@ -103,6 +125,8 @@ export interface ExportStreamAsk {
   readonly accountId: string;
   readonly workspaceName: string;
   readonly exportedAt: Date;
+  /** Whether the `shared` list is read; it is written empty otherwise. */
+  readonly includeShared: boolean;
 }
 
 /** The name of the attachment: the UTC day of the export, and nothing of the workspace. */
@@ -188,7 +212,27 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
     }
   }
 
-  yield '],"goPreferences":[],"shared":[]}';
+  yield '],"goPreferences":[],"shared":[';
+  if (ask.includeShared) {
+    separator = "";
+    let sharedAfter: string | undefined;
+    for (;;) {
+      const after = sharedAfter;
+      const rows = await page((store) => store.shared(owner, after, pageSize));
+      if (rows.length > 0) {
+        yield (
+          separator +
+          rows.map((row) => JSON.stringify({ url: row.url, title: row.title, description: row.description, slug: row.slug, ownerName: row.ownerName, shared: true })).join(",")
+        );
+        separator = ",";
+        sharedAfter = rows[rows.length - 1]?.id;
+      }
+      if (rows.length < pageSize) {
+        break;
+      }
+    }
+  }
+  yield "]}";
 }
 
 /**

@@ -1,4 +1,5 @@
 import { EXPORT_NETSCAPE_DISPOSITION_PATTERN, ImportResultSchema } from "@slugbase/contracts";
+import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
@@ -8,13 +9,16 @@ import { upload } from "./netscape-upload.ts";
 // `"><script>alert(1)</script>` and `<img onerror=...>`, and the same text in a folder and a tag name, are escaped in the file, and importing the file back through POST /api/v1/import/netscape
 // yields the same text; member B's export holds nothing of member A. Besides that: the answer is an attachment of `text/html; charset=utf-8` with `nosniff`, so a navigation to it downloads it, a bookmark
 // of two folders is under each and one of none is at the top level, a plan-archived one is in the file, the export is recorded once with counts only, the file streams in pieces whose first holds no link,
-// and a file whose reading fails after the first byte ends unfinished.
+// and a file whose reading fails after the first byte ends unfinished. With includeShared=true the bookmarks shared with the caller are at the top level, without tags, folders or anything of the owner's; one whose
+// share has ended, one of another workspace and one a downgrade archived are not in the file.
 
 const TEST_TIMEOUT_MS = 90_000;
 const EXPORT = "/api/v1/export/netscape";
 const BOOKMARKS = "/api/v1/bookmarks";
 const FOLDERS = "/api/v1/folders";
 const TAGS = "/api/v1/tags";
+const TEAMS = "/api/v1/teams";
+const GRANTED: EntitlementCheck = (entitlement) => entitlement === "sharing.members" || entitlement === "sharing.teams" || entitlement === "teams.manage";
 const RELAXED = { RATE_LIMIT_BULK_IP: "10000/hour", RATE_LIMIT_BULK_ACCOUNT: "10000/hour", RATE_LIMIT_WRITE_IP: "10000/min", RATE_LIMIT_WRITE_ACCOUNT: "10000/min" };
 const HOSTILE = [`"><script>alert(1)</script>`, "<img src=x onerror=alert(1)>", "a & b &amp; c &lt;b&gt;"];
 
@@ -420,6 +424,110 @@ describe("GET /export/netscape", () => {
       expect(received.endsWith("</DL><p>\n")).toBe(false);
       expect(logged.map((entry) => entry.message)).toEqual(["An export ended before its last byte"]);
       expect(JSON.stringify(logged)).not.toContain("Title");
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+describe("GET /export/netscape?includeShared=true", () => {
+  const SHARED_EXPORT = `${EXPORT}?includeShared=true`;
+  const share = async (world: World, owner: Person, path: string, target: Record<string, string>): Promise<string> => {
+    const response = await send(world, "POST", path, asPerson(owner), target);
+    expect(response.status).toBe(201);
+    return ((await response.json()) as { id: string }).id;
+  };
+  const fileOf = async (world: World, headers: Record<string, string>, path = SHARED_EXPORT): Promise<string> => {
+    const response = await send(world, "GET", path, headers);
+    expect(response.status).toBe(200);
+    return response.text();
+  };
+
+  it(
+    "adds the bookmarks shared with the caller (directly, through a team and through a shared folder) at the top level before the first section, with the address, title and slug and no tags, and nothing of the owner's tags, folders or pin",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b, c } = await setup(world);
+      const direct = await bookmark(world, a, "Direct", { slug: "direct-slug", pinned: true, description: "Their description" });
+      const viaTeam = await bookmark(world, a, "Via team");
+      const viaFolder = await bookmark(world, a, "Via folder");
+      await bookmark(world, a, "Not shared");
+      const archivedShare = await bookmark(world, a, "Archived share");
+      await bookmark(world, b, "Own of B");
+      const privateTag = await create(world, a, TAGS, { name: "owner-private-tag" });
+      const privateFolder = await create(world, a, FOLDERS, { name: "Owner private folder" });
+      const sharedFolder = await create(world, a, FOLDERS, { name: "Folder shared with B" });
+      await create(world, b, FOLDERS, { name: "B's folder" });
+      const team = await create(world, a, TEAMS, { name: "Readers" });
+      expect((await send(world, "PUT", `${TEAMS}/${team}/members`, asPerson(a), { accountIds: [b.account.id] })).status).toBe(200);
+      expect((await send(world, "PATCH", `${BOOKMARKS}/${direct}`, asPerson(a), { tagIds: [privateTag], folderIds: [privateFolder] })).status).toBe(200);
+      expect((await send(world, "PATCH", `${BOOKMARKS}/${viaFolder}`, asPerson(a), { folderIds: [sharedFolder] })).status).toBe(200);
+      await share(world, a, `${BOOKMARKS}/${direct}/shares`, { accountId: b.account.id });
+      await share(world, a, `${BOOKMARKS}/${viaTeam}/shares`, { teamId: team });
+      await share(world, a, `${FOLDERS}/${sharedFolder}/shares`, { accountId: b.account.id });
+      await share(world, a, `${BOOKMARKS}/${archivedShare}/shares`, { accountId: b.account.id });
+      await archive(archivedShare);
+      await bookmark(world, c, "Elsewhere bookmark");
+
+      const file = await fileOf(world, asPerson(b));
+
+      expect(parseLinks(file)).toEqual([
+        ["https://example.com/Own%20of%20B", ""],
+        ["https://example.com/Direct", ""],
+        ["https://example.com/Via%20team", ""],
+        ["https://example.com/Via%20folder", ""],
+      ]);
+      expect(file).toContain('    <DT><A HREF="https://example.com/Direct" SHORTCUTURL="direct-slug">Direct</A>\n');
+      expect(file).not.toMatch(/TAGS=/);
+      expect(file).not.toMatch(/owner-private-tag|Owner private folder|Folder shared with B|Not shared|Archived share|Elsewhere|Their description|Readers/);
+      expect(file.indexOf("Via folder")).toBeLessThan(file.indexOf("<H3>"));
+      expect(file).toContain("<H3>B&#39;s folder</H3>");
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "leaves them out without the parameter and with includeShared=false, and refuses a value that is not true or false as 422",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const { a, b, shared } = await setup(world);
+      const one = await bookmark(world, a, "Shared one");
+      await share(world, a, `${BOOKMARKS}/${one}/shares`, { accountId: b.account.id });
+
+      expect(await fileOf(world, asPerson(b), EXPORT)).not.toContain("Shared one");
+      expect(await fileOf(world, asPerson(b), `${EXPORT}?includeShared=false`)).not.toContain("Shared one");
+      expect(await fileOf(world, asPerson(b))).toContain("Shared one");
+      expect((await send(world, "GET", `${EXPORT}?includeShared=1`, asPerson(b))).status).toBe(422);
+      expect((await exportEvents(shared.workspaceId)).map((event) => event.metadata.shared)).toEqual(["0", "0", "1"]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "does not hold a bookmark in the next file after its share is revoked, and holds the bookmarks of the workspace of the request only",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+      const [a, b, c] = await Promise.all([harness.person(world), harness.person(world), harness.person(world)]);
+      const workspaceA = await harness.workspaceOf([
+        { person: a, role: "owner" },
+        { person: b, role: "member" },
+      ]);
+      const inA = await bookmark(world, a, "Shared in A");
+      const shareId = await share(world, a, `${BOOKMARKS}/${inA}/shares`, { accountId: b.account.id });
+      const workspaceB = await harness.workspaceOf([
+        { person: c, role: "owner" },
+        { person: b, role: "member" },
+      ]);
+      const inB = await bookmark(world, c, "Shared in B");
+      await share(world, c, `${BOOKMARKS}/${inB}/shares`, { accountId: b.account.id });
+      const inWorkspace = async (workspaceId: string) => bearer(await harness.token(workspaceId, b, "read"));
+
+      const here = await fileOf(world, await inWorkspace(workspaceA.workspaceId));
+      const there = await fileOf(world, await inWorkspace(workspaceB.workspaceId));
+      expect(parseLinks(here)).toEqual([["https://example.com/Shared%20in%20A", ""]]);
+      expect(parseLinks(there)).toEqual([["https://example.com/Shared%20in%20B", ""]]);
+
+      expect((await send(world, "DELETE", `${BOOKMARKS}/${inA}/shares/${shareId}`, asPerson(a))).status).toBe(204);
+      expect(parseLinks(await fileOf(world, await inWorkspace(workspaceA.workspaceId)))).toEqual([]);
     },
     TEST_TIMEOUT_MS,
   );

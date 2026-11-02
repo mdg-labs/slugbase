@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH } from "./bookmarks.ts";
 import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
-import { EXPORT_VERSION, ExportBookmarkSchema, ExportDocumentSchema } from "./export.ts";
+import { EXPORT_VERSION, ExportBookmarkSchema, ExportDocumentSchema, ExportSharedBookmarkSchema } from "./export.ts";
 
 // The import tag of doc 04 section 10.9 (doc 02 sections 13.1 and 13.3, doc 10 T1, T11 and T13): a SlugBase JSON file, the export envelope or a plain array of bookmarks, is read within strict caps
 // and the answer says exactly what the import did. With `dryRun=true` it says what the import would do and the operation writes nothing of the workspace; without it, or with `dryRun=false`, the bookmarks are created in one transaction under
@@ -79,7 +79,7 @@ export const ImportEnvelopeSchema = z
     tags: z.array(ImportNameSchema).optional().describe("The tags of the file, each of up to 1 000 characters: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters"),
     bookmarks: ImportBookmarksSchema,
     goPreferences: z.array(z.string()).max(0).optional().describe("The caller's remembered slug choices; always empty in a version 1 file"),
-    shared: z.array(z.string()).max(0).optional().describe("The bookmarks other members shared with the exporter; always empty in a version 1 file, and never read"),
+    shared: z.array(ExportSharedBookmarkSchema).optional().describe("The bookmarks other members shared with the exporter, as the export writes them (url, title, description, slug, ownerName and shared: true, each within the limits of the export); each is checked as the format and then ignored, so a re-import never creates a copy of another member's bookmark"),
   })
   .meta({ id: "ImportEnvelope" });
 

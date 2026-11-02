@@ -10,6 +10,7 @@ const document = JSON.parse(serializeOpenApiDocument(buildOpenApiDocument(operat
 const documented = document.paths["/api/v1/import/json"]?.["post"] as Obj;
 
 const ENVELOPE = { format: "slugbase-export", version: 1, bookmarks: [{ url: "https://example.com/a" }] };
+const SHARED_ENTRY = { url: "https://example.com/theirs", title: "Theirs", description: null, slug: "theirs", ownerName: "Olga Owner", shared: true };
 
 describe("the import operation", () => {
   it("is POST /api/v1/import/json, a member's write in the bulk bucket with an idempotency key and a body limit of 5 MiB", () => {
@@ -106,6 +107,12 @@ describe("the import request", () => {
     ).toBe(true);
   });
 
+  it("accepts the shared list an export writes, in its strict entry shape, and no other", () => {
+    expect(ImportRequestSchema.safeParse({ ...ENVELOPE, shared: [SHARED_ENTRY, { ...SHARED_ENTRY, description: "d", slug: null, ownerName: null }] }).success).toBe(true);
+    expect(ImportEnvelopeSchema.safeParse({ ...ENVELOPE, shared: [] }).success).toBe(true);
+    expect(document.components.schemas["ImportEnvelope"]).toMatchObject({ properties: { shared: { type: "array", items: { $ref: "#/components/schemas/ExportSharedBookmark" } } } });
+  });
+
   it("refuses what is not the format as a whole: another format, a field it does not declare, a value of the wrong type", () => {
     for (const body of [
       { ...ENVELOPE, format: "other" },
@@ -117,6 +124,11 @@ describe("the import request", () => {
       [{ url: "https://example.com/a", pinned: "yes" }],
       [{ url: "https://example.com/a", constructor: {} }],
       { ...ENVELOPE, shared: [{ x: 1 }] },
+      { ...ENVELOPE, shared: [""] },
+      { ...ENVELOPE, shared: [{ ...SHARED_ENTRY, tags: ["private"] }] },
+      { ...ENVELOPE, shared: [{ ...SHARED_ENTRY, shared: false }] },
+      { ...ENVELOPE, shared: [{ ...SHARED_ENTRY, title: "t".repeat(301) }] },
+      { ...ENVELOPE, shared: [{ ...SHARED_ENTRY, url: 1 }] },
       "text",
       null,
       [[]],

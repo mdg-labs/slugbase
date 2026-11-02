@@ -17,6 +17,10 @@ import { route } from "../register.ts";
 // account of the request as the owner (src/repositories/export.ts), so another member's content, content with no owner and anything of another workspace is in no answer. The Netscape file is the same
 // export in the other format: it starts the same way (one `export.created`, counts only, before the first byte) and is streamed the same way, and it is answered as `text/html; charset=utf-8` with the
 // disposition of an attachment, which with the `nosniff` of every response means a navigation to it downloads the file and never renders it in the origin of the application (doc 10 T14).
+//
+// `includeShared=true` (doc 02 section 13.2) adds the bookmarks other members shared with the caller, in the `shared` list of the document and at the top level of the file. They are read by the same
+// repository, for the account of the request, page by page and under the grants as they stand when each page is read (src/repositories/export.ts), and the count the event records is the number of them
+// that the caller could read when the export began. Without the parameter, or with `includeShared=false`, nothing shared is read, the list is empty and the event counts none.
 
 const NO_WORKSPACE = "No such resource.";
 
@@ -40,7 +44,7 @@ export interface ExportRoutesOptions {
 }
 
 /** Counts what the caller owns and records the export, in one transaction; undefined when the workspace cannot be read, which ends the request. */
-async function begin(context: ChainContext, tenant: RequestTenant): Promise<ExportSummary | undefined> {
+async function begin(context: ChainContext, tenant: RequestTenant, includeShared: boolean): Promise<ExportSummary | undefined> {
   const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
   const started = await tenant.withTenant(async (tx) => {
     const profile = await accountProfileRepository(tx).profile();
@@ -49,7 +53,7 @@ async function begin(context: ChainContext, tenant: RequestTenant): Promise<Expo
     }
     return startExport(
       { store: exportRepository(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
-      { workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor: auditActorOf(context, tenant.accountId, profile.displayName), ipPrefix },
+      { workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor: auditActorOf(context, tenant.accountId, profile.displayName), ipPrefix, includeShared },
     );
   });
   return started.kind === "unavailable" ? undefined : started.summary;
@@ -68,30 +72,32 @@ export function exportRoutes({ logger }: ExportRoutesOptions): RouteBinding[] {
   };
 
   return [
-    route(exportJsonOperation).handle(async (_request, context) => {
+    route(exportJsonOperation).handle(async ({ query }, context) => {
       const tenant = tenantOf(context);
       const exportedAt = new Date();
-      const summary = await begin(context, tenant);
+      const includeShared = query.includeShared === "true";
+      const summary = await begin(context, tenant, includeShared);
       if (summary === undefined) {
         throw new ProblemError("not_found", NO_WORKSPACE);
       }
       const body = exportStream(
         { page: (read) => tenant.withTenant((tx) => read(exportRepository(tx))), onFailure: onFailure(context) },
-        { accountId: tenant.accountId, workspaceName: summary.workspaceName, exportedAt },
+        { accountId: tenant.accountId, workspaceName: summary.workspaceName, exportedAt, includeShared },
       );
       return { status: 200, body, headers: { "Content-Disposition": `attachment; filename="${exportFilename(exportedAt)}"` } };
     }),
 
-    route(exportNetscapeOperation).handle(async (_request, context) => {
+    route(exportNetscapeOperation).handle(async ({ query }, context) => {
       const tenant = tenantOf(context);
       const exportedAt = new Date();
-      const summary = await begin(context, tenant);
+      const includeShared = query.includeShared === "true";
+      const summary = await begin(context, tenant, includeShared);
       if (summary === undefined) {
         throw new ProblemError("not_found", NO_WORKSPACE);
       }
       const body = exportNetscapeStream(
         { page: (read) => tenant.withTenant((tx) => read(exportRepository(tx))), onFailure: onFailure(context) },
-        { accountId: tenant.accountId },
+        { accountId: tenant.accountId, includeShared },
       );
       return { status: 200, body, headers: { "Content-Type": EXPORT_NETSCAPE_CONTENT_TYPE, "Content-Disposition": `attachment; filename="${exportNetscapeFilename(exportedAt)}"` } };
     }),

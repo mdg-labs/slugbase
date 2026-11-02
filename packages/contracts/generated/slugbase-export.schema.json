@@ -125,9 +125,10 @@
           "type": "array"
         },
         "shared": {
-          "description": "The bookmarks other members shared with the caller; always empty in this release",
-          "items": {},
-          "maxItems": 0,
+          "description": "The bookmarks other members shared with the caller that the caller can read, plan-archived ones left out, in the order of their creation; empty unless the request asked for them with includeShared=true, and never read by an import",
+          "items": {
+            "$ref": "#/$defs/ExportSharedBookmark"
+          },
           "type": "array"
         },
         "tags": {
@@ -199,6 +200,75 @@
         "name",
         "icon",
         "color"
+      ],
+      "type": "object"
+    },
+    "ExportSharedBookmark": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The bookmark's description; null when it has none"
+        },
+        "ownerName": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The display name of the member who owns the bookmark; null when the bookmark has no owner, because its owner has left the workspace"
+        },
+        "shared": {
+          "const": true,
+          "description": "Always true: the bookmark is another member's, shared with the caller, and a re-import never creates it",
+          "type": "boolean"
+        },
+        "slug": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The bookmark's slug as its owner set it; null when it has none"
+        },
+        "title": {
+          "description": "The bookmark's title",
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "description": "The bookmark's address, an http or https URL, as it is stored",
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "title",
+        "description",
+        "slug",
+        "ownerName",
+        "shared"
       ],
       "type": "object"
     }

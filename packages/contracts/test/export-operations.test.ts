@@ -7,6 +7,8 @@ import {
   EXPORT_DISPOSITION_PATTERN,
   EXPORT_NETSCAPE_DISPOSITION_PATTERN,
   ExportDocumentSchema,
+  ExportQuerySchema,
+  ExportSharedBookmarkSchema,
   exportJson,
   exportNetscape,
   jsonResponse,
@@ -34,6 +36,7 @@ const BOOKMARK = {
   folders: ["Reading"],
   tags: ["news"],
 };
+const SHARED = { url: "https://example.com/theirs", title: "Theirs", description: "About it", slug: "theirs", ownerName: "Olga Owner", shared: true };
 const EXPORT = {
   format: "slugbase-export",
   version: 1,
@@ -56,7 +59,7 @@ describe("the export operation", () => {
 
   it("answers an application/json attachment whose body is the export document, with a dated file name that holds no workspace name", () => {
     const responses = documented["responses"] as Record<string, { content?: Obj; headers?: Record<string, { schema: { pattern: string } }> }>;
-    expect(Object.keys(responses).sort()).toEqual(["200", "401", "404", "429", "503"]);
+    expect(Object.keys(responses).sort()).toEqual(["200", "401", "404", "422", "429", "503"]);
     expect(responses["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/ExportDocument" } } });
     const pattern = new RegExp(responses["200"]?.headers?.["Content-Disposition"]?.schema.pattern ?? "(none)");
     expect(pattern.test('attachment; filename="slugbase-export-2026-11-02.json"')).toBe(true);
@@ -102,9 +105,56 @@ describe("the export document", () => {
     expect(ExportDocumentSchema.safeParse({ ...EXPORT, bookmarks: [{ ...BOOKMARK, folders: [{ name: "Reading", icon: "folder", color: 1 }] }] }).success).toBe(false);
   });
 
-  it("holds no go preferences and no shared bookmarks yet", () => {
+  it("holds no go preferences yet", () => {
     expect(ExportDocumentSchema.safeParse({ ...EXPORT, goPreferences: [{ slug: "a", ref: "b1" }] }).success).toBe(false);
-    expect(ExportDocumentSchema.safeParse({ ...EXPORT, shared: [{ url: "https://example.com/" }] }).success).toBe(false);
+  });
+
+  it("holds the shared bookmarks as the readable fields and the flag, a null owner name for a bookmark whose owner has left, and nothing else", () => {
+    expect(ExportDocumentSchema.parse({ ...EXPORT, shared: [SHARED] }).shared).toEqual([SHARED]);
+    expect(ExportDocumentSchema.parse({ ...EXPORT, shared: [{ ...SHARED, description: null, slug: null, ownerName: null }] }).shared).toHaveLength(1);
+    for (const member of ["id", "ref", "tags", "folders", "pinned", "forwarding", "planArchived", "ownerId", "recipients", "shares", "openCount", "createdAt"]) {
+      expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, [member]: [] }).success, member).toBe(false);
+    }
+  });
+
+  it("flags every shared bookmark as shared, and bounds each of its strings as the export bounds the others", () => {
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, shared: false }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ url: SHARED.url, title: SHARED.title, description: null, slug: null, ownerName: null }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, url: "" }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, url: `https://example.com/${"a".repeat(2048)}` }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, title: "t".repeat(301) }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, description: "d".repeat(1001) }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, slug: "s".repeat(65) }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, ownerName: "o".repeat(101) }).success).toBe(false);
+    expect(ExportSharedBookmarkSchema.safeParse({ ...SHARED, ownerName: "" }).success).toBe(false);
+  });
+});
+
+describe("the includeShared parameter", () => {
+  const queryOf = (operation: Obj): Obj[] => (operation["parameters"] as Obj[]).filter((parameter) => parameter["in"] === "query");
+
+  it("is declared on both exports as an optional true or false, and nothing else is taken", () => {
+    const netscapeOperation = document.paths["/api/v1/export/netscape"]?.["get"] as Obj;
+    for (const operation of [documented, netscapeOperation]) {
+      const parameters = queryOf(operation);
+      expect(parameters.map((parameter) => parameter["name"])).toEqual(["includeShared"]);
+      expect(parameters[0]).toMatchObject({ required: false, schema: { type: "string", enum: ["true", "false"] } });
+    }
+    expect(exportJson.request.query).toBe(ExportQuerySchema);
+    expect(exportNetscape.request.query).toBe(ExportQuerySchema);
+    expect(ExportQuerySchema.safeParse({}).success).toBe(true);
+    expect(ExportQuerySchema.safeParse({ includeShared: "true" }).success).toBe(true);
+    expect(ExportQuerySchema.safeParse({ includeShared: "yes" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ includeShared: "true", id: "x" }).success).toBe(false);
+  });
+
+  it("is described on both answers, with what a shared bookmark holds and what it never does", () => {
+    for (const path of ["/api/v1/export/json", "/api/v1/export/netscape"]) {
+      const operation = document.paths[path]?.["get"] as Obj;
+      const description = (operation["responses"] as Record<string, { description: string }>)["200"]?.description ?? "";
+      expect(description, path).toMatch(/includeShared=true/);
+      expect(description, path).toMatch(/never the owner's tags/);
+    }
   });
 });
 
@@ -120,7 +170,7 @@ describe("the Netscape export operation", () => {
 
   it("answers a text/html attachment of opaque bytes, with a dated .html file name that holds no workspace name", () => {
     const responses = netscape["responses"] as Record<string, { content?: Obj; headers?: Record<string, { schema: { pattern: string } }> }>;
-    expect(Object.keys(responses).sort()).toEqual(["200", "401", "404", "429", "503"]);
+    expect(Object.keys(responses).sort()).toEqual(["200", "401", "404", "422", "429", "503"]);
     expect(responses["200"]?.content).toEqual({ "text/html": { schema: { type: "string", format: "binary" } } });
     const pattern = new RegExp(responses["200"]?.headers?.["Content-Disposition"]?.schema.pattern ?? "(none)");
     expect(pattern.test('attachment; filename="slugbase-export-2026-11-02.html"')).toBe(true);

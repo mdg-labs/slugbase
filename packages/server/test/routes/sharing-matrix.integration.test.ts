@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { ExportDocumentSchema } from "@slugbase/contracts";
 import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,7 +15,8 @@ import { ACTIONS, expected, expectedForFolder, FOLDER_ACTIONS, FOLDER_RELATIONS,
 // or, for a list, a `200` that leaves the bookmark out. A request that is refused leaves every row of the tables it could write as it was. The owner asks last,
 // since an owner's request changes the bookmark. The same table judges the share operations of a folder, for the relations a folder can have (a direct share, a
 // team share, none, an admin with no share and a member who has left): a recipient is told `403`, a member who cannot read the folder `404`, and the answer
-// to each is the one `GET /folders/{id}` agrees with. Besides the table: the owner's tags, pin and folders reach no recipient, and the recipient cannot reach the tag.
+// to each is the one `GET /folders/{id}` agrees with. The export row is judged by the documents of both exports asked with `includeShared=true`: the owner's bookmark is in the member's own bookmarks,
+// a recipient's is in the list `shared` (JSON) or at the top level (Netscape) with the readable fields alone, any other member finds it in neither, and a member who has left is answered `404`. Besides the table: the owner's tags, pin and folders reach no recipient, and the recipient cannot reach the tag.
 
 const TEST_TIMEOUT_MS = 90_000;
 const BOOKMARKS = "/api/v1/bookmarks";
@@ -23,6 +25,7 @@ const TAGS = "/api/v1/tags";
 const TEAMS = "/api/v1/teams";
 const MEMBERS = "/api/v1/members";
 const SEARCH = "/api/v1/search";
+const EXPORT = "/api/v1/export";
 const GRANTED: EntitlementCheck = (entitlement) => entitlement === "sharing.members" || entitlement === "sharing.teams" || entitlement === "teams.manage";
 const RELAXED = {
   RATE_LIMIT_BULK_IP: "10000/hour",
@@ -152,6 +155,9 @@ async function setup(serving: World): Promise<Cast> {
   const readers = await idOf(send(serving, "POST", TEAMS, as(owner), { name: "Readers" }));
   expect((await send(serving, "PUT", `${TEAMS}/${readers}/members`, as(owner), { accountIds: [team.account.id, former.account.id] })).status).toBe(200);
   const spareTeam = await idOf(send(serving, "POST", TEAMS, as(owner), { name: "Spare team" }));
+  // The owner is in this team, which only the export bookmark is shared with: they hold a grant on their own bookmark, which the export must not list as shared with them. No other row's owner holds one.
+  const ownersTeam = await idOf(send(serving, "POST", TEAMS, as(owner), { name: "Owner's team" }));
+  expect((await send(serving, "PUT", `${TEAMS}/${ownersTeam}/members`, as(owner), { accountIds: [owner.account.id] })).status).toBe(200);
   expect((await send(serving, "POST", `${FOLDERS}/${sharedFolder}/shares`, as(owner), { accountId: folder.account.id })).status).toBe(201);
 
   const make = async (name: string): Promise<{ id: string; slug: string }> => {
@@ -159,6 +165,9 @@ async function setup(serving: World): Promise<Cast> {
     const id = await idOf(send(serving, "POST", BOOKMARKS, as(owner), { url: OWNERS_URL, title: `Matrix ${name}`, slug, pinned: true, tagIds: [tag], folderIds: [sharedFolder] }));
     for (const target of [{ accountId: direct.account.id }, { accountId: former.account.id }, { teamId: readers }]) {
       expect((await send(serving, "POST", `${BOOKMARKS}/${id}/shares`, as(owner), target)).status).toBe(201);
+    }
+    if (name === "export") {
+      expect((await send(serving, "POST", `${BOOKMARKS}/${id}/shares`, as(owner), { teamId: ownersTeam })).status).toBe(201);
     }
     return { id, slug };
   };
@@ -218,6 +227,62 @@ async function forwarding(as: Relation, slug: string): Promise<string> {
   return response.status === 404 ? "not_found" : `${String(response.status)} ${response.headers.get("location") ?? ""}`;
 }
 
+/** The display name of the owner of the matrix's bookmarks, which a recipient's entry of the export names. */
+async function ownerName(): Promise<string> {
+  const [row] = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ display_name: string }[]>`SELECT display_name FROM accounts WHERE id = ${cast.people.owner.account.id}`;
+  });
+  return row?.display_name ?? "";
+}
+
+/** The JSON export is allowed when the bookmark is in the member's own bookmarks or, flagged, in the shared list; hidden when it is in neither. */
+async function exportedAsJson(as: Relation, bookmark: { readonly id: string; readonly slug: string }): Promise<string> {
+  const response = await request(as, "GET", `${EXPORT}/json?includeShared=true`);
+  if (response.status !== 200) {
+    return outcomeOf(response, []);
+  }
+  const text = await response.text();
+  const document = ExportDocumentSchema.parse(JSON.parse(text));
+  const own = document.bookmarks.find((entry) => entry.slug === bookmark.slug);
+  const sharedWithThem = document.shared.filter((entry) => entry.slug === bookmark.slug);
+  if (as === "owner") {
+    expect(own, "the owner's bookmark in their own list").toMatchObject({ url: OWNERS_URL, tags: [PRIVATE_TAG], pinned: true });
+    expect(sharedWithThem, "the owner's bookmark in their shared list").toEqual([]);
+    return "allowed";
+  }
+  expect(own, `${as}: another member's bookmark in their own list`).toBeUndefined();
+  expect(text, `${as}: the owner's private tag`).not.toContain(PRIVATE_TAG);
+  expect(text, `${as}: the identifier of the bookmark`).not.toContain(bookmark.id);
+  if (sharedWithThem.length === 0) {
+    return "hidden";
+  }
+  expect(sharedWithThem).toHaveLength(1);
+  expect(sharedWithThem[0]).toEqual({ url: OWNERS_URL, title: expect.stringMatching(/^Matrix /) as string, description: null, slug: bookmark.slug, ownerName: await ownerName(), shared: true });
+  return "allowed";
+}
+
+/** The Netscape export is allowed when the file has a link with the bookmark's slug; a recipient's link is at the top level and has no tags. */
+async function exportedAsFile(as: Relation, bookmark: { readonly id: string; readonly slug: string }): Promise<string> {
+  const response = await request(as, "GET", `${EXPORT}/netscape?includeShared=true`);
+  if (response.status !== 200) {
+    return outcomeOf(response, []);
+  }
+  const text = await response.text();
+  const link = text.split("\n").find((line) => line.includes(`SHORTCUTURL="${bookmark.slug}"`));
+  if (as === "owner") {
+    expect(link, "the owner's link").toContain(`TAGS="${PRIVATE_TAG}"`);
+    return "allowed";
+  }
+  expect(text, `${as}: the owner's private tag`).not.toContain(PRIVATE_TAG);
+  expect(text, `${as}: a tag or a folder of the owner's`).not.toMatch(/TAGS=|Shared folder/);
+  if (link === undefined) {
+    return "hidden";
+  }
+  expect(link, "a recipient's link is at the top level").toMatch(/^ {4}<DT><A HREF=/);
+  return "allowed";
+}
+
 /** For each action, the operations that perform it, in the order they are asked (an owner's request must not change what the next one judges). */
 const PROBES: Readonly<Record<Action, readonly Probe[]>> = {
   see: [
@@ -249,6 +314,10 @@ const PROBES: Readonly<Record<Action, readonly Probe[]>> = {
     { name: "DELETE a share", run: async (as, b, extra) => outcomeOf(await request(as, "DELETE", `${BOOKMARKS}/${b.id}/shares/${extra.shareId}`), [204]) },
   ],
   "see-recipients": [{ name: "GET shares", run: async (as, b) => outcomeOf(await request(as, "GET", `${BOOKMARKS}/${b.id}/shares`), [200]) }],
+  export: [
+    { name: "GET /export/json?includeShared=true", run: (as, b) => exportedAsJson(as, b) },
+    { name: "GET /export/netscape?includeShared=true", run: (as, b) => exportedAsFile(as, b) },
+  ],
 };
 
 /** The relations in the order they ask: the owner last. */

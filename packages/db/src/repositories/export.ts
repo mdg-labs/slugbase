@@ -1,10 +1,12 @@
-import type { ExportBookmarkRow, ExportFolderRow, ExportStore, ExportSummary, NetscapeBookmarkRow, NetscapeExportStore, NetscapeSectionRow } from "@slugbase/core";
+import type { ExportBookmarkRow, ExportFolderRow, ExportSharedRow, ExportStore, ExportSummary, NetscapeBookmarkRow, NetscapeExportStore, NetscapeSectionRow } from "@slugbase/core";
 import { sql, type SQL } from "drizzle-orm";
+import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { folderBookmarks, folders } from "../schema/folders.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { workspaces } from "../schema/workspaces.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
+import { sharedBookmarks } from "./bookmark-access.ts";
 
 // The reads of the export (doc 02 section 13.2, doc 05 section 2.4, doc 10 T1 and T2) in the active workspace. Every statement names the workspace and the owner as well as the policy, and the owner
 // is always the account of the transaction: a request that names another account is a programming error and throws. A bookmark is read whether or not a downgrade archived it, and a bookmark, folder
@@ -13,6 +15,12 @@ import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 // and filtering by owner, so the work of the whole export is a pass over the workspace's bookmarks and not a sort of the member's for each page; the folders and tags by the bytes of their name
 // (`COLLATE "C"`), a total order since a member's names are unique, which also makes the order the same on every database whatever its locale. The Netscape export reads a section at a time: the member's folders by identifier, the bookmarks of
 // one of them by the identifier of the folder, and the member's bookmarks that are in none of its folders.
+//
+// The bookmarks shared with the member (`includeShared`, doc 02 sections 8.2 and 13.2) are read from the set of the member's grants, which is the one the lists are driven from (`sharedBookmarks`: a direct share, a
+// team's, or a shared folder's, written once in `bookmark-access.ts`), so a bookmark is readable here exactly when the list of the shared bookmarks shows it, and a share that ended is in no page read after it. A bookmark the member
+// owns is never in that read, a plan-archived one is left out as the lists leave it out, and a bookmark of another workspace is out of reach of the workspace named in every statement. The row is the readable
+// fields and the name of the owner, read from the account (null for a bookmark with no owner, and for an owner whose name the policy of accounts does not let the member read), and nothing of the owner's tags,
+// folders or pin, and nothing of who else the bookmark is shared with: none of those tables is read.
 
 function requireWorkspace(tx: TenantTx): string {
   if (tx.workspaceId === undefined) {
@@ -34,15 +42,22 @@ function requireLimit(limit: number): void {
   }
 }
 
-/** The statement of `ExportRepository.summary`, exported for the test that plans it. */
-export function summaryStatement(tx: TenantTx, ownerId: string): SQL {
+/** The bookmarks of the workspace that are shared with the member and that they can read now: not their own, not plan-archived. */
+function sharedWith(workspaceId: string, member: string): SQL {
+  return sql`${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.id} IN (${sharedBookmarks(member, workspaceId)}) AND ${bookmarks.ownerId} IS DISTINCT FROM ${member}::uuid AND ${bookmarks.planArchivedAt} IS NULL`;
+}
+
+/** The statement of `ExportRepository.summary`, exported for the test that plans it. The count of the shared bookmarks is read only with `includeShared`, and is 0 without. */
+export function summaryStatement(tx: TenantTx, ownerId: string, includeShared = false): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
+  const shared = includeShared ? sql`(SELECT count(*) FROM ${bookmarks} WHERE ${sharedWith(workspaceId, owner)})::int` : sql`0`;
   return sql`
     SELECT ${workspaces.name} AS workspace_name,
       (SELECT count(*) FROM ${bookmarks} WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid)::int AS bookmarks,
       (SELECT count(*) FROM ${folders} WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid)::int AS folders,
-      (SELECT count(*) FROM ${tags} WHERE ${tags.workspaceId} = ${workspaceId}::uuid AND ${tags.ownerId} = ${owner}::uuid)::int AS tags
+      (SELECT count(*) FROM ${tags} WHERE ${tags.workspaceId} = ${workspaceId}::uuid AND ${tags.ownerId} = ${owner}::uuid)::int AS tags,
+      ${shared} AS shared
     FROM ${workspaces}
     WHERE ${workspaces.id} = ${workspaceId}::uuid`;
 }
@@ -96,6 +111,24 @@ export function bookmarksStatement(tx: TenantTx, ownerId: string, after: string 
       ), ARRAY[]::text[]) AS tag_names
     FROM ${bookmarks}
     WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid AND ${resume}
+    ORDER BY ${bookmarks.id}
+    LIMIT ${limit}::integer`;
+}
+
+/**
+ * The statement of `ExportRepository.shared`, exported for the test that plans it: the bookmarks of other members that the member can read through a share, by identifier, with the display name of the
+ * owner, resumed after the identifier of the last row of a page.
+ */
+export function sharedStatement(tx: TenantTx, accountId: string, after: string | undefined, limit: number): SQL {
+  const workspaceId = requireWorkspace(tx);
+  const member = requireOwner(tx, accountId);
+  requireLimit(limit);
+  const resume = after === undefined ? sql`TRUE` : sql`${bookmarks.id} > ${after}::uuid`;
+  return sql`
+    SELECT ${bookmarks.id} AS id, ${bookmarks.url} AS url, ${bookmarks.title} AS title, ${bookmarks.description} AS description, ${bookmarks.slug} AS slug, ${accounts.displayName} AS owner_name
+    FROM ${bookmarks}
+    LEFT JOIN ${accounts} ON ${accounts.id} = ${bookmarks.ownerId}
+    WHERE ${sharedWith(workspaceId, member)} AND ${resume}
     ORDER BY ${bookmarks.id}
     LIMIT ${limit}::integer`;
 }
@@ -193,9 +226,9 @@ export type ExportRepository = ExportStore & NetscapeExportStore;
 /** The reads of the export bound to the open transaction; every method needs a transaction opened with a workspace. */
 export function exportRepository(tx: TenantTx): ExportRepository {
   return {
-    async summary(ownerId): Promise<ExportSummary | undefined> {
-      const [row] = await tenantHandle(tx).execute<{ workspace_name: string; bookmarks: number; folders: number; tags: number }>(summaryStatement(tx, ownerId));
-      return row === undefined ? undefined : { workspaceName: row.workspace_name, bookmarks: row.bookmarks, folders: row.folders, tags: row.tags };
+    async summary(ownerId, includeShared): Promise<ExportSummary | undefined> {
+      const [row] = await tenantHandle(tx).execute<{ workspace_name: string; bookmarks: number; folders: number; tags: number; shared: number }>(summaryStatement(tx, ownerId, includeShared));
+      return row === undefined ? undefined : { workspaceName: row.workspace_name, bookmarks: row.bookmarks, folders: row.folders, tags: row.tags, shared: row.shared };
     },
 
     async folders(ownerId, after, limit): Promise<readonly ExportFolderRow[]> {
@@ -222,6 +255,11 @@ export function exportRepository(tx: TenantTx): ExportRepository {
         folders: [...row.folder_names],
         tags: [...row.tag_names],
       }));
+    },
+
+    async shared(accountId, after, limit): Promise<readonly ExportSharedRow[]> {
+      const rows = await tenantHandle(tx).execute<{ id: string; url: string; title: string; description: string | null; slug: string | null; owner_name: string | null }>(sharedStatement(tx, accountId, after, limit));
+      return rows.map((row) => ({ id: row.id, url: row.url, title: row.title, description: row.description, slug: row.slug, ownerName: row.owner_name }));
     },
 
     async sections(ownerId, after, limit): Promise<readonly NetscapeSectionRow[]> {

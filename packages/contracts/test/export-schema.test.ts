@@ -105,9 +105,18 @@ describe("the generated JSON Schema of the export format", () => {
     expect(validate({ ...document(), format: "other" })).toBe(false);
   });
 
-  it("refuses an entry in the lists that this release writes empty", () => {
+  it("refuses an entry in the list of go preferences, which this release writes empty", () => {
     expect(validate({ ...document(), goPreferences: [{}] })).toBe(false);
-    expect(validate({ ...document(), shared: [{}] })).toBe(false);
+  });
+
+  it("accepts the shared bookmarks as the readable fields and the flag, and refuses an entry that holds more or less", () => {
+    const entry = { url: "https://example.com/theirs", title: "Theirs", description: null, slug: null, ownerName: null, shared: true };
+    const doc = { ...document(), shared: [entry, { ...entry, description: "d", slug: "s", ownerName: "Olga Owner" }] };
+    expect(ExportDocumentSchema.safeParse(doc).success).toBe(true);
+    expect(validate(doc), JSON.stringify(validate.errors)).toBe(true);
+    for (const refused of [{}, { ...entry, tags: ["private"] }, { ...entry, folders: [] }, { ...entry, pinned: false }, { ...entry, shared: false }, { ...entry, title: "t".repeat(301) }, { ...entry, ownerName: "o".repeat(101) }]) {
+      expect(validate({ ...document(), shared: [refused] }), JSON.stringify(refused)).toBe(false);
+    }
   });
 
   it("refuses a bookmark reference that is not b and a position", () => {
