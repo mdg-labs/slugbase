@@ -84,8 +84,9 @@ jobs:
       # The journeys run in the Playwright image on the network of the runner
       # (e2e/in-image.sh), as the user of the runner, so that what they write under
       # e2e/ is readable by the upload step. The step fails when a test does. --shard
-      # takes the shard's quarter of the tests of every project, and the `setup` project,
-      # which the other projects depend on, runs in each shard against its stack.
+      # splits the tests of all projects by count, in project order, so each test runs in
+      # one shard of a leg; the `setup` project, which the other projects depend on, runs
+      # in each shard against its stack.
       - name: Run the journeys
         env:
           BUILD_COMMIT: ${{ github.sha }}
