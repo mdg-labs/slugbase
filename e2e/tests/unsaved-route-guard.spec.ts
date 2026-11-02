@@ -33,6 +33,35 @@ interface FormCase {
   readonly before: string;
 }
 
+const MUTATION = { origin: appOrigin(), "content-type": "application/json" };
+
+// The ids of the tags a journey made, by its page; `afterEach` removes them whether the journey passed or failed.
+const madeTags = new WeakMap<Page, string[]>();
+
+/** Makes a tag for the journey to edit and returns its name. */
+async function makeTag(page: Page): Promise<string> {
+  const name = `guard-${randomBytes(4).toString("hex")}`;
+  const made = await page.request.post("/api/v1/tags", { headers: MUTATION, data: { name } });
+  expect(made.status(), "POST /api/v1/tags").toBe(201);
+  const { id } = (await made.json()) as { id: string };
+  madeTags.set(page, [...(madeTags.get(page) ?? []), id]);
+  return name;
+}
+
+test.afterEach(async ({ page }) => {
+  const refused: string[] = [];
+  for (const id of madeTags.get(page) ?? []) {
+    const removed = await page.request.delete(`/api/v1/tags/${id}`, { headers: MUTATION });
+    if (removed.status() !== 204) {
+      refused.push(`${id}: ${String(removed.status())}`);
+    }
+  }
+  madeTags.delete(page);
+  if (refused.length > 0) {
+    throw new Error(`DELETE /api/v1/tags/{id} was refused while the journey removed what it made (${refused.join(", ")})`);
+  }
+});
+
 const NAV = (page: Page): Locator => page.getByRole("navigation", { name: en("shell.navigation"), exact: true });
 const SETTINGS_NAV = (page: Page): Locator => page.getByRole("navigation", { name: en("settings.navigation"), exact: true });
 
@@ -75,15 +104,13 @@ const CASES: readonly FormCase[] = [
     name: "the tag rename form",
     before: "/",
     open: async (page, app) => {
-      const token = randomBytes(4).toString("hex");
-      const made = await page.request.post("/api/v1/tags", { headers: { origin: appOrigin(), "content-type": "application/json" }, data: { name: `guard-${token}` } });
-      expect(made.status(), "POST /api/v1/tags").toBe(201);
+      const name = await makeTag(page);
       await app.visit("/", page.getByRole("heading", { level: 1 }));
       await NAV(page).getByRole("link", { name: en("shell.tags"), exact: true }).click();
       await expect(page.getByRole("heading", { level: 1, name: en("tags.page.title"), exact: true })).toBeVisible();
       const dialog = page.getByRole("dialog", { name: en("tags.form.title"), exact: true });
       return opened(dialog, dialog.getByRole("textbox", { name: en("tags.form.name.label"), exact: true }), "/tags", async () => {
-        await page.getByRole("button", { name: en("tags.list.actionsFor", { name: `guard-${token}` }), exact: true }).click();
+        await page.getByRole("button", { name: en("tags.list.actionsFor", { name }), exact: true }).click();
         await page.getByRole("menuitem", { name: en("tags.actions.rename"), exact: true }).click();
       });
     },
@@ -345,9 +372,7 @@ test.describe("a Back across documents behind an edited form", () => {
 // navigation, one document), with the tag rename form open on /tags.
 test.describe("two traversals during one question", () => {
   async function openOnThirdEntry(page: Page, app: App): Promise<{ dialog: Locator; field: Locator }> {
-    const token = randomBytes(4).toString("hex");
-    const made = await page.request.post("/api/v1/tags", { headers: { origin: appOrigin(), "content-type": "application/json" }, data: { name: `guard-${token}` } });
-    expect(made.status(), "POST /api/v1/tags").toBe(201);
+    const tag = await makeTag(page);
     const heading = (name: string): Locator => page.getByRole("heading", { level: 1, name, exact: true });
     await app.visit("/bookmarks", heading(en("shell.bookmarks")));
     await NAV(page).getByRole("link", { name: en("shell.folders"), exact: true }).click();
@@ -356,7 +381,7 @@ test.describe("two traversals during one question", () => {
     await NAV(page).getByRole("link", { name: en("shell.tags"), exact: true }).click();
     await expect(heading(en("tags.page.title"))).toBeVisible();
     await app.scan();
-    await page.getByRole("button", { name: en("tags.list.actionsFor", { name: `guard-${token}` }), exact: true }).click();
+    await page.getByRole("button", { name: en("tags.list.actionsFor", { name: tag }), exact: true }).click();
     await page.getByRole("menuitem", { name: en("tags.actions.rename"), exact: true }).click();
     const dialog = page.getByRole("dialog", { name: en("tags.form.title"), exact: true });
     const field = dialog.getByRole("textbox", { name: en("tags.form.name.label"), exact: true });
@@ -431,9 +456,7 @@ test.describe("two traversals during one question", () => {
 // form and the edit stay, and no wait for a history entry is left listening.
 test("a second Back onto an entry with the form's own address settles the question and leaves no listener", async ({ page, app, account }) => {
   await account.set({ locale: "en" });
-  const token = randomBytes(4).toString("hex");
-  const made = await page.request.post("/api/v1/tags", { headers: { origin: appOrigin(), "content-type": "application/json" }, data: { name: `guard-${token}` } });
-  expect(made.status(), "POST /api/v1/tags").toBe(201);
+  const tag = await makeTag(page);
   const heading = (name: string): Locator => page.getByRole("heading", { level: 1, name, exact: true });
   await app.visit("/tags", heading(en("tags.page.title")));
   for (const [link, title] of [
@@ -446,7 +469,7 @@ test("a second Back onto an entry with the form's own address settles the questi
     await expect(heading(title)).toBeVisible();
     await app.scan();
   }
-  await page.getByRole("button", { name: en("tags.list.actionsFor", { name: `guard-${token}` }), exact: true }).click();
+  await page.getByRole("button", { name: en("tags.list.actionsFor", { name: tag }), exact: true }).click();
   await page.getByRole("menuitem", { name: en("tags.actions.rename"), exact: true }).click();
   const dialog = page.getByRole("dialog", { name: en("tags.form.title"), exact: true });
   const field = dialog.getByRole("textbox", { name: en("tags.form.name.label"), exact: true });
