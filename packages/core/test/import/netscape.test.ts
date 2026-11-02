@@ -193,6 +193,17 @@ describe("a file that is meant to hurt", () => {
     expect(result.failed.map((entry) => entry.reason)).toEqual(hrefs.map(() => "url_not_allowed"));
   });
 
+  it("fails a javascript link of 3 000 characters as url_not_allowed, and an https link of that length as url_invalid", async () => {
+    const bookmarks = parsed(`<DL><DT><A HREF="javascript:${"a".repeat(3000)}">Long bookmarklet</A><DT><A HREF="https://e.test/${"a".repeat(3000)}">Long address</A></DL>`);
+    const result = await previewed(bookmarks);
+
+    expect(bookmarks.map((bookmark) => bookmark.url.length)).toEqual([3011, 3000 + "https://e.test/".length]);
+    expect(result.failed.map((entry) => [entry.position, entry.reason])).toEqual([
+      [1, "url_not_allowed"],
+      [2, "url_invalid"],
+    ]);
+  });
+
   it("ends bounded on unclosed and nested tags: an unclosed quote, comment, tag, title and link, and every link inside the last", () => {
     const [kept] = parsed('<DL><DT><A HREF="https://e.test/kept">Kept</A>');
 

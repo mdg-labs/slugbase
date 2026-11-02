@@ -169,7 +169,19 @@ describe("normalizeBookmarkUrl, what it refuses (doc 10 T12 and T13)", () => {
     const prefix = "https://example.com/";
     expect(accepted(prefix + "a".repeat(BOOKMARK_URL_MAX_LENGTH - prefix.length)).url).toHaveLength(BOOKMARK_URL_MAX_LENGTH);
     expect(refusal(prefix + "a".repeat(BOOKMARK_URL_MAX_LENGTH - prefix.length + 1))).toBe("too_long");
-    expect(refusal(`javascript:${"a".repeat(BOOKMARK_URL_MAX_LENGTH)}`)).toBe("too_long");
+  });
+
+  it("refuses a value that is not an http or https URL for its scheme at any length, and an over-long http or https URL for its length", () => {
+    for (const scheme of ["javascript:", "data:text/html,", "vbscript:", "file:///", "//example.com/", "example.com/"]) {
+      expect(refusal(`${scheme}${"a".repeat(3000)}`)).toBe("not_http");
+    }
+    expect(refusal(`  JavaScript:${"a".repeat(3000)}\n`)).toBe("not_http");
+    expect(refusal(`http://example.com/${"a".repeat(3000)}`)).toBe("too_long");
+    expect(refusal(`HTTPS://example.com/${"a".repeat(3000)}`)).toBe("too_long");
+  });
+
+  it("refuses a huge value of another scheme without scanning it", { timeout: 1_000 }, () => {
+    expect(refusal(`javascript:${"a".repeat(50_000_000)}`)).toBe("not_http");
   });
 
   it("counts the length of the value without the whitespace around it", () => {

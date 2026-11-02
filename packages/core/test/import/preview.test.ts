@@ -97,6 +97,13 @@ describe("readImportBookmark", () => {
     expect(huge).toMatchObject({ reason: "url_invalid" });
     expect((huge as { url: string }).url).toHaveLength(2048);
   });
+
+  it("refuses a URL of another scheme as url_not_allowed whatever its length", () => {
+    const long = readImportBookmark({ url: `javascript:${"a".repeat(3000)}` }, 1);
+
+    expect(long).toMatchObject({ reason: "url_not_allowed" });
+    expect((long as { url: string }).url).toHaveLength(2048);
+  });
 });
 
 describe("previewImport", () => {

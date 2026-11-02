@@ -99,11 +99,13 @@ export function normalizeBookmarkUrl(input: string): BookmarkUrlResult {
   if (given === "") {
     return refuse("empty");
   }
-  if (given.length > BOOKMARK_URL_MAX_LENGTH) {
-    return refuse("too_long");
-  }
+  // The scheme comes before the length: the prefix test reads only the start of the value, and a link of another scheme
+  // is refused for that scheme at any length.
   if (!HTTP_PREFIX.test(given)) {
     return refuse("not_http");
+  }
+  if (given.length > BOOKMARK_URL_MAX_LENGTH) {
+    return refuse("too_long");
   }
   if (CONTROL_CHARACTER.test(given) || !URL.canParse(given)) {
     return refuse("malformed");

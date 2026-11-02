@@ -119,6 +119,27 @@ describe("POST /import/netscape", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await stored(shared.workspaceId)).toEqual({ bookmarks: 3, counter: 3, folders: 1, tags: 2, links: 4, completed: 1, events: 3 });
   });
 
+  it("reports a javascript link of 3 000 characters as url_not_allowed, and an https one of that length as url_invalid, and stores neither", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, shared } = await setup(world);
+
+    const result = await imported(
+      world,
+      a,
+      bookmarkFile([
+        { url: `javascript:${"a".repeat(3000)}`, title: "Long bookmarklet" },
+        { url: `https://example.com/${"a".repeat(3000)}`, title: "Long address" },
+      ]),
+    );
+
+    expect(result).toMatchObject({ created: 0 });
+    expect(result.failed.map((entry) => [entry.position, entry.reason])).toEqual([
+      [1, "url_not_allowed"],
+      [2, "url_invalid"],
+    ]);
+    expect(await stored(shared.workspaceId)).toMatchObject({ bookmarks: 0, counter: 0 });
+  });
+
   it("answers a dry run as the write answers it, writes nothing and records no import.completed", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);
