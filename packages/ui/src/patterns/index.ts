@@ -29,6 +29,7 @@ export { DataTable, type DataTableCardSlot, type DataTableColumn, type DataTable
 export { Disclosure, type DisclosureProps } from "./disclosure.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { Favicon, type FaviconProps } from "./favicon.tsx";
+export { FileDrop, type FileDropProps } from "./file-drop.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
 export { FOLDER_ICON_COMPONENTS } from "./folder-icons.ts";
 export { FormField, type FormFieldProps } from "./form-field.tsx";

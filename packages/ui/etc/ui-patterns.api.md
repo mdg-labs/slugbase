@@ -608,6 +608,28 @@ export interface FeedbackToastProviderProps {
     regionLabel: string;
 }
 
+// @public
+export function FileDrop(input: FileDropProps): ReactElement;
+
+// @public (undocumented)
+export interface FileDropProps {
+    accept?: string;
+    action?: ReactNode;
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    dropLabel: ReactNode;
+    error?: ReactNode;
+    fileName?: ReactNode;
+    inputRef?: Ref<HTMLInputElement>;
+    // (undocumented)
+    label: ReactNode;
+    name?: string;
+    onFile: (file: File) => void;
+}
+
 export { FilterXIcon }
 
 // @public
@@ -1379,6 +1401,7 @@ export interface WizardProps {
     className?: string;
     // (undocumented)
     description?: ReactNode;
+    headingLevel?: 1 | 2;
     nextDisabled?: boolean;
     nextLabel: string;
     onBack?: () => void;

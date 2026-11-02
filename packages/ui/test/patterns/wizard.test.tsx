@@ -45,6 +45,19 @@ describe("Wizard", () => {
     expect(screen.getByText("Who you are.")).toBeTruthy();
   });
 
+  it("takes the heading level of the page it sits in, and puts the step's heading one level below", () => {
+    const { rerender } = render(<Steps />);
+    expect(screen.getByRole("heading", { level: 1, name: "Set up" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Your account" })).toBeTruthy();
+
+    rerender(<Steps headingLevel={2} />);
+
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.getByRole("region", { name: "Set up" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Set up" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 3, name: "Your account" })).toBeTruthy();
+  });
+
   it("shows Back only when it is given a way back, and calls it", () => {
     const onBack = vi.fn();
     const { rerender } = render(<Steps />);

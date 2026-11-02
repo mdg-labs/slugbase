@@ -1423,6 +1423,7 @@
       "preferences": "Voreinstellungen",
       "security": "Sicherheit",
       "tokens": "API-Tokens",
+      "data": "Import & Export",
       "workspace": "Workspace",
       "general": "Allgemein",
       "members": "Mitglieder",
@@ -2208,6 +2209,97 @@
           "changedElsewhere": "Ein Team wurde woanders geändert, daher wurde darin nichts überschrieben. Speichere erneut, um deine Änderungen auf die neuesten Mitglieder anzuwenden.",
           "unavailable": "Die Teams konnten gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
           "partlySaved": "Ein Teil deiner Änderungen wurde gespeichert, aber nicht alle. Speichere erneut, um den Rest zu senden."
+        }
+      }
+    }
+  },
+  "data": {
+    "title": "Import & Export",
+    "import": {
+      "title": "Lesezeichen importieren",
+      "description": "Füge Lesezeichen aus einer Lesezeichen-Datei deines Browsers oder aus einem SlugBase-JSON-Export hinzu.",
+      "stepLabel": "Schritt {step} von {count}",
+      "back": "Zurück",
+      "retry": "Erneut versuchen",
+      "next": {
+        "preview": "Vorschau",
+        "import": "Importieren",
+        "importing": "Import läuft …",
+        "another": "Weitere Datei importieren"
+      },
+      "step1": {
+        "title": "Datei auswählen",
+        "description": "Wähle die Datei aus, die du importieren möchtest. Erst im nächsten Schritt wird nach deiner Bestätigung etwas hinzugefügt."
+      },
+      "step2": {
+        "title": "Prüfen, was importiert wird",
+        "description": "So würde der Import ablaufen. Es wurde noch nichts hinzugefügt."
+      },
+      "step3": {
+        "title": {
+          "running": "Import läuft",
+          "done": "Import abgeschlossen"
+        },
+        "description": {
+          "running": "Lass diese Seite geöffnet, bis der Import abgeschlossen ist.",
+          "done": "Das hat der Import gemacht."
+        }
+      },
+      "file": {
+        "label": "Lesezeichen-Datei",
+        "description": "Eine Lesezeichen-Datei deines Browsers (.html) oder ein SlugBase-JSON-Export (.json), bis zu 5 MiB.",
+        "drop": "Ziehe eine Datei hierher oder wähle eine aus."
+      },
+      "skipDuplicates": "Duplikate überspringen",
+      "count": {
+        "bookmarks": "Lesezeichen",
+        "folders": "Ordner",
+        "tags": "Tags"
+      },
+      "preview": {
+        "target": "Die Lesezeichen werden zu {workspace} hinzugefügt.",
+        "targetUnknown": "Die Lesezeichen werden zu deinem aktuellen Workspace hinzugefügt.",
+        "file": "In der Datei",
+        "plan": "Der Import würde",
+        "created": "Lesezeichen hinzufügen",
+        "foldersCreated": "Ordner anlegen",
+        "tagsCreated": "Tags anlegen",
+        "skippedDuplicate": "als Duplikate überspringen",
+        "skippedLimit": "überspringen, weil der Workspace voll ist",
+        "failed": "auslassen, weil die Adresse ungültig ist",
+        "slugsDropped": "Slugs verwerfen"
+      },
+      "running": "Deine Lesezeichen werden importiert",
+      "result": {
+        "created": "Hinzugefügt",
+        "skipped": "Übersprungen",
+        "failed": "Fehlgeschlagen",
+        "slugsDropped": "Slugs verworfen",
+        "made": "{folders, plural, one {# Ordner} other {# Ordner}} und {tags, plural, one {# Tag} other {# Tags}} wurden angelegt."
+      },
+      "status": {
+        "checking": "Die Datei wird geprüft.",
+        "checkFailed": "Die Datei konnte nicht geprüft werden.",
+        "running": "Der Import hat begonnen.",
+        "done": "Der Import ist abgeschlossen. {count, plural, one {# Lesezeichen wurde} other {# Lesezeichen wurden}} hinzugefügt.",
+        "failed": "Der Import wurde nicht abgeschlossen."
+      },
+      "error": {
+        "unsupported": "Wähle eine SlugBase-JSON-Datei (.json) oder eine Lesezeichen-Datei deines Browsers (.html).",
+        "tooLarge": "Diese Datei ist größer als 5 MiB. Teile sie in kleinere Dateien auf.",
+        "unsupportedType": "Der Server akzeptiert diese Art von Datei nicht. Wähle eine SlugBase-JSON-Datei oder eine Lesezeichen-Datei deines Browsers.",
+        "newerVersion": "Diese Datei stammt aus einer neueren SlugBase-Version, als diese lesen kann. Aktualisiere SlugBase oder exportiere die Datei erneut aus dieser Version.",
+        "tooManyNewNames": "Diese Datei würde mehr als {count, number} neue Ordner und Tags anlegen. Teile sie in kleinere Dateien auf.",
+        "tooManyBookmarks": "Diese Datei enthält mehr als {count, number} Lesezeichen. Teile sie in kleinere Dateien auf.",
+        "tooManyAssignments": "Die Ordner und Tags dieser Datei kommen zusammen mehr als {count, number} Mal vor, auch wenn sie nur wenige Lesezeichen enthält. Teile sie in kleinere Dateien auf.",
+        "invalid": "Das ist keine gültige SlugBase-JSON-Datei und keine gültige Lesezeichen-Datei eines Browsers.",
+        "unreadable": "Die Datei konnte nicht gelesen werden. Wähle sie erneut aus.",
+        "network": "Der Server ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
+        "failed": "Der Import konnte nicht durchgeführt werden. Versuche es erneut.",
+        "rateLimited": {
+          "unknown": "Zu viele Importe. Versuche es später erneut.",
+          "seconds": "Zu viele Importe. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+          "minutes": "Zu viele Importe. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
         }
       }
     }

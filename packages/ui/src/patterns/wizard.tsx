@@ -17,6 +17,8 @@ import { Progress, ProgressIndicator, ProgressLabel, ProgressTrack } from "../co
 export interface WizardProps {
   /** The wizard's heading. */
   title: ReactNode;
+  /** The level of the wizard's heading, 1 by default; the heading of the current step is one level below it. A page that has a heading of its own gives 2. */
+  headingLevel?: 1 | 2;
   description?: ReactNode;
   /** The current step, counted from 1. */
   step: number;
@@ -49,6 +51,7 @@ export interface WizardProps {
  */
 export function Wizard({
   title,
+  headingLevel = 1,
   description,
   step,
   stepCount,
@@ -74,7 +77,7 @@ export function Wizard({
   return (
     <CardFrame className={className} render={<section aria-labelledby={headingId} />}>
       <CardFrameHeader>
-        <CardFrameTitle render={<h1 id={headingId} />}>{title}</CardFrameTitle>
+        <CardFrameTitle render={headingLevel === 1 ? <h1 id={headingId} /> : <h2 id={headingId} />}>{title}</CardFrameTitle>
         {description === undefined ? null : <CardFrameDescription render={<p />}>{description}</CardFrameDescription>}
       </CardFrameHeader>
       <Card render={<form noValidate />} onSubmit={submit}>
@@ -85,7 +88,7 @@ export function Wizard({
               <ProgressIndicator />
             </ProgressTrack>
           </Progress>
-          <CardTitle render={<h2 />}>{stepTitle}</CardTitle>
+          <CardTitle render={headingLevel === 1 ? <h2 /> : <h3 />}>{stepTitle}</CardTitle>
           {stepDescription === undefined ? null : <CardDescription render={<p />}>{stepDescription}</CardDescription>}
         </CardHeader>
         <CardPanel className="flex flex-col gap-4">{children}</CardPanel>

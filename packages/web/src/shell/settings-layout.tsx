@@ -11,6 +11,7 @@ const PROFILE_PATH = "/settings/account";
 const PREFERENCES_PATH = "/settings/account/preferences";
 const SECURITY_PATH = "/settings/account/security";
 const TOKENS_PATH = "/settings/account/tokens";
+const DATA_PATH = "/settings/account/data";
 const GENERAL_PATH = "/settings/workspace";
 const MEMBERS_PATH = "/settings/workspace/members";
 const TEAMS_PATH = "/settings/workspace/teams";
@@ -42,6 +43,7 @@ export function SettingsLayout(): ReactElement {
         },
         { id: "security", label: t("settings.nav.security"), link: <Link to={SECURITY_PATH} />, current: pathname === SECURITY_PATH },
         { id: "tokens", label: t("settings.nav.tokens"), link: <Link to={TOKENS_PATH} />, current: pathname === TOKENS_PATH },
+        { id: "data", label: t("settings.nav.data"), link: <Link to={DATA_PATH} />, current: pathname === DATA_PATH },
       ],
     },
   ];
@@ -72,6 +74,8 @@ export function SettingsLayout(): ReactElement {
             void router.navigate({ to: SECURITY_PATH });
           } else if (id === "tokens") {
             void router.navigate({ to: TOKENS_PATH });
+          } else if (id === "data") {
+            void router.navigate({ to: DATA_PATH });
           } else if (id === "general") {
             void router.navigate({ to: GENERAL_PATH });
           } else if (id === "members") {

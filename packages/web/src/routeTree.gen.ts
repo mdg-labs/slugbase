@@ -38,6 +38,7 @@ import { Route as AppAdminSettingsRouteImport } from "./routes/_app/admin/settin
 import { Route as AppAdminWorkspacesRouteImport } from "./routes/_app/admin/workspaces.tsx";
 import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/index.tsx";
 import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
+import { Route as AppSettingsAccountDataRouteImport } from "./routes/_app/settings/account/data.tsx";
 import { Route as AppSettingsAccountPreferencesRouteImport } from "./routes/_app/settings/account/preferences.tsx";
 import { Route as AppSettingsAccountSecurityRouteImport } from "./routes/_app/settings/account/security.tsx";
 import { Route as AppSettingsAccountTokensRouteImport } from "./routes/_app/settings/account/tokens.tsx";
@@ -190,6 +191,11 @@ const AppSettingsAccountIndexRoute = AppSettingsAccountIndexRouteImport.update({
   path: "/account/",
   getParentRoute: () => AppSettingsRoute,
 } as any);
+const AppSettingsAccountDataRoute = AppSettingsAccountDataRouteImport.update({
+  id: "/account/data",
+  path: "/account/data",
+  getParentRoute: () => AppSettingsRoute,
+} as any);
 const AppSettingsAccountPreferencesRoute =
   AppSettingsAccountPreferencesRouteImport.update({
     id: "/account/preferences",
@@ -260,6 +266,7 @@ export interface FileRoutesByFullPath {
   "/admin/workspaces": typeof AppAdminWorkspacesRoute;
   "/admin/": typeof AppAdminIndexRoute;
   "/settings/": typeof AppSettingsIndexRoute;
+  "/settings/account/data": typeof AppSettingsAccountDataRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
@@ -295,6 +302,7 @@ export interface FileRoutesByTo {
   "/admin/workspaces": typeof AppAdminWorkspacesRoute;
   "/admin": typeof AppAdminIndexRoute;
   "/settings": typeof AppSettingsIndexRoute;
+  "/settings/account/data": typeof AppSettingsAccountDataRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
@@ -334,6 +342,7 @@ export interface FileRoutesById {
   "/_app/admin/workspaces": typeof AppAdminWorkspacesRoute;
   "/_app/admin/": typeof AppAdminIndexRoute;
   "/_app/settings/": typeof AppSettingsIndexRoute;
+  "/_app/settings/account/data": typeof AppSettingsAccountDataRoute;
   "/_app/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/_app/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/_app/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
@@ -373,6 +382,7 @@ export interface FileRouteTypes {
     | "/admin/workspaces"
     | "/admin/"
     | "/settings/"
+    | "/settings/account/data"
     | "/settings/account/preferences"
     | "/settings/account/security"
     | "/settings/account/tokens"
@@ -408,6 +418,7 @@ export interface FileRouteTypes {
     | "/admin/workspaces"
     | "/admin"
     | "/settings"
+    | "/settings/account/data"
     | "/settings/account/preferences"
     | "/settings/account/security"
     | "/settings/account/tokens"
@@ -446,6 +457,7 @@ export interface FileRouteTypes {
     | "/_app/admin/workspaces"
     | "/_app/admin/"
     | "/_app/settings/"
+    | "/_app/settings/account/data"
     | "/_app/settings/account/preferences"
     | "/_app/settings/account/security"
     | "/_app/settings/account/tokens"
@@ -678,6 +690,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppSettingsAccountIndexRouteImport;
       parentRoute: typeof AppSettingsRoute;
     };
+    "/_app/settings/account/data": {
+      id: "/_app/settings/account/data";
+      path: "/account/data";
+      fullPath: "/settings/account/data";
+      preLoaderRoute: typeof AppSettingsAccountDataRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
     "/_app/settings/account/preferences": {
       id: "/_app/settings/account/preferences";
       path: "/account/preferences";
@@ -750,6 +769,7 @@ const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
 
 interface AppSettingsRouteChildren {
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute;
+  AppSettingsAccountDataRoute: typeof AppSettingsAccountDataRoute;
   AppSettingsAccountPreferencesRoute: typeof AppSettingsAccountPreferencesRoute;
   AppSettingsAccountSecurityRoute: typeof AppSettingsAccountSecurityRoute;
   AppSettingsAccountTokensRoute: typeof AppSettingsAccountTokensRoute;
@@ -762,6 +782,7 @@ interface AppSettingsRouteChildren {
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsIndexRoute: AppSettingsIndexRoute,
+  AppSettingsAccountDataRoute: AppSettingsAccountDataRoute,
   AppSettingsAccountPreferencesRoute: AppSettingsAccountPreferencesRoute,
   AppSettingsAccountSecurityRoute: AppSettingsAccountSecurityRoute,
   AppSettingsAccountTokensRoute: AppSettingsAccountTokensRoute,

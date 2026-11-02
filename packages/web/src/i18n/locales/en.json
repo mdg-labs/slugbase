@@ -1423,6 +1423,7 @@
       "preferences": "Preferences",
       "security": "Security",
       "tokens": "API tokens",
+      "data": "Import & export",
       "workspace": "Workspace",
       "general": "General",
       "members": "Members",
@@ -2208,6 +2209,97 @@
           "changedElsewhere": "A team was changed somewhere else, so nothing in it was overwritten. Save again to apply your changes to its latest members.",
           "unavailable": "The teams could not be saved right now. Try again in a moment.",
           "partlySaved": "Some of your changes were saved, but not all of them. Save again to send the rest."
+        }
+      }
+    }
+  },
+  "data": {
+    "title": "Import & export",
+    "import": {
+      "title": "Import bookmarks",
+      "description": "Add bookmarks from a browser bookmark file or from a SlugBase JSON export.",
+      "stepLabel": "Step {step} of {count}",
+      "back": "Back",
+      "retry": "Try again",
+      "next": {
+        "preview": "Preview",
+        "import": "Import",
+        "importing": "Importing…",
+        "another": "Import another file"
+      },
+      "step1": {
+        "title": "Choose a file",
+        "description": "Choose the file to import. Nothing is added until you confirm on the next step."
+      },
+      "step2": {
+        "title": "Check what will be imported",
+        "description": "This is what the import would do. Nothing has been added yet."
+      },
+      "step3": {
+        "title": {
+          "running": "Importing",
+          "done": "Import finished"
+        },
+        "description": {
+          "running": "Keep this page open until the import is finished.",
+          "done": "This is what the import did."
+        }
+      },
+      "file": {
+        "label": "Bookmark file",
+        "description": "A browser bookmark file (.html) or a SlugBase JSON export (.json), up to 5 MiB.",
+        "drop": "Drop a file here, or choose one."
+      },
+      "skipDuplicates": "Skip duplicates",
+      "count": {
+        "bookmarks": "Bookmarks",
+        "folders": "Folders",
+        "tags": "Tags"
+      },
+      "preview": {
+        "target": "Bookmarks are added to {workspace}.",
+        "targetUnknown": "Bookmarks are added to your current workspace.",
+        "file": "In the file",
+        "plan": "The import would",
+        "created": "Add bookmarks",
+        "foldersCreated": "Create folders",
+        "tagsCreated": "Create tags",
+        "skippedDuplicate": "Skip as duplicates",
+        "skippedLimit": "Skip because the workspace is full",
+        "failed": "Leave out because the address is not valid",
+        "slugsDropped": "Drop slugs"
+      },
+      "running": "Importing your bookmarks",
+      "result": {
+        "created": "Added",
+        "skipped": "Skipped",
+        "failed": "Failed",
+        "slugsDropped": "Slugs dropped",
+        "made": "{folders, plural, one {# folder} other {# folders}} and {tags, plural, one {# tag} other {# tags}} were created."
+      },
+      "status": {
+        "checking": "Checking the file.",
+        "checkFailed": "The file could not be checked.",
+        "running": "The import has started.",
+        "done": "The import finished. {count, plural, one {# bookmark was} other {# bookmarks were}} added.",
+        "failed": "The import did not finish."
+      },
+      "error": {
+        "unsupported": "Choose a SlugBase JSON file (.json) or a browser bookmark file (.html).",
+        "tooLarge": "This file is larger than 5 MiB. Split it into smaller files.",
+        "unsupportedType": "The server does not accept this kind of file. Choose a SlugBase JSON file or a browser bookmark file.",
+        "newerVersion": "This file was made by a newer version of SlugBase than this one can read. Update SlugBase, or export the file again from this one.",
+        "tooManyNewNames": "This file would create more than {count, number} new folders and tags. Split it into smaller files.",
+        "tooManyBookmarks": "This file holds more than {count, number} bookmarks. Split it into smaller files.",
+        "tooManyAssignments": "The folders and tags of this file add up to more than {count, number} uses, however few bookmarks it holds. Split it into smaller files.",
+        "invalid": "This is not a valid SlugBase JSON file or browser bookmark file.",
+        "unreadable": "The file could not be read. Choose it again.",
+        "network": "The server could not be reached. Check your connection and try again.",
+        "failed": "The import could not be done. Try again.",
+        "rateLimited": {
+          "unknown": "Too many imports. Try again later.",
+          "seconds": "Too many imports. Try again in {count, plural, one {# second} other {# seconds}}.",
+          "minutes": "Too many imports. Try again in {count, plural, one {# minute} other {# minutes}}."
         }
       }
     }
