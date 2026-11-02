@@ -51,7 +51,7 @@ function memoryStore(): { store: AuditStore; records: AuditRecord[] } {
 
 describe("the audit catalog", () => {
   it("groups the recorded actions by category and declares the metadata of each", () => {
-    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created"]);
+    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created", "import.completed"]);
     for (const name of AUDIT_ACTION_NAMES) {
       expect(AUDIT_ACTIONS[name].category).toBe(name.split(".")[0]);
     }
@@ -78,6 +78,15 @@ describe("the audit catalog", () => {
     expect(Object.keys(AUDIT_ACTIONS["bookmark.bulk_deleted"].metadata)).toEqual(["count"]);
     expect(Object.keys(AUDIT_ACTIONS["share.bulk_granted"].metadata)).toEqual(["count", "targetKind", "targetId", "targetName"]);
     expect(Object.keys(AUDIT_ACTIONS["export.created"].metadata)).toEqual(["bookmarks", "folders", "tags", "shared"]);
+    expect(Object.keys(AUDIT_ACTIONS["import.completed"].metadata)).toEqual(["created", "skipped", "failed", "slugsDropped", "foldersCreated", "tagsCreated"]);
+  });
+
+  it("records an import with counts only", () => {
+    const counts = { created: "12", skipped: "3", failed: "1", slugsDropped: "0", foldersCreated: "0", tagsCreated: "0" };
+    expect(parseAuditMetadata("import.completed", counts)).toEqual(counts);
+    expect(() => parseAuditMetadata("import.completed", { ...counts, url: "https://example.com/" })).toThrow(AuditMetadataError);
+    expect(() => parseAuditMetadata("import.completed", { ...counts, created: "many" })).toThrow(AuditMetadataError);
+    expect(() => parseAuditMetadata("import.completed", { created: "12", skipped: "3", failed: "1", slugsDropped: "0", foldersCreated: "0" })).toThrow(AuditMetadataError);
   });
 
   it("records an export with counts only", () => {

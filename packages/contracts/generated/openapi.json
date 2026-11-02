@@ -517,7 +517,8 @@
                   "team",
                   "bookmark",
                   "share",
-                  "export"
+                  "export",
+                  "import"
                 ],
                 "type": "string"
               },
@@ -3741,7 +3742,7 @@
         "additionalProperties": false,
         "properties": {
           "created": {
-            "description": "The bookmarks the import creates",
+            "description": "The bookmarks the import creates (with dryRun=true, would create)",
             "maximum": 9007199254740991,
             "minimum": 0,
             "type": "integer"
@@ -6844,7 +6845,8 @@
                 "team",
                 "bookmark",
                 "share",
-                "export"
+                "export",
+                "import"
               ],
               "type": "string"
             }
@@ -11995,8 +11997,11 @@
             "name": "dryRun",
             "required": false,
             "schema": {
-              "const": "true",
-              "description": "Must be true: this release only previews an import and writes nothing. A request without it, once the caller is known to be allowed to make it, is refused with 422 and an error at dryRun",
+              "description": "true answers what the import would do and writes nothing; false, the default, imports the file",
+              "enum": [
+                "true",
+                "false"
+              ],
               "type": "string"
             }
           },
@@ -12056,7 +12061,7 @@
                 }
               }
             },
-            "description": "What an import of the file would do, and nothing is written: the counts of what the file holds, the number of bookmarks it would create, the bookmarks it would leave out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace has left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL it would refuse. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
+            "description": "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused. The bookmarks are created in the order of the file, in one transaction with the counter and one import.completed audit event, so a failure leaves none of them. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
           },
           "400": {
             "content": {
@@ -12126,7 +12131,7 @@
                 }
               }
             },
-            "description": "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. Also dryRun not true, or missing (an error at dryRun). A bad URL or an over-long title is no reason for it: see the answer"
+            "description": "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer"
           },
           "429": {
             "content": {
@@ -12160,7 +12165,7 @@
             "description": "The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"
           }
         },
-        "summary": "Preview an import of SlugBase JSON",
+        "summary": "Import SlugBase JSON",
         "tags": [
           "import"
         ],

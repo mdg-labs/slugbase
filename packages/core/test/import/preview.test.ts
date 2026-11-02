@@ -46,9 +46,12 @@ describe("readImportBookmark", () => {
       position: 4,
       url: "https://example.com/a/?utm_source=x#frag",
       canonical: "https://example.com/a",
+      host: "example.com",
       title: "😀".repeat(300),
       description: "😀".repeat(1000),
+      pinned: false,
     });
+    expect(readImportBookmark({ url: "https://example.com/", pinned: true }, 1)).toMatchObject({ pinned: true });
     expect(readImportBookmark({ url: "https://example.com/", title: " \u0000 " }, 1)).toMatchObject({ title: "example.com", description: null });
     expect(readImportBookmark({ url: "https://example.com/", title: null, description: null }, 1)).toMatchObject({ title: "example.com", description: null });
   });

@@ -7,7 +7,7 @@ import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } f
 // an API token never reads the log. An event is returned without the network it was made from.
 
 /** The groups of the audit catalog an event is filtered by (`AUDIT_CATEGORIES` of `@slugbase/core`, which a test keeps equal to this list). */
-export const AUDIT_EVENT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share", "export"] as const;
+export const AUDIT_EVENT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"] as const;
 
 /** The longest action name the log stores. */
 const AUDIT_ACTION_MAX_LENGTH = 64;

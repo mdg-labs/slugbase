@@ -683,10 +683,33 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "import.completed": {
+        readonly category: "import";
+        readonly metadata: {
+            readonly created: {
+                readonly type: "count";
+            };
+            readonly skipped: {
+                readonly type: "count";
+            };
+            readonly failed: {
+                readonly type: "count";
+            };
+            readonly slugsDropped: {
+                readonly type: "count";
+            };
+            readonly foldersCreated: {
+                readonly type: "count";
+            };
+            readonly tagsCreated: {
+                readonly type: "count";
+            };
+        };
+    };
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -4159,14 +4182,89 @@ export class ImageRefused extends Error {
 }
 
 // @public
+export const IMPORT_BATCH_SIZE = 500;
+
+// @public (undocumented)
+export interface ImportAsk {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly ceiling: EntitlementLimit;
+    // (undocumented)
+    readonly file: Parameters<typeof bookmarksOfFile>[0];
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    readonly skipDuplicates: boolean;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
 export interface ImportBookmark {
     readonly canonical: string;
     // (undocumented)
     readonly description: string | null;
+    readonly host: string;
+    readonly pinned: boolean;
     readonly position: number;
     readonly title: string;
     readonly url: string;
 }
+
+// @public
+export function importBookmarks(input: ImportDependencies, ask: ImportAsk): Promise<ImportOutcome>;
+
+// @public (undocumented)
+export interface ImportDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    readonly newBookmarkId: () => string;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: ImportStore;
+}
+
+// @public
+export interface ImportNewBookmark {
+    // (undocumented)
+    readonly description: string | null;
+    // (undocumented)
+    readonly host: string;
+    readonly id: string;
+    readonly ownerId: string;
+    // (undocumented)
+    readonly pinned: boolean;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+    // (undocumented)
+    readonly urlCanonical: string;
+}
+
+// @public (undocumented)
+export type ImportOutcome =
+/** The workspace cannot be reached; nothing was written. */
+    {
+    readonly kind: "unavailable";
+} | {
+    readonly kind: "imported";
+    readonly result: ImportResult;
+};
+
+// @public
+export type ImportPlaces =
+/** The workspace cannot be reached: it does not exist, is being deleted, or the account is no member. Nothing is taken. */
+    {
+    readonly kind: "unavailable";
+}
+/** `taken` places (as many as were wanted, or as many as were left under the ceiling) were taken, and the workspace holds `used` bookmarks that count after it. */
+| {
+    readonly kind: "taken";
+    readonly taken: number;
+    readonly used: number;
+};
 
 // @public (undocumented)
 export interface ImportPreviewAsk {
@@ -4210,6 +4308,15 @@ export interface ImportRefusal {
 
 // @public (undocumented)
 export type ImportRefusalReason = "url_not_allowed" | "url_invalid";
+
+// @public (undocumented)
+export interface ImportStore extends ImportPreviewStore {
+    insertBookmarks(batch: {
+        readonly bookmarks: readonly ImportNewBookmark[];
+        readonly events: readonly DomainEvent<"bookmark.created">[];
+    }): Promise<void>;
+    takePlaces(ceiling: number | null, wanted: number): Promise<ImportPlaces>;
+}
 
 // @public
 export function inspectInvitation(input: {

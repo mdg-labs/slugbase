@@ -1,4 +1,4 @@
-import { aiSuggestionRepository, bookmarkRepository, folderRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
+import { aiSuggestionRepository, bookmarkRepository, folderRepository, importRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useTestDatabase } from "../src/db.ts";
@@ -1048,6 +1048,59 @@ describe("the bulk operations across workspaces", () => {
     expect(results).toEqual({ deleted: 0, pinned: 0, unpinned: 0, ids: [BOOKMARK_OF_A] });
     expect(namingB).toBeNull();
     expect({ a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) }).toEqual({ a: before.a, b: before.b });
+  });
+
+  // The import (doc 02 section 13.1) takes places under the counter of the workspace of the transaction, with `sys_bookmark_count_take_many`, and inserts the file's bookmarks into it. From a transaction acting in A, by an account that is a
+  // member of both workspaces, the repository takes places in A and writes its bookmarks in A, and naming B to the function, or inserting a row that names B, changes nothing in B.
+  it("takes no place in B and writes no bookmark in B for an import from a transaction acting in A, through the repository, by naming B to the function or by inserting a row that names B", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${MEMBER_OF_A}, 'bulk-matrix@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${MEMBER_OF_A} WHERE id IN (${BOOKMARK_OF_A}, ${BOOKMARK_OF_B})`;
+      await tx`UPDATE workspaces SET bookmark_count = (SELECT count(*) FROM bookmarks WHERE workspace_id = workspaces.id AND plan_archived_at IS NULL) WHERE id IN (${PROBE_WORKSPACE_A}, ${PROBE_WORKSPACE_B})`;
+    });
+    const before = { a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) };
+    const context = { accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-import" };
+    const imported = "0192f3a0-2222-7000-8000-00000000a0e1";
+
+    const results = await database().tenant.withTenant(context, async (tx) => {
+      const repository = importRepository(tx);
+      const places = await repository.takePlaces(null, 1);
+      await repository.insertBookmarks({
+        bookmarks: [{ id: imported, ownerId: MEMBER_OF_A, url: "https://example.com/imported", urlCanonical: "https://example.com/imported", host: "example.com", title: "Imported", description: null, pinned: false }],
+        jobs: [],
+      });
+      return places;
+    });
+    const namingB = await database().app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true), set_config('app.workspace_id', ${PROBE_WORKSPACE_A}, true)`;
+      const rows = await tx<{ outcome: string; taken: number | null }[]>`SELECT outcome, taken FROM public.sys_bookmark_count_take_many(${PROBE_WORKSPACE_B}::uuid, NULL, 3)`;
+      return rows[0];
+    });
+    const insertingIntoB = await database()
+      .app.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true), set_config('app.workspace_id', ${PROBE_WORKSPACE_A}, true)`;
+        await tx`INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title) VALUES ('0192f3a0-2222-7000-8000-00000000b0e1', ${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'https://example.com/x', 'https://example.com/x', 'example.com', 'X')`;
+      })
+      .then(
+        () => "inserted",
+        (error: unknown) => (error as { code?: string }).code,
+      );
+
+    expect(results).toEqual({ kind: "taken", taken: 1, used: before.a.counter + 1 });
+    expect(namingB).toEqual({ outcome: "unavailable", taken: null });
+    expect(insertingIntoB).toBe("42501");
+    const after = { a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) };
+    expect(after.b).toEqual(before.b);
+    expect(after.a).toMatchObject({ rows: before.a.rows + 1, counter: before.a.counter + 1 });
   });
 
   // The bulk filing, tagging and preview of adding tags (doc 02 section 5.8) take a bookmark and a folder or tags by identifier. From a transaction acting in A, a

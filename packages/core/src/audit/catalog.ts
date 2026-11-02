@@ -6,7 +6,7 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share", "export"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -88,6 +88,8 @@ export const AUDIT_ACTIONS = {
   "share.bulk_granted": { category: "share", metadata: { count: COUNT, targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
   // A member exported their own content (doc 02 section 13.2): how many bookmarks (plan-archived ones included), folders and tags the document holds and how many shared bookmarks, and nothing about any of them.
   "export.created": { category: "export", metadata: { bookmarks: COUNT, folders: COUNT, tags: COUNT, shared: COUNT } },
+  // A member imported a SlugBase JSON file (doc 02 section 13.1): how many bookmarks were created, how many were left out or refused, how many slugs were dropped and how many folders and tags were created, and nothing about any of them. A dry run records nothing.
+  "import.completed": { category: "import", metadata: { created: COUNT, skipped: COUNT, failed: COUNT, slugsDropped: COUNT, foldersCreated: COUNT, tagsCreated: COUNT } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

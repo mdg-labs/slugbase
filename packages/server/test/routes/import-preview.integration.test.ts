@@ -203,18 +203,17 @@ describe("POST /import/json?dryRun=true", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(unlimited).toMatchObject({ created: 2, skipped: [] });
   });
 
-  it("requires dryRun=true, tells a caller with no right to ask so first, and refuses a query it does not declare", async () => {
+  it("refuses a dryRun that is not true or false and a query it does not declare, tells a caller with no right to ask so first, and writes nothing", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);
     const before = await stored(shared.workspaceId);
 
-    for (const path of [IMPORT, `${IMPORT}?dryRun=false`, `${IMPORT}?dryRun=yes`, `${PREVIEW}&skipDuplicates=maybe`, `${PREVIEW}&other=1`]) {
+    for (const path of [`${IMPORT}?dryRun=yes`, `${IMPORT}?dryRun=1`, `${PREVIEW}&skipDuplicates=maybe`, `${PREVIEW}&other=1`]) {
       const answer = await importAs(world, asPerson(a), file("https://example.com/"), path);
       expect(answer.status, path).toBe(422);
       expect((answer.body as { code: string }).code).toBe("validation_failed");
     }
-    const missing = await importAs(world, asPerson(a), file("https://example.com/"), IMPORT);
-    expect((missing.body as { errors: unknown }).errors).toEqual([{ path: "dryRun", code: "invalid_value" }]);
+    expect((await importAs(world, {}, file("https://example.com/"), PREVIEW)).status).toBe(401);
     expect((await importAs(world, {}, file("https://example.com/"), IMPORT)).status).toBe(401);
     expect(await stored(shared.workspaceId)).toEqual(before);
   });

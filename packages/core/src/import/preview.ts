@@ -45,9 +45,13 @@ export interface ImportBookmark {
   readonly url: string;
   /** The canonical form of the URL: the key of duplicate detection. */
   readonly canonical: string;
+  /** The host of the URL, lower case and in punycode. */
+  readonly host: string;
   /** The title; the host of the URL when the file gives none. */
   readonly title: string;
   readonly description: string | null;
+  /** Whether the file has the bookmark pinned. */
+  readonly pinned: boolean;
 }
 
 /** A bookmark of the file whose URL is refused. */
@@ -86,12 +90,14 @@ export function readImportBookmark(entry: ImportFileBookmark, position: number):
     position,
     url: parsed.value.url,
     canonical: parsed.value.canonical,
+    host: parsed.value.host,
     title: title === "" ? cleanText(parsed.value.host, BOOKMARK_TITLE_MAX_LENGTH) : title,
     description: description === "" ? null : description,
+    pinned: entry.pinned === true,
   };
 }
 
-function isRefusal(read: ImportBookmark | ImportRefusal): read is ImportRefusal {
+export function isRefusal(read: ImportBookmark | ImportRefusal): read is ImportRefusal {
   return "reason" in read;
 }
 
@@ -127,8 +133,13 @@ function* tagNamesOf(file: ImportRequest): Generator<string> {
   }
 }
 
-function entry(read: ImportBookmark | ImportRefusal): { position: number; title: string; url: string } {
+export function entry(read: ImportBookmark | ImportRefusal): { position: number; title: string; url: string } {
   return { position: read.position, title: read.title, url: read.url };
+}
+
+/** What the file holds: its bookmarks, and its distinct folder and tag names. */
+export function detectedOf(file: ImportRequest, bookmarks: number): ImportResult["detected"] {
+  return { bookmarks, folders: distinctNames(folderNamesOf(file), FOLDER_NAME_MAX_LENGTH), tags: distinctNames(tagNamesOf(file), TAG_NAME_MAX_LENGTH) };
 }
 
 /**
@@ -168,7 +179,7 @@ export async function previewImport({ store }: ImportPreviewDependencies, ask: I
   return {
     kind: "previewed",
     result: {
-      detected: { bookmarks: reads.length, folders: distinctNames(folderNamesOf(ask.file), FOLDER_NAME_MAX_LENGTH), tags: distinctNames(tagNamesOf(ask.file), TAG_NAME_MAX_LENGTH) },
+      detected: detectedOf(ask.file, reads.length),
       created,
       skipped,
       failed,

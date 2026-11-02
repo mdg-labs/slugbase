@@ -597,7 +597,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Preview an import of SlugBase JSON */
+        /** Import SlugBase JSON */
         post: operations["importJson"];
         delete?: never;
         options?: never;
@@ -1847,7 +1847,7 @@ export interface components {
             action: string;
             actor: components["schemas"]["AuditEventActor"];
             /** @description The group the action belongs to; null for an action the catalog no longer holds */
-            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export") | null;
+            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import") | null;
             /**
              * Format: date-time
              * @description When the change was made, RFC 3339 UTC
@@ -2898,7 +2898,7 @@ export interface components {
             name: string;
         };
         ImportResult: {
-            /** @description The bookmarks the import creates */
+            /** @description The bookmarks the import creates (with dryRun=true, would create) */
             created: number;
             /** @description What the file holds */
             detected: {
@@ -4060,7 +4060,7 @@ export interface operations {
             query?: {
                 actorAccountId?: string;
                 action?: string | string[];
-                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export";
+                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import";
                 entityType?: string;
                 entityId?: string;
                 from?: string;
@@ -7546,7 +7546,7 @@ export interface operations {
     importJson: {
         parameters: {
             query?: {
-                dryRun?: "true";
+                dryRun?: "true" | "false";
                 skipDuplicates?: "true" | "false";
             };
             header?: {
@@ -7562,7 +7562,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What an import of the file would do, and nothing is written: the counts of what the file holds, the number of bookmarks it would create, the bookmarks it would leave out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace has left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL it would refuse. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true */
+            /** @description What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused. The bookmarks are created in the order of the file, in one transaction with the counter and one import.completed audit event, so a failure leaves none of them. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7625,7 +7625,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. Also dryRun not true, or missing (an error at dryRun). A bad URL or an over-long title is no reason for it: see the answer */
+            /** @description The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer */
             422: {
                 headers: {
                     [name: string]: unknown;

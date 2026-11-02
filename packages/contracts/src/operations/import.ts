@@ -3,9 +3,9 @@ import { BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH } from "./bookmarks.
 import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { EXPORT_VERSION, ExportBookmarkSchema, ExportDocumentSchema } from "./export.ts";
 
-// The import tag of doc 04 section 10.9 (doc 02 sections 13.1 and 13.3, doc 10 T1 and T13): a SlugBase JSON file, the export envelope or a plain array of bookmarks, is read within strict caps
-// and the answer says exactly what an import of it does. This release answers the preview only: `dryRun=true` must be sent (the handler refuses a request without it, after the caller is authorised, so the query is declared optional for the validation stage), and the operation reads and writes nothing of the workspace. The
-// request is synchronous, as doc 04 section 10.9 defines it.
+// The import tag of doc 04 section 10.9 (doc 02 sections 13.1 and 13.3, doc 10 T1, T11 and T13): a SlugBase JSON file, the export envelope or a plain array of bookmarks, is read within strict caps
+// and the answer says exactly what the import did. With `dryRun=true` it says what the import would do and the operation writes nothing of the workspace; without it, or with `dryRun=false`, the bookmarks are created in one transaction under
+// the workspace's `bookmarks.max` and the answer is the result. The request is synchronous, as doc 04 section 10.9 defines it.
 //
 // A file that is not the format is a `422` for the whole request: a value of the wrong type, a field the format does not declare, more bookmarks than the cap, a version this release does not
 // read. A bookmark that is the format but has a bad URL, or a title that is too long, is that bookmark's problem: it is reported in `failed` or cut to its limit, and the rest of the file is
@@ -66,7 +66,7 @@ export const ImportRequestSchema = z.union([ImportEnvelopeSchema, ImportBookmark
 const QueryBooleanSchema = z.enum(["true", "false"]);
 
 export const ImportQuerySchema = z.strictObject({
-  dryRun: z.literal("true").optional().describe("Must be true: this release only previews an import and writes nothing. A request without it, once the caller is known to be allowed to make it, is refused with 422 and an error at dryRun"),
+  dryRun: QueryBooleanSchema.optional().describe("true answers what the import would do and writes nothing; false, the default, imports the file"),
   skipDuplicates: QueryBooleanSchema.optional().describe("true, the default, skips a bookmark whose canonical URL the caller has already or that an earlier bookmark of the file has; false imports it"),
 });
 
@@ -101,7 +101,7 @@ export const ImportResultSchema = z
         tags: z.number().int().min(0).describe("The distinct tag names in the file, compared without regard to case"),
       })
       .describe("What the file holds"),
-    created: z.number().int().min(0).describe("The bookmarks the import creates"),
+    created: z.number().int().min(0).describe("The bookmarks the import creates (with dryRun=true, would create)"),
     skipped: z.array(ImportSkippedSchema).describe("The bookmarks the import leaves out, in the order of the file"),
     failed: z.array(ImportFailedSchema).describe("The bookmarks whose URL the import refuses, in the order of the file"),
     slugsDropped: z.number().int().min(0).describe("The bookmarks that lose their slug; 0 until the import reads slugs"),
@@ -116,7 +116,7 @@ export const importJson = defineOperation({
   path: "/api/v1/import/json",
   operationId: "importJson",
   tag: "import",
-  summary: "Preview an import of SlugBase JSON",
+  summary: "Import SlugBase JSON",
   auth: "member",
   rate: "bulk",
   scope: "write",
@@ -125,7 +125,7 @@ export const importJson = defineOperation({
   request: { query: ImportQuerySchema, body: ImportRequestSchema },
   responses: {
     200: jsonResponse(
-      "What an import of the file would do, and nothing is written: the counts of what the file holds, the number of bookmarks it would create, the bookmarks it would leave out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace has left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL it would refuse. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true",
+      "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused. The bookmarks are created in the order of the file, in one transaction with the counter and one import.completed audit event, so a failure leaves none of them. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true",
       ImportResultSchema,
     ),
     400: problemResponse("The body is not valid JSON, or the Idempotency-Key header is not a UUID"),
@@ -135,7 +135,7 @@ export const importJson = defineOperation({
     409: problemResponse("The Idempotency-Key was used before for another request (idempotency_conflict)"),
     413: problemResponse("The request body is over 5 MiB (payload_too_large)"),
     422: problemResponse(
-      "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. Also dryRun not true, or missing (an error at dryRun). A bad URL or an over-long title is no reason for it: see the answer",
+      "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Imports take from the bulk limit"),
     503: problemResponse("The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"),

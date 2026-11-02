@@ -396,9 +396,10 @@ export const FIXTURES: ContractFixtures = {
   // The export names no identifier either: it streams the caller's own bookmarks, folders and tags in the workspace of the request. Workspace B holds rows named matrix-..., so a row of B in the
   // document would show; the walker reads the whole document and checks it against the declared schema.
   exportJson: {},
-  // The import preview names no identifier of any workspace: it reads the caller's own canonical URLs and the counter of the workspace of the request, and writes nothing. The matrix picks the `slug` of a bookmark of the file
-  // (in the export document and in the plain array) by its name; it is text the caller writes, so a value of workspace B in it is answered 200 as any other text is, and the file's bookmark is a failure or a creation of the answer
-  // that quotes nothing of B.
+  // The import names no identifier of any workspace: it reads the caller's own canonical URLs and the counter of the workspace of the request. The walker and the matrix send it as a dry run, which writes nothing: the matrix makes
+  // no bookmark in A, and the assertions after it (the dashboards, the lists, the export) rely on that, while the walks run in parallel. The import that writes is held to workspace B by `tenancy-matrix.integration.test.ts` of
+  // `@slugbase/testing` (the places and the bookmarks of a transaction acting in A) and by `import-write.integration.test.ts`. The matrix picks the `slug` of a bookmark of the file (in the export document and in the plain array)
+  // by its name; it is text the caller writes, so a value of workspace B in it is answered 200 as any other text is, and the file's bookmark is a failure or a creation of the answer that quotes nothing of B.
   importJson: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }], foreign: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }] }, foreignAnswer: { status: 200 } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.

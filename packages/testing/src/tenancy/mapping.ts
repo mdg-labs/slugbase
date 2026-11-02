@@ -75,9 +75,10 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Export: `exportJson` takes no input at all and so no entry. It reads the caller's own bookmarks, folders and tags of the workspace of the request through statements that name the workspace and the
  *   owner (`packages/db/src/repositories/export.ts`), over the tables whose scoped repositories are below, so the API mode holds it to an answer that names nothing of B and a workspace B whose rows are as they were.
  * - Import: the body input `slug` of a bookmark of `importJson`, in the export document (`bookmarks[].slug`) and in the plain array (`[].slug`), is the slug the file gives the bookmark and not the identifier of a row, so
- *   the default maps it to a bookmark like the other inputs named slug and judges it with the rest of the call. The operation previews an import of the caller's file: it reads the caller's own canonical URLs and
+ *   the default maps it to a bookmark like the other inputs named slug and judges it with the rest of the call. The matrix sends the operation as a dry run: it reads the caller's own canonical URLs and
  *   the counter of the workspace of the request (`packages/db/src/repositories/import.ts`) and writes nothing, so a value of B in the file is answered `200` as it would be for any text, which `runApiMatrix` is told by its
- *   `emptyAnswers` option, and the workspace B is as it was.
+ *   `emptyAnswers` option, and the workspace B is as it was. The import that writes (the places taken under the counter and the bookmarks inserted) is held to the workspace of the transaction by "the import across workspaces"
+ *   in `test/tenancy-matrix.integration.test.ts`.
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and

@@ -328,7 +328,7 @@ export const AUDIT_ACTION_FILTER_MAX = 20;
 export const AUDIT_ACTOR_TYPES: readonly ["account", "api_token", "system"];
 
 // @public
-export const AUDIT_EVENT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export"];
+export const AUDIT_EVENT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"];
 
 // @public (undocumented)
 export const AuditEventActorSchema: z.ZodObject<{
@@ -359,6 +359,7 @@ export const AuditEventListQuerySchema: z.ZodObject<{
         share: "share";
         workspace: "workspace";
         export: "export";
+        import: "import";
     }>>;
     entityType: z.ZodOptional<z.ZodString>;
     entityId: z.ZodOptional<z.ZodUUID>;
@@ -391,6 +392,7 @@ export const AuditEventListSchema: z.ZodObject<{
             share: "share";
             workspace: "workspace";
             export: "export";
+            import: "import";
         }>>;
         entity: z.ZodNullable<z.ZodObject<{
             type: z.ZodString;
@@ -423,6 +425,7 @@ export const AuditEventSchema: z.ZodObject<{
         share: "share";
         workspace: "workspace";
         export: "export";
+        import: "import";
     }>>;
     entity: z.ZodNullable<z.ZodObject<{
         type: z.ZodString;
@@ -1242,7 +1245,7 @@ export interface ComponentTypes {
         AuditEvent: {
             action: string;
             actor: ComponentTypes["schemas"]["AuditEventActor"];
-            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export") | null;
+            category: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import") | null;
             createdAt: string;
             entity: ComponentTypes["schemas"]["AuditEventEntity"] | null;
             id: string;
@@ -4919,7 +4922,7 @@ export const importJson: {
     readonly path: "/api/v1/import/json";
     readonly operationId: "importJson";
     readonly tag: "import";
-    readonly summary: "Preview an import of SlugBase JSON";
+    readonly summary: "Import SlugBase JSON";
     readonly auth: "member";
     readonly rate: "bulk";
     readonly scope: "write";
@@ -4927,7 +4930,10 @@ export const importJson: {
     readonly maxBodyBytes: number;
     readonly request: {
         readonly query: z.ZodObject<{
-            dryRun: z.ZodOptional<z.ZodLiteral<"true">>;
+            dryRun: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
             skipDuplicates: z.ZodOptional<z.ZodEnum<{
                 true: "true";
                 false: "false";
@@ -5027,7 +5033,10 @@ export const importJson: {
 
 // @public (undocumented)
 export const ImportQuerySchema: z.ZodObject<{
-    dryRun: z.ZodOptional<z.ZodLiteral<"true">>;
+    dryRun: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
     skipDuplicates: z.ZodOptional<z.ZodEnum<{
         true: "true";
         false: "false";
@@ -5649,6 +5658,7 @@ export const listAuditEvents: {
                 share: "share";
                 workspace: "workspace";
                 export: "export";
+                import: "import";
             }>>;
             entityType: z.ZodOptional<z.ZodString>;
             entityId: z.ZodOptional<z.ZodUUID>;
@@ -5681,6 +5691,7 @@ export const listAuditEvents: {
         share: "share";
         workspace: "workspace";
         export: "export";
+        import: "import";
         }>>;
         entity: z.ZodNullable<z.ZodObject<{
         type: z.ZodString;
@@ -10902,7 +10913,7 @@ export interface OperationTypes {
     importJson: {
         parameters: {
             query?: {
-                dryRun?: "true";
+                dryRun?: "true" | "false";
                 skipDuplicates?: "true" | "false";
             };
             header?: {
@@ -11410,7 +11421,7 @@ export interface OperationTypes {
             query?: {
                 actorAccountId?: string;
                 action?: string | string[];
-                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export";
+                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import";
                 entityType?: string;
                 entityId?: string;
                 from?: string;

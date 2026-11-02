@@ -20,7 +20,7 @@ describe("the import operation", () => {
     expect(documented).toMatchObject({ operationId: "importJson", "x-slugbase-auth": "member", "x-slugbase-rate": "bulk", "x-slugbase-scope": "write", "x-slugbase-idempotency": true });
   });
 
-  it("documents the answers of a preview, the 413 and the 422 included, and the query that makes it one", () => {
+  it("documents the answers of an import, the 413 and the 422 included, and the query that makes it a dry run", () => {
     expect(Object.keys(documented["responses"] as Obj).sort()).toEqual(["200", "400", "401", "403", "404", "409", "413", "422", "429", "503"]);
     const parameters = documented["parameters"] as { name: string; in: string; required: boolean }[];
     expect(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter.required])).toEqual([
@@ -100,11 +100,11 @@ describe("the import request", () => {
 });
 
 describe("the import query", () => {
-  it("takes dryRun only as true, which the handler then needs, and skipDuplicates as true or false", () => {
+  it("takes dryRun and skipDuplicates as true or false, both optional, and no other member", () => {
     expect(ImportQuerySchema.safeParse({}).success).toBe(true);
     expect(ImportQuerySchema.safeParse({ dryRun: "true" }).success).toBe(true);
-    expect(ImportQuerySchema.safeParse({ dryRun: "true", skipDuplicates: "false" }).success).toBe(true);
-    for (const query of [{ dryRun: "false" }, { dryRun: "1" }, { dryRun: "true", skipDuplicates: "maybe" }, { dryRun: "true", other: "1" }]) {
+    expect(ImportQuerySchema.safeParse({ dryRun: "false", skipDuplicates: "false" }).success).toBe(true);
+    for (const query of [{ dryRun: "1" }, { dryRun: "yes" }, { dryRun: "true", skipDuplicates: "maybe" }, { dryRun: "true", other: "1" }]) {
       expect(ImportQuerySchema.safeParse(query).success, JSON.stringify(query)).toBe(false);
     }
   });
