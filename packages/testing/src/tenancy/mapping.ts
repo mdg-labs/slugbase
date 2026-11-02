@@ -79,7 +79,9 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   read in A, and the count of the summary is A's.
  * - Import: the body input `slug` of a bookmark of `importJson`, in the export document (`bookmarks[].slug`) and in the plain array (`[].slug`), is the slug the file gives the bookmark and not the identifier of a row, so
  *   the default maps it to a bookmark like the other inputs named slug and judges it with the rest of the call. The `slug` of an entry of the export document's `shared` list (`shared[].slug`) is mapped the same way: it is the slug of another member's bookmark as the exporter read it, and the import
- *   checks its shape and never reads it. The matrix sends the operation as a dry run: it reads the caller's own canonical URLs and
+ *   checks its shape and never reads it. The `slug` of an entry of the export document's `goPreferences` list (`goPreferences[].slug`) is the slug of a remembered choice and is mapped the same way: the import restores a choice only for a bookmark of
+ *   the file that it created with that slug, through `importRepository(tx).rememberChoices`, which names the workspace and the account of the transaction (see the case of `test/tenancy-matrix.integration.test.ts` named below), so a slug of B in the list
+ *   restores nothing in B and changes no choice of B. The matrix sends the operation as a dry run: it reads the caller's own canonical URLs and
  *   the counter of the workspace of the request (`packages/db/src/repositories/import.ts`) and writes nothing, so a value of B in the file is answered `200` as it would be for any text, which `runApiMatrix` is told by its
  *   `emptyAnswers` option, and the workspace B is as it was. The import's other body inputs are names and numbers, not identifiers: the `name`, `icon` and `color` of a folder of the file (`folders[].name`, `folders[].icon`,
  *   `folders[].color`), the `tags` of the file and the `folders` and `tags` of a bookmark, and the `forwarding` and `pinned` flags. They are matched to the caller's own folders and tags of the workspace of the request by name, so a
@@ -111,6 +113,7 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "importJson.bookmarks[].slug": "bookmark",
   "importJson.[].slug": "bookmark",
   "importJson.shared[].slug": "bookmark",
+  "importJson.goPreferences[].slug": "bookmark",
   "getFavicon.host": "bookmark",
   "updateBookmark.id": "bookmark",
   "deleteBookmark.id": "bookmark",

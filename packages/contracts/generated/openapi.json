@@ -2632,9 +2632,10 @@
             "type": "string"
           },
           "goPreferences": {
-            "description": "The caller's remembered slug choices; always empty in this release",
-            "items": {},
-            "maxItems": 0,
+            "description": "The caller's remembered slug choices whose bookmark is the caller's own and still has the slug and forwards, each as the slug and the ref of that bookmark, sorted by the bytes of the slug; a choice for another member's bookmark is not in it",
+            "items": {
+              "$ref": "#/components/schemas/ExportGoPreference"
+            },
             "type": "array"
           },
           "shared": {
@@ -2713,6 +2714,27 @@
           "name",
           "icon",
           "color"
+        ],
+        "type": "object"
+      },
+      "ExportGoPreference": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkRef": {
+            "description": "The ref of the caller's own bookmark in this document's bookmarks that the choice names; never another member's bookmark, which has no ref",
+            "pattern": "^b[1-9][0-9]*$",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The slug the caller made a choice for",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "bookmarkRef"
         ],
         "type": "object"
       },
@@ -3700,11 +3722,11 @@
             "type": "string"
           },
           "goPreferences": {
-            "description": "The caller's remembered slug choices; always empty in a version 1 file",
+            "description": "The exporter's remembered slug choices, each a slug and the ref of a bookmark of the file, at most 5 000: a choice is restored for the caller when that bookmark is created with that slug and forwards; any other choice is ignored and fails nothing",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ImportGoPreference"
             },
-            "maxItems": 0,
+            "maxItems": 5000,
             "type": "array"
           },
           "shared": {
@@ -3809,6 +3831,26 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "ImportGoPreference": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkRef": {
+            "description": "The ref of the bookmark of the file the choice names, of up to 1 000 characters; a ref that no bookmark of the file has, or that more than one has, restores nothing",
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "slug": {
+            "description": "The slug the choice is for, of up to 1 000 characters; it is trimmed and lower-cased, and a choice for one outside the slug grammar restores nothing",
+            "maxLength": 1000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "bookmarkRef"
         ],
         "type": "object"
       },
@@ -10157,7 +10199,7 @@
                 }
               }
             },
-            "description": "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
+            "description": "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The list goPreferences holds the caller's remembered slug choices, each as a slug and bookmarkRef, the ref of the caller's own bookmark in the same document that the choice names and that still has the slug and forwards, sorted by slug; a choice for another member's bookmark is never in it, and the document holds no other member's choice. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
             "headers": {
               "Content-Disposition": {
                 "description": "An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name",
@@ -10268,7 +10310,7 @@
                 }
               }
             },
-            "description": "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin and the forwarding flag are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the file unfinished",
+            "description": "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin, the forwarding flag and the go preferences are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the file unfinished",
             "headers": {
               "Content-Disposition": {
                 "description": "An attachment named slugbase-export-<date>.html, the date being the UTC day of the export; the name holds no workspace name",
@@ -12279,7 +12321,7 @@
                 }
               }
             },
-            "description": "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused, the slugs dropped and the folders and tags created. The bookmarks are created in the order of the file, each filed in its own folders, tagged with its own tags and with its slug, forwarding and pinned state, in one transaction with the counter, the folders, the tags and one import.completed audit event, so a failure leaves none of them. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing; an existing one keeps its icon and colour, and the folders and tags the file lists exist afterwards whether a bookmark uses them or not. A slug outside the grammar, one the caller has already or one an earlier bookmark of the file keeps is dropped from its bookmark with forwarding off, and the bookmark is still imported; a slug the caller takes on another bookmark in a request that runs at the same time is dropped the same way. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
+            "description": "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused, the slugs dropped and the folders and tags created. The bookmarks are created in the order of the file, each filed in its own folders, tagged with its own tags and with its slug, forwarding and pinned state, in one transaction with the counter, the folders, the tags and one import.completed audit event, so a failure leaves none of them. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing; an existing one keeps its icon and colour, and the folders and tags the file lists exist afterwards whether a bookmark uses them or not. A slug outside the grammar, one the caller has already or one an earlier bookmark of the file keeps is dropped from its bookmark with forwarding off, and the bookmark is still imported; a slug the caller takes on another bookmark in a request that runs at the same time is dropped the same way. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. The remembered slug choices in goPreferences are restored for the caller, in the order of the file and in the same transaction: a choice is stored when the bookmark its bookmarkRef names (the ref of a bookmark of the file, which no other bookmark of the file has) was created by this import with the choice's slug, kept and forwarding, through the check that a member's own choice of that bookmark for the slug passes; a choice whose bookmark was skipped, failed or lost its slug, one whose ref names no bookmark or more than one, and one whose slug is outside the grammar restore nothing and fail nothing, and the choices of other members and workspaces are never changed. A dry run restores none. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
           },
           "400": {
             "content": {
@@ -12464,7 +12506,7 @@
                 }
               }
             },
-            "description": "What the import did, or with dryRun=true what it would do and nothing is written, in the shape importJson answers. Each link of the file (an A element with an HREF) is one bookmark in the order of the file, filed in the one folder named by the H3 element of the list it sits in (a folder inside a folder gives its own name, not a path) and tagged with the names of its TAGS attribute, split at commas, at most 1 000 of them; a link with no title takes the host of its address. The file is read as text and nothing in it is run or followed. The counts of what the file holds say how many links it has and how many distinct folders and tags they name, compared without regard to case, those of links that fail or are skipped included; the bookmarks left out are the duplicates by canonical URL and, as bookmark_limit_reached, those past the room the workspace had left under its bookmarks.max, read from the workspace's counter; the links whose address is not an http or https URL (a bookmarklet, a place: query) are failed with url_not_allowed. Only the folders and tags of the bookmarks that are created are made, in one transaction with the bookmarks, the counter and one import.completed audit event, so a failure leaves none of them: a folder that no created link sits directly in, because it holds only other folders, or nothing, or only links that fail or are skipped, is not created, and foldersCreated and tagsCreated count what was made. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing with the default icon and colour; an existing one keeps its own. A file names no slug, so no bookmark has one and slugsDropped is 0 with droppedSlugs empty. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles are cut to 300 characters, and all text is plain text. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
+            "description": "What the import did, or with dryRun=true what it would do and nothing is written, in the shape importJson answers. Each link of the file (an A element with an HREF) is one bookmark in the order of the file, filed in the one folder named by the H3 element of the list it sits in (a folder inside a folder gives its own name, not a path) and tagged with the names of its TAGS attribute, split at commas, at most 1 000 of them; a link with no title takes the host of its address. The file is read as text and nothing in it is run or followed. The counts of what the file holds say how many links it has and how many distinct folders and tags they name, compared without regard to case, those of links that fail or are skipped included; the bookmarks left out are the duplicates by canonical URL and, as bookmark_limit_reached, those past the room the workspace had left under its bookmarks.max, read from the workspace's counter; the links whose address is not an http or https URL (a bookmarklet, a place: query) are failed with url_not_allowed. Only the folders and tags of the bookmarks that are created are made, in one transaction with the bookmarks, the counter and one import.completed audit event, so a failure leaves none of them: a folder that no created link sits directly in, because it holds only other folders, or nothing, or only links that fail or are skipped, is not created, and foldersCreated and tagsCreated count what was made. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing with the default icon and colour; an existing one keeps its own. A file names no slug and no go preference, so no bookmark has a slug, no choice is restored and slugsDropped is 0 with droppedSlugs empty. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles are cut to 300 characters, and all text is plain text. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
           },
           "400": {
             "content": {

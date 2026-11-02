@@ -119,9 +119,10 @@
           "type": "string"
         },
         "goPreferences": {
-          "description": "The caller's remembered slug choices; always empty in this release",
-          "items": {},
-          "maxItems": 0,
+          "description": "The caller's remembered slug choices whose bookmark is the caller's own and still has the slug and forwards, each as the slug and the ref of that bookmark, sorted by the bytes of the slug; a choice for another member's bookmark is not in it",
+          "items": {
+            "$ref": "#/$defs/ExportGoPreference"
+          },
           "type": "array"
         },
         "shared": {
@@ -200,6 +201,27 @@
         "name",
         "icon",
         "color"
+      ],
+      "type": "object"
+    },
+    "ExportGoPreference": {
+      "additionalProperties": false,
+      "properties": {
+        "bookmarkRef": {
+          "description": "The ref of the caller's own bookmark in this document's bookmarks that the choice names; never another member's bookmark, which has no ref",
+          "pattern": "^b[1-9][0-9]*$",
+          "type": "string"
+        },
+        "slug": {
+          "description": "The slug the caller made a choice for",
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "bookmarkRef"
       ],
       "type": "object"
     },

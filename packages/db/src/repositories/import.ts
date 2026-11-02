@@ -1,10 +1,12 @@
 import type { ImportFolderToResolve, ImportResolved, ImportStore, ImportTagToResolve } from "@slugbase/core";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
+import { slugPreferences } from "../schema/slug-preferences.ts";
 import { folders } from "../schema/folders.ts";
 import { tags } from "../schema/tags.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
+import { bookmarkReadableBy } from "./bookmark-access.ts";
 import { insertLinkPairs, requireIdentifiers } from "./folder-links.ts";
 import { insertTagLinkPairs } from "./tag-links.ts";
 
@@ -21,6 +23,14 @@ import { insertTagLinkPairs } from "./tag-links.ts";
 // `tag-links.ts`, and a name another transaction creates meanwhile is that transaction's row: the insert leaves it and the read that follows finds and locks it. A slug is inserted with its bookmark and never overwrites
 // anything: the insert leaves a bookmark whose slug the account has on a bookmark by then (another transaction, which the check before the insert could not see), and the bookmark is inserted again without the slug and
 // without forwarding, so a slug taken in that moment costs the bookmark its slug and not the import.
+//
+// The remembered choices of the file (`rememberChoices`, doc 02 section 6.4, doc 10 T2 and T13) are stored for the account and workspace of the transaction by the statement of `GoRepository.remember` run over a batch of
+// choices, so a file of thousands of them costs `ceil(n / IMPORT_CHOICE_BATCH_SIZE)` statements under the workspace's row lock and not one for each: a choice is kept only for a bookmark that has the slug, forwards, is not
+// plan-archived and that the account can read (`bookmarkReadableBy`), which is locked `FOR KEY SHARE`, and a choice that fails those checks is not stored. A choice is the account's own row in the workspace of the transaction and
+// replaces the account's earlier choice for the slug; it names no bookmark of another workspace (the key of the row carries the workspace) and touches no other account's row.
+
+/** The most choices one statement stores. */
+const IMPORT_CHOICE_BATCH_SIZE = 500;
 
 function requireWorkspace(tx: TenantTx): string {
   if (tx.workspaceId === undefined) {
@@ -297,6 +307,34 @@ export function importRepository(tx: TenantTx): ImportRepository {
       requireWorkspace(tx);
       await insertLinkPairs(tx, folderLinks);
       await insertTagLinkPairs(tx, tagLinks);
+    },
+
+    async rememberChoices(choices) {
+      const workspaceId = requireWorkspace(tx);
+      requireIdentifiers(
+        choices.map((choice) => choice.bookmarkId),
+        "remembering the choices of a file",
+      );
+      let stored = 0;
+      for (let from = 0; from < choices.length; from += IMPORT_CHOICE_BATCH_SIZE) {
+        const asked = JSON.stringify(choices.slice(from, from + IMPORT_CHOICE_BATCH_SIZE).map((choice) => ({ slug: choice.slug, bookmark_id: choice.bookmarkId })));
+        const written = await tenantHandle(tx).execute<{ slug: string }>(sql`
+          WITH chosen AS (
+            SELECT ${bookmarks.id} AS id, v.slug AS slug
+            FROM jsonb_to_recordset(${asked}::text::jsonb) AS v(slug text, bookmark_id uuid)
+            JOIN ${bookmarks} ON ${bookmarks.id} = v.bookmark_id
+            WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.slug} = v.slug
+              AND ${bookmarks.forwarding} AND ${bookmarks.planArchivedAt} IS NULL AND ${bookmarkReadableBy(tx.accountId)}
+            ORDER BY ${bookmarks.id}
+            FOR KEY SHARE OF ${bookmarks}
+          )
+          INSERT INTO ${slugPreferences} (workspace_id, account_id, slug, bookmark_id)
+          SELECT ${workspaceId}::uuid, ${tx.accountId}::uuid, chosen.slug, chosen.id FROM chosen
+          ON CONFLICT (workspace_id, account_id, slug) DO UPDATE SET bookmark_id = EXCLUDED.bookmark_id
+          RETURNING ${slugPreferences.slug} AS slug`);
+        stored += written.length;
+      }
+      return stored;
     },
   };
 }

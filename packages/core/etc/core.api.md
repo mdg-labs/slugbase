@@ -3027,6 +3027,14 @@ export interface ExportFolderRow {
 }
 
 // @public
+export interface ExportGoPreferenceRow {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly slug: string;
+}
+
+// @public
 export function exportNetscapeFilename(exportedAt: Date): string;
 
 // @public
@@ -3081,6 +3089,7 @@ export type ExportStartOutcome = {
 export interface ExportStore {
     bookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportBookmarkRow[]>;
     folders(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportFolderRow[]>;
+    goPreferences(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportGoPreferenceRow[]>;
     shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
     summary(ownerId: string, includeShared: boolean): Promise<ExportSummary | undefined>;
     tags(ownerId: string, after: string | undefined, limit: number): Promise<readonly string[]>;
@@ -4415,6 +4424,10 @@ export interface ImportStore extends ImportPreviewStore {
         readonly slugsLost: readonly string[];
     }>;
     linkBookmarks(links: ImportLinks): Promise<void>;
+    rememberChoices(choices: readonly {
+        readonly slug: string;
+        readonly bookmarkId: string;
+    }[]): Promise<number>;
     resolveFolders(folders: readonly ImportFolderToResolve[]): Promise<ImportResolved>;
     resolveTags(tags: readonly ImportTagToResolve[]): Promise<ImportResolved>;
     takePlaces(ceiling: number | null, wanted: number): Promise<ImportPlaces>;

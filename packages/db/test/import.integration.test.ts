@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { importRepository } from "../src/index.ts";
+import { goRepository, importRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { tenantHandle } from "../src/tenant.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
@@ -843,5 +843,148 @@ describe("the links the import writes", () => {
 
     await expect(asMember(w, me, (tx) => importRepository(tx).linkBookmarks({ folders: [{ bookmarkId: "x", folderId: freshId() }], tags: [] }))).rejects.toThrow(/identifiers/);
     await expect(asMember(w, me, (tx) => importRepository(tx).linkBookmarks({ folders: [], tags: [{ bookmarkId: freshId(), tagId: "'; DROP TABLE tags; --" }] }))).rejects.toThrow(/identifiers/);
+  });
+});
+
+describe("the remembered slug choices the import restores", () => {
+  async function bookmarkWithSlug(workspaceId: string, ownerId: string, slug: string, options: { forwarding?: boolean; archived?: boolean } = {}): Promise<string> {
+    const id = freshId();
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding, plan_archived_at)
+        VALUES (${id}, ${workspaceId}, ${ownerId}, ${`https://example.com/${id}`}, ${`https://example.com/${id}`}, 'example.com', 'Title', ${slug}, ${options.forwarding ?? true}, ${options.archived === true ? new Date() : null})`,
+    );
+    return id;
+  }
+
+  const chosen = (workspaceId: string) =>
+    asSystem(db, (tx) => tx<{ account_id: string; slug: string; bookmark_id: string }[]>`SELECT account_id, slug, bookmark_id FROM slug_preferences WHERE workspace_id = ${workspaceId} ORDER BY account_id, slug`);
+
+  it("are stored for the account and the workspace of the transaction, for a bookmark of the account's that has the slug and forwards", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const first = await bookmarkWithSlug(w, me, "docs");
+    const second = await bookmarkWithSlug(w, me, "news");
+    const stored = await asMember(w, me, (tx) =>
+      importRepository(tx).rememberChoices([
+        { slug: "docs", bookmarkId: first },
+        { slug: "news", bookmarkId: second },
+      ]),
+    );
+
+    expect(stored).toBe(2);
+    expect(await chosen(w)).toEqual([
+      { account_id: me, slug: "docs", bookmark_id: first },
+      { account_id: me, slug: "news", bookmark_id: second },
+    ]);
+  });
+
+  it("replace the choice the account had for the slug", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const before = await bookmarkWithSlug(w, me, "docs");
+    const after = await bookmarkWithSlug(w, me, "docs-new");
+    await asMember(w, me, (tx) => importRepository(tx).rememberChoices([{ slug: "docs", bookmarkId: before }]));
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET slug = 'old' WHERE id = ${before}`.then(() => tx`UPDATE bookmarks SET slug = 'docs' WHERE id = ${after}`));
+
+    expect(await asMember(w, me, (tx) => importRepository(tx).rememberChoices([{ slug: "docs", bookmarkId: after }]))).toBe(1);
+    expect(await chosen(w)).toEqual([{ account_id: me, slug: "docs", bookmark_id: after }]);
+  });
+
+  it("are not stored, and are no failure, for a bookmark that lacks the slug, does not forward, is plan-archived or does not exist, and the others of the batch are stored", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const wrongSlug = await bookmarkWithSlug(w, me, "other");
+    const quiet = await bookmarkWithSlug(w, me, "quiet", { forwarding: false });
+    const archived = await bookmarkWithSlug(w, me, "archived", { archived: true });
+    const fine = await bookmarkWithSlug(w, me, "fine");
+
+    const stored = await asMember(w, me, (tx) =>
+      importRepository(tx).rememberChoices([
+        { slug: "docs", bookmarkId: wrongSlug },
+        { slug: "quiet", bookmarkId: quiet },
+        { slug: "archived", bookmarkId: archived },
+        { slug: "gone", bookmarkId: freshId() },
+        { slug: "fine", bookmarkId: fine },
+      ]),
+    );
+
+    expect(stored).toBe(1);
+    expect(await chosen(w)).toEqual([{ account_id: me, slug: "fine", bookmark_id: fine }]);
+  });
+
+  it("answer, for every case, as the member's own remembering of the choice answers", async () => {
+    const me = await account();
+    const other = await account();
+    const w = await workspace([me, other]);
+    const elsewhere = await workspace([me, other]);
+    const cases: { label: string; slug: string; bookmarkId: string; expected: boolean }[] = [
+      { label: "own", slug: "own", bookmarkId: await bookmarkWithSlug(w, me, "own"), expected: true },
+      { label: "wrong slug", slug: "wrong", bookmarkId: await bookmarkWithSlug(w, me, "right"), expected: false },
+      { label: "not forwarding", slug: "quiet", bookmarkId: await bookmarkWithSlug(w, me, "quiet", { forwarding: false }), expected: false },
+      { label: "archived", slug: "old", bookmarkId: await bookmarkWithSlug(w, me, "old", { archived: true }), expected: false },
+      { label: "another member's", slug: "theirs", bookmarkId: await bookmarkWithSlug(w, other, "theirs"), expected: false },
+      { label: "another workspace's", slug: "abroad", bookmarkId: await bookmarkWithSlug(elsewhere, me, "abroad"), expected: false },
+      { label: "unknown", slug: "unknown", bookmarkId: freshId(), expected: false },
+    ];
+    for (const { label, slug, bookmarkId, expected } of cases) {
+      const one = await asMember(w, me, (tx) => goRepository(tx).remember({ slug, bookmarkId, accountId: me }));
+      await asSystem(db, (tx) => tx`DELETE FROM slug_preferences`);
+      const batch = await asMember(w, me, (tx) => importRepository(tx).rememberChoices([{ slug, bookmarkId }]));
+      await asSystem(db, (tx) => tx`DELETE FROM slug_preferences`);
+      expect([label, one, batch], label).toEqual([label, expected, expected ? 1 : 0]);
+    }
+  });
+
+  it("change no choice of another member and store none for another member's or another workspace's bookmark (T2)", async () => {
+    const me = await account();
+    const other = await account();
+    const w = await workspace([me, other]);
+    const elsewhere = await workspace([me, other]);
+    const theirs = await bookmarkWithSlug(w, other, "docs");
+    const theirOwn = await bookmarkWithSlug(w, other, "kept");
+    const abroad = await bookmarkWithSlug(elsewhere, me, "abroad");
+    await asSystem(db, (tx) => tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${w}, ${other}, 'kept', ${theirOwn})`);
+    const mine = await bookmarkWithSlug(w, me, "kept");
+
+    const stored = await asMember(w, me, (tx) =>
+      importRepository(tx).rememberChoices([
+        { slug: "docs", bookmarkId: theirs },
+        { slug: "abroad", bookmarkId: abroad },
+        { slug: "kept", bookmarkId: mine },
+      ]),
+    );
+
+    expect(stored).toBe(1);
+    const rows = await chosen(w);
+    expect(rows).toHaveLength(2);
+    expect(rows).toContainEqual({ account_id: other, slug: "kept", bookmark_id: theirOwn });
+    expect(rows).toContainEqual({ account_id: me, slug: "kept", bookmark_id: mine });
+    expect(await chosen(elsewhere)).toEqual([]);
+  });
+
+  it("are stored in a few statements whatever their number: a thousand choices are all stored", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
+        SELECT ('0192f3a0-cccc-7000-8000-' || lpad(to_hex(n), 12, '0'))::uuid, ${w}, ${me}, 'https://example.com/' || n, 'https://example.com/' || n, 'example.com', 'T', 'slug-' || n, true
+        FROM generate_series(1, 1200) AS n`,
+    );
+    const choices = Array.from({ length: 1200 }, (_, index) => ({ slug: `slug-${String(index + 1)}`, bookmarkId: `0192f3a0-cccc-7000-8000-${(index + 1).toString(16).padStart(12, "0")}` }));
+
+    expect(await asMember(w, me, (tx) => importRepository(tx).rememberChoices(choices))).toBe(1200);
+    expect(await chosen(w)).toHaveLength(1200);
+    expect(await asMember(w, me, (tx) => importRepository(tx).rememberChoices([]))).toBe(0);
+  });
+
+  it("need a transaction opened with a workspace and take identifiers only", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    await expect(asMember(w, me, (tx) => importRepository(tx).rememberChoices([{ slug: "docs", bookmarkId: "not-an-identifier" }]))).rejects.toThrow();
+    await expect(db.tenant.withTenant({ accountId: me, requestId: "import-test" }, (tx) => importRepository(tx).rememberChoices([{ slug: "docs", bookmarkId: freshId() }]))).rejects.toThrow("workspace");
   });
 });

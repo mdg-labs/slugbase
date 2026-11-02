@@ -4,12 +4,17 @@ import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 // The SlugBase JSON export of a member (doc 02 sections 13.2 and 13.3, doc 05 section 2.4, doc 10 T1 and T2): the member's own bookmarks, folders and tags in the active workspace as
 // one versioned document, generated on demand, streamed and stored nowhere. Every read names the member as the owner, so another member's content and content with no owner is never in
 // the document. The export is recorded before the first byte, in the transaction that counts it, as one `export.created` audit event with counts only; the document is then read page by page,
-// each page in a transaction of its own that ends before the page is handed to the client, so a slow reader holds no transaction and the server holds no more than a page. A failure after the
+// each page in a transaction of its own that ends before the page is handed to the client, so a slow reader holds no transaction and the server holds no more than a page, besides the ref of each bookmark that has a slug and forwards (below), which is kept for the length of the download. A failure after the
 // first byte errors the stream, which ends the connection with the document unfinished: what was received does not parse as JSON, so a truncated file never reads as a complete one.
 //
 // The document is deterministic, which the round trip of the import relies on: bookmarks in the order of their identifiers (UUIDv7, so the order of their creation), folders and tags by the bytes
 // of their names, the folders and tags of a bookmark by the bytes of their names, and the `ref` of a bookmark by its position, never a database identifier. A page is a keyset slice, not a
 // snapshot: a change made while the export runs is in the document or not, page by page, but no row is read twice.
+//
+// The document's `goPreferences` (doc 02 section 6.4) are the member's remembered slug choices whose bookmark is the member's own, is still a candidate of the slug (it has the slug and forwards) and is in the document,
+// each written as the slug and the `ref` of that bookmark, in the order of the slugs. A choice names a bookmark by its database identifier, which is never written, so the service keeps the ref it gave each bookmark that has a
+// slug and forwards (one entry for each such bookmark, the only memory it holds beyond a page) and writes a choice only when its bookmark is one of them: a bookmark made after its page was read, or one that stopped
+// forwarding, has no ref, so its choice is left out and never points at another bookmark. Another member's bookmark is not among them, and the store reads only choices whose bookmark the member owns. With no bookmark that forwards the store is not asked.
 //
 // With `includeShared` the document's `shared` list holds the bookmarks other members shared with the member (doc 02 sections 8.2 and 13.2): `url`, `title`, `description`, `slug`, the name of the
 // owner (null when the bookmark has no owner) and the flag `shared: true`, written field by field from what the store answers, so a row that carried more (a tag, a folder, the pin, a recipient) would still
@@ -33,6 +38,12 @@ export interface ExportBookmarkRow {
   readonly folders: readonly string[];
   /** The names of the member's tags the bookmark carries, sorted by the bytes of the name. */
   readonly tags: readonly string[];
+}
+
+/** A remembered slug choice as the store reads it. The identifier of the bookmark only finds its ref; it is not written to the document. */
+export interface ExportGoPreferenceRow {
+  readonly slug: string;
+  readonly bookmarkId: string;
 }
 
 export interface ExportFolderRow {
@@ -72,6 +83,8 @@ export interface ExportStore {
   tags(ownerId: string, after: string | undefined, limit: number): Promise<readonly string[]>;
   /** At most `limit` of the bookmarks `ownerId` owns, plan-archived ones included, whose identifier is greater than `after` (the first page when undefined), in the order of the identifier. */
   bookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportBookmarkRow[]>;
+  /** At most `limit` of the remembered slug choices of `ownerId` whose bookmark `ownerId` owns and that has the slug and forwards, plan-archived ones included, whose slug sorts after `after` (the first page when undefined), by the bytes of the slug. */
+  goPreferences(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportGoPreferenceRow[]>;
   /** At most `limit` of the bookmarks of other members that `accountId` can read through a share (directly, through a team or through a shared folder), plan-archived ones never, whose identifier is greater than `after` (the first page when undefined), in the order of the identifier. */
   shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
 }
@@ -179,6 +192,7 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
   yield '],"bookmarks":[';
   separator = "";
   let position = 0;
+  const refOf = new Map<string, string>();
   let bookmarkAfter: string | undefined;
   for (;;) {
     const after = bookmarkAfter;
@@ -189,8 +203,12 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
         rows
           .map((row) => {
             position += 1;
+            const ref = `b${String(position)}`;
+            if (row.slug !== null && row.forwarding) {
+              refOf.set(row.id.toLowerCase(), ref);
+            }
             return JSON.stringify({
-              ref: `b${String(position)}`,
+              ref,
               url: row.url,
               title: row.title,
               description: row.description,
@@ -212,7 +230,28 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
     }
   }
 
-  yield '],"goPreferences":[],"shared":[';
+  yield '],"goPreferences":[';
+  if (refOf.size > 0) {
+    separator = "";
+    let preferenceAfter: string | undefined;
+    for (;;) {
+      const after = preferenceAfter;
+      const rows = await page((store) => store.goPreferences(owner, after, pageSize));
+      const written = rows.flatMap((row) => {
+        const bookmarkRef = refOf.get(row.bookmarkId.toLowerCase());
+        return bookmarkRef === undefined ? [] : [JSON.stringify({ slug: row.slug, bookmarkRef })];
+      });
+      if (written.length > 0) {
+        yield separator + written.join(",");
+        separator = ",";
+      }
+      if (rows.length < pageSize) {
+        break;
+      }
+      preferenceAfter = rows[rows.length - 1]?.slug;
+    }
+  }
+  yield '],"shared":[';
   if (ask.includeShared) {
     separator = "";
     let sharedAfter: string | undefined;
@@ -236,7 +275,7 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
 }
 
 /**
- * The pieces of a document as a stream of bytes. A piece is read only when the client asks for more, so at most one page is held, whatever the size of the export. The stream errors, and the
+ * The pieces of a document as a stream of bytes. A piece is read only when the client asks for more, so the stream itself holds at most one page, whatever the size of the export (the JSON generator also keeps the ref map described at the top of this file). The stream errors, and the
  * connection with it, when a piece cannot be read; `onFailure` is told first.
  */
 export function pieceStream(source: AsyncGenerator<string, void, undefined>, onFailure: (error: unknown) => void): ReadableStream<Uint8Array> {

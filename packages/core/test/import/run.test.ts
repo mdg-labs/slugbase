@@ -13,6 +13,8 @@ interface Written {
   readonly folders: (readonly ImportFolderToResolve[])[];
   readonly tags: (readonly ImportTagToResolve[])[];
   readonly links: ImportLinks[];
+  readonly choices: { slug: string; bookmarkId: string }[];
+  readonly choiceCalls: number[];
 }
 
 interface Options {
@@ -33,10 +35,13 @@ interface Options {
   tags?: readonly string[];
   /** Whether two spellings are one name for the store; the same whatever the case when left out. */
   same?: (a: string, b: string) => boolean;
+  /** The slugs the store refuses a choice for, as it does when the bookmark is no longer a candidate of the member. */
+  refusedChoices?: readonly string[];
+  failChoice?: boolean;
 }
 
 function fixture(options: Options = {}) {
-  const written: Written = { takes: [], batches: [], order: [], audit: [], slugLookups: [], folders: [], tags: [], links: [] };
+  const written: Written = { takes: [], batches: [], order: [], audit: [], slugLookups: [], folders: [], tags: [], links: [], choices: [], choiceCalls: [] };
   const store: ImportStore = {
     bookmarkCount: () => {
       written.order.push("count");
@@ -75,6 +80,15 @@ function fixture(options: Options = {}) {
       written.order.push("link");
       written.links.push(links);
       return Promise.resolve();
+    },
+    rememberChoices: (choices) => {
+      written.order.push("remember");
+      if (options.failChoice === true) {
+        return Promise.reject(new Error("the choices could not be stored"));
+      }
+      written.choices.push(...choices);
+      written.choiceCalls.push(choices.length);
+      return Promise.resolve(choices.filter((choice) => !(options.refusedChoices ?? []).includes(choice.slug)).length);
     },
     takePlaces: (ceiling, wanted): Promise<ImportPlaces> => {
       written.order.push("take");
@@ -646,5 +660,149 @@ describe("importBookmarks and the folder and tag links", () => {
     const { dependencies } = fixture();
 
     await expect(importBookmarks(dependencies, ask([{ url: "https://example.com/a", tags: Array.from({ length: IMPORT_MAX_NEW_NAMES + 1 }, (_, index) => `n${String(index)}`) }]))).resolves.toMatchObject({ kind: "too_many_names" });
+  });
+});
+
+describe("importBookmarks and the remembered slug choices", () => {
+  const link = (ref: string, slug: string, extra: Record<string, unknown> = {}) => ({ ref, url: `https://example.com/${ref}`, slug, forwarding: true, ...extra });
+  const envelope = (bookmarks: object[], goPreferences: object[]): ImportRequest => ({ format: "slugbase-export", version: 1, bookmarks, goPreferences }) as ImportRequest;
+  const idOf = (written: Written, url: string): string | undefined => written.batches.flatMap((batch) => batch.bookmarks).find((bookmark) => bookmark.url === url)?.id;
+
+  it("restores the choices for the bookmarks their refs name once the bookmarks are written with that slug and forward, in one call after the last batch and before the audit event, in the order of the file", async () => {
+    const { written, dependencies } = fixture();
+
+    const outcome = await importBookmarks(dependencies, ask(envelope([link("b1", "docs"), link("b2", "news")], [{ slug: "news", bookmarkRef: "b2" }, { slug: "docs", bookmarkRef: "b1" }])));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 2 } });
+    expect(written.choices).toEqual([
+      { slug: "news", bookmarkId: idOf(written, "https://example.com/b2") },
+      { slug: "docs", bookmarkId: idOf(written, "https://example.com/b1") },
+    ]);
+    expect(written.order).toEqual(["lookup", "count", "take", "slugs", "insert", "remember", "audit"]);
+  });
+
+  it("reads a slug of a choice as a slug of a bookmark is read: trimmed and in lower case", async () => {
+    const { written, dependencies } = fixture();
+
+    await importBookmarks(dependencies, ask(envelope([link("b1", "Docs")], [{ slug: "  DOCS ", bookmarkRef: "b1" }])));
+
+    expect(written.choices).toEqual([{ slug: "docs", bookmarkId: idOf(written, "https://example.com/b1") }]);
+  });
+
+  it("restores nothing and fails nothing for a bookmark that lost its slug to one the caller has, to an earlier bookmark of the file, or to another transaction", async () => {
+    const { written, dependencies } = fixture({ slugs: ["had"], racedSlugs: ["raced"] });
+    const file = envelope(
+      [link("b1", "had"), link("b2", "twice"), link("b3", "twice"), link("b4", "raced")],
+      [
+        { slug: "had", bookmarkRef: "b1" },
+        { slug: "twice", bookmarkRef: "b3" },
+        { slug: "raced", bookmarkRef: "b4" },
+      ],
+    );
+
+    const outcome = await importBookmarks(dependencies, ask(file));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 4, slugsDropped: 3 } });
+    expect(written.choices).toEqual([]);
+  });
+
+  it("restores nothing for a bookmark that was skipped as a duplicate, failed or was left out for the limit", async () => {
+    const { written, dependencies } = fixture({ existing: ["https://example.com/dup"], room: 1 });
+    const file = envelope(
+      [link("b1", "kept"), link("dup", "dup-slug", { url: "https://example.com/dup" }), link("bad", "bad-slug", { url: "bogus" }), link("b4", "late")],
+      [
+        { slug: "dup-slug", bookmarkRef: "dup" },
+        { slug: "bad-slug", bookmarkRef: "bad" },
+        { slug: "late", bookmarkRef: "b4" },
+      ],
+    );
+
+    const outcome = await importBookmarks(dependencies, ask(file, { ceiling: 1 }));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 1 } });
+    expect(written.choices).toEqual([]);
+  });
+
+  it("restores nothing for a bookmark that does not forward, for a slug the bookmark does not have and for a bookmark with no slug", async () => {
+    const { written, dependencies } = fixture();
+    const file = envelope(
+      [link("b1", "quiet", { forwarding: false }), link("b2", "other"), { ref: "b3", url: "https://example.com/b3" }],
+      [
+        { slug: "quiet", bookmarkRef: "b1" },
+        { slug: "docs", bookmarkRef: "b2" },
+        { slug: "docs", bookmarkRef: "b3" },
+      ],
+    );
+
+    await importBookmarks(dependencies, ask(file));
+
+    expect(written.choices).toEqual([]);
+  });
+
+  it("restores nothing for a ref no bookmark of the file has, for a ref more than one has, and for a slug outside the grammar, and fails nothing", async () => {
+    const { written, dependencies } = fixture();
+    const file = envelope(
+      [link("b1", "docs"), link("b1", "news", { url: "https://example.com/b1-again" }), link("b3", "fine")],
+      [
+        { slug: "docs", bookmarkRef: "b1" },
+        { slug: "news", bookmarkRef: "b1" },
+        { slug: "fine", bookmarkRef: "b9" },
+        { slug: "Not A Slug!", bookmarkRef: "b3" },
+        { slug: "", bookmarkRef: "b3" },
+        { slug: "x".repeat(1000), bookmarkRef: "b3" },
+      ],
+    );
+
+    const outcome = await importBookmarks(dependencies, ask(file));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 3 } });
+    expect(written.choices).toEqual([]);
+    expect(written.audit).toHaveLength(1);
+  });
+
+  it("restores nothing from a plain array or a document with no list or an empty one", async () => {
+    for (const file of [[link("b1", "docs")], envelope([link("b1", "docs")], []), { format: "slugbase-export", version: 1, bookmarks: [link("b1", "docs")] } as ImportRequest]) {
+      const { written, dependencies } = fixture();
+      await importBookmarks(dependencies, ask(file));
+      expect(written.choices).toEqual([]);
+      expect(written.order).not.toContain("remember");
+    }
+  });
+
+  it("asks once for a slug however many entries name it, and the entries that name a bookmark that lost the slug do not take the choice from the one that kept it", async () => {
+    const { written, dependencies } = fixture();
+    const entries = Array.from({ length: 1000 }, (_, index) => ({ slug: "docs", bookmarkRef: index % 2 === 0 ? "b1" : "b2" }));
+
+    await importBookmarks(dependencies, ask(envelope([link("b1", "docs"), link("b2", "docs")], entries)));
+
+    expect(written.choices).toEqual([{ slug: "docs", bookmarkId: idOf(written, "https://example.com/b1") }]);
+  });
+
+  it("asks the store once for all of the choices of a file, at most one for each slug and never more than there are bookmarks created with a slug", async () => {
+    const { written, dependencies } = fixture();
+    const bookmarks = Array.from({ length: 50 }, (_, index) => link(`b${String(index + 1)}`, `s${String(index + 1)}`));
+    const entries = [...bookmarks, ...bookmarks, ...bookmarks].map((bookmark) => ({ slug: bookmark.slug, bookmarkRef: bookmark.ref }));
+
+    await importBookmarks(dependencies, ask(envelope(bookmarks, entries)));
+
+    expect(written.choices).toHaveLength(50);
+    expect(written.choiceCalls).toEqual([50]);
+    expect(new Set(written.choices.map((choice) => choice.slug)).size).toBe(50);
+  });
+
+  it("succeeds when the store refuses a choice", async () => {
+    const { written, dependencies } = fixture({ refusedChoices: ["docs"] });
+
+    const outcome = await importBookmarks(dependencies, ask(envelope([link("b1", "docs"), link("b2", "news")], [{ slug: "docs", bookmarkRef: "b1" }, { slug: "news", bookmarkRef: "b2" }])));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 2 } });
+    expect(written.choices.map((choice) => choice.slug)).toEqual(["docs", "news"]);
+  });
+
+  it("rejects, and records no audit event, when the store cannot store a choice", async () => {
+    const { written, dependencies } = fixture({ failChoice: true });
+
+    await expect(importBookmarks(dependencies, ask(envelope([link("b1", "docs")], [{ slug: "docs", bookmarkRef: "b1" }])))).rejects.toThrow("the choices could not be stored");
+    expect(written.audit).toEqual([]);
   });
 });

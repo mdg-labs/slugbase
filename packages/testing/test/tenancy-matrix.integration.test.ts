@@ -310,7 +310,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { "listAuditEvents.actorAccountId": "member", "listAuditEvents.entityId": "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "bulkBookmarks.teamId": "team", "previewBulkBookmarks.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "importJson.bookmarks[].slug": "bookmark", "importJson.[].slug": "bookmark", "importJson.shared[].slug": "bookmark", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202, listAuditEvents: 200, importJson: 200 } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { "listAuditEvents.actorAccountId": "member", "listAuditEvents.entityId": "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "bulkBookmarks.teamId": "team", "previewBulkBookmarks.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "importJson.bookmarks[].slug": "bookmark", "importJson.[].slug": "bookmark", "importJson.shared[].slug": "bookmark", "importJson.goPreferences[].slug": "bookmark", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202, listAuditEvents: 200, importJson: 200 } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -331,10 +331,10 @@ describe("the matrix over the committed contract and the repository registry", (
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
     // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for the team of B on each of the read, the change and the deletion of a team and once for each of the three members of B with the team of B on the replacement of its members, and once for each of the two bookmarks of B on the list of the shares of a bookmark, once for each of the two bookmarks of B with each of the three members of B and the team of B on the grant of a share, and once for each of the two bookmarks of B with the share of B on its revocation, and once for the folder of B on the list of the shares of a folder, once for the folder of B with each of the three members of B and the team of B on the grant of a share of a folder, and once for the folder of B with the share of B on its revocation, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice, and once for each of the two hosts of B on the favicon (answered the placeholder, 202, by a principal that reaches the handler).
     // The bulk request and its preview name each pair of a bookmark of B in `ids` and one in `filter.hasSlug` once for each of the three members of B in `accountId`: twelve calls each, the four they had before being in the sum above and the further eight each added at its end.
-    // The import preview names each of the two bookmarks of B once in the `slug` of a bookmark of the export document and once in the `slug` of a bookmark of the plain array, and in the `slug` of an entry of the document's `shared` list: eight calls for each principal, the last term of the sum.
+    // The import preview names each of the two bookmarks of B once in the `slug` of a bookmark of the export document and once in the `slug` of a bookmark of the plain array, in the `slug` of an entry of the document's `shared` list and in the `slug` of an entry of its `goPreferences` list: sixteen calls for each principal, the last term of the sum.
     // The Netscape export names none either, and is counted in the first term with the JSON export: it reads the caller's own bookmarks, folders and tags of the workspace of the request, section by section.
     // The Netscape import names none either, and is counted in the first term: its one file part is a stream of bytes and no identifier, and what the file lists is text matched among the caller's own rows.
-    expect(report.attempts).toBe(9 * 27 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2));
+    expect(report.attempts).toBe(9 * 27 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2 * 2));
     assertMatrixPassed(report);
   });
 
@@ -1189,6 +1189,54 @@ describe("the bulk operations across workspaces", () => {
     expect(after).toEqual([...before.a.split("\n"), `folder:${createdFolder}/import-b`, `tag:${createdTag}/import-b`].sort());
   });
 
+  // The import restores the remembered slug choices of its file (doc 02 section 6.4, doc 10 T2). From a transaction acting in A, by an account that owns a bookmark with the same slug in each of A and B and has a choice for the slug in B, a
+  // choice that names the bookmark of B is stored for no one, the choice for the bookmark of A is stored in A, and the choice of B is as it was; a row that names B is refused by the policy.
+  it("stores no remembered choice for a bookmark of B, writes none in B and changes no choice of B, for an import from a transaction acting in A, through the repository", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${MEMBER_OF_A}, 'bulk-matrix@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${MEMBER_OF_A}, slug = 'choice-slug', forwarding = true WHERE id IN (${BOOKMARK_OF_A}, ${BOOKMARK_OF_B})`;
+      await tx`DELETE FROM slug_preferences WHERE workspace_id IN (${PROBE_WORKSPACE_A}, ${PROBE_WORKSPACE_B})`;
+      await tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'choice-slug', ${BOOKMARK_OF_B})`;
+    });
+    const choicesIn = async (workspaceId: string): Promise<string> => {
+      const rows = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<{ item: string }[]>`SELECT account_id || '/' || slug || '/' || bookmark_id AS item FROM slug_preferences WHERE workspace_id = ${workspaceId} ORDER BY 1`;
+      });
+      return rows.map((row) => row.item).join("\n");
+    };
+    const before = { a: await choicesIn(PROBE_WORKSPACE_A), b: await choicesIn(PROBE_WORKSPACE_B) };
+    const context = { accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-import-choices" };
+
+    const ofB = await database().tenant.withTenant(context, (tx) => importRepository(tx).rememberChoices([{ slug: "choice-slug", bookmarkId: BOOKMARK_OF_B }]));
+    expect({ ofB, a: await choicesIn(PROBE_WORKSPACE_A), b: await choicesIn(PROBE_WORKSPACE_B) }).toEqual({ ofB: 0, a: before.a, b: before.b });
+
+    const ofA = await database().tenant.withTenant(context, (tx) => importRepository(tx).rememberChoices([{ slug: "choice-slug", bookmarkId: BOOKMARK_OF_A }]));
+    const insertingIntoB = await database()
+      .app.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true), set_config('app.workspace_id', ${PROBE_WORKSPACE_A}, true)`;
+        await tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'other-slug', ${BOOKMARK_OF_B})`;
+      })
+      .then(
+        () => "inserted",
+        (error: unknown) => (error as { code?: string }).code,
+      );
+
+    expect(ofA).toBe(1);
+    expect(await choicesIn(PROBE_WORKSPACE_A)).toBe(`${MEMBER_OF_A}/choice-slug/${BOOKMARK_OF_A}`);
+    expect(insertingIntoB).toBe("42501");
+    expect(await choicesIn(PROBE_WORKSPACE_B)).toBe(before.b);
+  });
+
   // The bulk filing, tagging and preview of adding tags (doc 02 section 5.8) take a bookmark and a folder or tags by identifier. From a transaction acting in A, a
   // bookmark of B is not reached and a folder or a tag of B is not found, though the same account owns all of them, so the guard under test is the workspace.
   it("files, tags and previews no bookmark of B, and finds no folder or tag of B, from a transaction acting in A, and writes no link in B", async () => {
@@ -1366,6 +1414,53 @@ describe("the shared bookmarks of the export across workspaces", () => {
 // The cache of AI suggestions locks the workspace row and the member's membership row before it writes (`holdMember`, which an update that counts accepted fields calls first,
 // and `store`): two rows of tables that no scoped repository covers, taken through the raw handle of the transaction, so the registry walk above cannot see them. This runs both
 // methods as shipped, through the repository, inside withTenant(A), as an account that is no member of A (it belongs to B) and as one that belongs to both, against the rows of B.
+describe("the remembered slug choices of the export across workspaces", () => {
+  const MEMBER_OF_BOTH = "0192f3a0-3333-7000-8000-00000000a0aa";
+  const OTHER_OF_A = "0192f3a0-3333-7000-8000-00000000a0ab";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0ba";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0ba";
+  const BOOKMARK_OF_OTHER = "0192f3a0-2222-7000-8000-00000000a0bb";
+
+  it("reads no choice of B and no choice of another member, from a transaction acting in A", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    for (const [accountId, email] of [
+      [MEMBER_OF_BOTH, "choices-export-both@example.test"],
+      [OTHER_OF_A, "choices-export-other@example.test"],
+    ] as const) {
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+        await tx`INSERT INTO accounts (id, email, display_name) VALUES (${accountId}, ${email}, 'Matrix member') ON CONFLICT DO NOTHING`;
+      });
+    }
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_BOTH}, 'owner'), (${PROBE_WORKSPACE_A}, ${OTHER_OF_A}, 'member'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_BOTH}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${MEMBER_OF_BOTH}, slug = 'export-choice', forwarding = true WHERE id IN (${BOOKMARK_OF_A}, ${BOOKMARK_OF_B})`;
+      await tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
+        VALUES (${BOOKMARK_OF_OTHER}, ${PROBE_WORKSPACE_A}, ${OTHER_OF_A}, 'https://example.com/other', 'https://example.com/other', 'example.com', 'Other', 'other-choice', true) ON CONFLICT DO NOTHING`;
+      await tx`DELETE FROM slug_preferences WHERE workspace_id IN (${PROBE_WORKSPACE_A}, ${PROBE_WORKSPACE_B})`;
+      await tx`
+        INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id)
+        VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_BOTH}, 'export-choice', ${BOOKMARK_OF_A}), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_BOTH}, 'export-choice', ${BOOKMARK_OF_B}),
+               (${PROBE_WORKSPACE_A}, ${OTHER_OF_A}, 'other-choice', ${BOOKMARK_OF_OTHER}), (${PROBE_WORKSPACE_A}, ${OTHER_OF_A}, 'export-choice', ${BOOKMARK_OF_A})`;
+    });
+
+    const reads = (workspaceId: string, accountId: string) =>
+      database().tenant.withTenant({ accountId, workspaceId, requestId: "matrix-choices-export" }, async (tx) => (await exportRepository(tx).goPreferences(accountId, undefined, 100)).map((row) => `${row.slug}/${row.bookmarkId}`));
+
+    expect(await reads(PROBE_WORKSPACE_B, MEMBER_OF_BOTH)).toEqual([`export-choice/${BOOKMARK_OF_B}`]);
+    expect(await reads(PROBE_WORKSPACE_A, MEMBER_OF_BOTH)).toEqual([`export-choice/${BOOKMARK_OF_A}`]);
+    // The other member's choice for the bookmark of the member who owns it is not that member's own bookmark, so it is in no export; their choice for their own bookmark is.
+    expect(await reads(PROBE_WORKSPACE_A, OTHER_OF_A)).toEqual([`other-choice/${BOOKMARK_OF_OTHER}`]);
+  });
+});
+
 describe("the member lock and the cache write across workspaces", () => {
   const ONLY_IN_B = "0192f3a0-3333-7000-8000-00000000a0a7";
   const IN_BOTH = "0192f3a0-3333-7000-8000-00000000a0a8";

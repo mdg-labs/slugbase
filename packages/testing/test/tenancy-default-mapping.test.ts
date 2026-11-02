@@ -104,6 +104,7 @@ describe("PATH_PARAMETER_MAPPING", () => {
         "importJson.bookmarks[].slug",
         "importJson.[].slug",
         "importJson.shared[].slug",
+        "importJson.goPreferences[].slug",
       ]),
     );
   });

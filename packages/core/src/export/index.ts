@@ -3,6 +3,7 @@ export { escapeHtml, exportNetscapeFilename, exportNetscapeStream } from "./nets
 export type {
   ExportBookmarkRow,
   ExportFolderRow,
+  ExportGoPreferenceRow,
   ExportSharedRow,
   ExportStartAsk,
   ExportStartDependencies,

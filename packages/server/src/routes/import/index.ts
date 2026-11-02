@@ -18,7 +18,7 @@ import { uploadedBookmarks } from "./upload.ts";
 // the places the file needs under the workspace's `bookmarks.max` (the entitlement is decided here, because the room is the counter under the workspace's row lock), inserts the bookmarks in batches in the order of
 // the file with ascending identifiers, queues `bookmark.created` for each (the page's metadata is not fetched: the file is the member's, and a fetch for each of up to 5 000 bookmarks is an amplification the member
 // chooses), and records one `import.completed` audit event with the account or the token as the actor. Between the places and the bookmarks it gets or creates the folders and tags of the file for the caller by name, and it
-// files and tags each bookmark by its own names; a slug the caller has already, or that an earlier bookmark of the file keeps, is dropped from its bookmark, which is still imported, and listed in the answer. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
+// files and tags each bookmark by its own names; a slug the caller has already, or that an earlier bookmark of the file keeps, is dropped from its bookmark, which is still imported, and listed in the answer. The remembered slug choices of the file (`goPreferences`) are restored after the bookmarks, in the same transaction and in batches, for the bookmarks that kept the slug of the choice and forward, through the check of a member's own choice; a dry run restores none. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
 // A file that would create more than 10 000 new folders and tags together is `422 validation_failed` with the field code `too_many_new_names`, in the dry run and in the write: the write decides it before it takes the
 // workspace's row, and the refusal that is only known under the lock throws inside the transaction, so nothing is committed. A file whose bookmarks would make more than 100 000 folder and tag links together is refused the same
 // way, with the field code `too_many_links`. Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
@@ -71,6 +71,7 @@ function storeOf(tx: TenantTx): ImportStore {
     resolveFolders: (folders) => repository.resolveFolders(folders),
     resolveTags: (tags) => repository.resolveTags(tags),
     linkBookmarks: (links) => repository.linkBookmarks(links),
+    rememberChoices: (choices) => repository.rememberChoices(choices),
     takePlaces: (ceiling, wanted) => repository.takePlaces(ceiling, wanted),
     insertBookmarks: ({ bookmarks, events }) =>
       repository.insertBookmarks({ bookmarks, jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)) }),

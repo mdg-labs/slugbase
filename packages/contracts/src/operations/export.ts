@@ -8,7 +8,8 @@ import { WORKSPACE_NAME_MAX_LENGTH } from "./workspaces.ts";
 // The export tag of doc 04 section 10.9 (doc 02 sections 13.2 and 13.3, doc 05 section 2.4, doc 10 T1 and T2): the caller's own content in the active workspace as one
 // versioned document, streamed page by page and never stored on the server. The document is the SlugBase export format: a bookmark carries the names of its folders
 // and tags, and the icon and colour of a folder are held once, in `folders`. A bookmark has an export-local `ref` that the entries of `goPreferences` point at; it is
-// assigned by position, so two exports of the same content hold the same refs, and it is no identifier of the database. The document holds no usage counts, no
+// assigned by position, so two exports of the same content hold the same refs, and it is no identifier of the database. `goPreferences` holds the caller's remembered slug choices (doc 02 section 6.4) as a slug and
+// the ref of the caller's own bookmark that the choice names, in the order of the slugs; a choice for a bookmark that is another member's has no ref to name and is not exported. The document holds no usage counts, no
 // identifiers and no timestamp but `exportedAt`. Content that is another member's, and content that has no owner, is never in it: the one exception is the list `shared`, which holds the
 // bookmarks other members shared with the caller when the request asks for them (`includeShared=true`), as their readable fields only and each flagged as shared; it holds none of the owner's
 // tags, folders or pin and nothing of who else the bookmark is shared with, and a bookmark whose share has ended, or that a downgrade of the plan archived, is not in it.
@@ -57,6 +58,13 @@ export const ExportBookmarkSchema = z
   })
   .meta({ id: "ExportBookmark" });
 
+export const ExportGoPreferenceSchema = z
+  .strictObject({
+    slug: z.string().min(1).max(BOOKMARK_SLUG_MAX_LENGTH).describe("The slug the caller made a choice for"),
+    bookmarkRef: z.string().regex(EXPORT_REF_PATTERN).describe("The ref of the caller's own bookmark in this document's bookmarks that the choice names; never another member's bookmark, which has no ref"),
+  })
+  .meta({ id: "ExportGoPreference" });
+
 export const ExportSharedBookmarkSchema = z
   .strictObject({
     url: z.string().min(1).max(BOOKMARK_URL_MAX_LENGTH).describe("The bookmark's address, an http or https URL, as it is stored"),
@@ -81,7 +89,7 @@ export const ExportDocumentSchema = z
     folders: z.array(ExportFolderSchema).describe("Every folder the caller owns, used or not, sorted by the bytes of the name"),
     tags: z.array(z.string().min(1).max(TAG_NAME_MAX_LENGTH)).describe("The name of every tag the caller owns, used or not, sorted by the bytes of the name"),
     bookmarks: z.array(ExportBookmarkSchema).describe("Every bookmark the caller owns, plan-archived ones included and flagged, in the order of their creation"),
-    goPreferences: z.array(z.unknown()).max(0).describe("The caller's remembered slug choices; always empty in this release"),
+    goPreferences: z.array(ExportGoPreferenceSchema).describe("The caller's remembered slug choices whose bookmark is the caller's own and still has the slug and forwards, each as the slug and the ref of that bookmark, sorted by the bytes of the slug; a choice for another member's bookmark is not in it"),
     shared: z.array(ExportSharedBookmarkSchema).describe("The bookmarks other members shared with the caller that the caller can read, plan-archived ones left out, in the order of their creation; empty unless the request asked for them with includeShared=true, and never read by an import"),
   })
   .meta({ id: "ExportDocument" });
@@ -98,7 +106,7 @@ export const exportJson = defineOperation({
   request: { query: ExportQuerySchema },
   responses: {
     200: streamResponse(
-      "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
+      "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The list goPreferences holds the caller's remembered slug choices, each as a slug and bookmarkRef, the ref of the caller's own bookmark in the same document that the choice names and that still has the slug and forwards, sorted by slug; a choice for another member's bookmark is never in it, and the document holds no other member's choice. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
       "application/json",
       {
         schema: ExportDocumentSchema,
@@ -135,7 +143,7 @@ export const exportNetscape = defineOperation({
   request: { query: ExportQuerySchema },
   responses: {
     200: streamResponse(
-      "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin and the forwarding flag are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the file unfinished",
+      "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin, the forwarding flag and the go preferences are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the file unfinished",
       "text/html",
       {
         headers: {

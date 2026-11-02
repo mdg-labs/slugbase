@@ -37,7 +37,7 @@ import { cleanText } from "./text.ts";
 // One import creates at most `IMPORT_MAX_NEW_NAMES` folders and tags together (doc 02 section 7, doc 04 section 10.9), so that a request cannot hold the workspace's row lock for the time it takes to write a
 // great many rows. Only the names the caller does not have count, as the database compares them (`missingNames`); a file that would create more is refused whole, by the preview and by the import alike.
 //
-// One import also makes at most `IMPORT_MAX_LINKS` folder and tag links together (`linksOf`), for the same reason: names the caller has already are free, but each bookmark that is created is linked once to each folder and each tag
+// One import also makes at most `IMPORT_MAX_LINKS` folder and tag links together (`overLinks`), for the same reason: names the caller has already are free, but each bookmark that is created is linked once to each folder and each tag
 // it names, so a file of a few names that repeat can still make a great many rows. Only the bookmarks that are created count, and the spellings of one name on one bookmark, as the database compares them, are one link.
 
 /** What the preview reads of the database, in the transaction of the request. */

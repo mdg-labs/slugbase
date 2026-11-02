@@ -85,6 +85,38 @@ describe("the descriptions of the two imports", () => {
     }
     expect(netscape).toContain("A file names no slug");
   });
+
+  it("say what the JSON import does with the remembered slug choices and that the Netscape import restores none", () => {
+    expect(json).toContain("goPreferences");
+    expect(json).toContain("remembered slug choice");
+    expect(json).toContain("A dry run restores none");
+    expect(netscape).toContain("no go preference");
+    expect(netscape).not.toContain("goPreferences");
+  });
+});
+
+describe("the remembered slug choices of an import file", () => {
+  const choice = { slug: "docs", bookmarkRef: "b1" };
+
+  it("are accepted in the strict shape the export writes, and an empty list or none at all as before", () => {
+    expect(ImportEnvelopeSchema.safeParse({ ...ENVELOPE, goPreferences: [choice, { slug: "news", bookmarkRef: "b2" }] }).success).toBe(true);
+    expect(ImportEnvelopeSchema.safeParse({ ...ENVELOPE, goPreferences: [] }).success).toBe(true);
+    expect(ImportEnvelopeSchema.safeParse(ENVELOPE).success).toBe(true);
+    expect(document.components.schemas["ImportEnvelope"]).toMatchObject({ properties: { goPreferences: { type: "array", items: { $ref: "#/components/schemas/ImportGoPreference" } } } });
+    expect(document.components.schemas["ImportGoPreference"]?.["additionalProperties"]).toBe(false);
+  });
+
+  it("leave a slug outside the grammar and a reference nothing names to the import, which restores nothing for them", () => {
+    expect(ImportEnvelopeSchema.safeParse({ ...ENVELOPE, goPreferences: [{ slug: "Not A Slug!", bookmarkRef: "nothing" }] }).success).toBe(true);
+  });
+
+  it("refuse what is not the format: another member, a value of the wrong type, a string over the bound and more entries than the file may hold bookmarks", () => {
+    for (const refused of [{}, { slug: "docs" }, { bookmarkRef: "b1" }, { ...choice, extra: 1 }, { ...choice, bookmarkId: "x" }, { slug: 1, bookmarkRef: "b1" }, { slug: "docs", bookmarkRef: null }, { slug: "s".repeat(IMPORT_NAME_MAX_LENGTH + 1), bookmarkRef: "b1" }, { slug: "docs", bookmarkRef: "r".repeat(IMPORT_NAME_MAX_LENGTH + 1) }, "docs"]) {
+      expect(ImportEnvelopeSchema.safeParse({ ...ENVELOPE, goPreferences: [refused] }).success, JSON.stringify(refused)).toBe(false);
+    }
+    expect(ImportEnvelopeSchema.safeParse({ ...ENVELOPE, goPreferences: Array.from({ length: IMPORT_MAX_BOOKMARKS }, () => choice) }).success).toBe(true);
+    expect(ImportEnvelopeSchema.safeParse({ ...ENVELOPE, goPreferences: Array.from({ length: IMPORT_MAX_BOOKMARKS + 1 }, () => choice) }).success).toBe(false);
+  });
 });
 
 describe("the import request", () => {

@@ -1,8 +1,9 @@
-import type { ExportBookmarkRow, ExportFolderRow, ExportSharedRow, ExportStore, ExportSummary, NetscapeBookmarkRow, NetscapeExportStore, NetscapeSectionRow } from "@slugbase/core";
+import type { ExportBookmarkRow, ExportFolderRow, ExportGoPreferenceRow, ExportSharedRow, ExportStore, ExportSummary, NetscapeBookmarkRow, NetscapeExportStore, NetscapeSectionRow } from "@slugbase/core";
 import { sql, type SQL } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { folderBookmarks, folders } from "../schema/folders.ts";
+import { slugPreferences } from "../schema/slug-preferences.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { workspaces } from "../schema/workspaces.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -15,6 +16,10 @@ import { sharedBookmarks } from "./bookmark-access.ts";
 // and filtering by owner, so the work of the whole export is a pass over the workspace's bookmarks and not a sort of the member's for each page; the folders and tags by the bytes of their name
 // (`COLLATE "C"`), a total order since a member's names are unique, which also makes the order the same on every database whatever its locale. The Netscape export reads a section at a time: the member's folders by identifier, the bookmarks of
 // one of them by the identifier of the folder, and the member's bookmarks that are in none of its folders.
+//
+// The remembered slug choices of the member (`goPreferences`, doc 02 section 6.4) are read from `slug_preferences` by the member's own rows (the workspace and the account are named as well as the policy) joined to the bookmark
+// by its key, and only where the member owns that bookmark and it still has the slug and forwards: a choice for another member's bookmark has no ref in the document, and one whose bookmark has changed since is stale, which the
+// resolution would forget. A plan-archived bookmark is not left out, since it is in the document flagged. The pages are keysets on the bytes of the slug, a total order since the member has one choice for a slug.
 //
 // The bookmarks shared with the member (`includeShared`, doc 02 sections 8.2 and 13.2) are read from the set of the member's grants, which is the one the lists are driven from (`sharedBookmarks`: a direct share, a
 // team's, or a shared folder's, written once in `bookmark-access.ts`), so a bookmark is readable here exactly when the list of the shared bookmarks shows it, and a share that ended is in no page read after it. A bookmark the member
@@ -112,6 +117,22 @@ export function bookmarksStatement(tx: TenantTx, ownerId: string, after: string 
     FROM ${bookmarks}
     WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid AND ${resume}
     ORDER BY ${bookmarks.id}
+    LIMIT ${limit}::integer`;
+}
+
+/** The statement of `ExportRepository.goPreferences`, exported for the test that plans it. */
+export function goPreferencesStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number): SQL {
+  const workspaceId = requireWorkspace(tx);
+  const owner = requireOwner(tx, ownerId);
+  requireLimit(limit);
+  const resume = after === undefined ? sql`TRUE` : sql`${slugPreferences.slug}::text COLLATE "C" > ${after}::text COLLATE "C"`;
+  return sql`
+    SELECT ${slugPreferences.slug}::text AS slug, ${slugPreferences.bookmarkId} AS bookmark_id
+    FROM ${slugPreferences}
+    JOIN ${bookmarks} ON ${bookmarks.workspaceId} = ${slugPreferences.workspaceId} AND ${bookmarks.id} = ${slugPreferences.bookmarkId}
+    WHERE ${slugPreferences.workspaceId} = ${workspaceId}::uuid AND ${slugPreferences.accountId} = ${owner}::uuid
+      AND ${bookmarks.ownerId} = ${owner}::uuid AND ${bookmarks.slug} = ${slugPreferences.slug} AND ${bookmarks.forwarding} AND ${resume}
+    ORDER BY ${slugPreferences.slug}::text COLLATE "C"
     LIMIT ${limit}::integer`;
 }
 
@@ -255,6 +276,11 @@ export function exportRepository(tx: TenantTx): ExportRepository {
         folders: [...row.folder_names],
         tags: [...row.tag_names],
       }));
+    },
+
+    async goPreferences(ownerId, after, limit): Promise<readonly ExportGoPreferenceRow[]> {
+      const rows = await tenantHandle(tx).execute<{ slug: string; bookmark_id: string }>(goPreferencesStatement(tx, ownerId, after, limit));
+      return rows.map((row) => ({ slug: row.slug, bookmarkId: row.bookmark_id }));
     },
 
     async shared(accountId, after, limit): Promise<readonly ExportSharedRow[]> {

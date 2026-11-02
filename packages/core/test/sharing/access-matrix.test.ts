@@ -178,6 +178,7 @@ function world(accountId: string) {
     summary: () => Promise.resolve({ workspaceName: "Home", bookmarks: 0, folders: 0, tags: 0, shared: 0 }),
     folders: () => Promise.resolve([]),
     tags: () => Promise.resolve([]),
+    goPreferences: () => Promise.resolve([]),
     bookmarks: (ownerId, after) => Promise.resolve(ownerId === OWNER && (after === undefined || BOOKMARK > after) ? [ownRow] : []),
     shared: (id, after) => Promise.resolve(sharedFor(id, after)),
     sections: () => Promise.resolve([]),

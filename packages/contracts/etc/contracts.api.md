@@ -1566,7 +1566,7 @@ export interface ComponentTypes {
             exportedAt: string;
             folders: ComponentTypes["schemas"]["ExportFolder"][];
             format: "slugbase-export";
-            goPreferences: unknown[];
+            goPreferences: ComponentTypes["schemas"]["ExportGoPreference"][];
             shared: ComponentTypes["schemas"]["ExportSharedBookmark"][];
             tags: string[];
             version: 1;
@@ -1578,6 +1578,10 @@ export interface ComponentTypes {
             color: number;
             icon: string;
             name: string;
+        };
+        ExportGoPreference: {
+            bookmarkRef: string;
+            slug: string;
         };
         ExportSharedBookmark: {
             description: string | null;
@@ -1731,7 +1735,7 @@ export interface ComponentTypes {
             exportedAt?: string;
             folders?: ComponentTypes["schemas"]["ImportFolder"][];
             format: "slugbase-export";
-            goPreferences?: string[];
+            goPreferences?: ComponentTypes["schemas"]["ImportGoPreference"][];
             shared?: ComponentTypes["schemas"]["ExportSharedBookmark"][];
             tags?: string[];
             version: number;
@@ -1749,6 +1753,10 @@ export interface ComponentTypes {
             color?: number;
             icon?: string;
             name: string;
+        };
+        ImportGoPreference: {
+            bookmarkRef: string;
+            slug: string;
         };
         ImportResult: {
             created: number;
@@ -3624,7 +3632,10 @@ export const ExportDocumentSchema: z.ZodObject<{
         folders: z.ZodArray<z.ZodString>;
         tags: z.ZodArray<z.ZodString>;
     }, z.core.$strict>>;
-    goPreferences: z.ZodArray<z.ZodUnknown>;
+    goPreferences: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkRef: z.ZodString;
+    }, z.core.$strict>>;
     shared: z.ZodArray<z.ZodObject<{
         url: z.ZodString;
         title: z.ZodString;
@@ -3640,6 +3651,12 @@ export const ExportFolderSchema: z.ZodObject<{
     name: z.ZodString;
     icon: z.ZodString;
     color: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ExportGoPreferenceSchema: z.ZodObject<{
+    slug: z.ZodString;
+    bookmarkRef: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -5004,7 +5021,10 @@ export const ImportEnvelopeSchema: z.ZodObject<{
         folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
         tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
-    goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    goPreferences: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkRef: z.ZodString;
+    }, z.core.$strict>>>;
     shared: z.ZodOptional<z.ZodArray<z.ZodObject<{
         url: z.ZodString;
         title: z.ZodString;
@@ -5028,6 +5048,12 @@ export const ImportFailedSchema: z.ZodObject<{
 
 // @public (undocumented)
 export type ImportFileBookmark = z.infer<typeof ImportBookmarkSchema>;
+
+// @public (undocumented)
+export const ImportGoPreferenceSchema: z.ZodObject<{
+    slug: z.ZodString;
+    bookmarkRef: z.ZodString;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const importJson: {
@@ -5077,7 +5103,10 @@ export const importJson: {
                 folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
                 tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
             }, z.core.$strict>>;
-            goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            goPreferences: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                slug: z.ZodString;
+                bookmarkRef: z.ZodString;
+            }, z.core.$strict>>>;
             shared: z.ZodOptional<z.ZodArray<z.ZodObject<{
                 url: z.ZodString;
                 title: z.ZodString;
@@ -5272,7 +5301,10 @@ export const ImportRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
         folders: z.ZodOptional<z.ZodArray<z.ZodString>>;
         tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
-    goPreferences: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    goPreferences: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkRef: z.ZodString;
+    }, z.core.$strict>>>;
     shared: z.ZodOptional<z.ZodArray<z.ZodObject<{
         url: z.ZodString;
         title: z.ZodString;

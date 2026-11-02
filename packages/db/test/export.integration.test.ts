@@ -2,7 +2,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { exportRepository } from "../src/index.ts";
-import { bookmarksStatement, foldersStatement, folderBookmarksStatement, sectionsStatement, sharedStatement, summaryStatement, tagsStatement, unfiledBookmarksStatement } from "../src/repositories/export.ts";
+import { bookmarksStatement, foldersStatement, folderBookmarksStatement, goPreferencesStatement, sectionsStatement, sharedStatement, summaryStatement, tagsStatement, unfiledBookmarksStatement } from "../src/repositories/export.ts";
 import type { TenantTx } from "../src/tenant.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
@@ -227,6 +227,94 @@ describe("the folders and tags of the export", () => {
     expect((await asMember(w, me, (tx) => exportRepository(tx).folders(me, undefined, 100))).map((row) => row.name)).toEqual(["mine"]);
     expect(await asMember(w, me, (tx) => exportRepository(tx).tags(me, undefined, 100))).toEqual(["mine"]);
     expect(await asMember(w, other, (tx) => exportRepository(tx).tags(other, undefined, 100))).toEqual(["theirs"]);
+  });
+});
+
+describe("the remembered slug choices of the export", () => {
+  async function choose(workspaceId: string, accountId: string, slug: string, bookmarkId: string): Promise<void> {
+    await asSystem(db, (tx) => tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${workspaceId}, ${accountId}, ${slug}, ${bookmarkId})`);
+  }
+
+  const read = (workspaceId: string, accountId: string, after: string | undefined, limit: number) => asMember(workspaceId, accountId, (tx) => exportRepository(tx).goPreferences(accountId, after, limit));
+
+  it("are the member's choices for their own bookmark that has the slug and forwards, a plan-archived bookmark's included, sorted by the bytes of the slug and not by the locale", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const slugs = ["banana", "zebra", "apple", "b-2", "10", "9"];
+    const ids = new Map<string, string>();
+    for (const slug of slugs) {
+      const id = await bookmark(w, me, { title: slug, slug, forwarding: true, archived: slug === "zebra" });
+      ids.set(slug, id);
+      await choose(w, me, slug, id);
+    }
+
+    const rows = await read(w, me, undefined, 100);
+
+    expect(rows).toEqual(["10", "9", "apple", "b-2", "banana", "zebra"].map((slug) => ({ slug, bookmarkId: ids.get(slug) })));
+  });
+
+  it("resume after the last slug of a page, each exactly once, whatever the page size", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    for (const slug of ["d", "a", "e", "c", "b"]) {
+      await choose(w, me, slug, await bookmark(w, me, { title: slug, slug, forwarding: true }));
+    }
+    const everything = (await read(w, me, undefined, 100)).map((row) => row.slug);
+    expect(everything).toEqual(["a", "b", "c", "d", "e"]);
+
+    for (const size of [1, 2, 3, 5, 6]) {
+      const seen: string[] = [];
+      let after: string | undefined;
+      for (;;) {
+        const page = await read(w, me, after, size);
+        seen.push(...page.map((row) => row.slug));
+        if (page.length < size) {
+          break;
+        }
+        after = page[page.length - 1]?.slug;
+      }
+      expect(seen, `page size ${String(size)}`).toEqual(everything);
+    }
+  });
+
+  it("never include a choice for another member's bookmark, another member's choice, a choice of another workspace, or a choice that went stale because its bookmark changed its slug or stopped forwarding", async () => {
+    const me = await account();
+    const other = await account();
+    const w = await workspace([me, other]);
+    const elsewhere = await workspace([me, other]);
+    const mine = await bookmark(w, me, { title: "mine", slug: "mine", forwarding: true });
+    const theirs = await bookmark(w, other, { title: "theirs", slug: "theirs", forwarding: true });
+    const moved = await bookmark(w, me, { title: "moved", slug: "moved", forwarding: true });
+    const quiet = await bookmark(w, me, { title: "quiet", slug: "quiet", forwarding: true });
+    const ownerless = await bookmark(w, null, { title: "ownerless", slug: "ownerless", forwarding: true });
+    const elsewhereMine = await bookmark(elsewhere, me, { title: "elsewhere", slug: "elsewhere", forwarding: true });
+    const othersChoice = await bookmark(w, other, { title: "others choice", slug: "mine", forwarding: true });
+    for (const [slug, id] of [["mine", mine], ["theirs", theirs], ["moved", moved], ["quiet", quiet], ["ownerless", ownerless]] as const) {
+      await choose(w, me, slug, id);
+    }
+    await choose(elsewhere, me, "elsewhere", elsewhereMine);
+    await choose(w, other, "mine", othersChoice);
+    await choose(w, other, "other-only", await bookmark(w, other, { title: "other only", slug: "other-only", forwarding: true }));
+    await asSystem(db, async (tx) => {
+      await tx`UPDATE bookmarks SET slug = 'renamed' WHERE id = ${moved}`;
+      await tx`UPDATE bookmarks SET forwarding = false WHERE id = ${quiet}`;
+    });
+
+    expect(await read(w, me, undefined, 100)).toEqual([{ slug: "mine", bookmarkId: mine }]);
+    expect(await read(w, other, undefined, 100)).toEqual([{ slug: "mine", bookmarkId: othersChoice }, { slug: "other-only", bookmarkId: expect.any(String) as string }]);
+    expect(await read(elsewhere, me, undefined, 100)).toEqual([{ slug: "elsewhere", bookmarkId: elsewhereMine }]);
+  });
+
+  it("are read for the account of the transaction only, with a positive whole page size", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    await asMember(w, me, (tx) => {
+      expect(() => goPreferencesStatement(tx, freshId(), undefined, 10)).toThrow("account of the transaction");
+      expect(() => goPreferencesStatement(tx, me, undefined, 0)).toThrow("positive whole limit");
+      expect(() => goPreferencesStatement(tx, me, undefined, 1.5)).toThrow("positive whole limit");
+      return Promise.resolve();
+    });
+    await expect(asMember(w, me, (tx) => exportRepository(tx).goPreferences(freshId(), undefined, 10))).rejects.toThrow("account of the transaction");
   });
 });
 
@@ -807,6 +895,21 @@ describe("the pages of the export on a workspace of 30 000 bookmarks", () => {
     for (const nodes of [await planOfStatement((tx) => sharedStatement(tx, me, undefined, PAGE)), await planOfStatement((tx) => sharedStatement(tx, me, shared[3]?.id, PAGE))]) {
       expect(nodes.filter((node) => node["Node Type"] === "Seq Scan" && ["bookmarks", "folder_bookmarks"].includes(node["Relation Name"] ?? ""))).toEqual([]);
       expect(nodes.map((node) => node["Index Name"])).toContain("bookmarks_pkey");
+    }
+  });
+
+  it("plans a page of the remembered slug choices from the member's own rows, reading the bookmarks through an index and scanning no table of bookmarks", async () => {
+    const mine = await asSystem(db, (tx) => tx<{ id: string; slug: string }[]>`SELECT id, slug FROM bookmarks WHERE workspace_id = ${w} AND owner_id = ${me} AND forwarding AND slug IS NOT NULL LIMIT 300`);
+    expect(mine.length).toBeGreaterThan(100);
+    for (const row of mine) {
+      await asSystem(db, (tx) => tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${w}, ${me}, ${row.slug}, ${row.id})`);
+    }
+    await db.owner.unsafe("VACUUM (ANALYZE) slug_preferences");
+    const page = await asMember(w, me, (tx) => exportRepository(tx).goPreferences(me, undefined, PAGE));
+    expect(page).toHaveLength(mine.length);
+    for (const nodes of [await planOfStatement((tx) => goPreferencesStatement(tx, me, undefined, PAGE)), await planOfStatement((tx) => goPreferencesStatement(tx, me, page[3]?.slug, PAGE))]) {
+      expect(nodes.filter((node) => node["Node Type"] === "Seq Scan" && node["Relation Name"] === "bookmarks")).toEqual([]);
+      expect(nodes.filter((node) => node["Relation Name"] === "bookmarks" && node["Node Type"].startsWith("Index"))).not.toEqual([]);
     }
   });
 

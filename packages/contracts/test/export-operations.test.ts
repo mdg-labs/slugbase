@@ -105,8 +105,18 @@ describe("the export document", () => {
     expect(ExportDocumentSchema.safeParse({ ...EXPORT, bookmarks: [{ ...BOOKMARK, folders: [{ name: "Reading", icon: "folder", color: 1 }] }] }).success).toBe(false);
   });
 
-  it("holds no go preferences yet", () => {
+  it("holds the remembered slug choices as a slug and the ref of a bookmark", () => {
+    expect(ExportDocumentSchema.parse({ ...EXPORT, goPreferences: [{ slug: "a", bookmarkRef: "b1" }] }).goPreferences).toEqual([{ slug: "a", bookmarkRef: "b1" }]);
     expect(ExportDocumentSchema.safeParse({ ...EXPORT, goPreferences: [{ slug: "a", ref: "b1" }] }).success).toBe(false);
+  });
+
+  it("describes the JSON export as carrying the remembered slug choices and the Netscape export as carrying none", () => {
+    const described = (operation: { responses: Record<number, { description: string }> }) => operation.responses[200]?.description ?? "";
+    expect(described(exportJson)).toContain("goPreferences");
+    expect(described(exportJson)).toContain("remembered slug choice");
+    expect(described(exportJson)).toContain("a choice for another member's bookmark is never in it");
+    expect(described(exportNetscape)).not.toContain("goPreferences");
+    expect(described(exportNetscape)).toContain("the go preferences");
   });
 
   it("holds the shared bookmarks as the readable fields and the flag, a null owner name for a bookmark whose owner has left, and nothing else", () => {

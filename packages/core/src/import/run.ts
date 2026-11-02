@@ -2,6 +2,7 @@ import type { ImportResult } from "@slugbase/contracts";
 import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
+import { parseSlug } from "../go/slug.ts";
 import { bookmarksOfFile, entry, isRefusal, missingNames, overLinks, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
 
 // The JSON import itself (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), in the one transaction the store and the audit writer are bound to. The file is judged exactly as the preview judges it
@@ -22,6 +23,12 @@ import { bookmarksOfFile, entry, isRefusal, missingNames, overLinks, overNewName
 // folder or tag the caller has keeps its icon and colour. The folders and tags the file lists exist afterwards whether a bookmark uses them or not; those a bookmark names are made sure of for the bookmarks that are
 // created. Each bookmark is filed and tagged by its own names, one pair for each folder or tag however many spellings of its name the bookmark has (the count of `overLinks` is the number of pairs the store gets), in the batch that writes it. A slug is kept by the bookmark that is created when `planSlugs` says so; the store inserts it only where the caller has no
 // bookmark with it at that moment, and a bookmark that loses its slug to a bookmark another transaction wrote since is still created, without the slug and without forwarding, and reported with the others.
+
+// The remembered slug choices of the file (doc 02 sections 6.4 and 13.2, doc 10 T2 and T13) are restored once every bookmark is written, in the same transaction and before the audit event, so a failure of one rolls back the
+// whole import. A choice in `goPreferences` names a bookmark of the file by its `ref`, and is restored only when that ref is the ref of exactly one bookmark of the file, that bookmark was created by this import, kept the slug the
+// choice names (read as a slug of a bookmark is) and forwards: a bookmark that was skipped, failed, or lost its slug to a conflict, a ref no bookmark has or more than one has, a slug outside the grammar, and a plain array of bookmarks, restore
+// nothing and fail nothing. The store gets the choices as the member's own for the account and workspace of the transaction (`rememberChoices`), which applies the checks of a member's own choice, so no choice of another member or
+// workspace is written. A slug is asked for once, in the order of the file, and the store is asked once for all of them, so the choices a file costs under the workspace's row lock are at most the number of bookmarks it creates with a slug, which `IMPORT_MAX_BOOKMARKS` bounds, written in batches.
 
 /** The most bookmarks one insert statement writes. */
 export const IMPORT_BATCH_SIZE = 500;
@@ -95,6 +102,11 @@ export interface ImportStore extends ImportPreviewStore {
   insertBookmarks(batch: { readonly bookmarks: readonly ImportNewBookmark[]; readonly events: readonly DomainEvent<"bookmark.created">[] }): Promise<{ readonly slugsLost: readonly string[] }>;
   /** Files and tags bookmarks inserted by `insertBookmarks`, leaving the links that exist. */
   linkBookmarks(links: ImportLinks): Promise<void>;
+  /**
+   * Remembers the account's choices, one for each slug, as the member's own choice is remembered: a choice only for a bookmark that has the slug, forwards, is not plan-archived and that the account can read, replacing the choice the
+   * account had for the slug. Answers how many were stored; a choice that fails the checks is not stored and is no failure. The store writes them in as few statements as it can: it is asked once for the whole file.
+   */
+  rememberChoices(choices: readonly { readonly slug: string; readonly bookmarkId: string }[]): Promise<number>;
 }
 
 export interface ImportDependencies {
@@ -138,6 +150,33 @@ function missing(kind: string): never {
 /** The identifier the store resolved for a spelling of a name: that of the wanted name it stands for. */
 function idOf(spelledAs: ReadonlyMap<string, string>, ids: ReadonlyMap<string, string>, name: string, kind: string): string {
   return ids.get(spelledAs.get(name) ?? missing(kind)) ?? missing(kind);
+}
+
+/** A bookmark the import wrote with a slug it kept and forwarding on, by its place in the file. */
+type Forwarding = ReadonlyMap<number, { readonly id: string; readonly slug: string }>;
+
+/** The choices of the file to restore, one for each slug, in the order of the file: those whose ref names exactly one bookmark of the file, which is in `forwarding` with the slug the choice names. */
+function choicesToRestore(file: ImportAsk["file"], forwarding: Forwarding): { slug: string; bookmarkId: string }[] {
+  if (Array.isArray(file) || file.goPreferences === undefined || forwarding.size === 0) {
+    return [];
+  }
+  const placeOfRef = new Map<string, number | null>();
+  file.bookmarks.forEach((bookmark, index) => {
+    if (bookmark.ref !== undefined) {
+      placeOfRef.set(bookmark.ref, placeOfRef.has(bookmark.ref) ? null : index + 1);
+    }
+  });
+  const chosen = new Map<string, string>();
+  for (const preference of file.goPreferences) {
+    const slug = parseSlug(preference.slug);
+    const place = placeOfRef.get(preference.bookmarkRef);
+    const bookmark = place === undefined || place === null ? undefined : forwarding.get(place);
+    if (slug !== undefined && bookmark?.slug === slug) {
+      chosen.delete(slug);
+      chosen.set(slug, bookmark.id);
+    }
+  }
+  return [...chosen].map(([slug, bookmarkId]) => ({ slug, bookmarkId }));
 }
 
 /** Imports the file in the transaction the dependencies are bound to; nothing is written when the workspace cannot be reached. */
@@ -214,6 +253,7 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
   const tags = names.tags.length > 0 ? await store.resolveTags(names.tags.map((name) => ({ id: newId(), name }))) : NOTHING_RESOLVED;
 
   const lost: ImportResult["droppedSlugs"] = [];
+  const forwarding = new Map<number, { id: string; slug: string }>();
   for (let from = 0; from < created.length; from += IMPORT_BATCH_SIZE) {
     const batch = created.slice(from, from + IMPORT_BATCH_SIZE).map((bookmark) => {
       const slug = slugPlan.kept.get(bookmark.position) ?? null;
@@ -239,6 +279,8 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
     for (const { bookmark, row } of batch) {
       if (lostIds.delete(row.id.toLowerCase())) {
         lost.push({ ...entry(bookmark), slug: row.slug ?? "", reason: "slug_conflict" });
+      } else if (row.slug !== null && row.forwarding) {
+        forwarding.set(bookmark.position, { id: row.id, slug: row.slug });
       }
     }
     if (lostIds.size > 0) {
@@ -251,6 +293,11 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
     if (links.folders.length > 0 || links.tags.length > 0) {
       await store.linkBookmarks(links);
     }
+  }
+
+  const choices = choicesToRestore(ask.file, forwarding);
+  if (choices.length > 0) {
+    await store.rememberChoices(choices);
   }
 
   const droppedSlugs = [...slugPlan.dropped, ...lost].sort((a, b) => a.position - b.position);

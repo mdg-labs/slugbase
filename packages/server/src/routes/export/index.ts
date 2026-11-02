@@ -12,11 +12,14 @@ import { route } from "../register.ts";
 // GET /api/v1/export/json and GET /api/v1/export/netscape (doc 04 section 10.9, doc 02 sections 13.2 and 13.3, doc 10 T1 and T2). It acts in the workspace the request is bound to and names none; the authorization stage lets a
 // member through by a session or by an API token of the read scope, and the request is in the `bulk` rate bucket. One transaction counts what the caller owns and records it as one `export.created`
 // audit event, with the account or the token as the actor, before the first byte; a failure of either ends the request with an error and no file is started. The document is then streamed
-// from the repository's pages, each in a transaction of its own that is over before the page is sent (core's `exportStream`), so the server holds one page of an export whatever its size and no
+// from the repository's pages, each in a transaction of its own that is over before the page is sent (core's `exportStream`), so the server holds one page of an export whatever its size, besides the ref of each bookmark of the JSON document that has a slug and forwards (core's `exportStream` keeps those for the length of the download, so the memory of the JSON export grows with the number of such bookmarks), and no
 // transaction waits on a slow client; nothing is stored. A page that cannot be read ends the connection with the document unfinished, so what was received does not parse. Every read names the
 // account of the request as the owner (src/repositories/export.ts), so another member's content, content with no owner and anything of another workspace is in no answer. The Netscape file is the same
 // export in the other format: it starts the same way (one `export.created`, counts only, before the first byte) and is streamed the same way, and it is answered as `text/html; charset=utf-8` with the
 // disposition of an attachment, which with the `nosniff` of every response means a navigation to it downloads the file and never renders it in the origin of the application (doc 10 T14).
+//
+// The JSON document also carries the caller's remembered slug choices (`goPreferences`): the choices for the caller's own bookmarks that still have the slug and forward, each as the slug and the `ref` of the bookmark in the same document, read from the same
+// repository after the bookmarks. The Netscape file names no go preference.
 //
 // `includeShared=true` (doc 02 section 13.2) adds the bookmarks other members shared with the caller, in the `shared` list of the document and at the top level of the file. They are read by the same
 // repository, for the account of the request, page by page and under the grants as they stand when each page is read (src/repositories/export.ts), and the count the event records is the number of them

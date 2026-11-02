@@ -105,8 +105,15 @@ describe("the generated JSON Schema of the export format", () => {
     expect(validate({ ...document(), format: "other" })).toBe(false);
   });
 
-  it("refuses an entry in the list of go preferences, which this release writes empty", () => {
-    expect(validate({ ...document(), goPreferences: [{}] })).toBe(false);
+  it("accepts a remembered slug choice as a slug and the ref of a bookmark, and refuses an entry that holds more, less or other", () => {
+    const entry = { slug: "docs", bookmarkRef: "b1" };
+    const doc = { ...document(), goPreferences: [entry, { slug: "news", bookmarkRef: "b2" }] };
+    expect(ExportDocumentSchema.safeParse(doc).success).toBe(true);
+    expect(validate(doc), JSON.stringify(validate.errors)).toBe(true);
+    for (const refused of [{}, { slug: "docs" }, { bookmarkRef: "b1" }, { ...entry, extra: 1 }, { ...entry, bookmarkRef: "b0" }, { ...entry, bookmarkRef: "0192f3a0-aaaa-7000-8000-00000000a0b1" }, { ...entry, slug: "" }, { ...entry, slug: "s".repeat(65) }, { ...entry, slug: 1 }]) {
+      expect(ExportDocumentSchema.safeParse({ ...document(), goPreferences: [refused] }).success, JSON.stringify(refused)).toBe(false);
+      expect(validate({ ...document(), goPreferences: [refused] }), JSON.stringify(refused)).toBe(false);
+    }
   });
 
   it("accepts the shared bookmarks as the readable fields and the flag, and refuses an entry that holds more or less", () => {

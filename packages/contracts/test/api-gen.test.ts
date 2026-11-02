@@ -75,7 +75,7 @@ describe("pnpm api:gen", () => {
     expect(text).toBe(`${JSON.stringify(sortKeys(schema), null, 2)}\n`);
     expect(schema["$schema"]).toBe("https://json-schema.org/draft/2020-12/schema");
     expect(schema["$ref"]).toBe("#/$defs/ExportDocument");
-    expect(Object.keys(schema["$defs"] as object)).toEqual(["ExportBookmark", "ExportDocument", "ExportFolder", "ExportSharedBookmark"]);
+    expect(Object.keys(schema["$defs"] as object)).toEqual(["ExportBookmark", "ExportDocument", "ExportFolder", "ExportGoPreference", "ExportSharedBookmark"]);
   });
 
   it("fails, names the operation and writes nothing when an operation has no policy", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {

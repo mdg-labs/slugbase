@@ -9,6 +9,7 @@ import {
   type AuditWriter,
   type ExportBookmarkRow,
   type ExportFolderRow,
+  type ExportGoPreferenceRow,
   type ExportSharedRow,
   type ExportStore,
   type ExportSummary,
@@ -36,20 +37,22 @@ interface Counters {
   tagPages: number;
   bookmarkPages: number;
   sharedPages: number;
+  preferencePages: number;
   open: number;
   asked: { what: string; ownerId: string; after: string | undefined; limit: number }[];
 }
 
-const counting = (): Counters => ({ folderPages: 0, tagPages: 0, bookmarkPages: 0, sharedPages: 0, open: 0, asked: [] });
+const counting = (): Counters => ({ folderPages: 0, tagPages: 0, bookmarkPages: 0, sharedPages: 0, preferencePages: 0, open: 0, asked: [] });
 
 function fakeStore(
-  data: { summary?: ExportSummary | undefined; folders?: readonly ExportFolderRow[]; tags?: readonly string[]; bookmarks?: readonly ExportBookmarkRow[]; shared?: readonly ExportSharedRow[] },
+  data: { summary?: ExportSummary | undefined; folders?: readonly ExportFolderRow[]; tags?: readonly string[]; bookmarks?: readonly ExportBookmarkRow[]; shared?: readonly ExportSharedRow[]; goPreferences?: readonly ExportGoPreferenceRow[] },
   counters: Counters,
 ): ExportStore {
   const folders = data.folders ?? [];
   const tags = data.tags ?? [];
   const bookmarks = data.bookmarks ?? [];
   const shared = data.shared ?? [];
+  const preferences = data.goPreferences ?? [];
   return {
     summary: (_ownerId, includeShared) =>
       Promise.resolve("summary" in data ? data.summary : { workspaceName: "Home", bookmarks: bookmarks.length, folders: folders.length, tags: tags.length, shared: includeShared ? shared.length : 0 }),
@@ -57,6 +60,11 @@ function fakeStore(
       counters.sharedPages += 1;
       counters.asked.push({ what: "shared", ownerId: accountId, after, limit });
       return Promise.resolve(shared.filter((row) => after === undefined || row.id > after).slice(0, limit));
+    },
+    goPreferences: (ownerId, after, limit) => {
+      counters.preferencePages += 1;
+      counters.asked.push({ what: "goPreferences", ownerId, after, limit });
+      return Promise.resolve(preferences.filter((row) => after === undefined || row.slug > after).slice(0, limit));
     },
     folders: (ownerId, after, limit) => {
       counters.folderPages += 1;
@@ -235,6 +243,70 @@ describe("the export stream", () => {
     expect(() => {
       JSON.parse(received);
     }).toThrow();
+  });
+});
+
+describe("the remembered slug choices of the export", () => {
+  const withSlug = (index: number, slug: string, overrides: Partial<ExportBookmarkRow> = {}) => bookmark(index, { slug, forwarding: true, ...overrides });
+  const choice = (bookmarkIndex: number, slug: string): ExportGoPreferenceRow => ({ slug, bookmarkId: bookmark(bookmarkIndex).id });
+
+  it("writes each choice as the slug and the ref of the bookmark it names, in the order of the slugs, and it parses against the contract's schema", async () => {
+    const bookmarks = [bookmark(1), withSlug(2, "docs"), withSlug(3, "news"), withSlug(4, "alpha")];
+    const text = await drain(harness({ bookmarks, goPreferences: [choice(4, "alpha"), choice(2, "docs"), choice(3, "news")] }).stream);
+    expect(ExportDocumentSchema.parse(JSON.parse(text)).goPreferences).toEqual([
+      { slug: "alpha", bookmarkRef: "b4" },
+      { slug: "docs", bookmarkRef: "b2" },
+      { slug: "news", bookmarkRef: "b3" },
+    ]);
+    expect(text).not.toContain("0192f3a0");
+  });
+
+  it("names a bookmark by the ref it has in the document whatever the page size, and writes the same document for any page size", async () => {
+    const bookmarks = Array.from({ length: 9 }, (_, index) => withSlug(index + 1, `s${String(index + 1)}`));
+    const goPreferences = [choice(2, "s2"), choice(5, "s5"), choice(9, "s9")];
+    const whole = await drain(harness({ bookmarks, goPreferences }, { pageSize: 500 }).stream);
+    const paged = await drain(harness({ bookmarks, goPreferences }, { pageSize: 2 }).stream);
+    expect(paged).toBe(whole);
+    expect(ExportDocumentSchema.parse(JSON.parse(paged)).goPreferences).toEqual([
+      { slug: "s2", bookmarkRef: "b2" },
+      { slug: "s5", bookmarkRef: "b5" },
+      { slug: "s9", bookmarkRef: "b9" },
+    ]);
+  });
+
+  it("asks the store for the member only, with the page size and the slug the last page ended at", async () => {
+    const bookmarks = Array.from({ length: 5 }, (_, index) => withSlug(index + 1, `s${String(index + 1)}`));
+    const { stream, counters } = harness({ bookmarks, goPreferences: bookmarks.map((row, index) => choice(index + 1, row.slug ?? "")) }, { pageSize: 2 });
+    await drain(stream);
+    expect(counters.asked.filter((entry) => entry.what === "goPreferences")).toEqual([
+      { what: "goPreferences", ownerId: ME.toLowerCase(), after: undefined, limit: 2 },
+      { what: "goPreferences", ownerId: ME.toLowerCase(), after: "s2", limit: 2 },
+      { what: "goPreferences", ownerId: ME.toLowerCase(), after: "s4", limit: 2 },
+    ]);
+  });
+
+  it("leaves out a choice whose bookmark is not in the document, which a bookmark made or lost during the export is, and a choice for another member's bookmark", async () => {
+    const bookmarks = [withSlug(1, "mine")];
+    const goPreferences: ExportGoPreferenceRow[] = [choice(1, "mine"), { slug: "theirs", bookmarkId: "0192f3a0-9999-7000-8000-000000000001" }, choice(7, "late")];
+    const text = await drain(harness({ bookmarks, goPreferences }).stream);
+    expect(ExportDocumentSchema.parse(JSON.parse(text)).goPreferences).toEqual([{ slug: "mine", bookmarkRef: "b1" }]);
+    expect(text).not.toContain("theirs");
+    expect(text).not.toContain("late");
+  });
+
+  it("leaves out a choice for a bookmark that does not forward, and reads no choices at all when no bookmark of the document can have one", async () => {
+    const off = bookmark(1, { slug: "off", forwarding: false });
+    const text = await drain(harness({ bookmarks: [off], goPreferences: [choice(1, "off")] }).stream);
+    expect(ExportDocumentSchema.parse(JSON.parse(text)).goPreferences).toEqual([]);
+
+    const none = harness({ bookmarks: [bookmark(1)], goPreferences: [choice(1, "x")] });
+    await drain(none.stream);
+    expect(none.counters.preferencePages).toBe(0);
+  });
+
+  it("exports the choice of a plan-archived bookmark, which is in the document flagged", async () => {
+    const text = await drain(harness({ bookmarks: [withSlug(1, "old", { planArchived: true })], goPreferences: [choice(1, "old")] }).stream);
+    expect(ExportDocumentSchema.parse(JSON.parse(text)).goPreferences).toEqual([{ slug: "old", bookmarkRef: "b1" }]);
   });
 });
 
