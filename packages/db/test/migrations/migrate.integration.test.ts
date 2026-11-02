@@ -812,6 +812,31 @@ await migrate({
     expect(await recordedRows(owner, "migrations_spelled")).toBe(1);
   }, 60_000);
 
+  it("takes a valid unique index of the step's name that a foreign key references for the step's own", async () => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE referenced_target (a integer)");
+    await owner.unsafe("ALTER TABLE referenced_target OWNER TO slugbase_owner");
+    await owner.unsafe("CREATE UNIQUE INDEX referenced_idx ON referenced_target (a)");
+    await owner.unsafe("CREATE TABLE referencing_table (a integer)");
+    await owner.unsafe(
+      "ALTER TABLE referencing_table ADD CONSTRAINT referencing_fk FOREIGN KEY (a) REFERENCES referenced_target (a)",
+    );
+    const chain = indexChain("referenced", [
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS referenced_idx ON referenced_target (a);",
+    ]);
+    const before = await indexIdentities(owner, ["referenced_idx"]);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [chain] });
+
+    expect(result.applied.map((step) => step.chain)).toContain("referenced");
+    expect(await indexIdentities(owner, ["referenced_idx"])).toEqual(before);
+    expect(await recordedRows(owner, "migrations_referenced")).toBe(1);
+    await expect(
+      owner<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_constraint WHERE conname = 'referencing_fk'`,
+    ).resolves.toEqual([{ n: 1 }]);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
   it.each([
     ["another column", "CREATE INDEX different_idx ON different_target (b)", "(a)"],
     ["another column order", "CREATE INDEX different_idx ON different_target (a DESC)", "(a)"],
@@ -850,6 +875,11 @@ await migrate({
     [
       "a deferrable unique constraint",
       "ALTER TABLE owned_target ADD CONSTRAINT owned_idx UNIQUE (a) DEFERRABLE INITIALLY DEFERRED",
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target (a);",
+    ],
+    [
+      "a unique constraint that a foreign key also references",
+      "ALTER TABLE owned_target ADD CONSTRAINT owned_idx UNIQUE (a); CREATE TABLE owned_referrer (a integer REFERENCES owned_target (a))",
       "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target (a);",
     ],
     [

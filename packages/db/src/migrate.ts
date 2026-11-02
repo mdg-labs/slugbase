@@ -486,7 +486,7 @@ async function findIndex(sql: postgres.Sql, build: IndexBuild): Promise<IndexOfN
             pg_get_indexdef(i.indexrelid) AS definition,
             quote_ident(tn.nspname) || '.' || quote_ident(target.relname) AS target,
             quote_ident(target.relname) AS "targetName",
-            EXISTS (SELECT 1 FROM pg_constraint WHERE conindid = i.indexrelid) AS constrained
+            EXISTS (SELECT 1 FROM pg_constraint WHERE conindid = i.indexrelid AND contype IN ('p', 'u', 'x')) AS constrained
        FROM pg_class target
        JOIN pg_namespace tn ON tn.oid = target.relnamespace
        JOIN pg_class c ON c.relnamespace = target.relnamespace AND c.relname = $2::name
