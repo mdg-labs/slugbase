@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Locator, Page, Route } from "@playwright/test";
 import { message } from "../support/catalog.ts";
+import { appOrigin } from "../support/environment.ts";
 import { expectHighlighted, openPaletteWithShortcut, paletteDialog, paletteInput } from "../support/palette.ts";
 import { expect, test } from "../support/test.ts";
 
@@ -9,7 +10,8 @@ import { expect, test } from "../support/test.ts";
 // Firefox and WebKit it falls to the page behind the dialog, where a single key such as `?` would act; Chromium lands on the dialog. So
 // the journeys run in the three engines and press the keys as a member does. The provider's answers are made by the page's own route
 // handlers (the server is not asked), and a save that the page sends is answered with a refusal after a pause, so nothing is made and
-// the stand-in for the provider (tests/ai.spec.ts counts what it received) is not asked.
+// the stand-in for the provider (tests/ai.spec.ts counts what it received) is not asked. The one journey that needs a toast from a real
+// save makes a bookmark and removes it when it ends, passed or failed.
 
 const en = (key: string, values: Readonly<Record<string, string>> = {}): string => message("en", key, values);
 
@@ -42,6 +44,22 @@ async function afterRender(page: Page): Promise<void> {
 test.describe("focus in the bookmark modal", () => {
   const token = randomBytes(4).toString("hex");
   const address = `https://focus-${token}.invalid/page`;
+  // The ids of the bookmarks that a journey saved for real; `afterEach` removes them whether the journey passed or failed.
+  const saved: string[] = [];
+
+  test.afterEach(async ({ page }) => {
+    const refused: string[] = [];
+    for (const id of saved.splice(0)) {
+      // A mutation must come from the app's origin and be JSON, with or without a body.
+      const removed = await page.request.delete(`/api/v1/bookmarks/${id}`, { headers: { origin: appOrigin(), "content-type": "application/json" } });
+      if (removed.status() !== 204) {
+        refused.push(`${id}: ${String(removed.status())}`);
+      }
+    }
+    if (refused.length > 0) {
+      throw new Error(`DELETE /api/v1/bookmarks/{id} was refused while the journey removed what it made (${refused.join(", ")})`);
+    }
+  });
 
   function modal(page: Page): { dialog: Locator; suggest: Locator; sheet: Locator; field: (key: string) => Locator; group: (key: string) => Locator } {
     const dialog = page.getByRole("dialog", { name: en("bookmarks.modal.create.title"), exact: true });
@@ -337,7 +355,11 @@ test.describe("focus in the bookmark modal", () => {
     await field("bookmarks.modal.url.label").fill(address);
     await field("bookmarks.modal.title.label").fill(`Saved ${token}`);
     await field("bookmarks.modal.title.label").focus();
+    const answered = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/bookmarks");
     await page.keyboard.press("Control+Enter");
+    const created = await answered;
+    expect(created.status(), "POST /api/v1/bookmarks").toBe(201);
+    saved.push(((await created.json()) as { id: string }).id);
     await expect(dialog).toHaveCount(0);
     const toast = page.getByRole("dialog").filter({ hasText: en("bookmarks.modal.saved.created") });
     await expect(toast).toBeVisible();
