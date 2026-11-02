@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_BYTES, ImportQuerySchema, ImportRequestSchema, ImportResultSchema, importJson, operations } from "../src/index.ts";
+import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_BYTES, IMPORT_NAME_MAX_LENGTH, ImportBookmarkSchema, ImportEnvelopeSchema, ImportQuerySchema, ImportRequestSchema, ImportResultSchema, importJson, operations } from "../src/index.ts";
 
 // The import preview of doc 04 section 10.9 and doc 02 section 13.1: POST /api/v1/import/json is a member's write in the bulk bucket that accepts an Idempotency-Key and a body of up to 5 MiB. Its
 // request is the export document or a plain array of bookmarks in strict schemas; a bad bookmark is not the request's failure, a file that is not the format is.
@@ -86,6 +86,25 @@ describe("the import request", () => {
 
   it("leaves a bad URL and an over-long text to the bookmark and not to the file", () => {
     expect(ImportRequestSchema.safeParse([{ url: "javascript:alert(1)", title: "t".repeat(10_000), description: "d".repeat(10_000), slug: "S L U G", folders: ["f".repeat(500)], tags: ["t".repeat(500)] }]).success).toBe(true);
+  });
+
+  it("takes any number of folder and tag names on a bookmark, and a name or an icon of any length up to the bound, which is cut to its stored limit later", () => {
+    const names = (count: number) => Array.from({ length: count }, (_, index) => `n${String(index)}`);
+    const url = "https://example.com/a";
+    const issues = (body: unknown) => {
+      const bookmark = Array.isArray(body) ? ImportBookmarkSchema.safeParse(body[0]) : ImportEnvelopeSchema.safeParse(body);
+      return bookmark.error?.issues.map((issue) => [(Array.isArray(body) ? ["0", ...issue.path] : issue.path).join("."), issue.code]);
+    };
+
+    expect(ImportRequestSchema.safeParse([{ url, folders: names(250), tags: names(250) }]).success).toBe(true);
+    expect(ImportRequestSchema.safeParse([{ url, folders: ["f".repeat(IMPORT_NAME_MAX_LENGTH)], tags: ["t".repeat(IMPORT_NAME_MAX_LENGTH)] }]).success).toBe(true);
+    expect(issues([{ url, folders: ["f".repeat(IMPORT_NAME_MAX_LENGTH + 1)] }])).toEqual([["0.folders.0", "too_big"]]);
+    expect(issues([{ url, tags: ["t".repeat(IMPORT_NAME_MAX_LENGTH + 1)] }])).toEqual([["0.tags.0", "too_big"]]);
+    expect(ImportRequestSchema.safeParse({ ...ENVELOPE, tags: ["t".repeat(IMPORT_NAME_MAX_LENGTH)] }).success).toBe(true);
+    expect(issues({ ...ENVELOPE, tags: ["t".repeat(IMPORT_NAME_MAX_LENGTH + 1)] })).toEqual([["tags.0", "too_big"]]);
+    expect(ImportRequestSchema.safeParse({ ...ENVELOPE, folders: [{ name: "f".repeat(IMPORT_NAME_MAX_LENGTH), icon: "i".repeat(IMPORT_NAME_MAX_LENGTH) }] }).success).toBe(true);
+    expect(issues({ ...ENVELOPE, folders: [{ name: "f".repeat(IMPORT_NAME_MAX_LENGTH + 1) }] })).toEqual([["folders.0.name", "too_big"]]);
+    expect(issues({ ...ENVELOPE, folders: [{ name: "f", icon: "i".repeat(IMPORT_NAME_MAX_LENGTH + 1) }] })).toEqual([["folders.0.icon", "too_big"]]);
   });
 
   it("refuses a version newer than the format with an error at version, also when the file holds fields this version does not know", () => {

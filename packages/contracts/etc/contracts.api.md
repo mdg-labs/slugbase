@@ -4840,6 +4840,9 @@ export const IMPORT_MAX_BOOKMARKS = 5000;
 // @public
 export const IMPORT_MAX_BYTES: number;
 
+// @public
+export const IMPORT_NAME_MAX_LENGTH = 1000;
+
 // @public (undocumented)
 export const IMPORT_SKIPPED_REASONS: readonly ["duplicate", "bookmark_limit_reached"];
 

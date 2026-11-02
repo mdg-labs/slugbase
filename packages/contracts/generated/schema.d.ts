@@ -2814,7 +2814,7 @@ export interface components {
         ImportBookmark: {
             /** @description The bookmark's description; cut to 1 000 characters. A blank one is none */
             description?: string | null;
-            /** @description The names of the folders the bookmark is filed in; a folder the caller has under that name, without regard to case, is used, and any other is created. A name is not split at a slash */
+            /** @description The names of the folders the bookmark is filed in, each of up to 1 000 characters; a folder the caller has under that name, without regard to case, is used, and any other is created. A name is not split at a slash */
             folders?: string[];
             /** @description Whether /go forwards to the bookmark by its slug; off when left out, and off for a bookmark that has no slug or loses it */
             forwarding?: boolean;
@@ -2826,7 +2826,7 @@ export interface components {
             ref?: string;
             /** @description The bookmark's slug; a blank one is none. It is trimmed and lower-cased, and it is dropped from the bookmark, which is still imported, when it is outside the slug grammar, the caller has it on a bookmark already (plan-archived or not) or an earlier bookmark of the file that is imported keeps it */
             slug?: string | null;
-            /** @description The names of the tags the bookmark carries; a tag the caller has under that name, without regard to case, is used, and any other is created */
+            /** @description The names of the tags the bookmark carries, each of up to 1 000 characters; a tag the caller has under that name, without regard to case, is used, and any other is created */
             tags?: string[];
             /** @description The bookmark's title; cut to 300 characters. A missing or blank title becomes the host of the URL */
             title?: string | null;
@@ -2867,7 +2867,7 @@ export interface components {
             goPreferences?: string[];
             /** @description The bookmarks other members shared with the exporter; always empty in a version 1 file, and never read */
             shared?: string[];
-            /** @description The tags of the file: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters */
+            /** @description The tags of the file, each of up to 1 000 characters: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters */
             tags?: string[];
             /** @description The version of the format; a version newer than 1 is refused with 422 and an error at version */
             version: number;
@@ -2892,9 +2892,9 @@ export interface components {
         ImportFolder: {
             /** @description The folder's colour, 1 to 8, taken by a folder the import creates; any other value becomes the default colour. A folder the caller has keeps its own */
             color?: number;
-            /** @description The folder's icon, taken by a folder the import creates; one outside the list a folder may carry becomes the default icon. A folder the caller has keeps its own */
+            /** @description The folder's icon, of up to 1 000 characters, taken by a folder the import creates; one outside the list a folder may carry becomes the default icon. A folder the caller has keeps its own */
             icon?: string;
-            /** @description The folder's name; control characters are removed and it is cut to 64 characters, and a name that is empty then is ignored */
+            /** @description The folder's name, of up to 1 000 characters; control characters are removed and it is cut to 64 characters, and a name that is empty then is ignored */
             name: string;
         };
         ImportResult: {
@@ -7625,7 +7625,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer */
+            /** @description The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer */
             422: {
                 headers: {
                     [name: string]: unknown;

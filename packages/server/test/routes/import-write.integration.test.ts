@@ -208,6 +208,34 @@ describe("POST /import/json", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(exported.bookmarks.map((bookmark) => bookmark.url)).toEqual(urls);
   });
 
+  it("imports in full a bookmark that the write paths gave more than 100 folders and more than 100 tags: tagIds with tagNames, and a bulk add_to_folder", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, c } = await setup(world);
+    const post = async (path: string, body: unknown, status: number) => {
+      const response = await send(world, "POST", path, asPerson(a), body);
+      expect(response.status).toBe(status);
+      return (await response.json()) as { id: string };
+    };
+    const folderIds = await Promise.all(Array.from({ length: 101 }, (_, index) => post("/api/v1/folders", { name: `folder ${String(index).padStart(3, "0")}` }, 201)));
+    const tagIds = await Promise.all(Array.from({ length: 100 }, (_, index) => post("/api/v1/tags", { name: `tag ${String(index).padStart(3, "0")}` }, 201)));
+    const bookmark = await post(
+      "/api/v1/bookmarks",
+      { url: "https://example.com/full", title: "Full", folderIds: folderIds.slice(0, 100).map((folder) => folder.id), tagIds: tagIds.map((tag) => tag.id), tagNames: Array.from({ length: 100 }, (_, index) => `named ${String(index).padStart(3, "0")}`) },
+      201,
+    );
+    await post("/api/v1/bookmarks", { url: "https://example.com/plain", title: "Plain" }, 201);
+    const bulk = await send(world, "POST", "/api/v1/bookmarks/bulk", asPerson(a), { action: "add_to_folder", ids: [bookmark.id], folderId: folderIds[100]?.id });
+    expect(bulk.status).toBe(200);
+
+    const exportedResponse = await send(world, "GET", EXPORT, asPerson(a));
+    const exported = (await exportedResponse.json()) as { bookmarks: { url: string; folders: string[]; tags: string[] }[] };
+    const full = exported.bookmarks.find((entry) => entry.url === "https://example.com/full");
+    expect([full?.folders.length, full?.tags.length]).toEqual([101, 200]);
+
+    const again = await imported(world, c, exported);
+    expect(again).toMatchObject({ created: 2, failed: [], foldersCreated: 101, tagsCreated: 200, detected: { bookmarks: 2, folders: 101, tags: 200 } });
+  });
+
   it("imports with dryRun=false as it does with no dryRun, and writes nothing for dryRun=true: no bookmark, no counter, no job and no audit event", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);

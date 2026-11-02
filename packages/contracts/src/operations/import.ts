@@ -9,13 +9,20 @@ import { EXPORT_VERSION, ExportBookmarkSchema, ExportDocumentSchema } from "./ex
 //
 // A file that is not the format is a `422` for the whole request: a value of the wrong type, a field the format does not declare, more bookmarks than the cap, a version this release does not
 // read. A bookmark that is the format but has a bad URL, or a title that is too long, is that bookmark's problem: it is reported in `failed` or cut to its limit, and the rest of the file is
-// unaffected. The schemas are strict objects, so a value nested deeper than the format allows is refused before anything reads it.
+// unaffected. The schemas are strict objects, so a value nested deeper than the format allows is refused before anything reads it. No folder or tag name and no folder icon is longer
+// than `IMPORT_NAME_MAX_LENGTH`, so a single value cannot be an unbounded string; a name inside that bound is cut to its stored limit. The number of folders and tags a bookmark names has no cap of its own, because
+// a bookmark can hold more than 100 of each (the API caps one request, not the total) and the export emits them all; the rows of an import are bounded by the 5 MiB body limit and the `bulk` rate bucket.
 
 /** The most bookmarks one import file holds (doc 02 section 13.1). */
 export const IMPORT_MAX_BOOKMARKS = 5000;
 
 /** The largest import request body, in bytes (doc 04 section 10.9). */
 export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+
+/** The longest folder or tag name, or folder icon, an import file may hold; a name over it makes the file invalid, and one within it is cut to the stored limit of 64 or 40 characters. */
+export const IMPORT_NAME_MAX_LENGTH = 1000;
+
+const ImportNameSchema = z.string().max(IMPORT_NAME_MAX_LENGTH);
 
 export const IMPORT_SKIPPED_REASONS = ["duplicate", "bookmark_limit_reached"] as const;
 export const IMPORT_FAILED_REASONS = ["url_not_allowed", "url_invalid"] as const;
@@ -31,15 +38,15 @@ export const ImportBookmarkSchema = z
     forwarding: z.boolean().optional().describe("Whether /go forwards to the bookmark by its slug; off when left out, and off for a bookmark that has no slug or loses it"),
     pinned: z.boolean().optional().describe("Whether the bookmark is pinned"),
     planArchived: z.boolean().optional().describe("Whether a downgrade of the plan archived the bookmark when the file was made; it is ignored"),
-    folders: z.array(z.string()).optional().describe("The names of the folders the bookmark is filed in; a folder the caller has under that name, without regard to case, is used, and any other is created. A name is not split at a slash"),
-    tags: z.array(z.string()).optional().describe("The names of the tags the bookmark carries; a tag the caller has under that name, without regard to case, is used, and any other is created"),
+    folders: z.array(ImportNameSchema).optional().describe("The names of the folders the bookmark is filed in, each of up to 1 000 characters; a folder the caller has under that name, without regard to case, is used, and any other is created. A name is not split at a slash"),
+    tags: z.array(ImportNameSchema).optional().describe("The names of the tags the bookmark carries, each of up to 1 000 characters; a tag the caller has under that name, without regard to case, is used, and any other is created"),
   })
   .meta({ id: "ImportBookmark" });
 
 const ImportFolderSchema = z
   .strictObject({
-    name: z.string().describe("The folder's name; control characters are removed and it is cut to 64 characters, and a name that is empty then is ignored"),
-    icon: z.string().optional().describe("The folder's icon, taken by a folder the import creates; one outside the list a folder may carry becomes the default icon. A folder the caller has keeps its own"),
+    name: ImportNameSchema.describe("The folder's name, of up to 1 000 characters; control characters are removed and it is cut to 64 characters, and a name that is empty then is ignored"),
+    icon: ImportNameSchema.optional().describe("The folder's icon, of up to 1 000 characters, taken by a folder the import creates; one outside the list a folder may carry becomes the default icon. A folder the caller has keeps its own"),
     color: z.number().int().optional().describe("The folder's colour, 1 to 8, taken by a folder the import creates; any other value becomes the default colour. A folder the caller has keeps its own"),
   })
   .meta({ id: "ImportFolder" });
@@ -54,7 +61,7 @@ export const ImportEnvelopeSchema = z
     exportedAt: ExportDocumentSchema.shape.exportedAt.optional(),
     workspace: ExportDocumentSchema.shape.workspace.optional(),
     folders: z.array(ImportFolderSchema).optional().describe("The folders of the file: each exists after the import, used by a bookmark or not. The caller's folder of that name, without regard to case, is used; any other is created"),
-    tags: z.array(z.string()).optional().describe("The tags of the file: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters"),
+    tags: z.array(ImportNameSchema).optional().describe("The tags of the file, each of up to 1 000 characters: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters"),
     bookmarks: ImportBookmarksSchema,
     goPreferences: z.array(z.string()).max(0).optional().describe("The caller's remembered slug choices; always empty in a version 1 file"),
     shared: z.array(z.string()).max(0).optional().describe("The bookmarks other members shared with the exporter; always empty in a version 1 file, and never read"),
@@ -135,7 +142,7 @@ export const importJson = defineOperation({
     409: problemResponse("The Idempotency-Key was used before for another request (idempotency_conflict)"),
     413: problemResponse("The request body is over 5 MiB (payload_too_large)"),
     422: problemResponse(
-      "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer",
+      "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. A bad URL or an over-long title is no reason for it: see the answer",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Imports take from the bulk limit"),
     503: problemResponse("The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"),

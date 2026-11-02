@@ -5,8 +5,8 @@ import { HOOK_TIMEOUT_MS, workspaceHarness, type Person, type World } from "../w
 
 // The hostile files of POST /api/v1/import/json (doc 08 section 3.5 `import/hostile`, doc 10 T1 and T13), through the whole chain over the migrated database. The failure scenario: a file the
 // importer must not trust, an oversized body, a body nested a hundred thousand deep that is sent with an Idempotency-Key, malformed JSON, five megabytes of empty objects, `javascript:` and
-// `data:` addresses, control characters, huge strings, script-laden titles and prototype-pollution keys, is each rejected or neutralised: no `500`, no polluted prototype, no stored key for a
-// refused request, and no row of any workspace written, the caller's or another's.
+// `data:` addresses, control characters, huge strings, script-laden titles and prototype-pollution keys, a folder or tag name or a folder icon of a hundred thousand
+// characters, is each rejected or neutralised: no `500`, no polluted prototype, no stored key for a refused request, and no row of any workspace written, the caller's or another's.
 
 const TEST_TIMEOUT_MS = 120_000;
 const IMPORT = "/api/v1/import/json?dryRun=true";
@@ -299,6 +299,32 @@ describe("POST /import/json with a hostile file", { timeout: TEST_TIMEOUT_MS }, 
     const problem = await problemOf(unknown);
     expect(problem.code).toBe("validation_failed");
     expect(problem.errors).toContainEqual({ path: "version", code: "too_big" });
+  });
+
+  it("refuses a folder or tag name or a folder icon of 100 000 characters with 422 at the path of the value, and writes nothing", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const before = await written();
+    const url = "https://example.com/hostile";
+    const huge = "n".repeat(100_000);
+    const cases: { body: unknown; error: { path: string; code: string } }[] = [
+      { body: [{ url, tags: [huge] }], error: { path: "0.tags.0", code: "too_big" } },
+      { body: [{ url, folders: [huge] }], error: { path: "0.folders.0", code: "too_big" } },
+      { body: { format: "slugbase-export", version: 1, tags: [huge], bookmarks: [] }, error: { path: "tags.0", code: "too_big" } },
+      { body: { format: "slugbase-export", version: 1, folders: [{ name: "Fine" }, { name: huge }], bookmarks: [] }, error: { path: "folders.1.name", code: "too_big" } },
+      { body: { format: "slugbase-export", version: 1, folders: [{ name: "Fine", icon: huge }], bookmarks: [] }, error: { path: "folders.0.icon", code: "too_big" } },
+    ];
+
+    for (const { body, error } of cases) {
+      const response = await json(world, a, body, { [KEY_HEADER]: crypto.randomUUID() }, "/api/v1/import/json");
+      const problem = await problemOf(response);
+      expect(response.status, JSON.stringify(error)).toBe(422);
+      expect(problem.code).toBe("validation_failed");
+      expect(problem.errors).toContainEqual(error);
+    }
+
+    expect(await keyCount()).toBe(0);
+    expect(await written()).toEqual(before);
   });
 
   it("finds no duplicate in, and touches no row of, another workspace", async () => {
