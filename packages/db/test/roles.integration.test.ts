@@ -2,6 +2,7 @@ import { execFile, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { useCluster, type ClusterUse } from "../src/testing.ts";
@@ -9,8 +10,8 @@ import { useCluster, type ClusterUse } from "../src/testing.ts";
 // Applies packages/db/provision/roles.sql to a throwaway database on the
 // development Postgres of compose.dev.yml (doc 05 section 3.1, doc 10 T1).
 
-const ROLES_SQL = new URL("../provision/roles.sql", import.meta.url).pathname;
-const COMPOSE_DEV = new URL("../../../compose.dev.yml", import.meta.url).pathname;
+const ROLES_SQL = fileURLToPath(new URL("../provision/roles.sql", import.meta.url));
+const COMPOSE_DEV = fileURLToPath(new URL("../../../compose.dev.yml", import.meta.url));
 
 // The development passwords of compose.dev.yml. Roles are cluster-wide, so
 // they may already exist with these passwords, which roles.sql never changes.

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
 import { createInterface } from "node:readline";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createTestDatabase, useCluster } from "../src/testing.ts";
@@ -21,7 +22,7 @@ import { createTestDatabase, useCluster } from "../src/testing.ts";
 // the lock while the test waits for another of them, so one foreign request
 // queued between them would end in a wait for each other.
 
-const HOLDER = new URL("./support/cluster-holder.ts", import.meta.url).pathname;
+const HOLDER = fileURLToPath(new URL("./support/cluster-holder.ts", import.meta.url));
 const CLUSTER_LOCK_KEY = 7_354_190_025;
 const HARNESS = "slugbase-test-harness";
 // Waiting for a template build of another run counts against both.

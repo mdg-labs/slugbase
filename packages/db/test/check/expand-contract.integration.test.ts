@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { GitPackage, releasedRepository, SECOND } from "./git-package.ts";
 
@@ -10,7 +11,7 @@ import { GitPackage, releasedRepository, SECOND } from "./git-package.ts";
 // run that fails on it.
 
 const TIMEOUT_MS = 180_000;
-const SCRIPT = new URL("../../scripts/db-check.ts", import.meta.url).pathname;
+const SCRIPT = fileURLToPath(new URL("../../scripts/db-check.ts", import.meta.url));
 const THIRD = "20260301000000_drop_legacy_title";
 const HEADER = `-- slugbase:contract expand=${SECOND} release=1.1.0\n`;
 

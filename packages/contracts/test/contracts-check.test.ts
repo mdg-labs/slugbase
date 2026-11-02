@@ -2,11 +2,12 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createReportPackage, runApiReport } from "./report-package.ts";
 import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
-const packageDir = new URL("..", import.meta.url).pathname;
+const packageDir = fileURLToPath(new URL("..", import.meta.url));
 const apiGen = join(packageDir, "scripts/api-gen.ts");
 const check = join(packageDir, "scripts/contracts-check.ts");
 const before = join(packageDir, "test/fixtures/drift-before.fixture.ts");

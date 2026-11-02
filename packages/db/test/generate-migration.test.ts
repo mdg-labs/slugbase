@@ -12,13 +12,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { hashSqlFiles, isNonTransactional } from "../scripts/migration-sql.ts";
 
 // Runs `pnpm db:generate` (scripts/generate-migration.ts) against a copy of the
 // package, so a test can edit the SQL files and the schema freely.
 
-const PACKAGE = new URL("..", import.meta.url).pathname;
+const PACKAGE = fileURLToPath(new URL("..", import.meta.url));
 const SCRIPT = join(PACKAGE, "scripts", "generate-migration.ts");
 const RUN_TIMEOUT_MS = 120_000;
 

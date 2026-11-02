@@ -2,10 +2,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
-const packageDir = new URL("..", import.meta.url).pathname;
+const packageDir = fileURLToPath(new URL("..", import.meta.url));
 const script = join(packageDir, "scripts/api-gen.ts");
 const directories: string[] = [];
 

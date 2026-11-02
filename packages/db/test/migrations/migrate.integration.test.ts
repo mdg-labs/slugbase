@@ -5,6 +5,7 @@ import { createServer, connect, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -22,8 +23,8 @@ import { useCluster, type ClusterUse } from "../../src/testing.ts";
 // provisioned with provision/roles.sql and migrated as slugbase_migrator, the
 // way the product does it; the superuser only creates and inspects databases.
 
-const ROLES_SQL = new URL("../../provision/roles.sql", import.meta.url).pathname;
-const FIXTURES = new URL("./fixtures/", import.meta.url).pathname;
+const ROLES_SQL = fileURLToPath(new URL("../../provision/roles.sql", import.meta.url));
+const FIXTURES = fileURLToPath(new URL("./fixtures/", import.meta.url));
 
 const APP_PASSWORD = "slugbase_app_dev_only";
 const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";

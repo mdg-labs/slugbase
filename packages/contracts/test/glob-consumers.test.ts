@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Document, Ruleset, type RulesetDefinition, Spectral } from "@stoplight/spectral-core";
 import parsers from "@stoplight/spectral-parsers";
 import { truthy } from "@stoplight/spectral-functions";
@@ -12,7 +13,7 @@ import { describe, expect, it } from "vitest";
  * consumer that cannot call it fails here and not on the first config line that reaches it.
  */
 
-const packageDir = new URL("..", import.meta.url).pathname;
+const packageDir = fileURLToPath(new URL("..", import.meta.url));
 
 interface RedoclyUrlReader {
   readFileFromUrl: (

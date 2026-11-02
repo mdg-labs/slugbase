@@ -4,6 +4,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
 import type { MigrationChain } from "../src/migrate.ts";
@@ -15,7 +16,7 @@ import { dropTestTemplate, testTemplateName } from "../src/testing.ts";
 // cluster lock is shared, and a shared request queues behind a waiting
 // exclusive one, so a holder must never wait for a later request.
 
-const START_DATABASE = new URL("./support/start-database.ts", import.meta.url).pathname;
+const START_DATABASE = fileURLToPath(new URL("./support/start-database.ts", import.meta.url));
 const execFileAsync = promisify(execFile);
 
 interface Started {
@@ -26,7 +27,7 @@ interface Started {
 
 const HOOK_TIMEOUT_MS = 300_000;
 const MIGRATIONS = new URL("../migrations/", import.meta.url);
-const FIXTURE = new URL("./migrations/fixtures/restored/", import.meta.url).pathname;
+const FIXTURE = fileURLToPath(new URL("./migrations/fixtures/restored/", import.meta.url));
 const serverUrl = process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev";
 
 interface Journal {

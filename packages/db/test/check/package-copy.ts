@@ -1,12 +1,13 @@
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // A copy of the package that `pnpm db:check` inspects, so a test can edit a
 // migration, the schema or src/sql without touching the real ones. Its schema is
 // the shipped one, which the migrations describe, plus the tables a test declares.
 
-export const PACKAGE = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+export const PACKAGE = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 
 export class PackageCopy {
   readonly dir = mkdtempSync(join(tmpdir(), "slugbase-db-check-test-"));
