@@ -158,8 +158,8 @@ describe("POST /import/json", { timeout: TEST_TIMEOUT_MS }, () => {
       failed: [{ position: 2, title: "Bad", url: "javascript:alert(1)", reason: "url_not_allowed" }],
       slugsDropped: 0,
       droppedSlugs: [],
-      foldersCreated: 0,
-      tagsCreated: 0,
+      foldersCreated: 1,
+      tagsCreated: 1,
     });
     expect(await stored(shared.workspaceId)).toMatchObject({ bookmarks: 3, counted: 3, counter: 3, audit: 1 });
     const rows = await asSystem(
@@ -168,7 +168,7 @@ describe("POST /import/json", { timeout: TEST_TIMEOUT_MS }, () => {
         FROM bookmarks WHERE workspace_id = ${shared.workspaceId} ORDER BY id`,
     );
     expect(rows).toEqual([
-      { url: "https://example.com/zulu", title: "Zulu", description: "About it", owner_id: a.account.id, pinned: true, archived: false, slug: null, forwarding: false },
+      { url: "https://example.com/zulu", title: "Zulu", description: "About it", owner_id: a.account.id, pinned: true, archived: false, slug: "zulu", forwarding: false },
       { url: "https://example.com/alpha", title: "example.com", description: null, owner_id: a.account.id, pinned: false, archived: false, slug: null, forwarding: false },
       { url: "https://example.com/mike", title: "example.com", description: null, owner_id: a.account.id, pinned: false, archived: false, slug: null, forwarding: false },
     ]);
@@ -176,7 +176,7 @@ describe("POST /import/json", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await jobCount(FETCH_JOB)).toBe(0);
     const events = await asSystem((tx) => tx<{ action: string; actor_type: string; actor_account_id: string; entity_id: string | null; metadata: unknown }[]>`SELECT action, actor_type, actor_account_id, entity_id, metadata FROM audit_events WHERE workspace_id = ${shared.workspaceId}`);
     expect(events).toEqual([
-      { action: "import.completed", actor_type: "account", actor_account_id: a.account.id, entity_id: null, metadata: { created: "3", skipped: "1", failed: "1", slugsDropped: "0", foldersCreated: "0", tagsCreated: "0" } },
+      { action: "import.completed", actor_type: "account", actor_account_id: a.account.id, entity_id: null, metadata: { created: "3", skipped: "1", failed: "1", slugsDropped: "0", foldersCreated: "1", tagsCreated: "1" } },
     ]);
   });
 

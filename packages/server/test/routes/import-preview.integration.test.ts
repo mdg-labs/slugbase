@@ -85,7 +85,7 @@ async function setup(world: World) {
 const file = (...urls: string[]) => urls.map((url) => ({ url }));
 
 describe("POST /import/json?dryRun=true", { timeout: TEST_TIMEOUT_MS }, () => {
-  it("answers what an import of a plain array would do, in the shape the later parts keep, and writes nothing", async () => {
+  it("answers what an import of a plain array would do, with the folders and tags it would create, and writes nothing", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);
     await create(world, a, "https://example.com/existing");
@@ -111,8 +111,8 @@ describe("POST /import/json?dryRun=true", { timeout: TEST_TIMEOUT_MS }, () => {
       ],
       slugsDropped: 0,
       droppedSlugs: [],
-      foldersCreated: 0,
-      tagsCreated: 0,
+      foldersCreated: 2,
+      tagsCreated: 2,
     });
     expect(await stored(shared.workspaceId)).toEqual(before);
   });

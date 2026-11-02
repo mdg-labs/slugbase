@@ -1075,7 +1075,7 @@ describe("the bulk operations across workspaces", () => {
       const repository = importRepository(tx);
       const places = await repository.takePlaces(null, 1);
       await repository.insertBookmarks({
-        bookmarks: [{ id: imported, ownerId: MEMBER_OF_A, url: "https://example.com/imported", urlCanonical: "https://example.com/imported", host: "example.com", title: "Imported", description: null, pinned: false }],
+        bookmarks: [{ id: imported, ownerId: MEMBER_OF_A, url: "https://example.com/imported", urlCanonical: "https://example.com/imported", host: "example.com", title: "Imported", description: null, pinned: false, slug: null, forwarding: false }],
         jobs: [],
       });
       return places;
@@ -1101,6 +1101,89 @@ describe("the bulk operations across workspaces", () => {
     const after = { a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) };
     expect(after.b).toEqual(before.b);
     expect(after.a).toMatchObject({ rows: before.a.rows + 1, counter: before.a.counter + 1 });
+  });
+
+  // The import also checks the caller's slugs, folders and tags, gets or creates folders and tags by name, and files and tags its new bookmarks (doc 02 section 13.1, Q30). From a transaction acting in A, by an account that is a
+  // member of both workspaces and owns a bookmark with a slug, a folder and a tag in each, the checks find nothing of B, the names are created in A and not matched to B's, and a link that names a bookmark, a folder or a tag of B is refused.
+  it("reads no slug, folder or tag of B, creates its folders and tags in A only, and writes no link in B, for an import from a transaction acting in A, through the repository", async () => {
+    const FOLDER_OF_A = "0192f3a0-4444-7000-8000-00000000a0e2";
+    const FOLDER_OF_B = "0192f3a0-4444-7000-8000-00000000b0e2";
+    const TAG_OF_A = "0192f3a0-5555-7000-8000-00000000a0e2";
+    const TAG_OF_B = "0192f3a0-5555-7000-8000-00000000b0e2";
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${MEMBER_OF_A}, 'bulk-matrix@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${MEMBER_OF_A} WHERE id IN (${BOOKMARK_OF_A}, ${BOOKMARK_OF_B})`;
+      await tx`UPDATE bookmarks SET slug = 'import-slug-b' WHERE id = ${BOOKMARK_OF_B}`;
+      await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${FOLDER_OF_A}, ${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'import-a'), (${FOLDER_OF_B}, ${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'import-b')`;
+      await tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${TAG_OF_A}, ${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'import-a'), (${TAG_OF_B}, ${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'import-b')`;
+      await tx`UPDATE workspaces SET bookmark_count = (SELECT count(*) FROM bookmarks WHERE workspace_id = workspaces.id AND plan_archived_at IS NULL) WHERE id IN (${PROBE_WORKSPACE_A}, ${PROBE_WORKSPACE_B})`;
+    });
+    const contentIn = async (workspaceId: string): Promise<string> => {
+      const rows = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<{ item: string }[]>`
+          SELECT 'folder:' || id || '/' || name::text AS item FROM folders WHERE workspace_id = ${workspaceId}
+          UNION ALL SELECT 'tag:' || id || '/' || name::text FROM tags WHERE workspace_id = ${workspaceId}
+          UNION ALL SELECT 'bookmark:' || id || '/' || coalesce(slug, '') FROM bookmarks WHERE workspace_id = ${workspaceId}
+          UNION ALL SELECT 'filed:' || bookmark_id || '/' || folder_id FROM folder_bookmarks WHERE workspace_id = ${workspaceId}
+          UNION ALL SELECT 'tagged:' || bookmark_id || '/' || tag_id FROM bookmark_tags WHERE workspace_id = ${workspaceId}
+          ORDER BY 1`;
+      });
+      return rows.map((row) => row.item).join("\n");
+    };
+    const before = { a: await contentIn(PROBE_WORKSPACE_A), b: await contentIn(PROBE_WORKSPACE_B) };
+    const context = { accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-import-content" };
+    const createdFolder = "0192f3a0-4444-7000-8000-00000000a0e3";
+    const createdTag = "0192f3a0-5555-7000-8000-00000000a0e3";
+
+    const results = await database().tenant.withTenant(context, async (tx) => {
+      const repository = importRepository(tx);
+      return {
+        slugOfB: [...(await repository.existingSlugs(["import-slug-b"]))],
+        folderOfB: [...(await repository.existingFolderNames(["import-b"]))],
+        tagOfB: [...(await repository.existingTagNames(["import-b"]))],
+        folderOfA: [...(await repository.existingFolderNames(["IMPORT-A"]))],
+        folderOfAResolved: (await repository.resolveFolders([{ id: createdFolder, name: "IMPORT-A", icon: "folder", color: 1 }])).ids.get("IMPORT-A"),
+        tagOfAResolved: (await repository.resolveTags([{ id: createdTag, name: "import-A" }])).ids.get("import-A"),
+      };
+    });
+    const created = await database().tenant.withTenant(context, async (tx) => {
+      const repository = importRepository(tx);
+      return { folder: await repository.resolveFolders([{ id: createdFolder, name: "import-b", icon: "star", color: 2 }]), tag: await repository.resolveTags([{ id: createdTag, name: "import-b" }]) };
+    });
+    const linkRefusals: Record<string, string | undefined> = {};
+    for (const [label, links] of Object.entries({
+      folderOfB: { folders: [{ bookmarkId: BOOKMARK_OF_A, folderId: FOLDER_OF_B }], tags: [] },
+      tagOfB: { folders: [], tags: [{ bookmarkId: BOOKMARK_OF_A, tagId: TAG_OF_B }] },
+      bookmarkOfBFolder: { folders: [{ bookmarkId: BOOKMARK_OF_B, folderId: FOLDER_OF_A }], tags: [] },
+      bookmarkOfBTag: { folders: [], tags: [{ bookmarkId: BOOKMARK_OF_B, tagId: TAG_OF_A }] },
+    })) {
+      linkRefusals[label] = await database()
+        .tenant.withTenant(context, (tx) => importRepository(tx).linkBookmarks(links))
+        .then(
+          () => "linked",
+          (error: unknown) => (error instanceof Error ? "refused" : "unknown"),
+        );
+    }
+
+    expect(results).toEqual({ slugOfB: [], folderOfB: [], tagOfB: [], folderOfA: ["IMPORT-A"], folderOfAResolved: FOLDER_OF_A, tagOfAResolved: TAG_OF_A });
+    expect(created.folder.created).toBe(1);
+    expect(created.folder.ids.get("import-b")).toBe(createdFolder);
+    expect(created.tag.created).toBe(1);
+    expect(created.tag.ids.get("import-b")).toBe(createdTag);
+    expect(linkRefusals).toEqual({ folderOfB: "refused", tagOfB: "refused", bookmarkOfBFolder: "refused", bookmarkOfBTag: "refused" });
+    expect(await contentIn(PROBE_WORKSPACE_B)).toBe(before.b);
+    const after = (await contentIn(PROBE_WORKSPACE_A)).split("\n");
+    expect(after).toEqual([...before.a.split("\n"), `folder:${createdFolder}/import-b`, `tag:${createdTag}/import-b`].sort());
   });
 
   // The bulk filing, tagging and preview of adding tags (doc 02 section 5.8) take a bookmark and a folder or tags by identifier. From a transaction acting in A, a

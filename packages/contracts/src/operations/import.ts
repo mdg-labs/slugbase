@@ -27,20 +27,20 @@ export const ImportBookmarkSchema = z
     url: z.string().describe("The bookmark's address. It must be an http or https URL once normalised; anything else makes this bookmark a failure, not the file"),
     title: z.string().nullish().describe("The bookmark's title; cut to 300 characters. A missing or blank title becomes the host of the URL"),
     description: z.string().nullish().describe("The bookmark's description; cut to 1 000 characters. A blank one is none"),
-    slug: z.string().nullish().describe("The bookmark's slug"),
-    forwarding: z.boolean().optional().describe("Whether /go forwards to the bookmark by its slug"),
+    slug: z.string().nullish().describe("The bookmark's slug; a blank one is none. It is trimmed and lower-cased, and it is dropped from the bookmark, which is still imported, when it is outside the slug grammar, the caller has it on a bookmark already (plan-archived or not) or an earlier bookmark of the file that is imported keeps it"),
+    forwarding: z.boolean().optional().describe("Whether /go forwards to the bookmark by its slug; off when left out, and off for a bookmark that has no slug or loses it"),
     pinned: z.boolean().optional().describe("Whether the bookmark is pinned"),
     planArchived: z.boolean().optional().describe("Whether a downgrade of the plan archived the bookmark when the file was made; it is ignored"),
-    folders: z.array(z.string()).optional().describe("The names of the folders the bookmark is filed in"),
-    tags: z.array(z.string()).optional().describe("The names of the tags the bookmark carries"),
+    folders: z.array(z.string()).optional().describe("The names of the folders the bookmark is filed in; a folder the caller has under that name, without regard to case, is used, and any other is created. A name is not split at a slash"),
+    tags: z.array(z.string()).optional().describe("The names of the tags the bookmark carries; a tag the caller has under that name, without regard to case, is used, and any other is created"),
   })
   .meta({ id: "ImportBookmark" });
 
 const ImportFolderSchema = z
   .strictObject({
-    name: z.string().describe("The folder's name"),
-    icon: z.string().optional().describe("The folder's icon"),
-    color: z.number().int().optional().describe("The folder's colour"),
+    name: z.string().describe("The folder's name; control characters are removed and it is cut to 64 characters, and a name that is empty then is ignored"),
+    icon: z.string().optional().describe("The folder's icon, taken by a folder the import creates; one outside the list a folder may carry becomes the default icon. A folder the caller has keeps its own"),
+    color: z.number().int().optional().describe("The folder's colour, 1 to 8, taken by a folder the import creates; any other value becomes the default colour. A folder the caller has keeps its own"),
   })
   .meta({ id: "ImportFolder" });
 
@@ -53,8 +53,8 @@ export const ImportEnvelopeSchema = z
     version: z.number().int().min(1).max(EXPORT_VERSION).describe(`The version of the format; a version newer than ${String(EXPORT_VERSION)} is refused with 422 and an error at version`),
     exportedAt: ExportDocumentSchema.shape.exportedAt.optional(),
     workspace: ExportDocumentSchema.shape.workspace.optional(),
-    folders: z.array(ImportFolderSchema).optional().describe("The folders of the file"),
-    tags: z.array(z.string()).optional().describe("The tags of the file"),
+    folders: z.array(ImportFolderSchema).optional().describe("The folders of the file: each exists after the import, used by a bookmark or not. The caller's folder of that name, without regard to case, is used; any other is created"),
+    tags: z.array(z.string()).optional().describe("The tags of the file: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters"),
     bookmarks: ImportBookmarksSchema,
     goPreferences: z.array(z.string()).max(0).optional().describe("The caller's remembered slug choices; always empty in a version 1 file"),
     shared: z.array(z.string()).max(0).optional().describe("The bookmarks other members shared with the exporter; always empty in a version 1 file, and never read"),
@@ -88,7 +88,7 @@ export const ImportDroppedSlugSchema = z
   .strictObject({
     ...ImportEntryFields,
     slug: z.string().max(BOOKMARK_URL_MAX_LENGTH).describe("The slug that was dropped, cut to 2 048 characters"),
-    reason: z.enum(IMPORT_SLUG_DROPPED_REASONS).describe("slug_invalid: outside the slug grammar; slug_conflict: another bookmark of the caller has it"),
+    reason: z.enum(IMPORT_SLUG_DROPPED_REASONS).describe("slug_invalid: outside the slug grammar; slug_conflict: the caller has a bookmark with it already, plan-archived or not, or an earlier bookmark of the file that is imported keeps it"),
   })
   .meta({ id: "ImportDroppedSlug" });
 
@@ -104,10 +104,10 @@ export const ImportResultSchema = z
     created: z.number().int().min(0).describe("The bookmarks the import creates (with dryRun=true, would create)"),
     skipped: z.array(ImportSkippedSchema).describe("The bookmarks the import leaves out, in the order of the file"),
     failed: z.array(ImportFailedSchema).describe("The bookmarks whose URL the import refuses, in the order of the file"),
-    slugsDropped: z.number().int().min(0).describe("The bookmarks that lose their slug; 0 until the import reads slugs"),
-    droppedSlugs: z.array(ImportDroppedSlugSchema).describe("The slugs that are dropped; empty until the import reads slugs"),
-    foldersCreated: z.number().int().min(0).describe("The folders the import creates; 0 until the import reads folders"),
-    tagsCreated: z.number().int().min(0).describe("The tags the import creates; 0 until the import reads tags"),
+    slugsDropped: z.number().int().min(0).describe("The bookmarks that lose their slug (with dryRun=true, would lose it)"),
+    droppedSlugs: z.array(ImportDroppedSlugSchema).describe("The slugs that are dropped, in the order of the file"),
+    foldersCreated: z.number().int().min(0).describe("The folders the import creates (with dryRun=true, would create): those of the file and of the bookmarks that are imported that the caller does not have"),
+    tagsCreated: z.number().int().min(0).describe("The tags the import creates (with dryRun=true, would create), by the same rule"),
   })
   .meta({ id: "ImportResult" });
 
@@ -125,7 +125,7 @@ export const importJson = defineOperation({
   request: { query: ImportQuerySchema, body: ImportRequestSchema },
   responses: {
     200: jsonResponse(
-      "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused. The bookmarks are created in the order of the file, in one transaction with the counter and one import.completed audit event, so a failure leaves none of them. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true",
+      "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused, the slugs dropped and the folders and tags created. The bookmarks are created in the order of the file, each filed in its own folders, tagged with its own tags and with its slug, forwarding and pinned state, in one transaction with the counter, the folders, the tags and one import.completed audit event, so a failure leaves none of them. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing; an existing one keeps its icon and colour, and the folders and tags the file lists exist afterwards whether a bookmark uses them or not. A slug outside the grammar, one the caller has already or one an earlier bookmark of the file keeps is dropped from its bookmark with forwarding off, and the bookmark is still imported; a slug the caller takes on another bookmark in a request that runs at the same time is dropped the same way. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true",
       ImportResultSchema,
     ),
     400: problemResponse("The body is not valid JSON, or the Idempotency-Key header is not a UUID"),

@@ -783,7 +783,9 @@ export interface ImportRepository extends Omit<ImportStore, "insertBookmarks"> {
     insertBookmarks(batch: {
         readonly bookmarks: Parameters<ImportStore["insertBookmarks"]>[0]["bookmarks"];
         readonly jobs: readonly QueuedJob[];
-    }): Promise<void>;
+    }): Promise<{
+        readonly slugsLost: readonly string[];
+    }>;
 }
 
 // @public

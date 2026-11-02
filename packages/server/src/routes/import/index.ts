@@ -15,7 +15,8 @@ import { route } from "../register.ts";
 // `Idempotency-Key` stores its answer under the key (the idempotency stage's own row) and changes nothing else. Otherwise the import is one transaction, the one the idempotency stage opens when there is a key: it takes
 // the places the file needs under the workspace's `bookmarks.max` (the entitlement is decided here, because the room is the counter under the workspace's row lock), inserts the bookmarks in batches in the order of
 // the file with ascending identifiers, queues `bookmark.created` for each (the page's metadata is not fetched: the file is the member's, and a fetch for each of up to 5 000 bookmarks is an amplification the member
-// chooses), and records one `import.completed` audit event with the account or the token as the actor. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
+// chooses), and records one `import.completed` audit event with the account or the token as the actor. Between the places and the bookmarks it gets or creates the folders and tags of the file for the caller by name, and it
+// files and tags each bookmark by its own names; a slug the caller has already, or that an earlier bookmark of the file keeps, is dropped from its bookmark, which is still imported, and listed in the answer. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
 // Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
 
 const NO_WORKSPACE = "No such resource.";
@@ -40,6 +41,12 @@ function storeOf(tx: TenantTx): ImportStore {
   return {
     bookmarkCount: () => repository.bookmarkCount(),
     existingCanonicalUrls: (canonicals) => repository.existingCanonicalUrls(canonicals),
+    existingSlugs: (slugs) => repository.existingSlugs(slugs),
+    existingFolderNames: (names) => repository.existingFolderNames(names),
+    existingTagNames: (names) => repository.existingTagNames(names),
+    resolveFolders: (folders) => repository.resolveFolders(folders),
+    resolveTags: (tags) => repository.resolveTags(tags),
+    linkBookmarks: (links) => repository.linkBookmarks(links),
     takePlaces: (ceiling, wanted) => repository.takePlaces(ceiling, wanted),
     insertBookmarks: ({ bookmarks, events }) =>
       repository.insertBookmarks({ bookmarks, jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)) }),

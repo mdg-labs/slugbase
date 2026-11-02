@@ -4205,9 +4205,21 @@ export interface ImportBookmark {
     readonly canonical: string;
     // (undocumented)
     readonly description: string | null;
+    readonly folders: readonly string[];
+    readonly forwarding: boolean;
     readonly host: string;
     readonly pinned: boolean;
     readonly position: number;
+    readonly slug: {
+        readonly kind: "none";
+    } | {
+        readonly kind: "valid";
+        readonly slug: string;
+    } | {
+        readonly kind: "invalid";
+        readonly text: string;
+    };
+    readonly tags: readonly string[];
     readonly title: string;
     readonly url: string;
 }
@@ -4226,15 +4238,42 @@ export interface ImportDependencies {
 }
 
 // @public
+export interface ImportFolderToResolve {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface ImportLinks {
+    // (undocumented)
+    readonly folders: readonly {
+        readonly bookmarkId: string;
+        readonly folderId: string;
+    }[];
+    // (undocumented)
+    readonly tags: readonly {
+        readonly bookmarkId: string;
+        readonly tagId: string;
+    }[];
+}
+
+// @public
 export interface ImportNewBookmark {
     // (undocumented)
     readonly description: string | null;
+    readonly forwarding: boolean;
     // (undocumented)
     readonly host: string;
     readonly id: string;
     readonly ownerId: string;
     // (undocumented)
     readonly pinned: boolean;
+    readonly slug: string | null;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -4294,6 +4333,9 @@ export type ImportPreviewOutcome =
 export interface ImportPreviewStore {
     bookmarkCount(): Promise<number | undefined>;
     existingCanonicalUrls(canonicals: readonly string[]): Promise<ReadonlySet<string>>;
+    existingFolderNames(names: readonly string[]): Promise<ReadonlySet<string>>;
+    existingSlugs(slugs: readonly string[]): Promise<ReadonlySet<string>>;
+    existingTagNames(names: readonly string[]): Promise<ReadonlySet<string>>;
 }
 
 // @public
@@ -4309,13 +4351,31 @@ export interface ImportRefusal {
 // @public (undocumented)
 export type ImportRefusalReason = "url_not_allowed" | "url_invalid";
 
+// @public
+export interface ImportResolved {
+    readonly created: number;
+    readonly ids: ReadonlyMap<string, string>;
+}
+
 // @public (undocumented)
 export interface ImportStore extends ImportPreviewStore {
     insertBookmarks(batch: {
         readonly bookmarks: readonly ImportNewBookmark[];
         readonly events: readonly DomainEvent<"bookmark.created">[];
-    }): Promise<void>;
+    }): Promise<{
+        readonly slugsLost: readonly string[];
+    }>;
+    linkBookmarks(links: ImportLinks): Promise<void>;
+    resolveFolders(folders: readonly ImportFolderToResolve[]): Promise<ImportResolved>;
+    resolveTags(tags: readonly ImportTagToResolve[]): Promise<ImportResolved>;
     takePlaces(ceiling: number | null, wanted: number): Promise<ImportPlaces>;
+}
+
+// @public
+export interface ImportTagToResolve {
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
 }
 
 // @public

@@ -77,8 +77,12 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Import: the body input `slug` of a bookmark of `importJson`, in the export document (`bookmarks[].slug`) and in the plain array (`[].slug`), is the slug the file gives the bookmark and not the identifier of a row, so
  *   the default maps it to a bookmark like the other inputs named slug and judges it with the rest of the call. The matrix sends the operation as a dry run: it reads the caller's own canonical URLs and
  *   the counter of the workspace of the request (`packages/db/src/repositories/import.ts`) and writes nothing, so a value of B in the file is answered `200` as it would be for any text, which `runApiMatrix` is told by its
- *   `emptyAnswers` option, and the workspace B is as it was. The import that writes (the places taken under the counter and the bookmarks inserted) is held to the workspace of the transaction by "the import across workspaces"
- *   in `test/tenancy-matrix.integration.test.ts`.
+ *   `emptyAnswers` option, and the workspace B is as it was. The import's other body inputs are names and numbers, not identifiers: the `name`, `icon` and `color` of a folder of the file (`folders[].name`, `folders[].icon`,
+ *   `folders[].color`), the `tags` of the file and the `folders` and `tags` of a bookmark, and the `forwarding` and `pinned` flags. They are matched to the caller's own folders and tags of the workspace of the request by name, so a
+ *   name that B has is no folder or tag of B to A. The import that writes is held to the workspace of the transaction by two cases of the `describe("the bulk operations across workspaces")` block of
+ *   `test/tenancy-matrix.integration.test.ts`: `it("takes no place in B and writes no bookmark in B for an import …")` (the places taken under the counter and the bookmarks inserted, with their slugs) and
+ *   `it("reads no slug, folder or tag of B, creates its folders and tags in A only, and writes no link in B, for an import …")` (the checks of the slugs, folders and tags, the get-or-create of folders and tags by name, and
+ *   the links of the new bookmarks).
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and

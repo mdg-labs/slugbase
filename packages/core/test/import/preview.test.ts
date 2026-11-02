@@ -7,11 +7,13 @@ import { previewImport, readImportBookmark, type ImportPreviewAsk, type ImportPr
 interface Calls {
   count: number;
   lookups: (readonly string[])[];
+  slugs: (readonly string[])[];
 }
 
-function store(options: { count?: number | undefined; existing?: readonly string[] } = {}): { store: ImportPreviewStore; calls: Calls } {
-  const calls: Calls = { count: 0, lookups: [] };
+function store(options: { count?: number | undefined; existing?: readonly string[]; slugs?: readonly string[]; folders?: readonly string[]; tags?: readonly string[] } = {}): { store: ImportPreviewStore; calls: Calls } {
+  const calls: Calls = { count: 0, lookups: [], slugs: [] };
   const existing = new Set(options.existing ?? []);
+  const named = (have: readonly string[] | undefined, names: readonly string[]) => new Set(names.filter((name) => (have ?? []).some((other) => other.toLowerCase() === name.toLowerCase())));
   return {
     calls,
     store: {
@@ -23,6 +25,12 @@ function store(options: { count?: number | undefined; existing?: readonly string
         calls.lookups.push(canonicals);
         return Promise.resolve(new Set(canonicals.filter((canonical) => existing.has(canonical))));
       },
+      existingSlugs: (slugs) => {
+        calls.slugs.push(slugs);
+        return Promise.resolve(new Set(slugs.filter((slug) => (options.slugs ?? []).includes(slug))));
+      },
+      existingFolderNames: (names) => Promise.resolve(named(options.folders, names)),
+      existingTagNames: (names) => Promise.resolve(named(options.tags, names)),
     },
   };
 }
@@ -50,6 +58,10 @@ describe("readImportBookmark", () => {
       title: "😀".repeat(300),
       description: "😀".repeat(1000),
       pinned: false,
+      slug: { kind: "none" },
+      forwarding: false,
+      folders: [],
+      tags: [],
     });
     expect(readImportBookmark({ url: "https://example.com/", pinned: true }, 1)).toMatchObject({ pinned: true });
     expect(readImportBookmark({ url: "https://example.com/", title: " \u0000 " }, 1)).toMatchObject({ title: "example.com", description: null });
@@ -166,9 +178,85 @@ describe("previewImport", () => {
     expect(result.detected).toEqual({ bookmarks: 2, folders: 3, tags: 3 });
   });
 
-  it("reports what the later parts will fill as nothing", async () => {
-    const { result } = await preview([{ url: "https://example.com/a", slug: "a", folders: ["F"], tags: ["T"] }]);
+  it("reads a slug in its normal form, text outside the grammar as it is, a blank slug as none, and the names of the folders and tags as plain text cut to their limits without a repeat that differs in case", () => {
+    expect(readImportBookmark({ url: "https://example.com/", slug: "  Mail-2 ", forwarding: true }, 1)).toMatchObject({ slug: { kind: "valid", slug: "mail-2" }, forwarding: true });
+    expect(readImportBookmark({ url: "https://example.com/", slug: "-mail" }, 1)).toMatchObject({ slug: { kind: "invalid", text: "-mail" } });
+    expect(readImportBookmark({ url: "https://example.com/", slug: "a\u0000b" }, 1)).toMatchObject({ slug: { kind: "invalid", text: "ab" } });
+    expect(readImportBookmark({ url: "https://example.com/", slug: "a".repeat(65) }, 1)).toMatchObject({ slug: { kind: "invalid" } });
+    expect(readImportBookmark({ url: "https://example.com/", slug: "   " }, 1)).toMatchObject({ slug: { kind: "none" } });
+    expect(readImportBookmark({ url: "https://example.com/", slug: null }, 1)).toMatchObject({ slug: { kind: "none" }, forwarding: false });
+    expect(readImportBookmark({ url: "https://example.com/", folders: ["Work", " work ", "", "\u0000", "A/B", "x".repeat(70)], tags: ["T", "t", "y".repeat(50)] }, 1)).toMatchObject({
+      folders: ["Work", "A/B", "x".repeat(64)],
+      tags: ["T", "y".repeat(40)],
+    });
+  });
 
+  it("drops a slug outside the grammar, one the caller has and one an earlier bookmark that is imported keeps, lists each once and counts the bookmarks", async () => {
+    const { result, calls } = await preview(
+      [
+        { url: "https://example.com/1", slug: "Mail" },
+        { url: "https://example.com/2", slug: "mail" },
+        { url: "https://example.com/3", slug: "has-it" },
+        { url: "https://example.com/4", slug: "no good" },
+        { url: "https://example.com/5", slug: "fine", forwarding: true },
+        { url: "https://example.com/6" },
+      ],
+      {},
+      { slugs: ["has-it"] },
+    );
+
+    expect(calls.slugs).toEqual([["mail", "has-it", "fine"]]);
+    expect(result.droppedSlugs).toEqual([
+      { position: 2, title: "example.com", url: "https://example.com/2", slug: "mail", reason: "slug_conflict" },
+      { position: 3, title: "example.com", url: "https://example.com/3", slug: "has-it", reason: "slug_conflict" },
+      { position: 4, title: "example.com", url: "https://example.com/4", slug: "no good", reason: "slug_invalid" },
+    ]);
+    expect(result.slugsDropped).toBe(3);
+    expect(result.created).toBe(6);
+  });
+
+  it("lets a bookmark that is imported keep the slug of one that is skipped, and reports no slug of a bookmark that is skipped, refused or past the limit", async () => {
+    const { result } = await preview(
+      [
+        { url: "https://example.com/a" },
+        { url: "https://example.com/a", slug: "taken" },
+        { url: "bogus", slug: "x y" },
+        { url: "https://example.com/c", slug: "taken" },
+        { url: "https://example.com/over", slug: "bad slug" },
+      ],
+      { ceiling: 2 },
+    );
+
+    expect(result.created).toBe(2);
+    expect(result.droppedSlugs).toEqual([]);
+    expect(result.slugsDropped).toBe(0);
+  });
+
+  it("counts the folders and tags the caller does not have, without regard to case, those of the document's lists and of the bookmarks that are imported", async () => {
+    const { result } = await preview(
+      {
+        format: "slugbase-export",
+        version: 1,
+        folders: [{ name: "Reading" }, { name: "Work", icon: "briefcase", color: 3 }, { name: "\u0000" }],
+        tags: ["News", "later"],
+        bookmarks: [
+          { url: "https://example.com/a", folders: ["reading", "Home"], tags: ["NEWS", "x"] },
+          { url: "https://example.com/a", folders: ["Never"], tags: ["never"] },
+        ],
+      },
+      {},
+      { folders: ["WORK"], tags: ["later"] },
+    );
+
+    expect(result.foldersCreated).toBe(2);
+    expect(result.tagsCreated).toBe(2);
+    expect(result.detected).toEqual({ bookmarks: 2, folders: 4, tags: 4 });
+  });
+
+  it("asks the store about nothing when the file holds no slug, folder or tag", async () => {
+    const { result, calls } = await preview(urls("https://example.com/a"));
+
+    expect(calls.slugs).toEqual([]);
     expect(result).toMatchObject({ slugsDropped: 0, droppedSlugs: [], foldersCreated: 0, tagsCreated: 0 });
   });
 

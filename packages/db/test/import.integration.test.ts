@@ -7,6 +7,9 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The reads of the import preview (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1). The failure scenario: a duplicate found among another member's bookmarks, a plan-archived bookmark, a bookmark with no
 // owner or another workspace's, and a room under the limit worked out from the rows and not from the counter of the workspace's row.
+//
+// The slugs, folders and tags of the import (Q30, doc 10 T2): a slug, a folder or a tag of another member of the workspace is never found, changed or taken for the importing member's, and each member gets their own;
+// a slug that the account takes between the check and the insert costs the bookmark its slug and not the import.
 
 const HOOK_TIMEOUT_MS = 300_000;
 
@@ -257,7 +260,7 @@ describe("the places the import takes under the ceiling", () => {
 });
 
 describe("the bookmarks the import inserts", () => {
-  const row = (id: string, ownerId: string, url: string, overrides: Partial<{ title: string; description: string | null; pinned: boolean }> = {}) => ({
+  const row = (id: string, ownerId: string, url: string, overrides: Partial<{ title: string; description: string | null; pinned: boolean; slug: string | null; forwarding: boolean }> = {}) => ({
     id,
     ownerId,
     url,
@@ -266,6 +269,8 @@ describe("the bookmarks the import inserts", () => {
     title: "Title",
     description: null,
     pinned: false,
+    slug: null,
+    forwarding: false,
     ...overrides,
   });
 
@@ -363,5 +368,447 @@ describe("the bookmarks the import inserts", () => {
     await expect(db.tenant.withTenant({ accountId: me, requestId: "import-test" }, (tx) => importRepository(tx).takePlaces(null, 1))).rejects.toThrow(/workspace/);
     await expect(db.tenant.withTenant({ accountId: me, requestId: "import-test" }, (tx) => importRepository(tx).insertBookmarks({ bookmarks: [], jobs: [] }))).rejects.toThrow(/workspace/);
     expect((await counterAndRows(w)).rows).toBe(0);
+  });
+});
+
+interface SeededFolder {
+  readonly id: string;
+  readonly name: string;
+}
+
+async function seedFolder(workspaceId: string, ownerId: string | null, name: string, icon = "folder", color = 1): Promise<SeededFolder> {
+  const id = freshId();
+  await asSystem(db, (tx) => tx`INSERT INTO folders (id, workspace_id, owner_id, name, icon, color) VALUES (${id}, ${workspaceId}, ${ownerId}, ${name}, ${icon}, ${color})`);
+  return { id, name };
+}
+
+async function seedTag(workspaceId: string, ownerId: string, name: string): Promise<SeededFolder> {
+  const id = freshId();
+  await asSystem(db, (tx) => tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${id}, ${workspaceId}, ${ownerId}, ${name})`);
+  return { id, name };
+}
+
+async function seedSlug(workspaceId: string, ownerId: string | null, slug: string, archived = false): Promise<string> {
+  const id = freshId();
+  await asSystem(
+    db,
+    (tx) => tx`
+      INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, plan_archived_at)
+      VALUES (${id}, ${workspaceId}, ${ownerId}, ${`https://example.com/${slug}`}, ${`https://example.com/${slug}`}, 'example.com', 'Title', ${slug}, ${archived ? new Date() : null})`,
+  );
+  return id;
+}
+
+interface StoredFolder {
+  readonly id: string;
+  readonly owner_id: string;
+  readonly name: string;
+  readonly icon: string;
+  readonly color: number;
+}
+
+const foldersOf = (workspaceId: string) =>
+  asSystem(db, (tx) => tx<StoredFolder[]>`SELECT id, owner_id, name::text AS name, icon, color FROM folders WHERE workspace_id = ${workspaceId} ORDER BY owner_id, name::text COLLATE "C"`);
+
+const tagsOf = (workspaceId: string) => asSystem(db, (tx) => tx<{ id: string; owner_id: string; name: string }[]>`SELECT id, owner_id, name::text AS name FROM tags WHERE workspace_id = ${workspaceId} ORDER BY owner_id, name::text COLLATE "C"`);
+
+describe("the slugs the import checks", () => {
+  it("are the account's own on any bookmark of the workspace, plan-archived ones included, and nothing of another member's, of no owner's or of another workspace's", async () => {
+    const me = await account();
+    const other = await account();
+    const w = await workspace([me, other]);
+    const elsewhere = await workspace([me]);
+    await seedSlug(w, me, "mine");
+    await seedSlug(w, me, "archived", true);
+    await seedSlug(w, other, "members");
+    await seedSlug(w, null, "ownerless");
+    await seedSlug(elsewhere, me, "other-workspace");
+    const asked = ["mine", "archived", "members", "ownerless", "other-workspace", "unknown"];
+
+    expect([...(await asMember(w, me, (tx) => importRepository(tx).existingSlugs(asked)))].sort()).toEqual(["archived", "mine"]);
+    expect([...(await asMember(w, other, (tx) => importRepository(tx).existingSlugs(asked)))]).toEqual(["members"]);
+    expect([...(await asMember(w, me, (tx) => importRepository(tx).existingSlugs([])))]).toEqual([]);
+  });
+});
+
+describe("the folder and tag names the import checks", () => {
+  it("are those the account has, matched without regard to case and answered as they were asked, and nothing of another member's, of no owner's or of another workspace's", async () => {
+    const me = await account();
+    const other = await account();
+    const w = await workspace([me, other]);
+    const elsewhere = await workspace([me]);
+    await seedFolder(w, me, "Work");
+    await seedFolder(w, other, "Theirs");
+    await seedFolder(w, null, "Ownerless");
+    await seedFolder(elsewhere, me, "Elsewhere");
+    await seedTag(w, me, "News");
+    await seedTag(w, other, "Private");
+    await seedTag(elsewhere, me, "Away");
+
+    const folderNames = ["WORK", "work", "Theirs", "Ownerless", "Elsewhere", "Nothing"];
+    const tagNames = ["news", "Private", "Away", "Nothing"];
+    expect([...(await asMember(w, me, (tx) => importRepository(tx).existingFolderNames(folderNames)))].sort()).toEqual(["WORK", "work"]);
+    expect([...(await asMember(w, me, (tx) => importRepository(tx).existingTagNames(tagNames)))]).toEqual(["news"]);
+    expect([...(await asMember(w, other, (tx) => importRepository(tx).existingFolderNames(folderNames)))]).toEqual(["Theirs"]);
+    expect([...(await asMember(w, other, (tx) => importRepository(tx).existingTagNames(tagNames)))]).toEqual(["Private"]);
+    expect([...(await asMember(w, me, (tx) => importRepository(tx).existingFolderNames([])))]).toEqual([]);
+  });
+
+  it("match a name as text, whatever characters it holds", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const odd = "a'b\"c\\d%e_f,g)h{}";
+    await seedFolder(w, me, odd);
+
+    expect([...(await asMember(w, me, (tx) => importRepository(tx).existingFolderNames([odd, "a' OR '1'='1"])))]).toEqual([odd]);
+  });
+});
+
+describe("the folders and tags the import gets or creates", () => {
+  it("use the account's own folder or tag of the name, whatever the case, with its icon and colour and without a new row, and create the others with the icon and colour asked", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const work = await seedFolder(w, me, "Work", "briefcase", 4);
+    const news = await seedTag(w, me, "News");
+    const ids = [freshId(), freshId(), freshId(), freshId()];
+
+    const folders = await asMember(w, me, (tx) =>
+      importRepository(tx).resolveFolders([
+        { id: ids[0] ?? "", name: "WORK", icon: "star", color: 8 },
+        { id: ids[1] ?? "", name: "Reading", icon: "book-open", color: 2 },
+      ]),
+    );
+    const tags = await asMember(w, me, (tx) =>
+      importRepository(tx).resolveTags([
+        { id: ids[2] ?? "", name: "news" },
+        { id: ids[3] ?? "", name: "Later" },
+      ]),
+    );
+
+    expect(folders.created).toBe(1);
+    expect(folders.ids.get("WORK")).toBe(work.id);
+    expect(folders.ids.get("Reading")).toBe(ids[1]);
+    expect(tags.created).toBe(1);
+    expect(tags.ids.get("news")).toBe(news.id);
+    expect(tags.ids.get("Later")).toBe(ids[3]);
+    expect((await foldersOf(w)).map((folder) => [folder.name, folder.icon, folder.color])).toEqual([
+      ["Reading", "book-open", 2],
+      ["Work", "briefcase", 4],
+    ]);
+    expect((await tagsOf(w)).map((tag) => tag.name)).toEqual(["Later", "News"]);
+  });
+
+  it("leave another member's folders, tags and slugs as they are when that member's names are imported by the caller, who gets their own folder, tag and slug (T2)", async () => {
+    const a = await account();
+    const b = await account();
+    const w = await workspace([a, b]);
+    const workOfA = await seedFolder(w, a, "Work", "briefcase", 5);
+    const newsOfA = await seedTag(w, a, "News");
+    const mailOfA = await seedSlug(w, a, "mail");
+    const bId = { folder: freshId(), tag: freshId(), bookmark: freshId() };
+
+    const taken = await asMember(w, b, (tx) => importRepository(tx).existingSlugs(["mail"]));
+    const resolved = await asMember(w, b, async (tx) => {
+      const repository = importRepository(tx);
+      const folders = await repository.resolveFolders([{ id: bId.folder, name: "work", icon: "star", color: 2 }]);
+      const tags = await repository.resolveTags([{ id: bId.tag, name: "NEWS" }]);
+      await repository.takePlaces(null, 1);
+      const inserted = await repository.insertBookmarks({
+        bookmarks: [{ id: bId.bookmark, ownerId: b, url: "https://example.com/b", urlCanonical: "https://example.com/b", host: "example.com", title: "B", description: null, pinned: false, slug: "mail", forwarding: true }],
+        jobs: [],
+      });
+      await repository.linkBookmarks({ folders: [{ bookmarkId: bId.bookmark, folderId: bId.folder }], tags: [{ bookmarkId: bId.bookmark, tagId: bId.tag }] });
+      return { folders, tags, inserted };
+    });
+
+    expect([...taken]).toEqual([]);
+    expect(resolved.folders).toMatchObject({ created: 1 });
+    expect(resolved.folders.ids.get("work")).toBe(bId.folder);
+    expect(resolved.tags.ids.get("NEWS")).toBe(bId.tag);
+    expect(resolved.inserted).toEqual({ slugsLost: [] });
+    expect(await foldersOf(w)).toEqual(
+      expect.arrayContaining([
+        { id: workOfA.id, owner_id: a, name: "Work", icon: "briefcase", color: 5 },
+        { id: bId.folder, owner_id: b, name: "work", icon: "star", color: 2 },
+      ]),
+    );
+    expect((await foldersOf(w)).length).toBe(2);
+    expect((await tagsOf(w)).map((tag) => [tag.id, tag.owner_id, tag.name])).toEqual(
+      [
+        [newsOfA.id, a, "News"],
+        [bId.tag, b, "NEWS"],
+      ].sort((x, y) => String(x[1]).localeCompare(String(y[1]))),
+    );
+    const bookmarksStored = await asSystem(db, (tx) => tx<{ id: string; owner_id: string; slug: string; forwarding: boolean }[]>`SELECT id, owner_id, slug, forwarding FROM bookmarks WHERE workspace_id = ${w} ORDER BY owner_id`);
+    expect(bookmarksStored.map((row) => [row.id, row.owner_id, row.slug, row.forwarding]).sort()).toEqual(
+      [
+        [mailOfA, a, "mail", false],
+        [bId.bookmark, b, "mail", true],
+      ].sort(),
+    );
+  });
+
+  it("do not create a folder in a workspace other than the one the transaction acts in", async () => {
+    const me = await account();
+    const a = await workspace([me]);
+    const b = await workspace([me]);
+
+    const code = await codeOf(
+      appAs({ accountId: me, workspaceId: a }, (tx) => tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${freshId()}, ${b}, ${me}, 'Sneaked')`),
+    );
+
+    expect(code).toBe("42501");
+    expect(await foldersOf(b)).toEqual([]);
+  });
+
+  it("create a name that two transactions of the account create at once only once, and neither fails, though they ask for the names in opposite orders", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const names = ["Alpha", "bravo", "Charlie", "delta", "Echo"];
+    const entries = (list: readonly string[]) => list.map((name) => ({ id: freshId(), name, icon: "folder", color: 1 }));
+
+    const [first, second] = await Promise.all([
+      asMember(w, me, (tx) => importRepository(tx).resolveFolders(entries(names))),
+      asMember(w, me, (tx) => importRepository(tx).resolveFolders(entries([...names].reverse()))),
+    ]);
+    const tagged = await Promise.all([
+      asMember(w, me, (tx) => importRepository(tx).resolveTags(entries(names))),
+      asMember(w, me, (tx) => importRepository(tx).resolveTags(entries([...names].reverse()))),
+    ]);
+
+    expect(first.created + second.created).toBe(5);
+    expect(tagged[0].created + tagged[1].created).toBe(5);
+    expect([...first.ids.values()].sort()).toEqual([...second.ids.values()].sort());
+    expect((await foldersOf(w)).map((folder) => folder.name)).toEqual(["Alpha", "Charlie", "Echo", "bravo", "delta"]);
+    expect((await tagsOf(w)).length).toBe(5);
+  });
+
+  it("leave no folder and no tag when a later write of the transaction fails", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+
+    await expect(
+      asMember(w, me, async (tx) => {
+        await importRepository(tx).resolveFolders([{ id: freshId(), name: "Gone", icon: "folder", color: 1 }]);
+        await importRepository(tx).resolveTags([{ id: freshId(), name: "Gone" }]);
+        throw new Error("a later write failed");
+      }),
+    ).rejects.toThrow("a later write failed");
+
+    expect(await foldersOf(w)).toEqual([]);
+    expect(await tagsOf(w)).toEqual([]);
+  });
+
+  it("need a transaction opened with a workspace, and a name that is a UUID-shaped identifier only", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+
+    await expect(db.tenant.withTenant({ accountId: me, requestId: "import-test" }, (tx) => importRepository(tx).resolveFolders([{ id: freshId(), name: "F", icon: "folder", color: 1 }]))).rejects.toThrow(/workspace/);
+    await expect(asMember(w, me, (tx) => importRepository(tx).resolveTags([{ id: "not-an-id", name: "T" }]))).rejects.toThrow(/identifiers/);
+  });
+});
+
+describe("the slugs the import inserts", () => {
+  const newRow = (me: string, id: string, slug: string | null, forwarding = false) => ({
+    id,
+    ownerId: me,
+    url: `https://example.com/${id}`,
+    urlCanonical: `https://example.com/${id}`,
+    host: "example.com",
+    title: "Title",
+    description: null,
+    pinned: false,
+    slug,
+    forwarding,
+  });
+
+  it("are written with their bookmark and their forwarding, and a slug that another member has is no conflict", async () => {
+    const me = await account();
+    const other = await account();
+    const w = await workspace([me, other]);
+    await seedSlug(w, other, "shared-name");
+    const mine = freshId();
+    const plain = freshId();
+
+    const answer = await asMember(w, me, async (tx) => {
+      await importRepository(tx).takePlaces(null, 2);
+      return importRepository(tx).insertBookmarks({ bookmarks: [newRow(me, mine, "shared-name", true), newRow(me, plain, null)], jobs: [] });
+    });
+
+    expect(answer).toEqual({ slugsLost: [] });
+    const stored = await asSystem(db, (tx) => tx<{ id: string; slug: string | null; forwarding: boolean }[]>`SELECT id, slug, forwarding FROM bookmarks WHERE owner_id = ${me}`);
+    expect(stored.map((row) => [row.id, row.slug, row.forwarding]).sort()).toEqual([[mine, "shared-name", true], [plain, null, false]].sort());
+  });
+
+  it("are lost, and the bookmark is inserted without the slug and the forwarding, when the account has the slug on a bookmark by the insert (a slug it took after the check), plan-archived or not, and the others of the batch are written as asked", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const checked = await asMember(w, me, (tx) => importRepository(tx).existingSlugs(["raced", "archived-raced", "free"]));
+    await seedSlug(w, me, "raced");
+    await seedSlug(w, me, "archived-raced", true);
+    const [raced, archived, free, none] = [freshId(), freshId(), freshId(), freshId()];
+
+    const answer = await asMember(w, me, async (tx) => {
+      await importRepository(tx).takePlaces(null, 4);
+      return importRepository(tx).insertBookmarks({
+        bookmarks: [newRow(me, raced, "raced", true), newRow(me, archived, "archived-raced", true), newRow(me, free, "free", true), newRow(me, none, null)],
+        jobs: [],
+      });
+    });
+
+    expect([...checked]).toEqual([]);
+    expect([...answer.slugsLost].sort()).toEqual([raced, archived].sort());
+    const stored = await asSystem(db, (tx) => tx<{ id: string; slug: string | null; forwarding: boolean }[]>`SELECT id, slug, forwarding FROM bookmarks WHERE id IN (${raced}, ${archived}, ${free}, ${none})`);
+    expect(Object.fromEntries(stored.map((row) => [row.id, [row.slug, row.forwarding]]))).toEqual({
+      [raced]: [null, false],
+      [archived]: [null, false],
+      [free]: ["free", true],
+      [none]: [null, false],
+    });
+    expect(await counterAndRows(w)).toMatchObject({ counter: 4, rows: 6, counted: 5 });
+  });
+
+  it("are lost without failing the import when another transaction of the account commits the slug while the insert waits for it", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const id = freshId();
+    const rivalSlug = "contended";
+    let commit: () => void = () => undefined;
+    const rivalMayCommit = new Promise<void>((resolve) => {
+      commit = resolve;
+    });
+    let rivalInserted: () => void = () => undefined;
+    const rivalHolds = new Promise<void>((resolve) => {
+      rivalInserted = resolve;
+    });
+    const rival = db.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug)
+        VALUES (${freshId()}, ${w}, ${me}, 'https://example.com/rival', 'https://example.com/rival', 'example.com', 'Rival', ${rivalSlug})`;
+      rivalInserted();
+      await rivalMayCommit;
+    });
+    try {
+      await rivalHolds;
+      const checked = await asMember(w, me, (tx) => importRepository(tx).existingSlugs([rivalSlug]));
+      const importing = asMember(w, me, async (tx) => {
+        await importRepository(tx).takePlaces(null, 1);
+        return importRepository(tx).insertBookmarks({ bookmarks: [newRow(me, id, rivalSlug, true)], jobs: [] });
+      });
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        const queued = await db.owner<{ count: number }[]>`SELECT count(*)::int AS count FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'`;
+        if ((queued[0]?.count ?? 0) > 0) {
+          break;
+        }
+        if (Date.now() > deadline) {
+          throw new Error("the insert did not wait for the rival's slug");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      commit();
+      await rival;
+
+      expect([...checked]).toEqual([]);
+      expect(await importing).toEqual({ slugsLost: [id] });
+      const stored = await asSystem(db, (tx) => tx<{ slug: string | null; forwarding: boolean }[]>`SELECT slug, forwarding FROM bookmarks WHERE id = ${id}`);
+      expect(stored).toEqual([{ slug: null, forwarding: false }]);
+    } finally {
+      commit();
+      await rival.catch(() => undefined);
+    }
+  });
+
+  it("are refused as an insert that leaves out a bookmark with no slug", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const id = freshId();
+
+    await expect(
+      asMember(w, me, async (tx) => {
+        await importRepository(tx).takePlaces(null, 2);
+        await importRepository(tx).insertBookmarks({ bookmarks: [newRow(me, id, null)], jobs: [] });
+        return importRepository(tx).insertBookmarks({ bookmarks: [newRow(me, id, null)], jobs: [] });
+      }),
+    ).rejects.toThrow(/no slug/);
+    expect((await counterAndRows(w)).rows).toBe(0);
+  });
+});
+
+describe("the links the import writes", () => {
+  it("file and tag each bookmark in its own folders and with its own tags, and leave the links that exist", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const [x, y] = [freshId(), freshId()];
+    const [folderOne, folderTwo] = [await seedFolder(w, me, "One"), await seedFolder(w, me, "Two")];
+    const [tagOne, tagTwo] = [await seedTag(w, me, "One"), await seedTag(w, me, "Two")];
+    const row = (id: string) => ({ id, ownerId: me, url: `https://example.com/${id}`, urlCanonical: `https://example.com/${id}`, host: "example.com", title: "T", description: null, pinned: false, slug: null, forwarding: false });
+
+    await asMember(w, me, async (tx) => {
+      const repository = importRepository(tx);
+      await repository.takePlaces(null, 2);
+      await repository.insertBookmarks({ bookmarks: [row(x), row(y)], jobs: [] });
+      const links = {
+        folders: [
+          { bookmarkId: x, folderId: folderOne.id },
+          { bookmarkId: y, folderId: folderOne.id },
+          { bookmarkId: y, folderId: folderTwo.id },
+        ],
+        tags: [
+          { bookmarkId: x, tagId: tagTwo.id },
+          { bookmarkId: y, tagId: tagOne.id },
+        ],
+      };
+      await repository.linkBookmarks(links);
+      await repository.linkBookmarks(links);
+      await repository.linkBookmarks({ folders: [], tags: [] });
+    });
+
+    const stored = await asSystem(
+      db,
+      (tx) => tx<{ link: string }[]>`
+        SELECT 'f:' || bookmark_id || '/' || folder_id AS link FROM folder_bookmarks WHERE workspace_id = ${w}
+        UNION ALL SELECT 't:' || bookmark_id || '/' || tag_id FROM bookmark_tags WHERE workspace_id = ${w}`,
+    );
+    expect(stored.map((entry) => entry.link).sort()).toEqual(
+      [`f:${x}/${folderOne.id}`, `f:${y}/${folderOne.id}`, `f:${y}/${folderTwo.id}`, `t:${x}/${tagTwo.id}`, `t:${y}/${tagOne.id}`].sort(),
+    );
+  });
+
+  it("refuse a folder or a tag of another member or of another workspace, writing no link", async () => {
+    const me = await account();
+    const other = await account();
+    const a = await workspace([me, other]);
+    const b = await workspace([me]);
+    const mine = freshId();
+    const theirFolder = await seedFolder(a, other, "Theirs");
+    const theirTag = await seedTag(a, other, "Theirs");
+    const farFolder = await seedFolder(b, me, "Far");
+    const row = { id: mine, ownerId: me, url: "https://example.com/m", urlCanonical: "https://example.com/m", host: "example.com", title: "T", description: null, pinned: false, slug: null, forwarding: false };
+
+    for (const links of [
+      { folders: [{ bookmarkId: mine, folderId: theirFolder.id }], tags: [] },
+      { folders: [], tags: [{ bookmarkId: mine, tagId: theirTag.id }] },
+      { folders: [{ bookmarkId: mine, folderId: farFolder.id }], tags: [] },
+    ]) {
+      await expect(
+        asMember(a, me, async (tx) => {
+          await importRepository(tx).takePlaces(null, 1);
+          await importRepository(tx).insertBookmarks({ bookmarks: [row], jobs: [] });
+          await importRepository(tx).linkBookmarks(links);
+        }),
+      ).rejects.toThrow();
+    }
+    const stored = await asSystem(db, (tx) => tx<{ count: number }[]>`SELECT (SELECT count(*) FROM folder_bookmarks WHERE workspace_id IN (${a}, ${b})) + (SELECT count(*) FROM bookmark_tags WHERE workspace_id IN (${a}, ${b})) AS count`);
+    expect(Number(stored[0]?.count)).toBe(0);
+  });
+
+  it("take identifiers only", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+
+    await expect(asMember(w, me, (tx) => importRepository(tx).linkBookmarks({ folders: [{ bookmarkId: "x", folderId: freshId() }], tags: [] }))).rejects.toThrow(/identifiers/);
+    await expect(asMember(w, me, (tx) => importRepository(tx).linkBookmarks({ folders: [], tags: [{ bookmarkId: freshId(), tagId: "'; DROP TABLE tags; --" }] }))).rejects.toThrow(/identifiers/);
   });
 });

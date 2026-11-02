@@ -2814,9 +2814,9 @@ export interface components {
         ImportBookmark: {
             /** @description The bookmark's description; cut to 1 000 characters. A blank one is none */
             description?: string | null;
-            /** @description The names of the folders the bookmark is filed in */
+            /** @description The names of the folders the bookmark is filed in; a folder the caller has under that name, without regard to case, is used, and any other is created. A name is not split at a slash */
             folders?: string[];
-            /** @description Whether /go forwards to the bookmark by its slug */
+            /** @description Whether /go forwards to the bookmark by its slug; off when left out, and off for a bookmark that has no slug or loses it */
             forwarding?: boolean;
             /** @description Whether the bookmark is pinned */
             pinned?: boolean;
@@ -2824,9 +2824,9 @@ export interface components {
             planArchived?: boolean;
             /** @description The export-local reference of the bookmark, `b1`, `b2` and so on in the order of the list; the entries of goPreferences name a bookmark by it */
             ref?: string;
-            /** @description The bookmark's slug */
+            /** @description The bookmark's slug; a blank one is none. It is trimmed and lower-cased, and it is dropped from the bookmark, which is still imported, when it is outside the slug grammar, the caller has it on a bookmark already (plan-archived or not) or an earlier bookmark of the file that is imported keeps it */
             slug?: string | null;
-            /** @description The names of the tags the bookmark carries */
+            /** @description The names of the tags the bookmark carries; a tag the caller has under that name, without regard to case, is used, and any other is created */
             tags?: string[];
             /** @description The bookmark's title; cut to 300 characters. A missing or blank title becomes the host of the URL */
             title?: string | null;
@@ -2837,7 +2837,7 @@ export interface components {
             /** @description The place of the bookmark in the file, counted from 1 */
             position: number;
             /**
-             * @description slug_invalid: outside the slug grammar; slug_conflict: another bookmark of the caller has it
+             * @description slug_invalid: outside the slug grammar; slug_conflict: the caller has a bookmark with it already, plan-archived or not, or an earlier bookmark of the file that is imported keeps it
              * @enum {string}
              */
             reason: "slug_invalid" | "slug_conflict";
@@ -2856,7 +2856,7 @@ export interface components {
              * @description When the export began, in UTC: the one timestamp the document holds
              */
             exportedAt?: string;
-            /** @description The folders of the file */
+            /** @description The folders of the file: each exists after the import, used by a bookmark or not. The caller's folder of that name, without regard to case, is used; any other is created */
             folders?: components["schemas"]["ImportFolder"][];
             /**
              * @description Always slugbase-export: the document is a SlugBase export
@@ -2867,7 +2867,7 @@ export interface components {
             goPreferences?: string[];
             /** @description The bookmarks other members shared with the exporter; always empty in a version 1 file, and never read */
             shared?: string[];
-            /** @description The tags of the file */
+            /** @description The tags of the file: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters */
             tags?: string[];
             /** @description The version of the format; a version newer than 1 is refused with 422 and an error at version */
             version: number;
@@ -2890,11 +2890,11 @@ export interface components {
             url: string;
         };
         ImportFolder: {
-            /** @description The folder's colour */
+            /** @description The folder's colour, 1 to 8, taken by a folder the import creates; any other value becomes the default colour. A folder the caller has keeps its own */
             color?: number;
-            /** @description The folder's icon */
+            /** @description The folder's icon, taken by a folder the import creates; one outside the list a folder may carry becomes the default icon. A folder the caller has keeps its own */
             icon?: string;
-            /** @description The folder's name */
+            /** @description The folder's name; control characters are removed and it is cut to 64 characters, and a name that is empty then is ignored */
             name: string;
         };
         ImportResult: {
@@ -2909,17 +2909,17 @@ export interface components {
                 /** @description The distinct tag names in the file, compared without regard to case */
                 tags: number;
             };
-            /** @description The slugs that are dropped; empty until the import reads slugs */
+            /** @description The slugs that are dropped, in the order of the file */
             droppedSlugs: components["schemas"]["ImportDroppedSlug"][];
             /** @description The bookmarks whose URL the import refuses, in the order of the file */
             failed: components["schemas"]["ImportFailed"][];
-            /** @description The folders the import creates; 0 until the import reads folders */
+            /** @description The folders the import creates (with dryRun=true, would create): those of the file and of the bookmarks that are imported that the caller does not have */
             foldersCreated: number;
             /** @description The bookmarks the import leaves out, in the order of the file */
             skipped: components["schemas"]["ImportSkipped"][];
-            /** @description The bookmarks that lose their slug; 0 until the import reads slugs */
+            /** @description The bookmarks that lose their slug (with dryRun=true, would lose it) */
             slugsDropped: number;
-            /** @description The tags the import creates; 0 until the import reads tags */
+            /** @description The tags the import creates (with dryRun=true, would create), by the same rule */
             tagsCreated: number;
         };
         ImportSkipped: {
@@ -7562,7 +7562,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused. The bookmarks are created in the order of the file, in one transaction with the counter and one import.completed audit event, so a failure leaves none of them. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true */
+            /** @description What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused, the slugs dropped and the folders and tags created. The bookmarks are created in the order of the file, each filed in its own folders, tagged with its own tags and with its slug, forwarding and pinned state, in one transaction with the counter, the folders, the tags and one import.completed audit event, so a failure leaves none of them. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing; an existing one keeps its icon and colour, and the folders and tags the file lists exist afterwards whether a bookmark uses them or not. A slug outside the grammar, one the caller has already or one an earlier bookmark of the file keeps is dropped from its bookmark with forwarding off, and the bookmark is still imported; a slug the caller takes on another bookmark in a request that runs at the same time is dropped the same way. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true */
             200: {
                 headers: {
                     [name: string]: unknown;
