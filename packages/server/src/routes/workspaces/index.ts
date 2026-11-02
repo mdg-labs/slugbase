@@ -172,9 +172,9 @@ function storeOf(tx: TenantTx): WorkspaceStore {
   };
 }
 
-function workspaceBody(workspace: WorkspaceDetail): z.input<typeof WorkspaceSchema> {
+function workspaceBody(workspace: WorkspaceDetail, aiEnabled: boolean): z.input<typeof WorkspaceSchema> {
   const { id, name, role, memberCount, createdAt, version } = workspace;
-  return { id, name, role, memberCount, createdAt: createdAt.toISOString(), version };
+  return { id, name, role, memberCount, aiEnabled, createdAt: createdAt.toISOString(), version };
 }
 
 export function workspaceRoutes({ withTenant, creationDefault, cookie, mail, ownedWorkspaces }: WorkspaceRoutesOptions): RouteBinding[] {
@@ -250,11 +250,16 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail, own
     }),
 
     route(getWorkspace).handle(async (_request, context) => {
-      const workspace = await tenantOf(context).withTenant((tx) => workspaceRepository(tx).current());
-      if (workspace === undefined) {
+      const found = await tenantOf(context).withTenant(async (tx) => {
+        const repository = workspaceRepository(tx);
+        const workspace = await repository.current();
+        const settings = await repository.settings();
+        return workspace === undefined || settings === undefined ? undefined : { workspace, settings };
+      });
+      if (found === undefined) {
         throw new ProblemError("not_found", NO_WORKSPACE);
       }
-      return { status: 200, body: workspaceBody(workspace), headers: { ETag: entityTagOf(workspace.version) } };
+      return { status: 200, body: workspaceBody(found.workspace, found.settings.aiEnabled), headers: { ETag: entityTagOf(found.workspace.version) } };
     }),
 
     route(renameWorkspaceOperation).handle(async ({ body }, context) => {
@@ -275,7 +280,8 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail, own
           return outcome;
         }
         const workspace = await repository.current();
-        return workspace === undefined ? ({ kind: "unavailable" } as const) : ({ kind: "done", workspace } as const);
+        const settings = await repository.settings();
+        return workspace === undefined || settings === undefined ? ({ kind: "unavailable" } as const) : ({ kind: "done", workspace, settings } as const);
       });
       switch (result.kind) {
         case "stale":
@@ -283,7 +289,7 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail, own
         case "unavailable":
           throw new ProblemError("not_found", NO_WORKSPACE);
         case "done":
-          return { status: 200, body: workspaceBody(result.workspace), headers: { ETag: entityTagOf(result.workspace.version) } };
+          return { status: 200, body: workspaceBody(result.workspace, result.settings.aiEnabled), headers: { ETag: entityTagOf(result.workspace.version) } };
       }
     }),
 

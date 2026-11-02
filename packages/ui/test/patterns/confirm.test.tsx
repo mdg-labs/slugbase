@@ -97,6 +97,39 @@ describe("Confirm", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it("returns focus to the element finalFocus names when it closes, for a dialog whose opener has gone", async () => {
+    const stays = document.createElement("button");
+    stays.textContent = "Stays";
+    document.body.append(stays);
+    function Closing(): ReactElement {
+      const [open, setOpen] = useState(true);
+      return (
+        <Confirm
+          cancelLabel="Cancel"
+          confirmLabel="Remove"
+          description="The bookmarks stay."
+          finalFocus={() => stays}
+          onConfirm={() => undefined}
+          onOpenChange={setOpen}
+          open={open}
+          title="Delete the folder?"
+        />
+      );
+    }
+    render(<Closing />);
+    await screen.findByRole("alertdialog");
+
+    await click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(stays);
+    });
+    stays.remove();
+  });
+
   it("renders nothing while closed", () => {
     render(
       <Confirm

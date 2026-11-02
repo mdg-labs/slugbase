@@ -47,16 +47,38 @@ interface Seed {
   readonly archived?: boolean;
 }
 
-async function bookmark(workspaceId: string, ownerId: string | null, seed: Seed): Promise<string> {
-  const id = freshId();
-  const host = seed.host ?? "example.com";
+// One transaction and one commit for the whole batch: a test that needs hundreds of bookmarks must not pay a durable commit for each.
+async function bookmarks(workspaceId: string, ownerId: string | null, seeds: readonly Seed[]): Promise<string[]> {
+  const rows = seeds.map((seed) => {
+    const id = freshId();
+    const host = seed.host ?? "example.com";
+    return {
+      id,
+      workspace_id: workspaceId,
+      owner_id: ownerId,
+      url: `https://${host}/${id}`,
+      url_canonical: `https://${host}/${id}`,
+      host,
+      title: seed.title,
+      description: seed.description ?? null,
+      slug: seed.slug ?? null,
+      forwarding: seed.forwarding ?? false,
+      pinned_at: seed.pinned === true ? new Date() : null,
+      plan_archived_at: seed.archived === true ? new Date() : null,
+    };
+  });
   await asSystem(
     db,
-    (tx) => tx`
-      INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, plan_archived_at)
-      VALUES (${id}, ${workspaceId}, ${ownerId}, ${`https://${host}/${id}`}, ${`https://${host}/${id}`}, ${host}, ${seed.title}, ${seed.description ?? null}, ${seed.slug ?? null},
-              ${seed.forwarding ?? false}, ${seed.pinned === true ? new Date() : null}, ${seed.archived === true ? new Date() : null})`,
+    (tx) => tx`INSERT INTO bookmarks ${tx(rows, "id", "workspace_id", "owner_id", "url", "url_canonical", "host", "title", "description", "slug", "forwarding", "pinned_at", "plan_archived_at")}`,
   );
+  return rows.map((row) => row.id);
+}
+
+async function bookmark(workspaceId: string, ownerId: string | null, seed: Seed): Promise<string> {
+  const [id] = await bookmarks(workspaceId, ownerId, [seed]);
+  if (id === undefined) {
+    throw new Error("the seed of a bookmark returned no identifier");
+  }
   return id;
 }
 
@@ -164,9 +186,7 @@ describe("the bookmarks of a search", () => {
     const me = await account();
     const w = await workspace([me]);
     const inTitle = await bookmark(w, me, { title: "Cormorant field guide" });
-    for (let n = 0; n < 350; n += 1) {
-      await bookmark(w, me, { title: `Bird ${String(n).padStart(3, "0")}`, host: "cormorant.example.com" });
-    }
+    await bookmarks(w, me, Array.from({ length: 350 }, (_, n) => ({ title: `Bird ${String(n).padStart(3, "0")}`, host: "cormorant.example.com" })));
 
     const few = await found(w, me, "cormorant", 8);
     expect(few).toHaveLength(8);
@@ -175,10 +195,7 @@ describe("the bookmarks of a search", () => {
     expect(all).toHaveLength(20);
     expect(all[0]).toBe(inTitle);
 
-    const titles = [inTitle];
-    for (let n = 0; n < 12; n += 1) {
-      titles.push(await bookmark(w, me, { title: `Cormorant ${String(n).padStart(2, "0")}` }));
-    }
+    const titles = [inTitle, ...(await bookmarks(w, me, Array.from({ length: 12 }, (_, n) => ({ title: `Cormorant ${String(n).padStart(2, "0")}` }))))];
     const full = await found(w, me, "cormorant", 8);
     expect(full).toHaveLength(8);
     expect(titles).toEqual(expect.arrayContaining(full));

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, type MigrationChain } from "../../src/migrate.ts";
@@ -24,9 +25,9 @@ import { migrate, type MigrationChain } from "../../src/migrate.ts";
 
 const ENABLED = process.env.SLUGBASE_TEST_BLACKHOLE === "1";
 
-const ROLES_SQL = new URL("../../provision/roles.sql", import.meta.url).pathname;
-const FIXTURES = new URL("./fixtures/", import.meta.url).pathname;
-const WORKSPACE_ROOT = new URL("../../../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROLES_SQL = fileURLToPath(new URL("../../provision/roles.sql", import.meta.url));
+const FIXTURES = fileURLToPath(new URL("./fixtures/", import.meta.url));
+const WORKSPACE_ROOT = fileURLToPath(new URL("../../../../", import.meta.url)).replace(/\/$/, "");
 
 const APP_PASSWORD = "slugbase_app_dev_only";
 const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";

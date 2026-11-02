@@ -1,6 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
-import { infiniteQueryOptions, type InfiniteData, type QueryClient } from "@tanstack/react-query";
-import { ME_QUERY_KEY, type Me } from "../account/me.ts";
+import { infiniteQueryOptions, useQuery, type InfiniteData, type QueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
+import { ME_QUERY_KEY, meQuery, type Me } from "../account/me.ts";
 import { ApiProblemError, type ApiClient } from "../api/client.ts";
 import { isReauthCancelled } from "../auth/reauth.ts";
 import { WORKSPACE_QUERY_KEY, type Workspace, type WorkspaceRole } from "./workspace.ts";
@@ -13,19 +14,39 @@ export const MEMBERS_QUERY_KEY = ["members"] as const;
 
 const PAGE_SIZE = 50;
 
-/** The members of the workspace the session acts in, a page at a time. */
+/**
+ * The workspace the session acts in, as the cached account has it; undefined while the account is not known or acts in
+ * none. A list that belongs to one workspace is keyed by it, because its request names no workspace and a list kept
+ * under one key would stand, with its row actions, in the workspace the session has moved to.
+ */
+export function useActiveWorkspaceId(): string | undefined {
+  const api = useRouter().options.context.api;
+  const me = useQuery({ ...meQuery(api), staleTime: Number.POSITIVE_INFINITY });
+  return me.data?.activeWorkspaceId ?? undefined;
+}
+
+/** A page of members with the workspace the account acted in when the page was asked for. */
+export type MemberPage = MemberList & { readonly workspaceId: string | null };
+
+/**
+ * The members of the workspace the session acts in, a page at a time. The request names no workspace and the list is
+ * shared by everything that reads the members, so each page records the workspace the session was in when it was asked
+ * for; `membersOf` tells a page's reader whether the pages are its own workspace's.
+ */
 export function membersQuery(api: ApiClient) {
   return infiniteQueryOptions({
     queryKey: MEMBERS_QUERY_KEY,
     initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam, signal, client }): Promise<MemberPage> => {
+      const workspaceId = client.getQueryData<Me>(ME_QUERY_KEY)?.activeWorkspaceId ?? null;
       const { data, error } = await api.GET("/api/v1/members", {
         params: { query: { limit: PAGE_SIZE, ...(pageParam === undefined ? {} : { cursor: pageParam }) } },
+        signal,
       });
       if (data === undefined) {
         throw new Error("The members request did not answer with a document", { cause: error });
       }
-      return data;
+      return { ...data, workspaceId };
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
@@ -65,8 +86,17 @@ export async function changeMemberRole(api: ApiClient, accountId: string, role: 
   }
 }
 
+/**
+ * The loaded pages if every one of them was asked for in the workspace, and undefined if there are none or any was asked
+ * for in another: after a switch the cache holds the previous workspace's list until the new one is read, and that list is
+ * not the reader's to show or to act on (a role change or a removal is applied by the server to the session's workspace).
+ */
+export function membersOf(data: InfiniteData<MemberPage> | undefined, workspaceId: string): readonly MemberPage[] | undefined {
+  return data !== undefined && data.pages.length > 0 && data.pages.every((page) => page.workspaceId === workspaceId) ? data.pages : undefined;
+}
+
 /** The loaded pages with the member replaced by its new state. */
-export function withMember(data: InfiniteData<MemberList, string | undefined> | undefined, member: Member): InfiniteData<MemberList, string | undefined> | undefined {
+export function withMember(data: InfiniteData<MemberPage, string | undefined> | undefined, member: Member): InfiniteData<MemberPage, string | undefined> | undefined {
   return data === undefined
     ? data
     : { ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.map((item) => (item.accountId === member.accountId ? member : item)) })) };

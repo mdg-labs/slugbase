@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UnsavedGuard } from "../../src/patterns/index.ts";
 import { expectNoViolations, stubBrowserApis } from "../support.tsx";
@@ -63,5 +64,37 @@ describe("UnsavedGuard", () => {
 
     expect(onKeepEditing).toHaveBeenCalledTimes(1);
     expect(onDiscard).not.toHaveBeenCalled();
+  });
+
+  it("returns focus to the element finalFocus names when the member keeps editing", async () => {
+    const stays = document.createElement("button");
+    stays.textContent = "Stays";
+    document.body.append(stays);
+    function Closing(): ReactElement {
+      const [open, setOpen] = useState(true);
+      return (
+        <UnsavedGuard
+          description="Your changes are lost."
+          discardLabel="Discard changes"
+          finalFocus={() => stays}
+          keepEditingLabel="Keep editing"
+          onDiscard={() => undefined}
+          onKeepEditing={() => {
+            setOpen(false);
+          }}
+          open={open}
+          title="Discard your changes?"
+        />
+      );
+    }
+    render(<Closing />);
+    await screen.findByRole("alertdialog");
+
+    await click(screen.getByRole("button", { name: "Keep editing" }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(stays);
+    });
+    stays.remove();
   });
 });

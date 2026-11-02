@@ -181,6 +181,22 @@ describe("the metadata prefill of the bookmark modal", { timeout: HEAVY_TEST_TIM
     expect(created).toEqual([{ url: DOCS, title: "Docs title", description: "Docs description" }]);
   });
 
+  it("does not read the page again when the form saves with the focus in the address field", async () => {
+    const dialog = await openNew();
+    await enterUrl(DOCS);
+    await waitFor(() => {
+      expect(titleField().value).toBe("Docs title");
+    });
+    expect(asked).toEqual([DOCS]);
+    act(() => {
+      screen.getByLabelText("URL").focus();
+    });
+
+    await save(dialog);
+
+    expect(asked).toEqual([DOCS]);
+  });
+
   it("reads the page when the address field loses focus, once for one address", async () => {
     const dialog = await openNew();
 

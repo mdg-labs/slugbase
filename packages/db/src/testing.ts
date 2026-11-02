@@ -41,8 +41,10 @@ const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";
 
 // Roles are cluster-wide, and every test database depends on them staying as
 // roles.sql leaves them. Each process holds this advisory lock shared for as
-// long as it has a test database, or a use of the cluster (`useCluster`), and
-// takes it exclusively only for the step of a test that changes the roles.
+// long as it has a test database, or a use of the cluster (`useCluster`). A step
+// that commits a change to the roles can take it exclusively (`lockExclusive`),
+// but no test does so on the shared cluster: the drift test makes and undoes its
+// change in one transaction (doc 08 section 3.2).
 const CLUSTER_LOCK_KEY = 7_354_190_025;
 
 // Per template, two session advisory locks: the build lock, held exclusively

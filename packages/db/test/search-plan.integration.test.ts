@@ -1,24 +1,28 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { searchRepository } from "../src/index.ts";
+import { bookmarkSearchStatement } from "../src/repositories/search.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { blocksOfStatement } from "./support/plan-work.ts";
 import { vacuumUntilAllVisible, visibilityOf } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
-// The plan and the time of the search on a workspace of 50 000 bookmarks, beside many small workspaces and another member's bookmarks in the same workspace (doc 08 section 5.3, doc 05
+// The plan and the work of the search on a workspace of 50 000 bookmarks, beside many small workspaces and another member's bookmarks in the same workspace (doc 08 section 5.3, doc 05
 // section 2.4): each branch of `sys_search` reads its own index with the search condition as the index condition, no sequential scan of bookmarks appears, and the answers of
-// realistic queries, the ones that match thousands of bookmarks among them, come back in well under 100 ms at the 95th percentile (the budget of doc 08 section 5.3, measured here
-// through the repository as slugbase_app, the round trip included). The failure scenario: the policy of `bookmarks` is FORCEd and none of `@@`, `<%` or `LIKE` is leakproof, so the same
+// realistic queries, the ones that match thousands of bookmarks among them, touch no more buffers than the plan behind the budget of doc 08 section 5.3 (the work and the time, below). The failure scenario: the policy of `bookmarks` is FORCEd and none of `@@`, `<%` or `LIKE` is leakproof, so the same
 // statements run as slugbase_app would use the indexes for the workspace alone and filter every bookmark of it; the plans below are the function's own statement as slugbase_system
-// runs it, and the timing is what the application sees. The full-text branch ranks every title and slug match exactly through its own index and fills the rest of the answer from a bounded
+// runs it, and the work is that of the statement as the application runs it. The full-text branch ranks every title and slug match exactly through its own index and fills the rest of the answer from a bounded
 // window of host and description matches, so a query that matches tens of thousands of bookmarks (`www`, `the team`) does not rank them all; the answers are compared with the unbounded
-// statement below. The file runs in a vitest project of its own, one file at a time, so that no other database-heavy file shares the machine with its timings (vitest.config.ts).
+// statement below. The file runs in a vitest project of its own, one file at a time, so that the time it reports is not that of other database-heavy files beside it (vitest.config.ts).
 
 const HOOK_TIMEOUT_MS = 300_000;
 const FIXTURE_TABLES = ["bookmark_shares", "bookmarks", "folder_bookmarks"] as const;
 const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_000;
 const P95_BUDGET_MS = 100;
+
+const dialect = new PgDialect({ casing: "snake_case" });
 
 let db: TestDatabase;
 let accountId: string;
@@ -286,6 +290,40 @@ describe.each(["g", "gh", "re", "ma", "zq"])("the plan of the search for the sho
   });
 });
 
+const QUERIES = ["github", "docs", "kubernetes", "kubernetes guide", "api reference", "typescript tutorial", "gh", "ma", "a", "re", "git", "mail", "postgrs", "kuberentes", "www.docs", "www", "com", "github.com", "rele", "dashbaord", "notes", "the team", "www.zzzzzz", "xyzzyx"];
+
+// The work and the time. The search through the repository took at most 21 ms for any of these queries and 9.8 to 11.5 ms at the 95th percentile in 12 runs of this file, but a time measured in a suite moves with what else runs on
+// the host while the plan does not, so what is asserted is the work of the plan: `Shared Hit Blocks` plus `Shared Read Blocks` of `EXPLAIN (ANALYZE, BUFFERS)` (`support/plan-work.ts`) of the statement of `SearchRepository.bookmarks`
+// as slugbase_app in a tenant transaction, the function it calls included. Each bound is 5 % and 16 blocks over the most that query touched in 12 runs of this file on PostgreSQL 17 and 18, which touched the same to within
+// a few blocks, rounded up to ten. The 95th percentile of the time is reported and not asserted. What this does not hold: the 100 ms. A regression that costs CPU and reads no more blocks passes; the k6 run requests
+// `GET /api/v1/search?q=` (doc 08 section 5.3).
+const BLOCKS: Readonly<Record<string, number>> = {
+  github: 260,
+  docs: 1020,
+  kubernetes: 1390,
+  "kubernetes guide": 300,
+  "api reference": 260,
+  "typescript tutorial": 250,
+  gh: 50,
+  ma: 1900,
+  a: 2870,
+  re: 3650,
+  git: 260,
+  mail: 1330,
+  postgrs: 2310,
+  kuberentes: 2340,
+  "www.docs": 850,
+  www: 220,
+  com: 2250,
+  "github.com": 260,
+  rele: 1360,
+  dashbaord: 2320,
+  notes: 1390,
+  "the team": 240,
+  "www.zzzzzz": 1210,
+  xyzzyx: 100,
+};
+
 describe("the search on a workspace of 50 000 bookmarks", () => {
   function search(text: string, limit = 8) {
     return db.tenant.withTenant({ accountId, workspaceId, requestId: "search-plan-test" }, (tx) => searchRepository(tx).bookmarks({ text, limit }));
@@ -414,16 +452,40 @@ describe("the search on a workspace of 50 000 bookmarks", () => {
     },
   );
 
-  it("answers realistic queries, those that match thousands of bookmarks among them, at a 95th percentile under the budget", { timeout: 120_000 }, async () => {
-    const queries = ["github", "docs", "kubernetes", "kubernetes guide", "api reference", "typescript tutorial", "gh", "ma", "a", "re", "git", "mail", "postgrs", "kuberentes", "www.docs", "www", "com", "github.com", "rele", "dashbaord", "notes", "the team", "www.zzzzzz", "xyzzyx"];
+  // The statement of `SearchRepository.bookmarks`, the one the repository runs (`bookmarkSearchStatement`).
+  function searchStatement(text: string, limit = 8): { sql: string; params: unknown[] } {
+    return dialect.sqlToQuery(bookmarkSearchStatement(text, limit));
+  }
+
+  // Realistic queries, the ones that match thousands of bookmarks among them. What each reads is the work of the plan behind the budget of doc 08 section 5.3, and it is held to a bound; the time is reported and not asserted
+  // (see `blocksOfStatement`, and the work and the time, below).
+  const measured = new Map<string, number>();
+
+  afterAll(() => {
+    process.stdout.write(`search work (buffers of the statement of each query): ${JSON.stringify(Object.fromEntries(measured))}\n`);
+  });
+
+  it.each(Object.keys(BLOCKS))("reads the answer for %s within the work of its plan", { timeout: 120_000 }, async (text) => {
+    const bound = BLOCKS[text];
+    if (bound === undefined) {
+      throw new Error(`no bound of the work of ${text}`);
+    }
+
+    const blocks = await blocksOfStatement(db, { accountId, workspaceId }, searchStatement(text), bound);
+    measured.set(text, blocks);
+
+    expect(blocks, text).toBeLessThan(bound);
+  });
+
+  it("answers the same queries, and reports the 95th percentile of their time", { timeout: 120_000 }, async () => {
     // Warm the connections and the caches, then measure each query ten times.
-    for (const text of queries) {
+    for (const text of QUERIES) {
       await search(text);
     }
     const timings: number[] = [];
     const slowest = new Map<string, number>();
     for (let round = 0; round < 10; round += 1) {
-      for (const text of queries) {
+      for (const text of QUERIES) {
         const started = performance.now();
         await search(text);
         const elapsed = performance.now() - started;
@@ -433,9 +495,9 @@ describe("the search on a workspace of 50 000 bookmarks", () => {
     }
     timings.sort((left, right) => left - right);
     const p95 = timings[Math.ceil(timings.length * 0.95) - 1] ?? Number.POSITIVE_INFINITY;
-    process.stdout.write(`search p95 ${p95.toFixed(1)} ms, slowest ${JSON.stringify(Object.fromEntries([...slowest].map(([text, ms]) => [text, Math.round(ms)])))}\n`);
+    process.stdout.write(`search p95 ${p95.toFixed(1)} ms, slowest ${JSON.stringify(Object.fromEntries([...slowest].map(([text, ms]) => [text, Math.round(ms)])))} (reported, not asserted; the budget is ${String(P95_BUDGET_MS)} ms)\n`);
 
-    expect(p95).toBeLessThan(P95_BUDGET_MS);
+    expect(timings).toHaveLength(QUERIES.length * 10);
   });
 });
 

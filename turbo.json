@@ -70,7 +70,11 @@
         "$TURBO_ROOT$/packages/**/*.ts",
         "$TURBO_ROOT$/packages/**/*.tsx",
         "$TURBO_ROOT$/apps/**/*.ts",
-        "$TURBO_ROOT$/apps/**/*.tsx"
+        "$TURBO_ROOT$/apps/**/*.tsx",
+        "$TURBO_ROOT$/e2e/**/*.ts",
+        "$TURBO_ROOT$/e2e/**/*.tsx",
+        "$TURBO_ROOT$/scripts/**/*.ts",
+        "$TURBO_ROOT$/scripts/**/*.tsx"
       ],
       "outputs": ["coverage/**"]
     },

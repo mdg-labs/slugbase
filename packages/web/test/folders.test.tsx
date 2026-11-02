@@ -52,6 +52,8 @@ interface Answers {
   readonly failShared?: boolean;
   /** The status the change, creation or deletion is refused with, with the code of its problem. */
   readonly refuse?: { readonly method: "POST" | "PATCH" | "DELETE"; readonly status: number; readonly code: string };
+  /** Holds every write until it settles, so a test can look at the form while it saves. */
+  readonly holdWrites?: Promise<unknown>;
 }
 
 interface Server {
@@ -105,6 +107,9 @@ function stubServer(initial: readonly Folder[], answers: Answers = {}): Server {
         const text = other.method === "GET" || other.method === "DELETE" ? "" : await other.clone().text();
         const body: unknown = text === "" ? undefined : JSON.parse(text);
         calls.push({ method: other.method, path: url.pathname, params: url.searchParams, ifMatch: other.headers.get("If-Match"), body });
+        if (answers.holdWrites !== undefined && other.method !== "GET") {
+          await answers.holdWrites;
+        }
         const refused = answers.refuse;
         if (refused !== undefined && refused.method === other.method) {
           return problem(refused.status, refused.code, "req-refused");
@@ -576,6 +581,49 @@ describe("creating a folder", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect((await within(dialog).findByRole("alert")).textContent).toContain("The folder could not be saved right now. Try again in a moment.");
     expect(within(dialog).getByRole<HTMLInputElement>("textbox", { name: "Name" }).value).toBe("Inbox");
     expect(screen.queryByText("Folder created.")).toBeNull();
+  });
+
+  it("keeps the focus in the form while it saves and returns it to the name field when the save is refused", async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const server = stubServer([], { refuse: { method: "POST", status: 503, code: "service_unavailable" }, holdWrites: held });
+    await openApp("/folders");
+    await press(await openEmptyPage());
+    const dialog = await screen.findByRole("dialog", { name: "New folder" });
+    await type(dialog, "Inbox");
+    const name = within(dialog).getByRole<HTMLInputElement>("textbox", { name: "Name" });
+    act(() => {
+      name.focus();
+    });
+
+    await act(async () => {
+      fireEvent.submit(name.form as HTMLFormElement);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(name.disabled).toBe(true);
+    });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(name.form?.getAttribute("aria-busy")).toBe("true");
+    await act(async () => {
+      fireEvent.submit(name.form as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(server.to("POST")).toHaveLength(1);
+
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+
+    await within(dialog).findByRole("alert");
+    expect(name.form?.hasAttribute("aria-busy")).toBe(false);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(name);
+    });
   });
 
   it("does not open a second form on N while the form is open", async () => {

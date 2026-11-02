@@ -25,6 +25,11 @@ export interface ConfirmProps {
   destructive?: boolean;
   /** Shows the wait on the confirm button and keeps the dialog from being dismissed meanwhile. */
   loading?: boolean;
+  /**
+   * Where focus goes when the dialog has closed, called as it unmounts: `true` returns it to the element that had it when the dialog opened.
+   * A form whose opener has gone since, such as an action that was withdrawn, names the element that stays.
+   */
+  finalFocus?: () => boolean | HTMLElement | null;
 }
 
 /** A confirmation before a revocation or removal (doc 03 `confirm`): a coss AlertDialog whose focus starts on Cancel. */
@@ -38,6 +43,7 @@ export function Confirm({
   onConfirm,
   destructive = false,
   loading = false,
+  finalFocus,
 }: ConfirmProps): ReactElement {
   const cancel = useRef<HTMLButtonElement>(null);
   return (
@@ -49,7 +55,7 @@ export function Confirm({
       }}
       open={open}
     >
-      <AlertDialogPopup data-slot="confirm" initialFocus={cancel}>
+      <AlertDialogPopup data-slot="confirm" finalFocus={finalFocus} initialFocus={cancel}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>

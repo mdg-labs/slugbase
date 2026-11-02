@@ -405,6 +405,45 @@ describe("creating a token", () => {
     });
   });
 
+  it("asks the discard question when Back would leave the form with an edit, and not once the secret is shown", async () => {
+    stubServer();
+    window.history.replaceState(null, "", "/settings/account");
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+    await act_(() => {
+      fireEvent.click(within(screen.getByRole("navigation", { name: "Settings" })).getByRole("link", { name: "API tokens" }));
+    });
+    await screen.findByRole("heading", { level: 1, name: "API tokens" });
+    const dialog = await openCreate();
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "CI" } });
+
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await click("Keep editing", await screen.findByRole("alertdialog", { name: "Discard your changes?" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(within(screen.getByRole("dialog", { name: "New API token" })).getByLabelText<HTMLInputElement>("Name").value).toBe("CI");
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/settings/account/tokens");
+    });
+
+    await click("Create token", dialog);
+    const result = await screen.findByRole("dialog", { name: "Copy your token" });
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/settings/account");
+    });
+    expect(screen.queryByRole("alertdialog", { name: "Discard your changes?" })).toBeNull();
+    expect(result.isConnected).toBe(false);
+  });
+
   it("opens the re-authentication prompt on reauth_required, and creates the token once the password is confirmed", async () => {
     const server = stubServer({ create: (call) => (call === 1 ? reauthRequired() : undefined) });
     await openTokens();

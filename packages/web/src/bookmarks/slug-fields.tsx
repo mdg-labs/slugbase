@@ -1,9 +1,10 @@
 import { CopyValue, FormField, SettingSwitch, SlugInput, feedbackToast } from "@slugbase/ui/patterns";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useConfig } from "../config/config-context.tsx";
+import { ShimmerOver } from "./suggest-action.tsx";
 import { BOOKMARK_SLUG_MAX_LENGTH, isValidSlug, slugAvailabilityQuery } from "./bookmarks.ts";
 
 /** How long the slug is left alone before it is looked up, so a slug being typed is asked about once. */
@@ -18,6 +19,10 @@ export interface SlugFieldsProps {
   /** Why the API refused the slug, shown at the field until the slug changes. */
   problem?: string | undefined;
   disabled: boolean;
+  /** Whether a suggestion for the slug is on its way, which a skeleton shimmer over the empty field shows. */
+  shimmer?: boolean | undefined;
+  /** What sits under the field: the suggestion chip. */
+  suggestion?: ReactNode;
   onSlugChange: (slug: string) => void;
   onForwardingChange: (forwarding: boolean) => void;
 }
@@ -42,7 +47,7 @@ function useSettled(value: string): string {
  * running or has failed says so without holding the save back. A valid slug shows the address it makes with a copy action.
  * Forwarding needs a slug, so the switch is off and disabled without one, and turns on when one is entered.
  */
-export function SlugFields({ slug, forwarding, bookmarkId, problem, disabled, onSlugChange, onForwardingChange }: SlugFieldsProps): ReactElement {
+export function SlugFields({ slug, forwarding, bookmarkId, problem, disabled, shimmer = false, suggestion, onSlugChange, onForwardingChange }: SlugFieldsProps): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const { origin } = useConfig();
@@ -76,15 +81,18 @@ export function SlugFields({ slug, forwarding, bookmarkId, problem, disabled, on
   return (
     <>
       <FormField description={note} error={error} label={t("bookmarks.modal.slug.label")} name="slug">
-        <SlugInput
-          disabled={disabled}
-          onValueChange={onSlugChange}
-          pending={looking}
-          pendingLabel={t("bookmarks.modal.slug.checking")}
-          placeholder={t("bookmarks.modal.slug.placeholder")}
-          value={slug}
-        />
+        <ShimmerOver active={shimmer}>
+          <SlugInput
+            disabled={disabled}
+            onValueChange={onSlugChange}
+            pending={looking}
+            pendingLabel={t("bookmarks.modal.slug.checking")}
+            placeholder={t("bookmarks.modal.slug.placeholder")}
+            value={slug}
+          />
+        </ShimmerOver>
       </FormField>
+      {suggestion}
       {valid && answered?.status !== "taken_by_me" ? (
         <CopyValue
           copiedLabel={t("bookmarks.modal.slug.address.copied")}

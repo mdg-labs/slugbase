@@ -1,0 +1,39 @@
+# Adds a stand-in for an OpenAI-compatible endpoint to the e2e stack and points the server at it, for the AI journey (doc 08 section 5.1).
+# It is an override file, merged over compose.yml and compose.e2e.yml by e2e/with-stack.sh and by nothing an operator runs: the files an
+# operator runs configure no AI endpoint, and the stub is part of no image. It is a service of the project, so the server reaches it by
+# name; its code is e2e/support/ai-stub/, mounted read-only into a container of the image that is under test (the image only supplies Node),
+# and its published port on the loopback address is how the journey reads back what the server sent (E2E_AI_STUB_URL).
+#
+# The server may call an endpoint on a private address, and over plain http, only when the operator names its exact host in
+# AI_ALLOWED_PRIVATE_HOST (doc 02 section 14, Q90), which this file does for the stub's service name. The worker does not answer
+# suggestions and gets none of these keys.
+services:
+  ai-stub:
+    image: ${SLUGBASE_IMAGE:?SLUGBASE_IMAGE is set by e2e/with-stack.sh}
+    entrypoint: ["node", "/stub/main.ts"]
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./e2e/support/ai-stub:/stub:ro
+    ports:
+      - "127.0.0.1::8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  slugbase:
+    depends_on:
+      ai-stub:
+        condition: service_healthy
+    environment:
+      AI_BASE_URL: http://ai-stub:8080/v1
+      AI_MODEL: stub-model
+      AI_PROVIDER_NAME: Example AI
+      AI_ALLOWED_PRIVATE_HOST: ai-stub

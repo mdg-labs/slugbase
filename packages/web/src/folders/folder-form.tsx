@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, FormField, FormOverlay, Picker, SegmentedChoice, feedbackToast } from "@slugbase/ui/patterns";
+import { Banner, FormField, FormOverlay, Picker, SegmentedChoice, feedbackToast, staysOnPage, staysWhileParams, useBusyFormFocus, useUnsavedForm, type FormStays } from "@slugbase/ui/patterns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
@@ -33,6 +33,11 @@ const SHOWN_IN_THE_FORM = inPlaceRefusals([
   { status: 404, code: "not_found" },
   { status: 429, code: "rate_limited" },
 ]);
+
+// The create form is open while the address on the folders page asks for it; the others belong to the page.
+const STAYS_WHILE_CREATING = staysWhileParams("create");
+const staysWhileOpen = (intent: FolderFormIntent): FormStays =>
+  intent === "create" ? (next, current) => staysOnPage(next, current) && STAYS_WHILE_CREATING(next, current) : staysOnPage;
 
 const COLORS = Array.from({ length: FOLDER_COLOR_MAX - FOLDER_COLOR_MIN + 1 }, (_, index) => FOLDER_COLOR_MIN + index);
 
@@ -90,6 +95,8 @@ export function FolderForm({ intent, folder, onClose }: FolderFormProps): ReactE
   const [nameRequired, setNameRequired] = useState(false);
   const [failure, setFailure] = useState<FolderFailure | undefined>(undefined);
 
+  const unsaved = useUnsavedForm(name !== (folder?.name ?? "") || icon !== (folder?.icon ?? FOLDER_DEFAULT_ICON) || color !== (folder?.color ?? FOLDER_DEFAULT_COLOR), staysWhileOpen(intent));
+
   const save = useMutation({
     mutationKey: ["folders", "save"],
     meta: SHOWN_IN_THE_FORM,
@@ -107,6 +114,7 @@ export function FolderForm({ intent, folder, onClose }: FolderFormProps): ReactE
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: FOLDERS_QUERY_KEY });
       feedbackToast.success(folder === undefined ? t("folders.form.saved.created") : t("folders.form.saved.updated"));
+      unsaved.release();
       onClose();
     },
     onError: (error) => {
@@ -118,6 +126,8 @@ export function FolderForm({ intent, folder, onClose }: FolderFormProps): ReactE
       }
     },
   });
+
+  const busyFocus = useBusyFormFocus(save.isPending);
 
   function submit(event: SyntheticEvent): void {
     event.preventDefault();
@@ -179,7 +189,7 @@ export function FolderForm({ intent, folder, onClose }: FolderFormProps): ReactE
       open
       title={title}
     >
-      <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} {...busyFocus}>
         {failure === undefined || nameFailure ? null : <Banner title={failureMessage(failure)} variant="error" />}
         <FormField
           error={nameFailure ? failureMessage(failure) : nameRequired ? t("folders.form.name.error.required") : undefined}

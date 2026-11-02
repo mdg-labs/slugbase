@@ -11,6 +11,12 @@ overrides:
   minimatch@<11.0.1: ^11.0.1
 
 patchedDependencies:
+  '@redocly/openapi-core@1.34.20':
+    hash: a58df8c54cc0b449bf2612b13825d3048c5256a2ae4effe4410cc995c31f99cc
+    path: patches/@redocly__openapi-core@1.34.20.patch
+  '@stoplight/spectral-core@1.24.0':
+    hash: 8630916753b8887e8a762d8d9450857663bcc73645590ded87cd23ace9d2c1b3
+    path: patches/@stoplight__spectral-core@1.24.0.patch
   postgres@3.4.9:
     hash: c166d23845b9ed1640690c7c318cc4a9098a6719ff1d33126b3dc5eb7e2104b2
     path: patches/postgres@3.4.9.patch
@@ -192,7 +198,7 @@ importers:
     devDependencies:
       '@stoplight/spectral-core':
         specifier: ^1.24.0
-        version: 1.24.0
+        version: 1.24.0(patch_hash=8630916753b8887e8a762d8d9450857663bcc73645590ded87cd23ace9d2c1b3)
       '@stoplight/spectral-functions':
         specifier: ^1.11.0
         version: 1.11.0
@@ -7053,7 +7059,7 @@ snapshots:
 
   '@redocly/config@0.22.0': {}
 
-  '@redocly/openapi-core@1.34.20(supports-color@10.2.2)':
+  '@redocly/openapi-core@1.34.20(patch_hash=a58df8c54cc0b449bf2612b13825d3048c5256a2ae4effe4410cc995c31f99cc)(supports-color@10.2.2)':
     dependencies:
       '@redocly/ajv': 8.11.2
       '@redocly/config': 0.22.0
@@ -7728,7 +7734,7 @@ snapshots:
 
   '@stoplight/path@1.3.2': {}
 
-  '@stoplight/spectral-core@1.24.0':
+  '@stoplight/spectral-core@1.24.0(patch_hash=8630916753b8887e8a762d8d9450857663bcc73645590ded87cd23ace9d2c1b3)':
     dependencies:
       '@scarf/scarf': 1.4.0
       '@stoplight/better-ajv-errors': 1.0.3(ajv@8.20.0)
@@ -7759,7 +7765,7 @@ snapshots:
     dependencies:
       '@scarf/scarf': 1.4.0
       '@stoplight/json': 3.21.7
-      '@stoplight/spectral-core': 1.24.0
+      '@stoplight/spectral-core': 1.24.0(patch_hash=8630916753b8887e8a762d8d9450857663bcc73645590ded87cd23ace9d2c1b3)
       '@types/json-schema': 7.0.15
       tslib: 2.8.1
     transitivePeerDependencies:
@@ -7770,7 +7776,7 @@ snapshots:
       '@scarf/scarf': 1.4.0
       '@stoplight/better-ajv-errors': 1.0.3(ajv@8.20.0)
       '@stoplight/json': 3.21.7
-      '@stoplight/spectral-core': 1.24.0
+      '@stoplight/spectral-core': 1.24.0(patch_hash=8630916753b8887e8a762d8d9450857663bcc73645590ded87cd23ace9d2c1b3)
       '@stoplight/spectral-formats': 1.9.0
       '@stoplight/spectral-runtime': 1.1.6
       ajv: 8.20.0
@@ -10692,7 +10698,7 @@ snapshots:
 
   openapi-typescript@7.13.0(typescript@6.0.3):
     dependencies:
-      '@redocly/openapi-core': 1.34.20(supports-color@10.2.2)
+      '@redocly/openapi-core': 1.34.20(patch_hash=a58df8c54cc0b449bf2612b13825d3048c5256a2ae4effe4410cc995c31f99cc)(supports-color@10.2.2)
       ansi-colors: 4.1.3
       change-case: 5.4.4
       parse-json: 8.3.0

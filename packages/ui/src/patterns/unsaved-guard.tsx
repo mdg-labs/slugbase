@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import { Confirm } from "./confirm.tsx";
+import { Confirm, type ConfirmProps } from "./confirm.tsx";
 
 export interface UnsavedGuardProps {
   open: boolean;
@@ -12,16 +12,19 @@ export interface UnsavedGuardProps {
   onDiscard: () => void;
   /** Called when the member goes back to the form, by the button, Escape or the backdrop. */
   onKeepEditing: () => void;
+  /** Where focus goes when the question has closed; see `Confirm`. */
+  finalFocus?: ConfirmProps["finalFocus"];
 }
 
 /** The question asked before a form with unsaved changes closes (doc 03 `unsaved-guard`): keep editing, or discard. */
-export function UnsavedGuard({ open, title, description, discardLabel, keepEditingLabel, onDiscard, onKeepEditing }: UnsavedGuardProps): ReactElement {
+export function UnsavedGuard({ open, title, description, discardLabel, keepEditingLabel, onDiscard, onKeepEditing, finalFocus }: UnsavedGuardProps): ReactElement {
   return (
     <Confirm
       cancelLabel={keepEditingLabel}
       confirmLabel={discardLabel}
       description={description}
       destructive
+      finalFocus={finalFocus}
       onConfirm={onDiscard}
       onOpenChange={(next) => {
         if (!next) {

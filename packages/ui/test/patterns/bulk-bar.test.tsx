@@ -70,5 +70,7 @@ describe("BulkBar", () => {
     expect(onPin).not.toHaveBeenCalled();
     expect(onClear).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Delete" }).getAttribute("data-loading")).not.toBeNull();
+    // The running action is announced as unavailable too, not as available because the toolbar says so.
+    expect(screen.getByRole("button", { name: "Delete" }).getAttribute("aria-disabled")).toBe("true");
   });
 });

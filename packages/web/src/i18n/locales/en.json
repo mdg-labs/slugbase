@@ -468,6 +468,19 @@
           "tooLong": "Use a tag name of at most {max, number} characters."
         }
       },
+      "suggest": {
+        "label": "Suggest",
+        "tooltip": {
+          "named": "Suggest a title, slug and tags with {provider}. It receives the address, the page’s title and description, and the names of your tags.",
+          "unnamed": "Suggest a title, slug and tags with this server’s AI service. It receives the address, the page’s title and description, and the names of your tags."
+        },
+        "unavailable": "Suggestions unavailable",
+        "chips": {
+          "title": "Suggested title",
+          "slug": "Suggested slug",
+          "tags": "Suggested tags"
+        }
+      },
       "description": {
         "label": "Description",
         "counter": "{count, number} / {max, number}",
@@ -2229,6 +2242,12 @@
       "title": "Your session has ended",
       "description": "Sign in again to continue."
     }
+  },
+  "unsaved": {
+    "title": "Discard your changes?",
+    "description": "The changes you made in this form are lost if you leave this page now.",
+    "discard": "Discard changes",
+    "keepEditing": "Keep editing"
   },
   "feedback": {
     "regionLabel": "Notifications",

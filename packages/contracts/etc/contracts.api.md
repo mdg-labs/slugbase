@@ -2104,6 +2104,7 @@ export interface ComponentTypes {
             version: string;
         };
         Workspace: {
+            aiEnabled: boolean;
             createdAt: string;
             id: string;
             memberCount: number;
@@ -4362,6 +4363,7 @@ export const getWorkspace: {
         owner: "owner";
         }>;
         memberCount: z.ZodNumber;
+        aiEnabled: z.ZodBoolean;
         createdAt: z.ZodISODateTime;
         version: z.ZodNumber;
         }, z.core.$strict>, {
@@ -17593,6 +17595,7 @@ export const renameWorkspace: {
         owner: "owner";
         }>;
         memberCount: z.ZodNumber;
+        aiEnabled: z.ZodBoolean;
         createdAt: z.ZodISODateTime;
         version: z.ZodNumber;
         }, z.core.$strict>, {
@@ -19561,6 +19564,7 @@ export const WorkspaceSchema: z.ZodObject<{
         owner: "owner";
     }>;
     memberCount: z.ZodNumber;
+    aiEnabled: z.ZodBoolean;
     createdAt: z.ZodISODateTime;
     version: z.ZodNumber;
 }, z.core.$strict>;

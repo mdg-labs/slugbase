@@ -5,7 +5,17 @@ import type { WebExtension } from "../src/extensions/index.ts";
 import { createWebApp } from "../src/index.ts";
 import { SWITCH_WRITE_WAIT_MS } from "../src/shell/workspaces.ts";
 import { ACCOUNT_BODY, ACTIVE_WORKSPACE_PATH, ME_PATH, WORKSPACE_ID, WORKSPACE_NAME, json, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
-import { OTHER_WORKSPACE_ID, SECOND_WORKSPACE_NAME, WORKSPACE_PATH, WORKSPACE_SETTINGS_PATH, stubWorkspaceSettingsServer } from "./workspace-settings-server.ts";
+import {
+  GRACE,
+  INVITATIONS_PATH,
+  MEMBERS_PATH,
+  OTHER_WORKSPACE_ID,
+  SECOND_WORKSPACE_NAME,
+  SELF,
+  WORKSPACE_PATH,
+  WORKSPACE_SETTINGS_PATH,
+  stubWorkspaceSettingsServer,
+} from "./workspace-settings-server.ts";
 
 // A switch of workspace while requests of the previous workspace are out. The failure scenarios are an account read that is
 // answered after the switch and puts the previous workspace back, a page that shows or renames the previous workspace's
@@ -209,6 +219,252 @@ describe("the General page after a switch", () => {
     expect(screen.queryByRole("textbox", { name: "Name" })).toBeNull();
     expect(screen.queryByDisplayValue(WORKSPACE_NAME)).toBeNull();
   }, 60_000);
+});
+
+const CALM = "2026-10-18T09:30:00.000Z";
+
+/** Serves the entitlements, which the invitations and the teams are behind; everything else the page asks for is the server's. */
+function entitlementsOnly(request: Request): Promise<Response> {
+  return Promise.resolve(new URL(request.url).pathname === ENTITLEMENTS_PATH ? json(entitlementsBody(true)) : json({}, { status: 500 }));
+}
+
+function hold(held: Respond[]): Promise<Response> {
+  return new Promise<Response>((resolve) => held.push(resolve));
+}
+
+describe("the Members page after a switch", () => {
+  it("shows a skeleton and offers no row action until the new workspace's own list arrives", async () => {
+    const held: Respond[] = [];
+    let holding = false;
+    // Grace Hopper is a member of both workspaces, so a change made from the previous workspace's list would be accepted by the new one.
+    const stub = stubWorkspaceSettingsServer({
+      second: { aiEnabled: true },
+      other: entitlementsOnly,
+      membersGet: () => (holding ? hold(held) : undefined),
+    });
+    await open("/settings/workspace/members");
+    expect(await screen.findByRole("combobox", { name: "Role of Grace Hopper" }, LOADED_WAIT)).toBeTruthy();
+    await settleAccountReads(stub);
+
+    holding = true;
+    await switchTo(stub, SECOND_WORKSPACE_NAME);
+    await waitFor(() => {
+      expect(held.length).toBeGreaterThan(0);
+    }, LOADED_WAIT);
+
+    // The page is on the new workspace's document, so what is left to wait for is the list.
+    expect(await screen.findByRole("heading", { name: "Members" }, LOADED_WAIT)).toBeTruthy();
+    expect(await screen.findByRole("status", { name: "Loading" }, LOADED_WAIT)).toBeTruthy();
+    expect(screen.queryByRole("table", { name: "Members" })).toBeNull();
+    expect(screen.queryByText("Grace Hopper")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Role of Grace Hopper" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Actions for Grace Hopper" })).toBeNull();
+    // No row action of the previous workspace's list could be taken, so nothing was sent to the account that both workspaces have.
+    expect(stub.received("PATCH", `${MEMBERS_PATH}/${GRACE.accountId}`)).toEqual([]);
+    expect(stub.received("DELETE", `${MEMBERS_PATH}/${GRACE.accountId}`)).toEqual([]);
+
+    await answer(held, () => json({ items: [{ ...SELF, lastActiveAt: CALM }, GRACE], nextCursor: null }));
+    expect(await screen.findByRole("combobox", { name: "Role of Grace Hopper" }, LOADED_WAIT)).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("shows the invitations of the new workspace only, from a skeleton", async () => {
+    const held: Respond[] = [];
+    let holding = false;
+    const invited = {
+      id: "0192f3a0-dddd-7000-8000-000000000001",
+      email: "linus@example.org",
+      role: "member" as const,
+      invitedBy: SELF.accountId,
+      expiresAt: "2026-12-01T10:00:00.000Z",
+    };
+    const stub = stubWorkspaceSettingsServer({
+      second: { aiEnabled: true },
+      invitations: [invited],
+      other: entitlementsOnly,
+      invitationsGet: () => (holding ? hold(held) : undefined),
+    });
+    await open("/settings/workspace/members");
+    expect(await screen.findByText("linus@example.org", undefined, LOADED_WAIT)).toBeTruthy();
+    await settleAccountReads(stub);
+
+    holding = true;
+    await switchTo(stub, SECOND_WORKSPACE_NAME);
+    await waitFor(() => {
+      expect(held.length).toBeGreaterThan(0);
+    }, LOADED_WAIT);
+
+    expect(await screen.findByRole("status", { name: "Loading invitations" }, LOADED_WAIT)).toBeTruthy();
+    expect(screen.queryByText("linus@example.org")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Actions for the invitation of / })).toBeNull();
+    expect(stub.received("DELETE", `${INVITATIONS_PATH}/${invited.id}`)).toEqual([]);
+
+    await answer(held, () => json({ items: [], nextCursor: null }));
+    expect(await screen.findByText("No pending invitations", undefined, LOADED_WAIT)).toBeTruthy();
+    expect(screen.queryByText("linus@example.org")).toBeNull();
+  }, SLOW_TEST_TIMEOUT_MS);
+});
+
+describe("the Teams page after a switch", () => {
+  it("shows a skeleton and offers no row action until the new workspace's own list arrives", async () => {
+    const held: Respond[] = [];
+    const team = (id: string, name: string) => ({
+      id,
+      name,
+      description: "",
+      memberCount: 0,
+      version: 1,
+      createdAt: "2026-09-01T08:00:00.000Z",
+      updatedAt: "2026-09-01T08:00:00.000Z",
+    });
+    const stub = stubWorkspaceSettingsServer({
+      second: { aiEnabled: true },
+      other: (request) => {
+        const { pathname } = new URL(request.url);
+        if (pathname.startsWith("/api/v1/teams/")) {
+          return Promise.resolve(json({ ...team(pathname.split("/")[4] ?? "", "Platform"), members: [] }));
+        }
+        return entitlementsOnly(request);
+      },
+      teamsGet: (_call, workspaceId) =>
+        workspaceId === WORKSPACE_ID ? Promise.resolve(json({ items: [team("0192f3a0-ffff-7000-8000-000000000001", "Platform")], nextCursor: null })) : hold(held),
+    });
+    await open("/settings/workspace/teams");
+    expect(await screen.findByRole("button", { name: "Actions for the team Platform" }, LOADED_WAIT)).toBeTruthy();
+    await settleAccountReads(stub);
+
+    await switchTo(stub, SECOND_WORKSPACE_NAME);
+    await waitFor(() => {
+      expect(held.length).toBeGreaterThan(0);
+    }, LOADED_WAIT);
+
+    expect(await screen.findByRole("status", { name: "Loading teams" }, LOADED_WAIT)).toBeTruthy();
+    expect(screen.queryByText("Platform")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Actions for the team / })).toBeNull();
+
+    await answer(held, () => json({ items: [team("0192f3a0-ffff-7000-8000-000000000002", "Design")], nextCursor: null }));
+    expect(await screen.findByText("Design", undefined, LOADED_WAIT)).toBeTruthy();
+    expect(screen.queryByText("Platform")).toBeNull();
+  }, SLOW_TEST_TIMEOUT_MS);
+});
+
+const STAMP = "2026-10-01T08:00:00.000Z";
+const OWNER_ID = "0192f3a0-bbbb-7000-8000-000000000001";
+
+/** A list answer; the shape of an item is the page's to read. */
+function page(items: readonly unknown[]): Response {
+  return json({ items, nextCursor: null, total: items.length });
+}
+
+interface FirstRead {
+  /** The page the read belongs to. */
+  readonly path: string;
+  /** The request the test holds the first of. */
+  readonly pathname: string;
+  /** What that read answers for a workspace. */
+  readonly answer: (workspace: "first" | "second") => Response;
+  /** What the page shows of the workspace it is answered for. */
+  readonly shows: Readonly<Record<"first" | "second", string>>;
+}
+
+const FIRST_READS: Readonly<Record<string, FirstRead>> = {
+  bookmarks: {
+    path: "/bookmarks",
+    pathname: "/api/v1/bookmarks",
+    answer: (workspace) =>
+      page([
+        {
+          id: workspace === "first" ? "0192f3a0-aaaa-7000-8000-000000000001" : "0192f3a0-aaaa-7000-8000-000000000002",
+          ownerId: OWNER_ID,
+          url: "https://example.com/docs",
+          host: "example.com",
+          title: workspace === "first" ? "Bookmark of the first workspace" : "Bookmark of the second workspace",
+          description: null,
+          slug: null,
+          forwarding: false,
+          pinned: false,
+          openCount: 0,
+          lastOpenedAt: null,
+          folders: [],
+          tags: [],
+          version: 1,
+          createdAt: STAMP,
+          updatedAt: STAMP,
+        },
+      ]),
+    shows: { first: "Bookmark of the first workspace", second: "Bookmark of the second workspace" },
+  },
+  folders: {
+    path: "/folders",
+    pathname: "/api/v1/folders",
+    answer: (workspace) =>
+      page([
+        {
+          id: workspace === "first" ? "0192f3a0-dddd-7000-8000-000000000001" : "0192f3a0-dddd-7000-8000-000000000002",
+          ownerId: OWNER_ID,
+          name: workspace === "first" ? "Folder of the first workspace" : "Folder of the second workspace",
+          icon: "folder",
+          color: 1,
+          bookmarkCount: 0,
+          version: 1,
+          createdAt: STAMP,
+          updatedAt: STAMP,
+        },
+      ]),
+    shows: { first: "Folder of the first workspace", second: "Folder of the second workspace" },
+  },
+  tags: {
+    path: "/tags",
+    pathname: "/api/v1/tags",
+    answer: (workspace) =>
+      page([
+        {
+          id: workspace === "first" ? "0192f3a0-eeee-7000-8000-000000000001" : "0192f3a0-eeee-7000-8000-000000000002",
+          name: workspace === "first" ? "tag-of-the-first-workspace" : "tag-of-the-second-workspace",
+          bookmarkCount: 0,
+          createdAt: STAMP,
+        },
+      ]),
+    shows: { first: "tag-of-the-first-workspace", second: "tag-of-the-second-workspace" },
+  },
+};
+
+describe("a first read that is out when the switch is made", () => {
+  it.each(Object.keys(FIRST_READS))("asks the new workspace for the %s and shows them, not the previous workspace's answer", async (name) => {
+    const read = FIRST_READS[name];
+    if (read === undefined) {
+      throw new Error(`no first read named ${name}`);
+    }
+    const held: Respond[] = [];
+    let reads = 0;
+    const stub = stubWorkspaceSettingsServer({
+      second: { aiEnabled: true },
+      other: (request) => {
+        const { pathname } = new URL(request.url);
+        if (pathname === read.pathname) {
+          reads += 1;
+          return reads === 1 ? hold(held) : Promise.resolve(read.answer("second"));
+        }
+        if (pathname === ENTITLEMENTS_PATH) {
+          return Promise.resolve(json(entitlementsBody(true)));
+        }
+        // The other lists the shell reads.
+        return Promise.resolve(page([]));
+      },
+    });
+    await open(read.path);
+    // The list has no data yet, so this read is the first of its key and is still out when the session moves.
+    await waitFor(() => {
+      expect(held.length).toBe(1);
+    }, LOADED_WAIT);
+
+    await switchTo(stub, SECOND_WORKSPACE_NAME);
+    await answer(held, () => read.answer("first"));
+
+    expect((await screen.findAllByText(read.shows.second, undefined, LOADED_WAIT)).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(read.shows.first)).toEqual([]);
+    expect(reads).toBeGreaterThanOrEqual(2);
+  }, SLOW_TEST_TIMEOUT_MS);
 });
 
 describe("the entitlements across switches", () => {

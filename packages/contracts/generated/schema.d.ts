@@ -3648,6 +3648,8 @@ export interface components {
             version: string;
         };
         Workspace: {
+            /** @description Whether AI suggestions are on for the workspace, the setting an admin changes; every member can read it, so that the bookmark form shows no suggestion action where it is off */
+            aiEnabled: boolean;
             /**
              * Format: date-time
              * @description When the workspace was created, RFC 3339 UTC

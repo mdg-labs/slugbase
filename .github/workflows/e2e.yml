@@ -3,8 +3,8 @@ name: E2E
 # The browser journeys of doc 08 section 5.1 against the image built from this
 # commit, started through compose.yml with the Mailpit of compose.e2e.yml that
 # catches the mail of the stack, once on PostgreSQL 17 and once on 18 (doc 08
-# section 6.2, Q3), each leg in two Playwright shards on runners of their own (doc
-# 08 section 5.1). The stack runs on the Docker daemon of the runner itself, as in
+# section 6.2, Q3), each leg in four Playwright shards on runners of their own (doc 08
+# section 5.1). The stack runs on the Docker daemon of the runner itself, as in
 # the `build` job of ci.yml, with its ports published on 127.0.0.1; only the
 # journeys run in a container, the Playwright image of e2e/Dockerfile (pinned to the
 # version of @playwright/test and to a digest) with the host's network, so the job
@@ -39,15 +39,15 @@ jobs:
   # address (doc 04 section 7) nor the session files under e2e/.auth. A failing shard
   # stops no other, so every shard and both majors report.
   shards:
-    name: e2e shard (PostgreSQL ${{ matrix.postgres }}, ${{ matrix.shard }}/2)
+    name: e2e shard (PostgreSQL ${{ matrix.postgres }}, ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         postgres: ["17", "18"]
-        # --shard=<n>/2 below: the two have to agree.
-        shard: [1, 2]
+        # --shard=<n>/4 below: the four have to agree.
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -84,14 +84,15 @@ jobs:
       # The journeys run in the Playwright image on the network of the runner
       # (e2e/in-image.sh), as the user of the runner, so that what they write under
       # e2e/ is readable by the upload step. The step fails when a test does. --shard
-      # takes the shard's half of the tests of every project, and the `setup` project,
-      # which the other projects depend on, runs in each shard against its stack.
+      # splits the tests of all projects by count, in project order, so each test runs in
+      # one shard of a leg; the `setup` project, which the other projects depend on, runs
+      # in each shard against its stack.
       - name: Run the journeys
         env:
           BUILD_COMMIT: ${{ github.sha }}
           SLUGBASE_IMAGE: slugbase:e2e
           SMOKE_POSTGRES_MAJOR: ${{ matrix.postgres }}
-        run: bash e2e/with-stack.sh bash e2e/in-image.sh node run-tests.ts --shard=${{ matrix.shard }}/2
+        run: bash e2e/with-stack.sh bash e2e/in-image.sh node run-tests.ts --shard=${{ matrix.shard }}/4
       # A stack that the script could not remove (its process killed, say) is removed
       # here; a run that ended normally leaves nothing to find.
       - name: Remove any stack left behind

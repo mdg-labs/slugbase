@@ -4,16 +4,19 @@ import { bookmarkRepository, TenantContextError } from "../src/index.ts";
 import { countQuery, listQuery } from "../src/repositories/bookmarks.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { blocksOfStatement } from "./support/plan-work.ts";
+import { vacuumUntilAllVisible, visibilityOf } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The list budget of doc 01 section 9.3 and doc 08 section 5.3 on a workspace of 50 000 bookmarks: every sort is read from the index
-// that serves it, not sorted from a scan of the table, and the first page and a page deep in the library are each read in under
-// 100 ms. The failure scenario: a sort whose ordering does not match its index (the wrong direction of NULLS, a missing tiebreak
-// column) plans a sort of the whole library, which this test sees as a sequential scan or a sort node.
+// that serves it, not sorted from a scan of the table, and the first page and a page deep in the library, a page under each filter and the capped
+// count each touch no more buffers than the plan that serves them. The failure scenario: a sort whose ordering does not match its index (the wrong direction of NULLS, a missing tiebreak
+// column) plans a sort of the whole library, which this test sees as a sequential scan or a sort node, and reads far more blocks. The time of the same reads through the repository is reported, not asserted
+// (the work and the time, below).
 
 const HOOK_TIMEOUT_MS = 300_000;
+const FIXTURE_TABLES = ["bookmarks"] as const;
 const BOOKMARKS = 50_000;
-const BUDGET_MS = 100;
 const RUNS = 5;
 const PAGE = 48;
 const DEEP = 40_000;
@@ -56,7 +59,8 @@ beforeAll(async () => {
     INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
     SELECT gen_random_uuid(), ${otherWorkspace}, ${accountId}, 'https://example.com/o' || n, 'https://example.com/o' || n, 'example.com', 'Other ' || n
     FROM generate_series(1, 500) AS n`);
-  await db.owner.unsafe("ANALYZE bookmarks");
+  // A running instance has its tables vacuumed and analysed: the fixture vacuums until the visibility map covers every page, so the state a read finds does not depend on whether autovacuum has reached the table in the middle of the file.
+  await vacuumUntilAllVisible(db, FIXTURE_TABLES);
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
@@ -66,6 +70,8 @@ afterAll(async () => {
 interface PlanNode {
   "Node Type": string;
   "Index Name"?: string;
+  "Index Cond"?: string;
+  Filter?: string;
   Plans?: PlanNode[];
 }
 
@@ -99,6 +105,7 @@ async function deepPosition(sort: BookmarkSort): Promise<BookmarkListRequest["af
   return { key: last.key, id: last.bookmark.id };
 }
 
+/** The median of `RUNS` runs of a read, in milliseconds, after one run that is not counted. */
 async function median(work: () => Promise<unknown>): Promise<number> {
   await work();
   const times: number[] = [];
@@ -110,6 +117,36 @@ async function median(work: () => Promise<unknown>): Promise<number> {
   times.sort((a, b) => a - b);
   return times[Math.floor(RUNS / 2)] ?? Number.POSITIVE_INFINITY;
 }
+
+// The work and the time. A read through the repository took 1 to 26 ms here (the median of five runs), but a time measured in a suite moves with what else runs on the host while the plan does not, so what is
+// asserted is the work of the plan: `Shared Hit Blocks` plus `Shared Read Blocks` of `EXPLAIN (ANALYZE, BUFFERS)` (`support/plan-work.ts`) of the statement of a page and of the count, as slugbase_app in a tenant
+// transaction. Each bound is 5 % and 16 blocks over the most that read touched in 12 runs of this file on PostgreSQL 17 and 18, rounded up to ten, and the higher of the two versions where they differ (the page of the forwarding bookmarks by oldest touched 3 438 to 3 452 blocks on PostgreSQL 17 and 2 664 to 2 700 on 18, the deep page by title_desc 41 003 to 41 008 and 40 513 to 40 529).
+// The median time of each read is reported at the end and not asserted. What this does not hold: the 100 ms. A regression that costs CPU and reads no more blocks
+// passes. And a bound above the 1 659 pages of the table cannot tell a scan of the table from the plan it holds. These reads are over it: the deep page by title (an index walk that filters 40 000 entries with the keyset
+// condition, which `lower()` being no leakproof function makes unavoidable under the policy of `bookmarks`; see the deep title page below), the pages of the pinned filter by title, most used and last opened, of the with-a-slug filter by most used and last opened,
+// and of the forwarding filter in every sort. For those reads the bound holds the plan's own cost, and only the unfiltered pages above and the page of one canonical URL are also checked for a scan and the index they read.
+const BLOCKS_OF_SORT: Readonly<Record<BookmarkSort, { first: number; deep: number }>> = {
+  recent: { first: 30, deep: 30 },
+  oldest: { first: 30, deep: 30 },
+  title_asc: { first: 80, deep: 42_580 },
+  title_desc: { first: 80, deep: 43_080 },
+  most_used: { first: 80, deep: 80 },
+  recently_opened: { first: 80, deep: 80 },
+};
+const measured = new Map<string, string>();
+
+afterAll(() => {
+  process.stdout.write(`list work (buffers of the statement) and median time (ms, reported not asserted): ${JSON.stringify(Object.fromEntries(measured))}\n`);
+});
+
+describe("the fixture", () => {
+  it("measures a table whose every page the visibility map marks all-visible", async () => {
+    const rows = await visibilityOf(db, FIXTURE_TABLES);
+
+    expect(rows.map((row) => row.name)).toEqual([...FIXTURE_TABLES].sort());
+    expect(rows.filter((row) => row.visible < row.pages)).toEqual([]);
+  });
+});
 
 describe.each(BOOKMARK_SORTS)("the list sorted by %s on a workspace of 50 000 bookmarks", (sort) => {
   let deep: BookmarkListRequest["after"];
@@ -135,8 +172,12 @@ describe.each(BOOKMARK_SORTS)("the list sorted by %s on a workspace of 50 000 bo
   it.each([
     ["the first page", undefined],
     ["a page deep in the library", "deep"],
-  ] as const)(`reads %s in under ${String(BUDGET_MS)} ms`, async (_name, where) => {
+  ] as const)("reads %s within the work of its plan", async (name, where) => {
     const after = where === "deep" ? deep : undefined;
+    const bound = BLOCKS_OF_SORT[sort][where === "deep" ? "deep" : "first"];
+    const statement = await inTenant((tx) => Promise.resolve(listQuery(tx, { filter: { ownerId: accountId }, sort, after, limit: PAGE + 1 }).toSQL()));
+
+    const blocks = await blocksOfStatement(db, { accountId, workspaceId }, statement, bound);
     const elapsed = await inTenant(async (tx) => {
       const repository = bookmarkRepository(tx);
       let rows = 0;
@@ -146,9 +187,10 @@ describe.each(BOOKMARK_SORTS)("the list sorted by %s on a workspace of 50 000 bo
       expect(rows).toBe(PAGE + 1);
       return time;
     });
+    measured.set(`${sort} ${name}`, `${String(blocks)} ${elapsed.toFixed(0)}`);
 
-    expect(elapsed).toBeLessThan(BUDGET_MS);
-  });
+    expect(blocks, `${sort}, ${name}`).toBeLessThan(bound);
+  }, HOOK_TIMEOUT_MS);
 });
 
 describe("the filters on a workspace of 50 000 bookmarks", () => {
@@ -158,28 +200,58 @@ describe("the filters on a workspace of 50 000 bookmarks", () => {
     { name: "forwarding", filter: { forwarding: true } },
     { name: "of one canonical URL", filter: { urlCanonical: "https://example.com/12345" } },
   ];
+  const BLOCKS_OF_FILTER: Readonly<Record<string, Readonly<Record<BookmarkSort, number>>>> = {
+    pinned: { recent: 150, oldest: 270, title_asc: 2360, title_desc: 2370, most_used: 23_450, recently_opened: 22_940 },
+    "with a slug": { recent: 50, oldest: 70, title_asc: 500, title_desc: 500, most_used: 4330, recently_opened: 21_630 },
+    forwarding: { recent: 2870, oldest: 3650, title_asc: 47_830, title_desc: 48_400, most_used: 47_850, recently_opened: 47_890 },
+    "of one canonical URL": { recent: 30, oldest: 30, title_asc: 30, title_desc: 30, most_used: 30, recently_opened: 30 },
+  };
 
-  it.each(filters)("reads a page of the bookmarks that are $name in under the list budget", async ({ filter }) => {
+
+  it.each(filters)("reads a page of the bookmarks that are $name within the work of its plan", async ({ name, filter }) => {
     for (const sort of BOOKMARK_SORTS) {
+      const bound = BLOCKS_OF_FILTER[name]?.[sort] ?? Number.NaN;
+      const statement = await inTenant((tx) => Promise.resolve(listQuery(tx, { filter: { ownerId: accountId, ...filter }, sort, after: undefined, limit: PAGE + 1 }).toSQL()));
+      const blocks = await blocksOfStatement(db, { accountId, workspaceId }, statement, bound);
       const elapsed = await inTenant(async (tx) => {
         const repository = bookmarkRepository(tx);
         return median(() => repository.list({ filter: { ownerId: accountId, ...filter }, sort, after: undefined, limit: PAGE + 1 }));
       });
+      measured.set(`${name} ${sort}`, `${String(blocks)} ${elapsed.toFixed(0)}`);
 
-      expect(elapsed, sort).toBeLessThan(BUDGET_MS);
+      expect(blocks, `${name}, ${sort}`).toBeLessThan(bound);
     }
+  }, HOOK_TIMEOUT_MS);
+
+  it.each(BOOKMARK_SORTS)("plans a page of one canonical URL, sorted by %s, from the index of the URL: an index condition, no sequential scan", async (sort) => {
+    const request: BookmarkListRequest = { filter: { ownerId: accountId, urlCanonical: "https://example.com/12345" }, sort, after: undefined, limit: PAGE + 1 };
+    const statement = await inTenant((tx) => Promise.resolve(listQuery(tx, request).toSQL()));
+
+    const nodes = await planOf(statement);
+
+    expect(nodes.map((node) => node["Node Type"])).not.toContain("Seq Scan");
+    const reads = nodes.filter((node) => node["Index Name"] !== undefined);
+    expect(reads.map((node) => node["Index Name"])).toEqual(["bookmarks_owner_url_idx"]);
+    expect(reads[0]?.["Index Cond"]).toContain("url_canonical = ");
+    expect(reads[0]?.Filter).toBeUndefined();
+    const rows = await inTenant((tx) => bookmarkRepository(tx).list(request));
+    expect(rows.map((row) => row.bookmark.url)).toEqual(["https://example.com/12345"]);
   });
 
-  it("counts the library, up to the cap, in under the list budget", async () => {
+  it("counts the library, up to the cap, within the work of its plan", async () => {
+    const bound = 400;
+    const statement = await inTenant((tx) => Promise.resolve(countQuery(tx, { ownerId: accountId }, 10_001).toSQL()));
+    const blocks = await blocksOfStatement(db, { accountId, workspaceId }, statement, bound);
     const elapsed = await inTenant(async (tx) => {
       const repository = bookmarkRepository(tx);
       expect(await repository.count({ ownerId: accountId }, 10_001)).toBe(10_001);
       expect(await repository.count({ ownerId: accountId, pinned: true }, 10_001)).toBe(1000);
       return median(() => repository.count({ ownerId: accountId }, 10_001));
     });
+    measured.set("count", `${String(blocks)} ${elapsed.toFixed(0)}`);
 
-    expect(elapsed).toBeLessThan(BUDGET_MS);
-  });
+    expect(blocks).toBeLessThan(bound);
+  }, HOOK_TIMEOUT_MS);
 
   it("plans the count so that it reads no more rows than the cap", async () => {
     const statement = await inTenant((tx) => Promise.resolve(countQuery(tx, { ownerId: accountId }, 10_001).toSQL()));
@@ -191,5 +263,49 @@ describe("the filters on a workspace of 50 000 bookmarks", () => {
 
   it("refuses to plan a statement in a transaction opened without a workspace", async () => {
     await expect(db.tenant.withTenant({ accountId, requestId: "bookmarks-plan-test" }, (tx) => Promise.resolve(listQuery(tx, { filter: { ownerId: accountId }, sort: "recent", after: undefined, limit: 1 })))).rejects.toBeInstanceOf(TenantContextError);
+  });
+});
+
+// The deep page by title reads 40 000 entries of `bookmarks_owner_title_idx` and drops them with a filter, 40 500 blocks, against about 50 when the keyset condition is an index condition. The index can serve it: as a role that
+// bypasses the policy the condition is one, and the page touches 52 blocks. As `slugbase_app` it cannot, because the policy of `bookmarks` is `FORCE`d and a condition of the query is an index condition only if everything in it is leakproof
+// (doc 05 section 4), and `lower()` is not: the comparison of the sort key (`lower(title)`, which the index is on) is a filter over what the index returns for the owner. `lower()` cannot be marked leakproof without a superuser;
+// a generated column of the lower-cased title rewrites the table under an `ACCESS EXCLUSIVE` lock, which the migration check refuses once a release tag holds `bookmarks` (`v0.1.0` does not); a plain nullable column of it does not rewrite and would serve the page, but needs the writes that fill it, column grants in `src/sql/`,
+// a backfill job and a later release; a system operation serves it too, but lives in `src/sql/`. None is built here (tracked in #691). When the page is served by an index condition this test fails, and the bound of the deep pages
+// by title above is lowered to what the index condition touches.
+describe("the deep page by title on a workspace of 50 000 bookmarks", () => {
+  async function deepStatement(sort: "title_asc" | "title_desc"): Promise<{ sql: string; params: unknown[] }> {
+    const after = await deepPosition(sort);
+    return inTenant((tx) => Promise.resolve(listQuery(tx, { filter: { ownerId: accountId }, sort, after, limit: PAGE + 1 }).toSQL()));
+  }
+
+  /** The nodes of the plan of a statement as `slugbase_system` with the tenant settings of `withTenant`: the role the policy of `bookmarks` does not bind. */
+  async function systemPlanOf(statement: { sql: string; params: unknown[] }): Promise<PlanNode[]> {
+    const plan = await db.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true)`;
+      const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: PlanNode }[] }[]>(`EXPLAIN (FORMAT JSON) ${statement.sql}`, statement.params as never[]);
+      return rows[0]?.["QUERY PLAN"][0]?.Plan;
+    });
+    if (plan === undefined) {
+      throw new Error("EXPLAIN returned no plan");
+    }
+    return nodesOf(plan);
+  }
+
+  it("is not an index condition for slugbase_app because lower() is not leakproof, and is one for a role the policy does not bind", async () => {
+    const [{ leakproof } = { leakproof: undefined }] = await db.owner<{ leakproof: boolean }[]>`SELECT proleakproof AS leakproof FROM pg_proc WHERE oid = 'lower(text)'::regprocedure`;
+    expect(leakproof).toBe(false);
+
+    for (const sort of ["title_asc", "title_desc"] as const) {
+      const statement = await deepStatement(sort);
+      const bound = await planOf(statement);
+      const unbound = await systemPlanOf(statement);
+
+      const boundRead = bound.find((node) => node["Index Name"] === "bookmarks_owner_title_idx");
+      const unboundRead = unbound.find((node) => node["Index Name"] === "bookmarks_owner_title_idx");
+      expect(boundRead?.["Index Cond"], sort).not.toContain("lower(title)");
+      expect(boundRead?.Filter, sort).toContain("lower(title)");
+      expect(unboundRead?.["Index Cond"], sort).toContain("lower(title)");
+    }
   });
 });

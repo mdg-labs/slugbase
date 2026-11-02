@@ -3,9 +3,10 @@ import { createTestDatabase, useCluster, type ClusterUse, type TestDatabase } fr
 
 // One process that behaves like a test file of another run, driven line by line
 // from stdin and answering on stdout. `use` holds the cluster the way a test
-// file does for its whole run, `lock-exclusive` and `unlock-exclusive` change
-// the roles of the cluster for a step, `database` and `drop-database` hold and
-// give back a test database, and `exit` ends the process.
+// file does for its whole run, `lock-exclusive` and `unlock-exclusive` take and
+// give back the cluster lock exclusively (as a step that commits a change to the
+// roles would; this process changes nothing), `database` and `drop-database`
+// hold and give back a test database, and `exit` ends the process.
 
 let cluster: ClusterUse | undefined;
 let unlock: (() => Promise<void>) | undefined;

@@ -8,7 +8,7 @@ import { cn } from "../../lib/utils.ts";
 import { Spinner } from "./spinner.tsx";
 
 export const buttonVariants = cva(
-  "relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium text-base outline-none transition-shadow before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 data-loading:select-none data-loading:text-transparent sm:text-sm [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0",
+  "relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium text-base outline-none transition-shadow before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 aria-disabled:pointer-events-none aria-disabled:opacity-64 data-loading:select-none data-loading:text-transparent sm:text-sm [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0",
   {
     defaultVariants: {
       size: "default",
@@ -54,6 +54,11 @@ export interface ButtonProps extends useRender.ComponentProps<"button"> {
   loading?: boolean;
 }
 
+/**
+ * A button. While `loading` it shows a spinner, announces itself as unavailable (`aria-disabled`, whatever `aria-disabled` its props carry) and ignores presses, but it is not `disabled`: a
+ * disabled element cannot hold focus, so a member who pressed it from the keyboard would lose their place (focus falls to the page behind a dialog,
+ * where single-key shortcuts act). `disabled` is for a button that is not available at all.
+ */
 export function Button({
   className,
   variant,
@@ -62,9 +67,10 @@ export function Button({
   children,
   loading = false,
   disabled: disabledProp,
+  onClick,
   ...props
 }: ButtonProps): React.ReactElement {
-  const isDisabled: boolean = Boolean(loading || disabledProp);
+  const isDisabled: boolean = Boolean(disabledProp);
   const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
     render ? undefined : "button";
 
@@ -85,12 +91,22 @@ export function Button({
     "data-loading": loading ? "" : undefined,
     "data-slot": "button",
     disabled: isDisabled,
+    // A press while loading does nothing: no handler runs and a submit button submits nothing.
+    onClick: loading
+      ? (event: React.MouseEvent<HTMLButtonElement>): void => {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      : onClick,
     type: typeValue,
   };
 
+  const merged = mergeProps<"button">(defaultProps, props);
   return useRender({
     defaultTagName: "button",
-    props: mergeProps<"button">(defaultProps, props),
+    // `loading` wins over an `aria-disabled` the caller's props carry: a Base UI Toolbar.Button that renders this button hands it
+    // `aria-disabled="false"`, which would announce a running action as available.
+    props: loading ? { ...merged, "aria-disabled": true } : merged,
     render,
   });
 }

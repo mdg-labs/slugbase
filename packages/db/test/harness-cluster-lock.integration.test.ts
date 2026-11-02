@@ -3,15 +3,17 @@ import { randomBytes } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
 import { createInterface } from "node:readline";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createTestDatabase, useCluster } from "../src/testing.ts";
 
 // Two harness users at once (doc 08 section 3.2). The cluster lock keeps the
 // roles of the cluster still while test databases use them: a test database
-// holds it shared for its whole life, and a test that changes the roles holds it
-// exclusively for that step only. A holder here is a process of its own, as the
-// test file of another run would be.
+// holds it shared for its whole life, and a step that changes the roles commits
+// can hold it exclusively for that step only. No test takes it exclusively on the
+// shared cluster; these tests do, in the scratch database of their own. A holder
+// here is a process of its own, as the test file of another run would be.
 //
 // Advisory locks belong to the database a session is connected to. The harness
 // connects to the database of its server URL, so these tests point it at a
@@ -20,7 +22,7 @@ import { createTestDatabase, useCluster } from "../src/testing.ts";
 // the lock while the test waits for another of them, so one foreign request
 // queued between them would end in a wait for each other.
 
-const HOLDER = new URL("./support/cluster-holder.ts", import.meta.url).pathname;
+const HOLDER = fileURLToPath(new URL("./support/cluster-holder.ts", import.meta.url));
 const CLUSTER_LOCK_KEY = 7_354_190_025;
 const HARNESS = "slugbase-test-harness";
 // Waiting for a template build of another run counts against both.

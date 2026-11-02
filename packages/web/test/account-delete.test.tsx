@@ -82,7 +82,7 @@ function stubServer(options: ServerOptions = {}) {
     }
     if (pathname === WORKSPACE_PATH) {
       const current = items.find(({ id }) => id === active) ?? SOLO;
-      return json({ ...current, createdAt: "2026-09-01T08:00:00.000Z", version: 1 }, { headers: { ETag: '"1"' } });
+      return json({ ...current, aiEnabled: true, createdAt: "2026-09-01T08:00:00.000Z", version: 1 }, { headers: { ETag: '"1"' } });
     }
     if (pathname === MEMBERS_PATH) {
       return json({ items: [], nextCursor: null });

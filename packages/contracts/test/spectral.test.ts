@@ -2,13 +2,14 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { lintOpenApi } from "../scripts/lint-openapi.ts";
 import { ruleset } from "../spectral/slugbase.ruleset.ts";
 import { createReportPackage } from "./report-package.ts";
 import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
-const packageDir = new URL("..", import.meta.url).pathname;
+const packageDir = fileURLToPath(new URL("..", import.meta.url));
 const fixtures = join(packageDir, "test/fixtures/spectral");
 const committed = join(packageDir, "generated/openapi.json");
 const check = join(packageDir, "scripts/contracts-check.ts");

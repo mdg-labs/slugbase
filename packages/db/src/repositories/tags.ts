@@ -78,12 +78,20 @@ const ORDERS: Readonly<Record<TagSort, readonly SQL[]>> = {
   count: [desc(sql`count(${bookmarks.id})`), asc(tags.name), asc(tags.id)],
 };
 
+interface TagsRequest {
+  readonly ownerId: string;
+  readonly sort: TagSort;
+  readonly after: TagPosition | undefined;
+  readonly limit: number | undefined;
+  readonly tagId: string | undefined;
+}
+
 /**
- * The statement of `TagRepository.list`: the tags of `ownerId` in the workspace of the transaction, or the one tag `tagId`, with their counts,
+ * The statement of `TagRepository.list`, exported for the test that plans it: the tags of `ownerId` in the workspace of the transaction, or the one tag `tagId`, with their counts,
  * in the order of `sort` and after `after`, at most `limit`. The keyset of the sort by name is (name, id) and is a condition on rows; the
- * keyset of the sort by count is (count descending, name, id) and is a condition on the groups, since the count is an aggregate.
+ * keyset of the sort by count is (count descending, name, id) and is a condition on the groups, since the count is an aggregate. Needs a transaction opened with a workspace.
  */
-function tagsOf(tx: TenantTx, request: { readonly ownerId: string; readonly sort: TagSort; readonly after: TagPosition | undefined; readonly limit: number | undefined; readonly tagId: string | undefined }): Promise<TagRow[]> {
+export function tagsQuery(tx: TenantTx, request: TagsRequest) {
   const workspaceId = requireWorkspace(tx);
   const { ownerId, sort, after, limit, tagId } = request;
   const bookmarkCount = sql<number>`count(${bookmarks.id})::int`;
@@ -103,6 +111,10 @@ function tagsOf(tx: TenantTx, request: { readonly ownerId: string; readonly sort
     .having(groupsAfter)
     .orderBy(...ORDERS[sort]);
   return limit === undefined ? query : query.limit(limit);
+}
+
+function tagsOf(tx: TenantTx, request: TagsRequest): Promise<TagRow[]> {
+  return tagsQuery(tx, request);
 }
 
 export type TagRepository = TagStore;

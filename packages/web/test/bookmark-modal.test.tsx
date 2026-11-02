@@ -355,8 +355,80 @@ describe("closing with unsaved changes", { timeout: HEAVY_TEST_TIMEOUT_MS }, () 
     await press(within(screen.getByRole("dialog", { name: "Edit bookmark" })).getByRole("button", { name: "Cancel" }));
     await press(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Discard changes" }));
     await waitFor(() => {
+      expect(window.location.search).toBe("");
+    });
+    expect(modal()).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(to("PATCH", `/api/v1/bookmarks/${ID}`)).toHaveLength(0);
+  });
+
+  it("asks on the browser's Back button, keeps the edit on Keep editing and closes the modal on Discard", async () => {
+    use({ fixtures: { createBookmark: BOOKMARK } });
+    await openApp("/bookmarks");
+    await press(within(await screen.findByRole("banner")).getByRole("button", { name: "New bookmark" }));
+    const dialog = await screen.findByRole("dialog", { name: "New bookmark" });
+    await type("URL", "https://example.com/docs");
+
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await press(within(await screen.findByRole("alertdialog", { name: "Discard your changes?" })).getByRole("button", { name: "Keep editing" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(modal()).toBe(dialog);
+    expect(screen.getByLabelText<HTMLInputElement>("URL").value).toBe("https://example.com/docs");
+    await waitFor(() => {
+      expect(window.location.search).toBe("?new=1");
+    });
+
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await press(within(await screen.findByRole("alertdialog", { name: "Discard your changes?" })).getByRole("button", { name: "Discard changes" }));
+
+    await waitFor(() => {
       expect(modal()).toBeNull();
     });
+    expect(window.location.search).toBe("");
+    expect(to("POST", "/api/v1/bookmarks")).toHaveLength(0);
+  });
+
+  it("asks on a palette command, and a Discard goes to the page it names", async () => {
+    const dialog = await openEdit();
+    await type("Title", "Unsaved");
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+      await Promise.resolve();
+    });
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+
+    await press(await within(palette).findByRole("option", { name: /^Folders/ }));
+
+    const guard = await screen.findByRole("alertdialog", { name: "Discard your changes?" });
+    expect(window.location.pathname).toBe("/bookmarks");
+    await press(within(guard).getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(modal()).toBe(dialog);
+    expect(screen.getByLabelText<HTMLInputElement>("Title").value).toBe("Unsaved");
+    expect(window.location.pathname).toBe("/bookmarks");
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+      await Promise.resolve();
+    });
+    await press(await within(await screen.findByRole("dialog", { name: "Command palette" })).findByRole("option", { name: /^Folders/ }));
+    await press(within(await screen.findByRole("alertdialog", { name: "Discard your changes?" })).getByRole("button", { name: "Discard changes" }));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/folders");
+    });
+    expect(modal()).toBeNull();
     expect(to("PATCH", `/api/v1/bookmarks/${ID}`)).toHaveLength(0);
   });
 

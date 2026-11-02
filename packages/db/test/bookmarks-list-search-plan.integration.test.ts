@@ -7,6 +7,7 @@ import { tenantHandle } from "../src/tenant.ts";
 import { matchedCountStatement, matchedPageStatement } from "../src/repositories/bookmarks.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { blocksOfStatement as blocksOfWork } from "./support/plan-work.ts";
 import { vacuumUntilAllVisible, visibilityOf } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
@@ -23,12 +24,6 @@ const FIXTURE_TABLES = ["bookmarks"] as const;
 const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_000;
 const RUNS = 5;
-// The runs of a statement before the ones that are counted: the first calls of a statement in a backend touch more blocks than later ones (a page of docs: 6 658, then 5 862 five times, then 5 820).
-const WARM_RUNS = 6;
-// The runs a statement gets to come in under its bound, one straight after the other (see `blocksOfStatement`).
-const MAX_COUNTED_RUNS = 8;
-// A statement of the list runs in a few tens of milliseconds; one that has lost its index plan can run for minutes (a scan of the table for each probe), so each is cut off at 20 s, which fails the case at once instead of at the end of the hook timeout. It is not a measure of the time.
-const STATEMENT_TIMEOUT_MS = 20_000;
 const PAGE = 49;
 
 let db: TestDatabase;
@@ -517,37 +512,9 @@ function requestOf({ text, sort, scope }: WorkCase): BookmarkListRequest {
   return { filter: scope === "all" ? { ownerId: accountId, q: text, scope } : { ownerId: accountId, q: text }, sort, after: undefined, limit: PAGE };
 }
 
-/**
- * The buffers one statement touches as slugbase_app with the tenant settings of `withTenant` and the jit setting the repository runs a page with: the shared blocks found in the cache and those read, counted over the whole
- * statement, the function it calls included. The statement runs `WARM_RUNS` times first, so what a backend loads or plans on its first calls is not part of the number.
- *
- * The runs that follow stop at the first one under `bound`, which is the work; the statement fails only when none of up to `MAX_COUNTED_RUNS` is, and the least of them is what it reports. A plan that has regressed
- * touches more than the bound in every run, so it uses all of them and fails. With the same plan and data a single run can also touch more when DDL commits elsewhere on the cluster at that moment: while a transaction of
- * 1 000 `CREATE TABLE` committed in another database, a page of 2 598 blocks touched 3 141 in one run and 2 598 again in the next. The 540 to 960 extra blocks are in the function scan of `sys_bookmark_match`, and the
- * planning of the statement touches more in the same run (71 blocks became about 900), which fits a backend whose caches were reset after it missed invalidation messages; that cause is inferred, not established.
- * The runs follow one another with no pause, so a retry comes within milliseconds and is unlikely to meet another commit. Beside a loop of DDL transactions of 1 000 `CREATE TABLE` and of their drop, one after the
- * other with no gap in another database (about two DDL commits a second), 17 of the 576 first counted runs of 12 runs of this file were over their bound and none of the 17 retries was; no case failed in those 12 runs or in
- * 20 others. DDL that commits more often than the runs of a statement follow one another can still fail a case.
- */
-async function blocksOfStatement(statement: { sql: string; params: unknown[] }, bound: number): Promise<number> {
-  return db.app.begin(async (tx) => {
-    await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true), set_config('jit', 'off', true), set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MS)}, true)`;
-    let least = Number.POSITIVE_INFINITY;
-    for (let run = 0; run < WARM_RUNS + MAX_COUNTED_RUNS; run += 1) {
-      const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: PlanNode }[] }[]>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement.sql}`, statement.params as never[]);
-      const plan = rows[0]?.["QUERY PLAN"][0]?.Plan;
-      if (plan === undefined) {
-        throw new Error("EXPLAIN returned no plan");
-      }
-      if (run >= WARM_RUNS) {
-        least = Math.min(least, (plan["Shared Hit Blocks"] ?? 0) + (plan["Shared Read Blocks"] ?? 0));
-        if (least < bound) {
-          break;
-        }
-      }
-    }
-    return least;
-  });
+/** The buffers one statement touches as slugbase_app with the tenant settings and the jit setting the repository runs a page with, and the runs that count (`support/plan-work.ts`). */
+function blocksOfStatement(statement: { sql: string; params: unknown[] }, bound: number): Promise<number> {
+  return blocksOfWork(db, { accountId, workspaceId }, statement, bound, { jit: "off" });
 }
 
 /** The buffers the page of a case touches and, where the count is a statement of its own, the buffers of the count. */

@@ -67,6 +67,27 @@ for (const { name, viewport } of [
         expect(places, `where the focus is after each of ${String(PRESSES)} presses of ${key}`).toEqual(Array.from({ length: PRESSES }, () => "inside"));
         await app.scan();
       });
+
+      // The focus lands on the page body when the element that held it goes (a field a save disabled, a button that was removed). A Tab from
+      // there goes into the overlay, not to "Skip to content" and the controls of the page behind it, which WebKit does without the guard.
+      test(`keeps the focus inside it from the first ${key} pressed with the focus on the page body`, async ({ page, app, account }) => {
+        await account.set({ locale: "en" });
+        await app.visit("/bookmarks", page.getByRole("heading", { level: 1, name: en("bookmarks.page.title") }));
+        const overlay = await openCreateOverlay(page, viewport !== undefined);
+        await page.evaluate(() => {
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        });
+        expect(await focusPlace(overlay), "where the focus is before the first press").toMatch(/^body/);
+        const places: string[] = [];
+        for (let press = 0; press < PRESSES; press++) {
+          await page.keyboard.press(key);
+          places.push(await focusPlace(overlay));
+        }
+        expect(places, `where the focus is after each of ${String(PRESSES)} presses of ${key}`).toEqual(Array.from({ length: PRESSES }, () => "inside"));
+        await app.scan();
+      });
     }
   });
 }

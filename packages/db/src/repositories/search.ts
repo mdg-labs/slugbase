@@ -1,5 +1,5 @@
 import type { BookmarkHit, FolderHit, SearchStore, TagHit } from "@slugbase/core";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { folders } from "../schema/folders.ts";
 import { tags } from "../schema/tags.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -43,6 +43,11 @@ function escapeLike(text: string): string {
   return text.replace(/[\\%_]/g, "\\$&");
 }
 
+/** The statement of `SearchRepository.bookmarks`, exported for the test that plans it. Needs a transaction opened with a workspace. */
+export function bookmarkSearchStatement(text: string, limit: number): SQL {
+  return sql`SELECT id, title, url, host, slug, forwarding, pinned FROM sys_search(${text}::text, ${limit}::integer)`;
+}
+
 export type SearchRepository = SearchStore;
 
 /** The search bound to the open transaction; every method needs a transaction opened with a workspace. */
@@ -51,7 +56,7 @@ export function searchRepository(tx: TenantTx): SearchRepository {
     async bookmarks({ text, limit }): Promise<readonly BookmarkHit[]> {
       requireWorkspace(tx);
       requireLimit(limit);
-      return tenantHandle(tx).execute<BookmarkRow>(sql`SELECT id, title, url, host, slug, forwarding, pinned FROM sys_search(${text}::text, ${limit}::integer)`);
+      return tenantHandle(tx).execute<BookmarkRow>(bookmarkSearchStatement(text, limit));
     },
 
     async folders({ accountId, text, limit }): Promise<readonly FolderHit[]> {

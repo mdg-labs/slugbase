@@ -16,6 +16,14 @@ These changes are made after a copy:
 - `button.tsx`: the `destructive` variant takes its fill, border, shadow and label from `destructive-button` and
   `destructive-button-foreground` (`theme.css`) in place of `destructive` and `text-white`, so the label meets
   WCAG AA 4.5 : 1 in both themes (doc 03 "Theme tokens").
+- `button.tsx`: while `loading` the button is `aria-disabled` and ignores presses (`preventDefault` and `stopPropagation` on click) and
+  is not `disabled`, where upstream sets `disabled` for `loading`; a disabled element cannot hold focus, so a member who pressed it from
+  the keyboard lost their place; the base classes dim and take pointer events away on `aria-disabled:` as they do on `disabled:`.
+  `loading` also wins over an `aria-disabled` its props carry, such as the `aria-disabled="false"` a Base UI
+  `Toolbar.Button` hands the button it renders. A re-add with the shadcn CLI brings the upstream behaviour back and must be undone.
+- `tabs.tsx`: the default `TabsList` variant leaves out upstream's `text-muted-foreground/72`, so inactive tab labels take the
+  plain `text-muted-foreground` the list already sets and meet WCAG AA 4.5 : 1 on `bg-muted` in both themes. A re-add with the
+  shadcn CLI brings the reduced opacity back and must be undone.
 - `sidebar.tsx`: the write of the open state through the Cookie Store API is skipped when `cookieStore` is
   missing and its rejection is caught, so toggling the sidebar never raises an unhandled rejection in a browser
   without the API; `Sidebar` takes `mobileLabels` (`title`, `description`, `close`) for the drawer texts,

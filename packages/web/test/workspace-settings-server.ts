@@ -60,8 +60,8 @@ export interface WorkspaceSettingsServerOptions {
   readonly mail?: boolean;
   /** The pending invitations the workspace starts with. */
   readonly invitations?: readonly TestInvitation[];
-  /** Answers `GET /invitations` instead of the list; `call` counts from 1. */
-  readonly invitationsGet?: (call: number) => Response | Promise<Response>;
+  /** Answers `GET /invitations` instead of the list, or leaves it to the server with undefined; `call` counts from 1. */
+  readonly invitationsGet?: (call: number) => Response | Promise<Response> | undefined;
   /** Answers `POST /invitations` instead of inviting; `call` counts from 1. */
   readonly invitationPost?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers `POST /invitations/{id}/resend` instead of resending; `call` counts from 1. */
@@ -97,8 +97,10 @@ export interface WorkspaceSettingsServerOptions {
   /** The members `GET /members` lists, in one page unless `pageSize` splits them. */
   readonly members?: readonly TestMember[];
   readonly pageSize?: number;
-  /** Answers `GET /members` instead of the list; `call` counts from 1. */
-  readonly membersGet?: (call: number) => Response | Promise<Response>;
+  /** Answers `GET /members` instead of the list, or leaves it to the server with undefined; `call` counts from 1. */
+  readonly membersGet?: (call: number) => Response | Promise<Response> | undefined;
+  /** Answers `GET /teams` instead of an empty list; `call` counts from 1, and `workspaceId` is the workspace the session acts in. */
+  readonly teamsGet?: (call: number, workspaceId: string) => Response | Promise<Response>;
   /** Answers `PATCH /members/{accountId}` instead of changing the role; `call` counts from 1. */
   readonly memberPatch?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers `DELETE /members/{accountId}` instead of removing the member; `call` counts from 1. */
@@ -150,6 +152,7 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
     name: activeId === WORKSPACE_ID ? name : SECOND_WORKSPACE_NAME,
     role,
     memberCount: 2,
+    aiEnabled: aiEnabled.get(activeId) ?? true,
     createdAt: "2026-09-01T08:00:00.000Z",
     version,
   });
@@ -183,9 +186,10 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   /** What the server does with the invitation routes, unless a test answers the request itself. */
   const invitationRoutes = (method: string, pathname: string, call: number, request: Request, text: string): Response | Promise<Response> | undefined => {
     if (pathname === INVITATIONS_PATH && method === "GET") {
-      return options.invitationsGet === undefined
-        ? json({ items: invitations.map((invitation) => ({ ...invitationBody(invitation), expired: invitation.expired === true })), nextCursor: null })
-        : options.invitationsGet(call);
+      return (
+        options.invitationsGet?.(call) ??
+        json({ items: invitations.map((invitation) => ({ ...invitationBody(invitation), expired: invitation.expired === true })), nextCursor: null })
+      );
     }
     if (pathname === INVITATIONS_PATH && method === "POST") {
       if (options.invitationPost !== undefined) {
@@ -357,8 +361,9 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       return json({ aiEnabled: aiEnabled.get(activeId) });
     }
     if (pathname === MEMBERS_PATH && request.method === "GET") {
-      if (options.membersGet !== undefined) {
-        return options.membersGet(call);
+      const answer = options.membersGet?.(call);
+      if (answer !== undefined) {
+        return answer;
       }
       const size = options.pageSize ?? members.length;
       const start = Number(new URL(request.url).searchParams.get("cursor") ?? 0);
@@ -419,8 +424,8 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       return json(promoted);
     }
     if (pathname === "/api/v1/teams" && request.method === "GET") {
-      // The invite dialog lists the teams to choose from; this workspace has none.
-      return json({ items: [], nextCursor: null });
+      // The invite dialog lists the teams to choose from; unless a test names them, the workspace has none.
+      return options.teamsGet?.(call, activeId) ?? json({ items: [], nextCursor: null });
     }
     if (options.other !== undefined) {
       return options.other(request);

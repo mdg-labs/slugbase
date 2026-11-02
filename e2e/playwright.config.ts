@@ -24,6 +24,8 @@ const CI = process.env.CI !== undefined && process.env.CI !== "";
 // at once would share them, so it runs in Chromium alone, the engine of the long tail.
 const SETUP = /.*\.setup\.ts/;
 const ACCOUNTS = /accounts\.spec\.ts/;
+// The AI journey (tests/ai.spec.ts) counts the requests the stack's stand-in for an AI provider received, so one engine runs it.
+const AI = /ai\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./tests",
@@ -49,7 +51,7 @@ export default defineConfig({
   projects: [
     { name: "setup", testMatch: SETUP, use: { ...devices["Desktop Chrome"], storageState: { cookies: [], origins: [] } } },
     { name: "chromium", testIgnore: SETUP, dependencies: ["setup"], use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", testIgnore: [SETUP, ACCOUNTS], dependencies: ["setup"], use: { ...devices["Desktop Firefox"] } },
-    { name: "webkit", testIgnore: [SETUP, ACCOUNTS], dependencies: ["setup"], use: { ...devices["Desktop Safari"] } },
+    { name: "firefox", testIgnore: [SETUP, ACCOUNTS, AI], dependencies: ["setup"], use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", testIgnore: [SETUP, ACCOUNTS, AI], dependencies: ["setup"], use: { ...devices["Desktop Safari"] } },
   ],
 });

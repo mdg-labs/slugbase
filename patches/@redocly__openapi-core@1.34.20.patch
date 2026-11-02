@@ -1,0 +1,22 @@
+diff --git a/lib/utils.js b/lib/utils.js
+index 479f4dde6a2edb1240c9a893c822e3d0f4014f3f..ca55c14d41bb385f2045bc57746a36a8cab5da0b 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -39,7 +39,7 @@ exports.getProxyAgent = getProxyAgent;
+ exports.dequal = dequal;
+ const fs = require("fs");
+ const path_1 = require("path");
+-const minimatch = require("minimatch");
++const minimatch_1 = require("minimatch");
+ const js_yaml_1 = require("./js-yaml");
+ const env_1 = require("./env");
+ const logger_1 = require("./logger");
+@@ -103,7 +103,7 @@ function match(url, pattern) {
+         // if pattern doesn't specify protocol directly, do not match against it
+         url = url.replace(/^https?:\/\//, '');
+     }
+-    return minimatch(url, pattern);
++    return (0, minimatch_1.minimatch)(url, pattern);
+ }
+ function pickObjectProps(object, keys) {
+     return Object.fromEntries(keys.filter((key) => key in object).map((key) => [key, object[key]]));

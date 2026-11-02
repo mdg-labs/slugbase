@@ -1,6 +1,7 @@
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { MigrationChain } from "../src/migrate.ts";
 import { createTestDatabase, dropTestTemplate, testTemplateName } from "../src/testing.ts";
@@ -9,7 +10,7 @@ import { createTestDatabase, dropTestTemplate, testTemplateName } from "../src/t
 // (doc 08 section 3.2), and the harness refuses to create or drop a database
 // outside its two name patterns. Neither needs a server.
 
-const FIXTURE = new URL("./migrations/fixtures/restored/", import.meta.url).pathname;
+const FIXTURE = fileURLToPath(new URL("./migrations/fixtures/restored/", import.meta.url));
 
 const folders: string[] = [];
 

@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, FormField, FormOverlay } from "@slugbase/ui/patterns";
+import { Banner, FormField, FormOverlay, useBusyFormFocus } from "@slugbase/ui/patterns";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
@@ -69,6 +69,7 @@ export function CreateWorkspaceDialog({ onClose, onCreated }: { onClose: () => v
   const [created, setCreated] = useState<WorkspaceSummary | undefined>(undefined);
   const [switchFailure, setSwitchFailure] = useState<SwitchFailure | undefined>(undefined);
   const [switchFailed, setSwitchFailed] = useState(false);
+  const busyFocus = useBusyFormFocus(pending);
 
   useEffect(
     () => () => {
@@ -201,7 +202,7 @@ export function CreateWorkspaceDialog({ onClose, onCreated }: { onClose: () => v
           </div>
         </div>
       ) : (
-        <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+        <form className="flex flex-col gap-4" noValidate onSubmit={submit} {...busyFocus}>
           {failure === undefined || nameFailure ? null : <Banner title={failureMessage(failure)} variant="error" />}
           <FormField
             error={nameFailure ? failureMessage(failure) : nameRequired ? t("workspaces.create.name.required") : undefined}

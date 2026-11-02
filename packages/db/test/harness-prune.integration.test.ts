@@ -4,6 +4,7 @@ import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { MigrationChain } from "../src/migrate.ts";
@@ -13,8 +14,8 @@ import { createTestDatabase, dropTestTemplate, pruneTestTemplates, testTemplateN
 // is shared with other checkouts, so every call here names the templates it
 // may drop: the ones this file creates, never the ones other runs depend on.
 
-const PRUNE_SCRIPT = new URL("../scripts/prune-templates.ts", import.meta.url).pathname;
-const FIXTURE = new URL("./migrations/fixtures/restored/", import.meta.url).pathname;
+const PRUNE_SCRIPT = fileURLToPath(new URL("../scripts/prune-templates.ts", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("./migrations/fixtures/restored/", import.meta.url));
 const serverUrl = process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev";
 const HOOK_TIMEOUT_MS = 300_000;
 const execFileAsync = promisify(execFile);

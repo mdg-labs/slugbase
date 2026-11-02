@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, CopyValue, FormField, FormOverlay, SegmentedChoice, SelectField, ShownOnce } from "@slugbase/ui/patterns";
+import { Banner, CopyValue, FormField, FormOverlay, SegmentedChoice, SelectField, ShownOnce, useBusyFormFocus, useUnsavedForm } from "@slugbase/ui/patterns";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
@@ -45,6 +45,10 @@ export function CreateApiToken({ me, onClose }: { me: Me; onClose: () => void })
   const [pending, setPending] = useState(false);
   const [created, setCreated] = useState<CreatedApiToken | undefined>(undefined);
   const [acknowledged, setAcknowledged] = useState(false);
+  const busyFocus = useBusyFormFocus(pending);
+  const unsaved = useUnsavedForm(
+    created === undefined && (name !== "" || workspaceId !== (preselected?.workspaceId ?? "") || scope !== "read" || expiry !== DEFAULT_EXPIRY),
+  );
 
   async function create(): Promise<void> {
     const trimmed = name.trim();
@@ -70,6 +74,7 @@ export function CreateApiToken({ me, onClose }: { me: Me; onClose: () => void })
       setFailure(outcome.failure);
       return;
     }
+    unsaved.release();
     setCreated(outcome.value);
     void queryClient.invalidateQueries({ queryKey: API_TOKENS_QUERY_KEY });
   }
@@ -117,7 +122,7 @@ export function CreateApiToken({ me, onClose }: { me: Me; onClose: () => void })
       title={created === undefined ? t("settings.tokens.create.title") : t("settings.tokens.result.title")}
     >
       {created === undefined ? (
-        <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+        <form className="flex flex-col gap-4" noValidate onSubmit={submit} {...busyFocus}>
           {failure === undefined || nameFailure ? null : <Banner title={failureMessage(failure)} variant="error" />}
           <FormField
             description={t("settings.tokens.name.description")}

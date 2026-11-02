@@ -10,9 +10,14 @@ function isListPage(pathname: string): boolean {
   return LIST_PAGES.some((page) => pathname === page || pathname.startsWith(`${page}/`));
 }
 
-/** The dialogs that are open besides the palette. */
+// A toast is a dialog that says `aria-modal="false"` and leaves the page behind it in use, so it is no dialog that focus could belong to; this is the
+// exclusion that `OPEN_MODALS` of the shortcuts in @slugbase/ui makes (it is not exported). A dialog that is closing is not one either.
+const NOT_SHOWN = ":not([hidden]):not([data-closed]):not([data-ending-style]):not([aria-modal='false'])";
+const MODALS = `[role='dialog']${NOT_SHOWN}, [role='alertdialog']${NOT_SHOWN}`;
+
+/** The modal dialogs that are open besides the palette. */
 function otherDialogs(): Element[] {
-  return Array.from(document.querySelectorAll("[role='dialog'], [role='alertdialog']")).filter((dialog) => dialog.closest("[data-slot='command-palette']") === null);
+  return Array.from(document.querySelectorAll(MODALS)).filter((dialog) => dialog.closest("[data-slot='command-palette']") === null);
 }
 
 interface PaletteState {
@@ -78,7 +83,15 @@ export function PaletteProvider({ children }: { readonly children: ReactNode }):
       return false;
     }
     const element = opener.current;
-    return element !== null && element.isConnected ? element : triggerRef.current;
+    if (element !== null && element.isConnected) {
+      return element;
+    }
+    // The element that had focus is gone, such as an action that was withdrawn while the palette stood over a dialog: focus stays in the
+    // topmost dialog that stood when the palette opened, not on the trigger of the page behind it.
+    const dialog = Array.from(dialogsAtOpen.current)
+      .filter((candidate) => candidate.isConnected)
+      .at(-1);
+    return dialog instanceof HTMLElement ? dialog : triggerRef.current;
   }, []);
 
   const state = useMemo<PaletteState>(() => ({ open, setOpen, triggerRef, focusBack }), [open, setOpen, focusBack]);

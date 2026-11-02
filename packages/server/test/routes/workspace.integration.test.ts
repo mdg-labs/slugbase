@@ -126,6 +126,7 @@ interface WorkspaceBody {
   name: string;
   role: string;
   memberCount: number;
+  aiEnabled: boolean;
   createdAt: string;
   version: number;
 }
@@ -218,9 +219,24 @@ describe("GET /api/v1/workspace", () => {
       name: "Research",
       role: "admin",
       memberCount: 2,
+      aiEnabled: true,
       createdAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/) as string,
       version: 1,
     });
+  });
+
+  it("tells a plain member whether AI suggestions are on for the workspace, which the settings operation keeps to admins", async () => {
+    const world = serve();
+    const off = await memberOf(world, "member", { aiEnabled: false });
+    const on = await memberOf(world, "member", { aiEnabled: true });
+
+    const refused = await send(world, "GET", SETTINGS, { cookie: off.cookie });
+    const asOff = await send(world, "GET", WORKSPACE, { cookie: off.cookie });
+    const asOn = await send(world, "GET", WORKSPACE, { cookie: on.cookie });
+
+    expect(refused.status).toBe(403);
+    expect(await asOff.json()).toMatchObject({ role: "member", aiEnabled: false });
+    expect(await asOn.json()).toMatchObject({ role: "member", aiEnabled: true });
   });
 
   it("is callable with a read-scope token, which acts in its own workspace and never in another the account belongs to", async () => {
@@ -281,7 +297,7 @@ describe("PATCH /api/v1/workspace", () => {
     expect(await first.json()).toMatchObject({ id: owner.workspaceId, name: "Middle", role: "owner", memberCount: 2, version: 2 });
     expect(second.status).toBe(200);
     expect(second.headers.get("etag")).toBe('"3"');
-    expect(await second.json()).toMatchObject({ name: "After", role: "admin", version: 3 });
+    expect(await second.json()).toMatchObject({ name: "After", role: "admin", aiEnabled: true, version: 3 });
     expect(await stored(owner.workspaceId)).toEqual({ name: "After", version: 3 });
     expect(await auditOf(owner.workspaceId)).toEqual([
       {

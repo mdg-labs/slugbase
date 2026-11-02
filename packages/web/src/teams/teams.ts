@@ -12,10 +12,13 @@ export const TEAMS_QUERY_KEY = ["teams"] as const;
 
 const PAGE_SIZE = 50;
 
-/** The workspace's teams by name, a page at a time. Every member may read them. */
-export function teamListQuery(api: ApiClient) {
+/**
+ * The teams of the workspace the session acts in by name, a page at a time, kept under that workspace's key. Every member
+ * may read them. The request names no workspace, so a list under one key for all of them would stand in the next one; a caller does not start the read while the workspace is unknown.
+ */
+export function teamListQuery(api: ApiClient, workspaceId: string | undefined) {
   return infiniteQueryOptions({
-    queryKey: [...TEAMS_QUERY_KEY, "list"],
+    queryKey: [...TEAMS_QUERY_KEY, "list", workspaceId ?? null],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
       const { data, error } = await api.GET("/api/v1/teams", {

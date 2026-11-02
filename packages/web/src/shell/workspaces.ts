@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError, isSessionEnded, type ApiClient } from "../api/client.ts";
 import { ME_QUERY_KEY, type Me } from "../account/me.ts";
-import { WORKSPACE_QUERY_KEY } from "./workspace.ts";
+import { ENTITLEMENTS_QUERY_KEY } from "../entitlements/entitlements.ts";
 
 export type WorkspaceList = ComponentTypes["schemas"]["WorkspaceList"];
 export type WorkspaceSummary = ComponentTypes["schemas"]["WorkspaceSummary"];
@@ -133,10 +133,11 @@ export function useWorkspaceSwitch(): WorkspaceSwitch {
       setPending(true);
       try {
         await setActiveWorkspace(router.options.context.api, workspaceId);
-        // A read of the account that is still out was asked before the session moved, and its answer would put the previous workspace back.
-        // A read of the workspace that is still out was asked before the session moved too, and a read with no data yet is not restarted by the
-        // invalidation below, which would leave the page on its skeleton, as `useWorkspace` hides the previous workspace's document; cancelled, the invalidation starts a new read.
-        await Promise.all([queryClient.cancelQueries({ queryKey: ME_QUERY_KEY }), queryClient.cancelQueries({ queryKey: WORKSPACE_QUERY_KEY, exact: true })]);
+        // A read that is still out was asked before the session moved, and its answer is the previous workspace's: that of the account would put
+        // the previous workspace back, and any other would be stored under a key that names no workspace and stand in the new one. A read with no
+        // data yet is not restarted by the invalidation below, which keeps it, so every read is cancelled and the invalidation starts new ones. The
+        // entitlements are keyed by workspace, so a read of them lands under the key of the workspace it was asked for and is left to finish.
+        await queryClient.cancelQueries({ predicate: ({ queryKey }) => queryKey[0] !== ENTITLEMENTS_QUERY_KEY[0] });
         queryClient.setQueryData<Me>(ME_QUERY_KEY, (me) => (me === undefined ? me : { ...me, activeWorkspaceId: workspaceId }));
       } catch (caught) {
         if (caught instanceof ApiProblemError && caught.status === 404) {

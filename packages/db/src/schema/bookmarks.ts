@@ -107,6 +107,10 @@ export const bookmarks = pgTable(
       .on(table.workspaceId, table.ownerId, table.openCount.desc(), table.id.desc())
       .where(sql`${table.planArchivedAt} IS NULL`),
     index("bookmarks_owner_title_idx").on(table.workspaceId, table.ownerId, sql`lower(${table.title})`, table.id),
+    // The page of one canonical URL (`url` of `GET /bookmarks`, the duplicate warning of doc 04 section 10.6): the caller's own bookmarks with that URL, whatever the sort.
+    index("bookmarks_owner_url_idx")
+      .on(table.workspaceId, table.ownerId, table.urlCanonical)
+      .where(sql`${table.planArchivedAt} IS NULL`),
     index("bookmarks_pinned_idx")
       .on(table.workspaceId, table.ownerId, table.pinnedAt.desc())
       .where(sql`${table.pinnedAt} IS NOT NULL AND ${table.planArchivedAt} IS NULL`),

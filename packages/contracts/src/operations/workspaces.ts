@@ -49,6 +49,9 @@ export const WorkspaceSchema = z
     name: z.string().describe("The workspace's name"),
     role: z.enum(WORKSPACE_ROLES).describe("The caller's role in the workspace"),
     memberCount: z.number().int().min(1).describe("How many members the workspace has"),
+    aiEnabled: z
+      .boolean()
+      .describe("Whether AI suggestions are on for the workspace, the setting an admin changes; every member can read it, so that the bookmark form shows no suggestion action where it is off"),
     createdAt: z.iso.datetime().describe("When the workspace was created, RFC 3339 UTC"),
     version: z.number().int().min(1).describe("Moves by one with every rename; the ETag header carries it and If-Match takes it back"),
   })

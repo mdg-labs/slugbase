@@ -5,6 +5,7 @@ export { AppShell, MAIN_CONTENT_ID, type AppShellLabels, type AppShellProps } fr
 export { AuthCard, AuthLayout, type AuthCardProps, type AuthLayoutProps } from "./auth-card.tsx";
 export { AvatarStack, type AvatarStackPerson, type AvatarStackProps } from "./avatar-stack.tsx";
 export { Banner, type BannerProps, type BannerVariant } from "./banner.tsx";
+export { useBusyFormFocus, type BusyFormFocus } from "./busy-form-focus.ts";
 export { BulkBar, BulkBarButton, type BulkBarAction, type BulkBarButtonProps, type BulkBarProps } from "./bulk-bar.tsx";
 export { CardGrid, CardGridItem, type CardGridItemProps, type CardGridProps } from "./card-grid.tsx";
 export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field.tsx";
@@ -60,6 +61,15 @@ export { TileGrid, TileLink, type TileGridProps, type TileLinkProps } from "./ti
 export { Totp, type TotpProps } from "./totp.tsx";
 export { TypedConfirm, matchesExpected, type TypedConfirmProps } from "./typed-confirm.tsx";
 export { UnsavedGuard, type UnsavedGuardProps } from "./unsaved-guard.tsx";
+export {
+  staysOnPage,
+  staysWhileParams,
+  unsavedChanges,
+  useUnsavedForm,
+  type FormAddress,
+  type FormStays,
+  type UnsavedChanges,
+} from "./unsaved-changes.ts";
 export { UrlInput, type UrlInputProps } from "./url-input.tsx";
 export { UsageMeter, type UsageMeterProps } from "./usage-meter.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";

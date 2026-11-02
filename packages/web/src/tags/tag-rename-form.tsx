@@ -1,5 +1,5 @@
 import { Button, Input } from "@slugbase/ui";
-import { Banner, Confirm, FormField, FormOverlay, feedbackToast } from "@slugbase/ui/patterns";
+import { Banner, Confirm, FormField, FormOverlay, feedbackToast, useBusyFormFocus, useUnsavedForm } from "@slugbase/ui/patterns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
@@ -42,6 +42,8 @@ export function TagRenameForm({ tag, onMerged, onClose }: TagRenameFormProps): R
   const [merging, setMerging] = useState<Tag | undefined>(undefined);
   const [mergeFailure, setMergeFailure] = useState<TagFailure | undefined>(undefined);
 
+  const unsaved = useUnsavedForm(name.trim() !== tag.name);
+
   const rename = useMutation({
     mutationKey: ["tags", "rename"],
     meta: SHOWN_IN_THE_FORM,
@@ -49,6 +51,7 @@ export function TagRenameForm({ tag, onMerged, onClose }: TagRenameFormProps): R
     onSuccess: () => {
       refreshTagViews(queryClient);
       feedbackToast.success(t("tags.form.saved"));
+      unsaved.release();
       onClose();
     },
     onError: async (error, next) => {
@@ -88,6 +91,7 @@ export function TagRenameForm({ tag, onMerged, onClose }: TagRenameFormProps): R
       feedbackToast.success(t("tags.merge.merged", { name: target.name }));
       setMerging(undefined);
       onMerged(target);
+      unsaved.release();
       onClose();
     },
     onError: (error) => {
@@ -99,6 +103,8 @@ export function TagRenameForm({ tag, onMerged, onClose }: TagRenameFormProps): R
       setMergeFailure(reason);
     },
   });
+
+  const busyFocus = useBusyFormFocus(rename.isPending);
 
   function submit(event: SyntheticEvent): void {
     event.preventDefault();
@@ -151,7 +157,7 @@ export function TagRenameForm({ tag, onMerged, onClose }: TagRenameFormProps): R
         open
         title={t("tags.form.title")}
       >
-        <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+        <form className="flex flex-col gap-4" noValidate onSubmit={submit} {...busyFocus}>
           {shown === undefined || nameFailure ? null : <Banner title={shown} variant="error" />}
           <FormField
             error={nameFailure ? shown : nameRequired ? t("tags.form.name.error.required") : undefined}

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { hashSqlFiles } from "../../scripts/migration-sql.ts";
@@ -14,7 +15,7 @@ import { PackageCopy, PACKAGE } from "./package-copy.ts";
 // itself against the shipped chain (doc 08 section 3.4).
 
 const HOOK_TIMEOUT_MS = 180_000;
-const SCRIPT = new URL("../../scripts/db-check.ts", import.meta.url).pathname;
+const SCRIPT = fileURLToPath(new URL("../../scripts/db-check.ts", import.meta.url));
 
 const server = new URL(
   process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev",

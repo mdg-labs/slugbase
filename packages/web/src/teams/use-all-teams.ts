@@ -1,6 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { useActiveWorkspaceId } from "../shell/workspace-members.ts";
 import { teamListQuery, type Team } from "./teams.ts";
 
 export interface AllTeams {
@@ -12,7 +13,8 @@ export interface AllTeams {
 
 /** The workspace's teams, read page by page to the end, for a choice among all of them. */
 export function useAllTeams(): AllTeams {
-  const list = useInfiniteQuery(teamListQuery(useRouter().options.context.api));
+  const workspaceId = useActiveWorkspaceId();
+  const list = useInfiniteQuery({ ...teamListQuery(useRouter().options.context.api, workspaceId), enabled: workspaceId !== undefined });
   const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = list;
   useEffect(() => {
     if (hasNextPage && !isFetchingNextPage && !isError) {

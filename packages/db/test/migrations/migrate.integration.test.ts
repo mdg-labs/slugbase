@@ -1,14 +1,16 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, connect, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   CE_CHAIN,
+  isNonTransactional,
   migrate,
   MigrationError,
   migrationLevel,
@@ -21,8 +23,8 @@ import { useCluster, type ClusterUse } from "../../src/testing.ts";
 // provisioned with provision/roles.sql and migrated as slugbase_migrator, the
 // way the product does it; the superuser only creates and inspects databases.
 
-const ROLES_SQL = new URL("../../provision/roles.sql", import.meta.url).pathname;
-const FIXTURES = new URL("./fixtures/", import.meta.url).pathname;
+const ROLES_SQL = fileURLToPath(new URL("../../provision/roles.sql", import.meta.url));
+const FIXTURES = fileURLToPath(new URL("./fixtures/", import.meta.url));
 
 const APP_PASSWORD = "slugbase_app_dev_only";
 const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";
@@ -284,6 +286,34 @@ async function indexes(owner: postgres.Sql, names: string[]): Promise<{ name: st
     WHERE c.relname IN ${owner(names)} ORDER BY c.relname`;
 }
 
+// A chain of one non-transactional migration holding the given statements, in a scratch folder.
+function indexChain(name: string, statements: string[]): MigrationChain {
+  const directory = mkdtempSync(join(tmpdir(), "slugbase-migrate-"));
+  scratchDirectories.push(directory);
+  const folder = join(directory, name);
+  const tag = `20300101000001_index_${name}`;
+  mkdirSync(join(folder, "meta"), { recursive: true });
+  writeFileSync(
+    join(folder, `${tag}.sql`),
+    `-- slugbase:non-transactional\n${statements.join("\n--> statement-breakpoint\n")}\n`,
+  );
+  writeFileSync(
+    join(folder, "meta", "_journal.json"),
+    JSON.stringify({
+      version: "7",
+      dialect: "postgresql",
+      entries: [{ idx: 0, version: "7", when: 1893456000000, tag, breakpoints: true }],
+    }),
+  );
+  return { name, folder, bookkeepingTable: `migrations_${name}` };
+}
+
+async function indexIdentities(owner: postgres.Sql, names: string[]): Promise<{ name: string; oid: string; definition: string }[]> {
+  return owner<{ name: string; oid: string; definition: string }[]>`
+    SELECT c.relname AS name, c.oid::text AS oid, pg_get_indexdef(c.oid) AS definition
+    FROM pg_class c WHERE c.relkind = 'i' AND c.relname IN ${owner(names)} ORDER BY c.relname`;
+}
+
 beforeAll(async () => {
   cluster = await useCluster();
   admin = track(connectAs(decodeURIComponent(server.username), decodeURIComponent(server.password), server.pathname.slice(1)));
@@ -498,7 +528,7 @@ describe("a failing migration", () => {
     });
   }, 60_000);
 
-  it("leaves the statements of a non-transactional step that ran, records none, and fails again on a re-run", async () => {
+  it("leaves the statements of a non-transactional step that ran, records none, and fails the same way on a re-run without building them again", async () => {
     const { name, owner } = await createDatabase();
     await owner.unsafe("CREATE TABLE partial_target (a integer)");
     await owner.unsafe("ALTER TABLE partial_target OWNER TO slugbase_owner");
@@ -506,14 +536,15 @@ describe("a failing migration", () => {
 
     const first = await rejection(migrate({ url: migratorUrl(name), chains }));
     expect(first.code).toBe("42703");
-    const indexes = await owner<{ indexname: string }[]>`
-      SELECT indexname FROM pg_indexes WHERE tablename = 'partial_target'`;
-    expect(indexes.map((row) => row.indexname)).toEqual(["partial_a_idx"]);
+    const built = await indexIdentities(owner, ["partial_a_idx"]);
+    expect(built).toHaveLength(1);
     expect(await recordedRows(owner, "migrations_partial")).toBe(0);
 
     const second = await rejection(migrate({ url: migratorUrl(name), chains }));
-    expect(second.code).toBe("42P07");
+    expect(second.code).toBe("42703");
+    expect(await indexIdentities(owner, ["partial_a_idx"])).toEqual(built);
     expect(await recordedRows(owner, "migrations_partial")).toBe(0);
+    expect(await migrateLockIsFree(owner)).toBe(true);
   }, 60_000);
 
   it("is refused before anything is applied when an applied migration was changed afterwards", async () => {
@@ -715,6 +746,187 @@ await migrate({
     expect(await recordedRows(owner, "migrations_invalid")).toBe(1);
   }, 60_000);
 
+  it("records a step whose indexes were built and valid when its bookkeeping row is missing, and keeps those indexes", async () => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE invalid_target (a integer)");
+    await owner.unsafe("ALTER TABLE invalid_target OWNER TO slugbase_owner");
+    const chains = [fixture("invalid")];
+    await migrate({ url: migratorUrl(name), chains });
+    const built = await indexIdentities(owner, ["invalid_Mixed_idx", "invalid_a_idx"]);
+    expect(built).toHaveLength(2);
+    await owner.unsafe("DELETE FROM drizzle.migrations_invalid");
+
+    const result = await migrate({ url: migratorUrl(name), chains });
+
+    expect(result.applied).toEqual([{ chain: "invalid", tag: "20300101000001_index_invalid_target" }]);
+    expect(await indexIdentities(owner, ["invalid_Mixed_idx", "invalid_a_idx"])).toEqual(built);
+    expect(await recordedRows(owner, "migrations_invalid")).toBe(1);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
+  it("records every index step of the CE chain whose bookkeeping row is missing, without building any of them again", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const rows = await owner<{ hash: string; created_at: string }[]>`
+      SELECT hash, created_at::text AS created_at FROM drizzle.migrations_core ORDER BY created_at`;
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as {
+      entries: { tag: string; when: number }[];
+    };
+    const steps = journal.entries.filter((entry) =>
+      isNonTransactional(readFileSync(join(CE_CHAIN.folder, `${entry.tag}.sql`), "utf8")),
+    );
+    expect(steps.length).toBeGreaterThan(5);
+    const before = await owner<{ oid: string }[]>`
+      SELECT c.oid::text AS oid FROM pg_class c WHERE c.relkind = 'i' ORDER BY c.relname`;
+    await owner.unsafe(
+      `DELETE FROM drizzle.migrations_core WHERE created_at IN (${steps.map((step) => String(step.when)).join(", ")})`,
+    );
+    expect(await recordedRows(owner, "migrations_core")).toBe(rows.length - steps.length);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(steps.map((step) => step.tag));
+    expect(await recordedRows(owner, "migrations_core")).toBe(rows.length);
+    expect(
+      await owner<{ oid: string }[]>`
+        SELECT c.oid::text AS oid FROM pg_class c WHERE c.relkind = 'i' ORDER BY c.relname`,
+    ).toEqual(before);
+    expect(await owner`SELECT 1 FROM pg_index WHERE NOT indisvalid`).toHaveLength(0);
+  }, 120_000);
+
+  it("takes an index of the step's name that PostgreSQL spells differently for the step's own", async () => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE spelled_target (a integer, b text)");
+    await owner.unsafe("ALTER TABLE spelled_target OWNER TO slugbase_owner");
+    await owner.unsafe(
+      "CREATE UNIQUE INDEX spelled_idx ON spelled_target (a, lower(b) DESC NULLS LAST) WHERE a IS NOT NULL",
+    );
+    const chain = indexChain("spelled", [
+      'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "spelled_idx" ON ONLY public."spelled_target" USING btree ("a",lower("b") DESC NULLS LAST) WHERE "spelled_target"."a" IS NOT NULL;',
+    ]);
+    const before = await indexIdentities(owner, ["spelled_idx"]);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [chain] });
+
+    expect(result.applied.map((step) => step.chain)).toContain("spelled");
+    expect(await indexIdentities(owner, ["spelled_idx"])).toEqual(before);
+    expect(await recordedRows(owner, "migrations_spelled")).toBe(1);
+  }, 60_000);
+
+  it("takes a valid unique index of the step's name that a foreign key references for the step's own", async () => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE referenced_target (a integer)");
+    await owner.unsafe("ALTER TABLE referenced_target OWNER TO slugbase_owner");
+    await owner.unsafe("CREATE UNIQUE INDEX referenced_idx ON referenced_target (a)");
+    await owner.unsafe("CREATE TABLE referencing_table (a integer)");
+    await owner.unsafe(
+      "ALTER TABLE referencing_table ADD CONSTRAINT referencing_fk FOREIGN KEY (a) REFERENCES referenced_target (a)",
+    );
+    const chain = indexChain("referenced", [
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS referenced_idx ON referenced_target (a);",
+    ]);
+    const before = await indexIdentities(owner, ["referenced_idx"]);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [chain] });
+
+    expect(result.applied.map((step) => step.chain)).toContain("referenced");
+    expect(await indexIdentities(owner, ["referenced_idx"])).toEqual(before);
+    expect(await recordedRows(owner, "migrations_referenced")).toBe(1);
+    await expect(
+      owner<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_constraint WHERE conname = 'referencing_fk'`,
+    ).resolves.toEqual([{ n: 1 }]);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
+  it.each([
+    ["another column", "CREATE INDEX different_idx ON different_target (b)", "(a)"],
+    ["another column order", "CREATE INDEX different_idx ON different_target (a DESC)", "(a)"],
+    ["another expression", "CREATE INDEX different_idx ON different_target (lower(c))", "(c)"],
+    ["uniqueness", "CREATE UNIQUE INDEX different_idx ON different_target (a)", "(a)"],
+    ["a predicate", "CREATE INDEX different_idx ON different_target (a) WHERE a > 1", "(a) WHERE a > 0"],
+    ["a missing predicate", "CREATE INDEX different_idx ON different_target (a)", "(a) WHERE a > 0"],
+    ["an extra predicate", "CREATE INDEX different_idx ON different_target (a) WHERE a > 0", "(a)"],
+    ["an access method", "CREATE INDEX different_idx ON different_target USING hash (a)", "(a)"],
+    ["another table", "CREATE INDEX different_idx ON different_other (a)", "(a)"],
+  ])("fails the run, names the index and records nothing when the index of that name differs in %s", async (_case, existing, wanted) => {
+    const { name, owner } = await createDatabase();
+    for (const table of ["different_target", "different_other"]) {
+      await owner.unsafe(`CREATE TABLE ${table} (a integer, b integer, c text)`);
+      await owner.unsafe(`ALTER TABLE ${table} OWNER TO slugbase_owner`);
+    }
+    await owner.unsafe(existing);
+    const chain = indexChain("different", [
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS different_idx ON different_target ${wanted};`,
+    ]);
+    const before = await indexIdentities(owner, ["different_idx"]);
+
+    const error = await rejection(migrate({ url: migratorUrl(name), chains: [chain] }));
+
+    expect(error.message).toContain("different_idx");
+    expect(error.message).toContain("20300101000001_index_different");
+    expect(await indexIdentities(owner, ["different_idx"])).toEqual(before);
+    expect(await recordedRows(owner, "migrations_different")).toBe(0);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+    await expect(
+      owner<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_class WHERE relpersistence = 't'`,
+    ).resolves.toEqual([{ n: 0 }]);
+  }, 60_000);
+
+  it.each([
+    [
+      "a primary key",
+      "ALTER TABLE owned_target ADD CONSTRAINT owned_idx PRIMARY KEY (a)",
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target (a);",
+    ],
+    [
+      "a deferrable unique constraint",
+      "ALTER TABLE owned_target ADD CONSTRAINT owned_idx UNIQUE (a) DEFERRABLE INITIALLY DEFERRED",
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target (a);",
+    ],
+    [
+      "a unique constraint that a foreign key also references",
+      "ALTER TABLE owned_target ADD CONSTRAINT owned_idx UNIQUE (a); CREATE TABLE owned_referrer (a integer REFERENCES owned_target (a))",
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target (a);",
+    ],
+    [
+      "an exclusion constraint",
+      "ALTER TABLE owned_target ADD CONSTRAINT owned_idx EXCLUDE USING gist (r WITH =)",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS owned_idx ON owned_target USING gist (r);",
+    ],
+  ])("fails the run, names the index and records nothing when %s owns the index of that name", async (_case, constraint, statement) => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE owned_target (a integer, r int4range)");
+    await owner.unsafe("ALTER TABLE owned_target OWNER TO slugbase_owner");
+    await owner.unsafe(constraint);
+    const chain = indexChain("owned", [statement]);
+    const before = await indexIdentities(owner, ["owned_idx"]);
+
+    const error = await rejection(migrate({ url: migratorUrl(name), chains: [chain] }));
+
+    expect(error.message).toContain("owned_idx");
+    expect(error.message).toContain("20300101000001_index_owned");
+    expect(await indexIdentities(owner, ["owned_idx"])).toEqual(before);
+    expect(await recordedRows(owner, "migrations_owned")).toBe(0);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
+  it("fails a step whose second index differs before it records the step, after keeping the first one", async () => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE pair_target (a integer, b integer)");
+    await owner.unsafe("ALTER TABLE pair_target OWNER TO slugbase_owner");
+    await owner.unsafe("CREATE INDEX pair_a_idx ON pair_target (a)");
+    await owner.unsafe("CREATE INDEX pair_b_idx ON pair_target (a)");
+    const chain = indexChain("pair", [
+      "CREATE INDEX CONCURRENTLY pair_a_idx ON pair_target (a);",
+      "CREATE INDEX CONCURRENTLY pair_b_idx ON pair_target (b);",
+    ]);
+
+    const error = await rejection(migrate({ url: migratorUrl(name), chains: [chain] }));
+
+    expect(error.message).toContain("pair_b_idx");
+    expect(await recordedRows(owner, "migrations_pair")).toBe(0);
+  }, 60_000);
+
   it("refuses a statement that is not a named concurrent index build before running any of the step", async () => {
     const { name, owner } = await createDatabase();
     await owner.unsafe("CREATE TABLE unparsable_target (a integer)");
@@ -914,6 +1126,42 @@ describe("an upgrade from the level before the audit event account indexes", () 
       expect.stringContaining("(lower((metadata ->> 'targetId'::text))) WHERE ((metadata ->> 'targetId'::text) IS NOT NULL)"),
       expect.stringContaining("(lower((metadata ->> 'transferTo'::text))) WHERE ((metadata ->> 'transferTo'::text) IS NOT NULL)"),
     ]);
+  }, 120_000);
+});
+
+describe("an upgrade from the level before the bookmark URL index", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000041";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000042";
+
+  it("builds the index concurrently on a table that holds bookmarks, in a step of its own, and it is valid and partial", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const urlIndex = journal.entries.filter((entry) => entry.tag.includes("index_bookmark_url"));
+    expect(urlIndex).toHaveLength(1);
+    for (const entry of urlIndex) {
+      expect(readFileSync(join(CE_CHAIN.folder, `${entry.tag}.sql`), "utf8").startsWith("-- slugbase:non-transactional\n")).toBe(true);
+    }
+    await owner.unsafe("DROP INDEX public.bookmarks_owner_url_idx");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${urlIndex.map((entry) => String(entry.when)).join(", ")})`);
+    await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SELECT set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${ACCOUNT}, 'url-index@example.test', 'Url index')`;
+      await tx`INSERT INTO workspaces (id, name) VALUES (${WORKSPACE}, 'Url index')`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${WORKSPACE}, ${ACCOUNT}, 'owner')`;
+      await tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+        SELECT gen_random_uuid(), ${WORKSPACE}, ${ACCOUNT}, 'https://example.com/' || n, 'https://example.com/' || n, 'example.com', 'Title ' || n
+        FROM generate_series(1, 500) AS n`;
+    });
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(urlIndex.map((entry) => entry.tag));
+    expect((await indexes(owner, ["bookmarks_owner_url_idx"])).map((index) => [index.name, index.valid])).toEqual([["bookmarks_owner_url_idx", true]]);
+    const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.bookmarks_owner_url_idx'::regclass) AS definition`;
+    expect(definition?.definition).toContain("(workspace_id, owner_id, url_canonical) WHERE (plan_archived_at IS NULL)");
   }, 120_000);
 });
 

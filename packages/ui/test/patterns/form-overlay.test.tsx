@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState, type ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Dialog, DialogPopup, DialogTitle } from "../../src/components/ui/dialog.tsx";
 import { FormOverlay } from "../../src/patterns/index.ts";
 import { expectNoViolations, stubBrowserApis, stubMatchMedia } from "../support.tsx";
 
@@ -98,6 +99,70 @@ describe("FormOverlay", () => {
   });
 });
 
+describe("FormOverlay header action", () => {
+  function WithAction(): ReactElement {
+    return (
+      <FormOverlay
+        closeLabel="Close"
+        headerAction={
+          <div>
+            <button type="button">Suggest</button>
+            <p>A block of its own</p>
+          </div>
+        }
+        onOpenChange={() => undefined}
+        open
+        title="Confirm it is you"
+      >
+        <input aria-label="Password" type="password" />
+      </FormOverlay>
+    );
+  }
+
+  for (const narrow of [false, true]) {
+    const kind = narrow ? "sheet" : "dialog";
+
+    it(`stands in the header of the ${kind}, outside the description, and is not what describes it`, async () => {
+      stubMatchMedia(narrow);
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      render(<WithAction />);
+
+      const dialog = await screen.findByRole("dialog", { name: "Confirm it is you" });
+      const action = screen.getByRole("button", { name: "Suggest" });
+
+      expect(action.closest("[data-slot=form-overlay-header-action]")).not.toBeNull();
+      expect(action.closest("[data-slot$=-description]")).toBeNull();
+      expect(dialog.querySelector("[data-slot$=-description]")).toBeNull();
+      expect(dialog.getAttribute("aria-describedby")).toBeNull();
+      expect(dialog.contains(action)).toBe(true);
+      expect(errors).not.toHaveBeenCalled();
+      await expectNoViolations(document.body);
+    });
+
+    it(`leaves the description of the ${kind} to the description when it has both`, async () => {
+      stubMatchMedia(narrow);
+      render(
+        <FormOverlay
+          closeLabel="Close"
+          description="Needs your password again."
+          headerAction={<button type="button">Suggest</button>}
+          onOpenChange={() => undefined}
+          open
+          title="Confirm it is you"
+        >
+          <input aria-label="Password" type="password" />
+        </FormOverlay>,
+      );
+
+      const dialog = await screen.findByRole("dialog", { name: "Confirm it is you" });
+      const described = document.getElementById(dialog.getAttribute("aria-describedby") ?? "");
+
+      expect(described?.textContent).toBe("Needs your password again.");
+      expect(described?.contains(screen.getByRole("button", { name: "Suggest" }))).toBe(false);
+    });
+  }
+});
+
 describe("FormOverlay keyboard trap", () => {
   function Form(): ReactElement {
     return (
@@ -181,5 +246,99 @@ describe("FormOverlay keyboard trap", () => {
     close.focus();
     expect(fireEvent.keyDown(close, { key: "Tab" })).toBe(false);
     expect(document.activeElement).toBe(screen.getByLabelText("Password"));
+  });
+});
+
+describe("FormOverlay with the focus on the page body", () => {
+  function Page({ overlay = true, over = false }: { readonly overlay?: boolean; readonly over?: boolean }): ReactElement {
+    return (
+      <>
+        <a href="#behind">Skip to content</a>
+        <FormOverlay closeLabel="Close" onOpenChange={() => undefined} open={overlay} title="Confirm it is you">
+          <input aria-label="Password" type="password" />
+          <button type="button">Save</button>
+        </FormOverlay>
+        {over ? (
+          <Dialog open>
+            <DialogPopup showCloseButton={false}>
+              <DialogTitle>A question</DialogTitle>
+              <button type="button">Yes</button>
+            </DialogPopup>
+          </Dialog>
+        ) : null}
+      </>
+    );
+  }
+
+  function toBody(): void {
+    act(() => {
+      (document.activeElement as HTMLElement).blur();
+    });
+    expect(document.activeElement).toBe(document.body);
+  }
+
+  for (const narrow of [false, true]) {
+    const kind = narrow ? "sheet" : "dialog";
+
+    it(`takes a Tab into the ${kind}, from where the browser goes on to its first stop`, async () => {
+      stubMatchMedia(narrow);
+      render(<Page />);
+      const overlay = await screen.findByRole("dialog", { name: "Confirm it is you" });
+      toBody();
+
+      const proceeded = fireEvent.keyDown(document.body, { key: "Tab" });
+
+      expect(proceeded).toBe(true);
+      expect(document.activeElement).toBe(overlay);
+    });
+
+    it(`takes a Shift+Tab into the ${kind}, to its last stop`, async () => {
+      stubMatchMedia(narrow);
+      render(<Page />);
+      await screen.findByRole("dialog", { name: "Confirm it is you" });
+      toBody();
+
+      const proceeded = fireEvent.keyDown(document.body, { key: "Tab", shiftKey: true });
+
+      expect(proceeded).toBe(false);
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+    });
+  }
+
+  it("leaves a Tab alone while the focus is on a control of the page", async () => {
+    render(<Page />);
+    await screen.findByRole("dialog", { name: "Confirm it is you" });
+    const behind = screen.getByText("Skip to content");
+    act(() => {
+      behind.focus();
+    });
+
+    fireEvent.keyDown(behind, { key: "Tab" });
+
+    expect(document.activeElement).toBe(behind);
+  });
+
+  it("leaves a Tab to the modal that opened over it", async () => {
+    render(<Page over />);
+    await screen.findByRole("dialog", { name: "A question", hidden: true });
+    toBody();
+
+    fireEvent.keyDown(document.body, { key: "Tab" });
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("takes no key once the overlay has closed", async () => {
+    const { rerender } = render(<Page />);
+    await screen.findByRole("dialog", { name: "Confirm it is you" });
+    rerender(<Page overlay={false} />);
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    toBody();
+
+    fireEvent.keyDown(document.body, { key: "Tab" });
+
+    expect(document.activeElement).toBe(document.body);
   });
 });
