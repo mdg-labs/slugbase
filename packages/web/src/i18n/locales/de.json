@@ -3041,6 +3041,25 @@
         "former": "Ehemaliges Mitglied",
         "unknown": "Akteur"
       },
+      "range": {
+        "label": "Zeitraum",
+        "any": "Beliebiger Zeitraum",
+        "24h": "Letzte 24 Stunden",
+        "7d": "Letzte 7 Tage",
+        "30d": "Letzte 30 Tage",
+        "90d": "Letzte 90 Tage",
+        "custom": "Eigener Zeitraum",
+        "first": "Erster Tag",
+        "last": "Letzter Tag",
+        "orderError": "Der letzte Tag liegt vor dem ersten Tag.",
+        "boundsError": "Gib einen Tag von Jahr 0001 bis 9999 ein.",
+        "refused": "Diese Tage konnten nicht verwendet werden. Wähle andere Tage.",
+        "chip": {
+          "between": "{from} bis {to}",
+          "from": "Ab {from}",
+          "to": "Bis {to}"
+        }
+      },
       "category": {
         "label": "Aktionskategorie",
         "placeholder": "Beliebige Kategorie",

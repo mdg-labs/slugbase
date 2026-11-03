@@ -3041,6 +3041,25 @@
         "former": "Former member",
         "unknown": "Actor"
       },
+      "range": {
+        "label": "Date range",
+        "any": "Any time",
+        "24h": "Last 24 hours",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "custom": "Custom range",
+        "first": "First day",
+        "last": "Last day",
+        "orderError": "The last day is before the first day.",
+        "boundsError": "Enter a day from year 0001 to 9999.",
+        "refused": "These days could not be used. Choose other days.",
+        "chip": {
+          "between": "{from} to {to}",
+          "from": "From {from}",
+          "to": "Until {to}"
+        }
+      },
       "category": {
         "label": "Action category",
         "placeholder": "Any category",

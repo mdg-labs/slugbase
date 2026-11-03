@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { ApiProblemError } from "../api/client.ts";
 import { EntitlementGate, entitlementsQuery, isEntitlementRequired } from "../entitlements/index.ts";
 import { Slot } from "../extensions/index.ts";
 import { useFormat } from "../i18n/use-format.ts";
@@ -11,6 +12,7 @@ import { useAllMembers } from "../teams/use-all-members.ts";
 import { WorkspaceAdminOnly } from "../shell/workspace-admin-only.tsx";
 import { useActiveWorkspaceId } from "../shell/workspace-members.ts";
 import { auditEventsQuery, type AuditEvent } from "./audit.ts";
+import type { AuditRange } from "./audit-range.ts";
 import { AuditEventPanel } from "./audit-event-panel.tsx";
 import { EventActor } from "./audit-actor.tsx";
 import { AuditFilters } from "./audit-filters.tsx";
@@ -78,11 +80,23 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
   const controls = useAuditSearchControls();
   const members = useAllMembers();
   const filtered = hasActiveFilters(search);
+  // A custom range with no day yet is not in the address, so the bar remembers that it was chosen.
+  const [customRange, setCustomRange] = useState(false);
+  const range: AuditRange = {
+    ...(search.range === undefined ? {} : { preset: search.range }),
+    ...(search.from === undefined ? {} : { firstDay: search.from }),
+    ...(search.to === undefined ? {} : { lastDay: search.to }),
+  };
+  const clearFilters = (): void => {
+    setCustomRange(false);
+    controls.clearFilters();
+  };
   // The filters are part of the query's key, so a change of them starts the list again from its first page.
   const events = useInfiniteQuery(
     auditEventsQuery(api, workspaceId, {
       ...(search.actor === undefined ? {} : { actorAccountId: search.actor }),
       ...(search.category === undefined ? {} : { category: search.category }),
+      range,
     }),
   );
   const items = events.data?.pages.flatMap((page) => page.items) ?? [];
@@ -115,9 +129,13 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
   if (events.isError && events.data === undefined && isEntitlementRequired(events.error)) {
     return <Slot name="entitlement.upgradeAction" />;
   }
+  // A refused range is said beside the range, which can be changed, and not by the table's banner nor by a list that looks empty.
+  const rangeRefused = filtered && events.isError && events.data === undefined && events.error instanceof ApiProblemError && events.error.status === 422;
   // The filter bar stays through every state of the list, so that a filter that leaves nothing, or fails, can be changed or taken off.
-  let body: ReactElement;
-  if (events.isError && events.data === undefined) {
+  let body: ReactElement | null;
+  if (rangeRefused) {
+    body = null;
+  } else if (events.isError && events.data === undefined) {
     body = (
       <Banner
         action={
@@ -151,7 +169,7 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
     body = filtered ? (
       <EmptyState
         actions={
-          <Button onClick={controls.clearFilters} variant="outline">
+          <Button onClick={clearFilters} variant="outline">
             {t("audit.filters.clear")}
           </Button>
         }
@@ -206,7 +224,7 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
   }
   return (
     <div className="flex flex-col gap-4">
-      <AuditFilters controls={controls} members={members} search={search} />
+      <AuditFilters controls={controls} customRange={customRange} members={members} onCustomRangeChange={setCustomRange} rangeRefused={rangeRefused} search={search} />
       {body}
     </div>
   );

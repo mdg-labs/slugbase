@@ -554,6 +554,46 @@ export interface DataTableProps<Row extends object> {
 export type DataTableSortDirection = "ascending" | "descending" | "none";
 
 // @public
+export const DATE_RANGE_MAX_DAY = "9999-12-31";
+
+// @public
+export const DATE_RANGE_MIN_DAY = "0001-01-01";
+
+// @public
+export function DateRange(input: DateRangeProps): ReactElement;
+
+// @public
+export interface DateRangeDays {
+    // (undocumented)
+    first: string;
+    // (undocumented)
+    last: string;
+}
+
+// @public (undocumented)
+export interface DateRangeProps {
+    boundsError: ReactNode;
+    // (undocumented)
+    className?: string;
+    customPreset: string;
+    days: DateRangeDays;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    // (undocumented)
+    firstLabel: ReactNode;
+    label: ReactNode;
+    // (undocumented)
+    lastLabel: ReactNode;
+    onDaysChange: (days: DateRangeDays) => void;
+    // (undocumented)
+    onPresetChange: (preset: string) => void;
+    orderError: ReactNode;
+    preset: string;
+    presets: readonly SelectOption[];
+}
+
+// @public
 export function Disclosure(input: DisclosureProps): ReactElement;
 
 // @public (undocumented)
@@ -725,6 +765,9 @@ export interface InlineNoteProps {
     className?: string;
     title?: ReactNode;
 }
+
+// @public
+export function isCalendarDay(value: string): boolean;
 
 export { LayoutGridIcon }
 
