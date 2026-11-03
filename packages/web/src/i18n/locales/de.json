@@ -1486,7 +1486,8 @@
       "general": "Allgemein",
       "members": "Mitglieder",
       "teams": "Teams",
-      "ai": "KI-Vorschläge"
+      "ai": "KI-Vorschläge",
+      "audit": "Audit-Log"
     },
     "account": {
       "title": "Profil",
@@ -3010,6 +3011,97 @@
       "cancel": "Abbrechen",
       "done": "Team „{name}“ gelöscht.",
       "gone": "Dieses Team wurde bereits gelöscht."
+    }
+  },
+  "audit": {
+    "title": "Audit-Log",
+    "description": "Wer in diesem Workspace was geändert hat, die neuesten Ereignisse zuerst.",
+    "loading": "Audit-Log wird geladen",
+    "loadFailed": "Das Audit-Log konnte nicht geladen werden",
+    "loadMore": "Mehr anzeigen",
+    "loadMoreFailed": "Weitere Ereignisse konnten nicht geladen werden",
+    "count": "{count, plural, one {# Ereignis angezeigt} other {# Ereignisse angezeigt}}",
+    "empty": {
+      "title": "Noch keine Ereignisse",
+      "description": "Änderungen an Mitgliedern, Teams, Freigaben und Einstellungen werden hier aufgezeichnet."
+    },
+    "column": {
+      "time": "Zeit",
+      "actor": "Akteur",
+      "action": "Aktion",
+      "target": "Ziel"
+    },
+    "actor": {
+      "deleted": "gelöschtes Konto",
+      "system": "System",
+      "apiToken": "API-Token"
+    },
+    "target": {
+      "none": "Kein Ziel",
+      "sharedWith": "mit {name}"
+    },
+    "entities": {
+      "workspace": "Workspace",
+      "member": "Mitglied",
+      "invitation": "Einladung",
+      "team": "Team",
+      "bookmark": "Lesezeichen",
+      "folder": "Ordner"
+    },
+    "categories": {
+      "workspace": "Workspace",
+      "member": "Mitglied",
+      "invitation": "Einladung",
+      "team": "Team",
+      "bookmark": "Lesezeichen",
+      "share": "Freigabe",
+      "export": "Export",
+      "import": "Import",
+      "other": "Sonstige"
+    },
+    "actions": {
+      "workspace": {
+        "created": "Workspace erstellt",
+        "renamed": "Workspace umbenannt",
+        "settings_changed": "Workspace-Einstellung geändert",
+        "deletion_requested": "Löschung des Workspace angefordert",
+        "ownership_transferred": "Eigentum übertragen"
+      },
+      "member": {
+        "role_changed": "Rolle eines Mitglieds geändert",
+        "removed": "Mitglied entfernt",
+        "left": "Mitglied ausgetreten",
+        "joined": "Mitglied beigetreten",
+        "instance_admin_joined": "Instanzadministrator beigetreten"
+      },
+      "invitation": {
+        "created": "Einladung gesendet",
+        "resent": "Einladung erneut gesendet",
+        "link_created": "Einladungslink erstellt",
+        "revoked": "Einladung widerrufen"
+      },
+      "team": {
+        "created": "Team erstellt",
+        "updated": "Team umbenannt",
+        "deleted": "Team gelöscht",
+        "members_changed": "Teammitglieder geändert"
+      },
+      "bookmark": {
+        "archived": "Lesezeichen archiviert",
+        "restored": "Lesezeichen wiederhergestellt",
+        "bulk_deleted": "Lesezeichen gelöscht"
+      },
+      "share": {
+        "granted": "Freigabe erteilt",
+        "revoked": "Freigabe widerrufen",
+        "bulk_granted": "Mehrere Lesezeichen freigegeben"
+      },
+      "export": {
+        "created": "Export erstellt"
+      },
+      "import": {
+        "completed": "Import abgeschlossen"
+      }
     }
   },
   "sharing": {

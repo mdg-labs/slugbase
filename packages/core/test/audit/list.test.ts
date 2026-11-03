@@ -1,4 +1,4 @@
-import { AUDIT_EVENT_CATEGORIES } from "@slugbase/contracts";
+import { AUDIT_EVENT_ACTIONS, AUDIT_EVENT_CATEGORIES } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import {
   AUDIT_ACTIONS,
@@ -211,5 +211,9 @@ describe("the categories of the log", () => {
       expect(auditCategoryOf(name)).toBe(AUDIT_ACTIONS[name].category);
     }
     expect(auditCategoryOf("retired.action")).toBeNull();
+  });
+
+  it("have the actions the contract lists, in the order of the catalog", () => {
+    expect([...AUDIT_EVENT_ACTIONS]).toEqual([...AUDIT_ACTION_NAMES]);
   });
 });

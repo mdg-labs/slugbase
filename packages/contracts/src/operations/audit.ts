@@ -9,6 +9,39 @@ import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } f
 /** The groups of the audit catalog an event is filtered by (`AUDIT_CATEGORIES` of `@slugbase/core`, which a test keeps equal to this list). */
 export const AUDIT_EVENT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"] as const;
 
+/**
+ * The dotted names of the actions the audit catalog holds (`AUDIT_ACTION_NAMES` of `@slugbase/core`, which a test keeps equal to this list, in order). An event's
+ * `action` stays a plain string, because an event written under an action the catalog has retired still lists; a client that labels actions iterates this list.
+ */
+export const AUDIT_EVENT_ACTIONS = [
+  "workspace.created",
+  "workspace.renamed",
+  "workspace.settings_changed",
+  "workspace.deletion_requested",
+  "workspace.ownership_transferred",
+  "member.role_changed",
+  "member.removed",
+  "member.left",
+  "member.joined",
+  "member.instance_admin_joined",
+  "invitation.created",
+  "invitation.resent",
+  "invitation.link_created",
+  "invitation.revoked",
+  "team.created",
+  "team.updated",
+  "team.deleted",
+  "team.members_changed",
+  "bookmark.archived",
+  "bookmark.restored",
+  "bookmark.bulk_deleted",
+  "share.granted",
+  "share.revoked",
+  "share.bulk_granted",
+  "export.created",
+  "import.completed",
+] as const;
+
 /** The longest action name the log stores. */
 const AUDIT_ACTION_MAX_LENGTH = 64;
 
