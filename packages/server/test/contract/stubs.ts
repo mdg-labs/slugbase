@@ -86,7 +86,8 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
       if ((scope !== "read" && scope !== "read-write") || accountId === undefined || membership === undefined) {
         return Promise.resolve(undefined);
       }
-      return Promise.resolve({ kind: "api-token", tokenId: `token-${accountId}`, accountId, workspaceId: membership.workspaceId, scope });
+      // The identifier of the stub's token is a UUID, as a real token's is, because an operation that records the token in the audit log refuses an identifier that is not one.
+      return Promise.resolve({ kind: "api-token", tokenId: `0192f3a0-eeee${accountId.slice("0192f3a0-0000".length)}`, accountId, workspaceId: membership.workspaceId, scope });
     },
   };
 

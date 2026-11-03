@@ -16,6 +16,7 @@ export * from "./components/ui/context-menu.tsx";
 export * from "./components/ui/empty.tsx";
 export * from "./components/ui/input.tsx";
 export * from "./components/ui/kbd.tsx";
+export * from "./components/ui/progress.tsx";
 export * from "./components/ui/scroll-area.tsx";
 export * from "./components/ui/separator.tsx";
 export * from "./components/ui/sheet.tsx";

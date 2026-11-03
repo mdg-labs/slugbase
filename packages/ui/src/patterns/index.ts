@@ -29,7 +29,8 @@ export { DataTable, type DataTableCardSlot, type DataTableColumn, type DataTable
 export { Disclosure, type DisclosureProps } from "./disclosure.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { Favicon, type FaviconProps } from "./favicon.tsx";
-export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
+export { FileDrop, type FileDropProps } from "./file-drop.tsx";
+export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps, type PromiseToastMessages, type PromiseToastText } from "./feedback-toast.tsx";
 export { FOLDER_ICON_COMPONENTS } from "./folder-icons.ts";
 export { FormField, type FormFieldProps } from "./form-field.tsx";
 export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
@@ -82,6 +83,7 @@ export {
   BookmarkIcon,
   CompassIcon,
   CopyIcon,
+  DownloadIcon,
   ExternalLinkIcon,
   FilterXIcon,
   FolderIcon,
@@ -108,6 +110,7 @@ export {
   TagIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  UploadIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react";

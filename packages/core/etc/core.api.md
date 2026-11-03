@@ -4,6 +4,9 @@
 
 ```ts
 
+import { ImportFileBookmark } from '@slugbase/contracts';
+import { ImportRequest } from '@slugbase/contracts';
+import { ImportResult } from '@slugbase/contracts';
 import type { ProblemCode } from '@slugbase/contracts';
 import type { SHARE_TARGET_KINDS } from '@slugbase/contracts';
 
@@ -663,10 +666,50 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "export.created": {
+        readonly category: "export";
+        readonly metadata: {
+            readonly bookmarks: {
+                readonly type: "count";
+            };
+            readonly folders: {
+                readonly type: "count";
+            };
+            readonly tags: {
+                readonly type: "count";
+            };
+            readonly shared: {
+                readonly type: "count";
+            };
+        };
+    };
+    readonly "import.completed": {
+        readonly category: "import";
+        readonly metadata: {
+            readonly created: {
+                readonly type: "count";
+            };
+            readonly skipped: {
+                readonly type: "count";
+            };
+            readonly failed: {
+                readonly type: "count";
+            };
+            readonly slugsDropped: {
+                readonly type: "count";
+            };
+            readonly foldersCreated: {
+                readonly type: "count";
+            };
+            readonly tagsCreated: {
+                readonly type: "count";
+            };
+        };
+    };
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -2187,6 +2230,9 @@ export interface BookmarkShareStore {
 // @public
 export type BookmarkShareUse = "read" | "grant" | "revoke";
 
+// @public
+export function bookmarksOfFile(file: ImportRequest): readonly ImportFileBookmark[];
+
 // @public (undocumented)
 export type BookmarkSort = (typeof BOOKMARK_SORTS)[number];
 
@@ -2434,6 +2480,9 @@ export function checkSuggestion(value: {
 export function chooseSlugBookmark(input: GoChooseDependencies, ask: GoChooseAsk): Promise<GoChooseOutcome>;
 
 // @public
+export function cleanText(value: string, max: number): string;
+
+// @public
 export interface ClientErrorReportPort extends Port {
     // (undocumented)
     dsn(request: ClientErrorReportRequest): Promise<string | null>;
@@ -2516,6 +2565,9 @@ export interface CredentialToken {
 
 // @public (undocumented)
 export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
+
+// @public
+export function cutCodePoints(value: string, max: number): string;
 
 // @public (undocumented)
 export interface Dashboard {
@@ -2931,6 +2983,180 @@ export interface ErrorReportContext {
 export interface ErrorReportPort extends Port {
     // (undocumented)
     capture(error: unknown, context?: ErrorReportContext): Promise<void>;
+}
+
+// @public
+export function escapeHtml(text: string): string;
+
+// @public
+export const EXPORT_PAGE_SIZE = 500;
+
+// @public
+export interface ExportBookmarkRow {
+    // (undocumented)
+    readonly description: string | null;
+    readonly folders: readonly string[];
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly pinned: boolean;
+    // (undocumented)
+    readonly planArchived: boolean;
+    // (undocumented)
+    readonly slug: string | null;
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export function exportFilename(exportedAt: Date): string;
+
+// @public (undocumented)
+export interface ExportFolderRow {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface ExportGoPreferenceRow {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly slug: string;
+}
+
+// @public
+export function exportNetscapeFilename(exportedAt: Date): string;
+
+// @public
+export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId" | "includeShared" | "only">): ReadableStream<Uint8Array>;
+
+// @public
+export type ExportSelection = {
+    readonly kind: "ids";
+    readonly ids: readonly string[];
+} | {
+    readonly kind: "filter";
+    readonly filter: BookmarkFilterAsk & {
+        readonly scope: BookmarkScope;
+    };
+};
+
+// @public (undocumented)
+export type ExportSelectionOutcome =
+/** The identifiers to export, lower-cased and without repeats. */
+    {
+    readonly kind: "selected";
+    readonly only: readonly string[];
+}
+/** More identifiers are named than an export takes, or the filters match more bookmarks than the select-all cap; nothing was read for the export. */
+| {
+    readonly kind: "too_many";
+    readonly limit: number;
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was read. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+};
+
+// @public
+export interface ExportSharedRow {
+    // (undocumented)
+    readonly description: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface ExportStartAsk {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly includeShared: boolean;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    readonly only?: readonly string[] | undefined;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface ExportStartDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    readonly store: ExportStore;
+}
+
+// @public (undocumented)
+export type ExportStartOutcome = {
+    readonly kind: "started";
+    readonly summary: ExportSummary;
+}
+/** The workspace of the request cannot be read (it is being deleted); nothing is recorded. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface ExportStore {
+    bookmarks(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportBookmarkRow[]>;
+    folders(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportFolderRow[]>;
+    goPreferences(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportGoPreferenceRow[]>;
+    shared(accountId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportSharedRow[]>;
+    summary(ownerId: string, includeShared: boolean, only?: readonly string[]): Promise<ExportSummary | undefined>;
+    tags(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly string[]>;
+}
+
+// @public
+export function exportStream(dependencies: ExportStreamDependencies, ask: ExportStreamAsk): ReadableStream<Uint8Array>;
+
+// @public (undocumented)
+export interface ExportStreamAsk {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly exportedAt: Date;
+    readonly includeShared: boolean;
+    readonly only?: readonly string[] | undefined;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public (undocumented)
+export interface ExportStreamDependencies {
+    readonly onFailure: (error: unknown) => void;
+    readonly page: <T>(read: (store: ExportStore) => Promise<T>) => Promise<T>;
+    readonly pageSize?: number;
+}
+
+// @public
+export interface ExportSummary {
+    readonly bookmarks: number;
+    // (undocumented)
+    readonly folders: number;
+    readonly shared: number;
+    // (undocumented)
+    readonly tags: number;
+    // (undocumented)
+    readonly workspaceName: string;
 }
 
 // @public
@@ -4021,6 +4247,228 @@ export class ImageRefused extends Error {
     constructor(code: ImageRefusalCode);
     // (undocumented)
     readonly code: ImageRefusalCode;
+}
+
+// @public
+export const IMPORT_BATCH_SIZE = 500;
+
+// @public (undocumented)
+export interface ImportAsk {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly ceiling: EntitlementLimit;
+    // (undocumented)
+    readonly file: Parameters<typeof bookmarksOfFile>[0];
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    readonly skipDuplicates: boolean;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export interface ImportBookmark {
+    readonly canonical: string;
+    // (undocumented)
+    readonly description: string | null;
+    readonly folders: readonly string[];
+    readonly forwarding: boolean;
+    readonly host: string;
+    readonly pinned: boolean;
+    readonly position: number;
+    readonly slug: {
+        readonly kind: "none";
+    } | {
+        readonly kind: "valid";
+        readonly slug: string;
+    } | {
+        readonly kind: "invalid";
+        readonly text: string;
+    };
+    readonly tags: readonly string[];
+    readonly title: string;
+    readonly url: string;
+}
+
+// @public
+export function importBookmarks(input: ImportDependencies, ask: ImportAsk): Promise<ImportOutcome>;
+
+// @public (undocumented)
+export interface ImportDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    readonly newBookmarkId: () => string;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: ImportStore;
+}
+
+// @public
+export interface ImportFolderToResolve {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface ImportLinks {
+    // (undocumented)
+    readonly folders: readonly {
+        readonly bookmarkId: string;
+        readonly folderId: string;
+    }[];
+    // (undocumented)
+    readonly tags: readonly {
+        readonly bookmarkId: string;
+        readonly tagId: string;
+    }[];
+}
+
+// @public
+export interface ImportNewBookmark {
+    // (undocumented)
+    readonly description: string | null;
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly host: string;
+    readonly id: string;
+    readonly ownerId: string;
+    // (undocumented)
+    readonly pinned: boolean;
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+    // (undocumented)
+    readonly urlCanonical: string;
+}
+
+// @public (undocumented)
+export type ImportOutcome =
+/** The workspace cannot be reached; nothing was written. */
+    {
+    readonly kind: "unavailable";
+} | {
+    readonly kind: "imported";
+    readonly result: ImportResult;
+}
+/** The file would create `newNames` new folders and tags together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
+| {
+    readonly kind: "too_many_names";
+    readonly newNames: number;
+}
+/** The bookmarks the import would create would make `links` folder and tag links together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
+| {
+    readonly kind: "too_many_links";
+    readonly links: number;
+};
+
+// @public
+export type ImportPlaces =
+/** The workspace cannot be reached: it does not exist, is being deleted, or the account is no member. Nothing is taken. */
+    {
+    readonly kind: "unavailable";
+}
+/** `taken` places (as many as were wanted, or as many as were left under the ceiling) were taken, and the workspace holds `used` bookmarks that count after it. */
+| {
+    readonly kind: "taken";
+    readonly taken: number;
+    readonly used: number;
+};
+
+// @public (undocumented)
+export interface ImportPreviewAsk {
+    readonly ceiling: EntitlementLimit;
+    // (undocumented)
+    readonly file: ImportRequest;
+    readonly skipDuplicates: boolean;
+}
+
+// @public (undocumented)
+export interface ImportPreviewDependencies {
+    // (undocumented)
+    readonly store: ImportPreviewStore;
+}
+
+// @public (undocumented)
+export type ImportPreviewOutcome =
+/** The workspace cannot be read: it is being deleted, or the caller is no member of it. */
+    {
+    readonly kind: "unavailable";
+} | {
+    readonly kind: "previewed";
+    readonly result: ImportResult;
+}
+/** The file would create more than `IMPORT_MAX_NEW_NAMES` new folders and tags together: `newNames` of them. */
+| {
+    readonly kind: "too_many_names";
+    readonly newNames: number;
+}
+/** The bookmarks that would be created would make more than `IMPORT_MAX_LINKS` folder and tag links together: `links` of them. */
+| {
+    readonly kind: "too_many_links";
+    readonly links: number;
+};
+
+// @public
+export interface ImportPreviewStore {
+    bookmarkCount(): Promise<number | undefined>;
+    existingCanonicalUrls(canonicals: readonly string[]): Promise<ReadonlySet<string>>;
+    existingFolderNames(names: readonly string[]): Promise<ReadonlySet<string>>;
+    existingSlugs(slugs: readonly string[]): Promise<ReadonlySet<string>>;
+    existingTagNames(names: readonly string[]): Promise<ReadonlySet<string>>;
+    firstSameNames(names: readonly string[]): Promise<readonly number[]>;
+}
+
+// @public
+export interface ImportRefusal {
+    // (undocumented)
+    readonly position: number;
+    // (undocumented)
+    readonly reason: ImportRefusalReason;
+    readonly title: string;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export type ImportRefusalReason = "url_not_allowed" | "url_invalid";
+
+// @public
+export interface ImportResolved {
+    readonly created: number;
+    readonly ids: ReadonlyMap<string, string>;
+}
+
+// @public (undocumented)
+export interface ImportStore extends ImportPreviewStore {
+    insertBookmarks(batch: {
+        readonly bookmarks: readonly ImportNewBookmark[];
+        readonly events: readonly DomainEvent<"bookmark.created">[];
+    }): Promise<{
+        readonly slugsLost: readonly string[];
+    }>;
+    linkBookmarks(links: ImportLinks): Promise<void>;
+    rememberChoices(choices: readonly {
+        readonly slug: string;
+        readonly bookmarkId: string;
+    }[]): Promise<number>;
+    resolveFolders(folders: readonly ImportFolderToResolve[]): Promise<ImportResolved>;
+    resolveTags(tags: readonly ImportTagToResolve[]): Promise<ImportResolved>;
+    takePlaces(ceiling: number | null, wanted: number): Promise<ImportPlaces>;
+}
+
+// @public
+export interface ImportTagToResolve {
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
 }
 
 // @public
@@ -5293,6 +5741,52 @@ export const METADATA_TITLE_MAX_LENGTH = 300;
 // @public (undocumented)
 export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;
 
+// @public
+export interface NetscapeBookmarkRow {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly slug: string | null;
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export interface NetscapeExportStore {
+    folderBookmarks(ownerId: string, folderId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly NetscapeBookmarkRow[]>;
+    sections(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly NetscapeSectionRow[]>;
+    shared(accountId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportSharedRow[]>;
+    unfiledBookmarks(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly NetscapeBookmarkRow[]>;
+}
+
+// @public (undocumented)
+export type NetscapeFile = {
+    readonly kind: "parsed";
+    readonly bookmarks: readonly ImportFileBookmark[];
+}
+/** The file has more than `IMPORT_MAX_BOOKMARKS` links. */
+| {
+    readonly kind: "too_many";
+};
+
+// @public
+export interface NetscapeSectionRow {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface NetscapeStreamDependencies {
+    readonly onFailure: (error: unknown) => void;
+    readonly page: <T>(read: (store: NetscapeExportStore) => Promise<T>) => Promise<T>;
+    readonly pageSize?: number;
+}
+
 // @public (undocumented)
 export interface NewAccountAcceptance {
     readonly accountId: string;
@@ -5625,6 +6119,9 @@ export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: 
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
 
 // @public
+export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile;
+
+// @public
 export function parsePageIcons(input: PageMetadataInput): readonly string[];
 
 // @public
@@ -5697,6 +6194,9 @@ export class PersonalWorkspaceUnavailableError extends Error {
 }
 
 // @public
+export function plainText(value: string): string;
+
+// @public
 export interface Port {
     readonly available: boolean;
 }
@@ -5721,6 +6221,9 @@ export function previewBulkShare(input: BookmarkBulkSharePreviewDependencies, as
 
 // @public
 export function previewBulkTags(input: BookmarkBulkPreviewDependencies, ask: BookmarkBulkPreviewAsk): Promise<BookmarkBulkPreviewOutcome>;
+
+// @public
+export function previewImport(input: ImportPreviewDependencies, ask: ImportPreviewAsk): Promise<ImportPreviewOutcome>;
 
 // @public
 export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string, ownedMax: EntitlementLimit): Promise<PersonalWorkspaceOutcome>;
@@ -5756,6 +6259,15 @@ export function readBookmark(input: BookmarkReadDependencies, ask: BookmarkReadA
 
 // @public
 export function readFolder(input: FolderReadDependencies, ask: FolderReadAsk): Promise<FolderRecord | undefined>;
+
+// @public
+export function readImportBookmark(entry: ImportFileBookmark, position: number): ImportBookmark | ImportRefusal;
+
+// @public
+export function readsShared(ask: {
+    readonly includeShared: boolean;
+    readonly only?: readonly string[] | undefined;
+}): boolean;
 
 // @public
 export function readTeam(input: TeamReadDependencies<"find">, ask: {
@@ -5829,6 +6341,9 @@ export function resendInvitation(input: InvitationActionDependencies, ask: Invit
 
 // @public
 export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
+
+// @public
+export function resolveExportSelection(store: Pick<BookmarkBulkStore, "ids">, selection: ExportSelection): Promise<ExportSelectionOutcome>;
 
 // @public
 export function resolveInWorkspace(input: GoWorkspaceResolveDependencies, ask: GoResolveAsk): Promise<GoWorkspaceResolution>;
@@ -6048,6 +6563,9 @@ export interface SlugUse {
     readonly othersUseCount: number;
     readonly takenByOwner: boolean;
 }
+
+// @public
+export function startExport(input: ExportStartDependencies, ask: ExportStartAsk): Promise<ExportStartOutcome>;
 
 // @public
 export interface StoredOnboarding {

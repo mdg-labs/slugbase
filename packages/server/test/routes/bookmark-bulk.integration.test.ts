@@ -1,6 +1,6 @@
 import { LimitedEntitlementSource } from "@slugbase/testing";
-import { useTestDatabase } from "@slugbase/testing/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
@@ -34,6 +34,8 @@ beforeEach(async () => {
   await database().owner`TRUNCATE workspaces CASCADE`;
   await database().owner`TRUNCATE pgboss.job`;
 });
+
+afterEach(() => assertBookmarkCountMatches(database()));
 
 interface Problem {
   readonly code: string;
@@ -779,6 +781,7 @@ describe("select all", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
         INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
         SELECT gen_random_uuid(), ${shared.workspaceId}, ${owner.account.id}, 'https://example.com/f' || n, 'https://example.com/f' || n, 'example.com', 'Filler ' || n
         FROM generate_series(1, ${SELECT_ALL_CAP + 1}) AS n`;
+      await tx`UPDATE workspaces SET bookmark_count = bookmark_count + ${SELECT_ALL_CAP + 1} WHERE id = ${shared.workspaceId}`;
     });
 
     const response = await ids(world, owner);

@@ -402,6 +402,10 @@ describe("the requests for an emailed link (T8)", () => {
 // acceptance that creates the account too, and the latency class of each kind of dead token against an unknown one.
 describe("the requests that redeem an invitation token (T8)", () => {
   const harness = workspaceHarness(database);
+  // Rounds per order. The inspection and the sign-up form take half a millisecond, so 61 calls of a side span only a few
+  // tens of milliseconds, and under load a delay of the host can cover most of them; more calls reach into the stretches
+  // that nothing delayed, where the low end of a side holds its work.
+  const REDEEM_LATENCY_ROUNDS = 100;
   const REDEEM_ENV = { RATE_LIMIT_TOKEN_REDEEM_IP: "100000/hour", RATE_LIMIT_TOKEN_REDEEM_ACCOUNT: "100000/hour" };
 
   beforeAll(() => harness.start(), HOOK_TIMEOUT_MS);
@@ -519,16 +523,22 @@ describe("the requests that redeem an invitation token (T8)", () => {
           return answer;
         };
         const reference = () => refused(form.call(world, randomToken(), "198.51.100.1"));
-        // A path that answered before it looked the token up, or after more work than the other, would fall outside the
-        // bounds, which are far wider than the noise of a loaded runner: the ratio is a median over many back-to-back pairs.
+        // The requests take from half a millisecond (the inspection and the sign-up form: one statement and the HTTP
+        // stack) to a few (the signed-in acceptance), and the host delays single calls of the test by as much as
+        // that. The statements each kind of token sends take the same time, so the readings are the ones of the
+        // emailed-link tests: the fastest call and the 25th percentile of each side, which a delayed call does not
+        // move. A path that answered before it looked the token up, or after more work than the other, would fall
+        // outside the bounds, which are far wider than the noise those readings keep.
         for (const probe of probes) {
           if (probe === undefined) {
             throw new Error("a kind of dead token is missing");
           }
           const { name, token } = probe;
-          const ratio = await medianLatencyRatio(reference, () => refused(form.call(world, token, "198.51.100.1")));
-          expect(ratio, `${form.name}, ${name}`).toBeGreaterThan(0.5);
-          expect(ratio, `${form.name}, ${name}`).toBeLessThan(2);
+          const ratios = await fastLatencyRatios(reference, () => refused(form.call(world, token, "198.51.100.1")), REDEEM_LATENCY_ROUNDS);
+          for (const [reading, ratio] of Object.entries(ratios)) {
+            expect(ratio, `${form.name}, ${name}, ${reading}`).toBeGreaterThan(0.5);
+            expect(ratio, `${form.name}, ${name}, ${reading}`).toBeLessThan(2);
+          }
         }
       }
     },

@@ -112,6 +112,30 @@ export async function insertLinks(tx: TenantTx, folderIds: readonly string[], bo
   return inserted.length;
 }
 
+/** The most pairs one statement of `insertLinkPairs` writes. */
+export const LINK_PAIRS_BATCH_SIZE = 10_000;
+
+/** Files each bookmark of `pairs` in its own folder, leaving the links that exist, and answers how many were new: the pairs, where `insertLinks` writes every combination of two sets. Both sides are owned already, and so are the locks. */
+export async function insertLinkPairs(tx: TenantTx, pairs: readonly { readonly folderId: string; readonly bookmarkId: string }[]): Promise<number> {
+  const workspaceId = requireWorkspace(tx, "filing bookmarks");
+  requireIdentifiers(
+    pairs.flatMap((pair) => [pair.folderId, pair.bookmarkId]),
+    "filing bookmarks",
+  );
+  let added = 0;
+  for (let from = 0; from < pairs.length; from += LINK_PAIRS_BATCH_SIZE) {
+    const rows = JSON.stringify(pairs.slice(from, from + LINK_PAIRS_BATCH_SIZE).map((pair) => ({ folder_id: pair.folderId, bookmark_id: pair.bookmarkId })));
+    // The statement names the columns the application role may insert (a column grant); the query builder would name `added_at` too.
+    const inserted = await tenantHandle(tx).execute<{ folder_id: string }>(sql`
+      INSERT INTO ${folderBookmarks} (workspace_id, folder_id, bookmark_id)
+      SELECT ${workspaceId}::uuid, r.folder_id, r.bookmark_id FROM jsonb_to_recordset(${rows}::text::jsonb) AS r(folder_id uuid, bookmark_id uuid)
+      ON CONFLICT (folder_id, bookmark_id) DO NOTHING
+      RETURNING folder_id`);
+    added += inserted.length;
+  }
+  return added;
+}
+
 /** Removes the links of `folderIds` and `bookmarkIds` (every pair of the two lists) and answers how many there were. */
 export async function deleteLinks(tx: TenantTx, folderIds: readonly string[], bookmarkIds: readonly string[]): Promise<number> {
   requireWorkspace(tx, "unfiling bookmarks");

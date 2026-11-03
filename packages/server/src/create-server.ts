@@ -55,6 +55,8 @@ import { teamRoutes } from "./routes/teams/index.ts";
 import { sharingRoutes } from "./routes/sharing/index.ts";
 import { goRoutes } from "./routes/go/index.ts";
 import { dashboardRoutes } from "./routes/dashboard/index.ts";
+import { exportRoutes } from "./routes/export/index.ts";
+import { importRoutes } from "./routes/import/index.ts";
 import { searchRoutes } from "./routes/search/index.ts";
 import { goNavigationRoutes, isGoShell } from "./routes/go/navigate.ts";
 import { isOpenSearchDocument, openSearchRoutes } from "./routes/opensearch.ts";
@@ -619,6 +621,10 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...searchRoutes());
   // And the member's dashboard: their own counts, quick access (shared bookmarks included), pinned bookmarks, top tags, sharing counts and Getting started checklist in one read.
   builtInRoutes.push(...dashboardRoutes({ sharingEntitlements: entitlementCheck }));
+  // And the member's own content as one SlugBase JSON document: streamed page by page, stored nowhere, and recorded in the audit log with counts only.
+  builtInRoutes.push(...exportRoutes({ logger }));
+  // And the preview of an import of such a file (the export document or a plain array of bookmarks): what it would create, skip and refuse under the workspace's bookmarks.max, with nothing written.
+  builtInRoutes.push(...importRoutes({ entitlements: createBookmarkEntitlements(entitlementService) }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // The CE instance admin's operations are part of the server and mounted in every composition: the policy admits no one on a deployment
   // where no account holds the flag (Q44), so a composition needs no switch of its own.

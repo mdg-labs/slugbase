@@ -76,4 +76,76 @@ describe("FeedbackToastProvider", () => {
     await screen.findByText("Signed out");
     expect(screen.queryByRole("alert")).toBeNull();
   });
+
+  describe("promise", () => {
+    it("shows the loading toast while the promise is pending and turns it into the success toast, from the value", async () => {
+      render(<FeedbackToastProvider regionLabel="Notifications">{null}</FeedbackToastProvider>);
+      let settle: (value: number) => void = () => undefined;
+      const pending = new Promise<number>((resolve) => {
+        settle = resolve;
+      });
+
+      let followed: Promise<number> = pending;
+      act(() => {
+        followed = feedbackToast.promise(pending, {
+          loading: "Preparing the file",
+          success: (count) => ({ title: "File saved", description: `${String(count)} bookmarks` }),
+          error: "Not saved",
+        });
+      });
+
+      expect(await screen.findByText("Preparing the file")).toBeTruthy();
+      expect(screen.queryByText("File saved")).toBeNull();
+
+      await act(async () => {
+        settle(3);
+        await expect(followed).resolves.toBe(3);
+      });
+
+      expect(await screen.findByText("File saved")).toBeTruthy();
+      expect(screen.getByText("3 bookmarks")).toBeTruthy();
+      expect(screen.queryByText("Preparing the file")).toBeNull();
+      expect(screen.queryByText("Not saved")).toBeNull();
+    });
+
+    it("turns the toast into an error toast announced at once, built from the reason, and rejects with that reason", async () => {
+      render(<FeedbackToastProvider regionLabel="Notifications">{null}</FeedbackToastProvider>);
+      const reason = new Error("boom");
+      let settle: (reason: unknown) => void = () => undefined;
+      const pending = new Promise<number>((_resolve, reject) => {
+        settle = reject;
+      });
+
+      let followed: Promise<number> = pending;
+      act(() => {
+        followed = feedbackToast.promise(pending, {
+          loading: "Preparing the file",
+          success: "File saved",
+          error: (caught) => ({ title: "Not saved", description: caught instanceof Error ? caught.message : "?" }),
+        });
+      });
+      await screen.findByText("Preparing the file");
+      expect(screen.queryByRole("alert")).toBeNull();
+
+      await act(async () => {
+        settle(reason);
+        await expect(followed).rejects.toBe(reason);
+      });
+
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toContain("Not saved");
+      expect(alert.textContent).toContain("boom");
+      expect(screen.queryByText("File saved")).toBeNull();
+    });
+
+    it("takes plain strings for every state", async () => {
+      render(<FeedbackToastProvider regionLabel="Notifications">{null}</FeedbackToastProvider>);
+
+      await act(async () => {
+        await feedbackToast.promise(Promise.resolve("ok"), { loading: "Working", success: "Done", error: "Failed" });
+      });
+
+      expect(await screen.findByText("Done")).toBeTruthy();
+    });
+  });
 });

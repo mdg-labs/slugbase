@@ -200,6 +200,20 @@ describe("the validation stage", () => {
     expect(reached).toHaveLength(1);
   });
 
+  it("holds at most 100 entries in errors[] for the whole request, whichever of the path, the query and the body failed", async () => {
+    const { server, reached } = setup();
+    const unknown = (prefix: string) => Object.fromEntries(Array.from({ length: 60 }, (_, index) => [`${prefix}${String(index)}`, 1]));
+    const query = new URLSearchParams({ page: "x", ...Object.fromEntries(Object.keys(unknown("q")).map((name) => [name, "1"])) });
+
+    const response = await server.fetch(post(`/api/v1/notes/not-an-id?${query.toString()}`, JSON.stringify({ title: "t", ...unknown("b") })));
+
+    expect(response.status).toBe(422);
+    const problem = await problemOf(response);
+    expect(problem.errors).toHaveLength(100);
+    expect(problem.errors?.[0]).toEqual({ path: "id", code: "invalid_format" });
+    expect(reached).toHaveLength(0);
+  });
+
   it("does not run for a request that matches no operation", async () => {
     const { server } = setup();
     const response = await server.fetch(post("/api/v1/unknown", "{", JSON_HEADERS));

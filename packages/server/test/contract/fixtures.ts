@@ -393,6 +393,22 @@ export const FIXTURES: ContractFixtures = {
   // The dashboard names no identifier either: it reads the caller's own counts, quick access, pinned bookmarks and tags in the workspace of the request. Workspace B holds bookmarks that forward by
   // a slug, a tag and a folder, all named matrix-..., so a row of B in an answer would show.
   getDashboard: {},
+  // The export of the whole library names no identifier: it streams the caller's own bookmarks, folders and tags in the workspace of the request. Workspace B holds rows named matrix-..., so a row of B in the
+  // document would show; the walker reads the whole document and checks it against the declared schema. Its selection does name some (`id`, and the folder and the tag of the filters), and a bookmark of B in `id` is
+  // ignored: the document is an export of nothing, a 200 as for any identifier that names no bookmark the caller can read.
+  exportJson: { foreign: { query: { id: UNKNOWN_BOOKMARK_ID } }, foreignAnswer: { status: 200 } },
+  // The Netscape export is the same: the whole library holds the text of the caller's rows only (workspace B holds rows named matrix-..., so one of them in the file would show), and a bookmark of B in the selection is ignored.
+  exportNetscape: { foreign: { query: { id: UNKNOWN_BOOKMARK_ID } }, foreignAnswer: { status: 200 } },
+  // The import names no identifier of any workspace: it reads the caller's own canonical URLs and the counter of the workspace of the request. The walker and the matrix send it as a dry run, which writes nothing: the matrix makes
+  // no bookmark in A, and the assertions after it (the dashboards, the lists, the export) rely on that, while the walks run in parallel. The import that writes is held to workspace B by `tenancy-matrix.integration.test.ts` of
+  // `@slugbase/testing` (the places and the bookmarks of a transaction acting in A) and by `import-write.integration.test.ts`. The matrix picks the `slug` of a bookmark of the file (in the export document and in the plain array)
+  // by its name; it is text the caller writes, so a value of workspace B in it is answered 200 as any other text is, and the file's bookmark is a failure or a creation of the answer that quotes nothing of B.
+  importJson: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }], foreign: { query: { dryRun: "true" }, body: [{ url: "https://example.com/walker", title: "Walker bookmark" }] }, foreignAnswer: { status: 200 } },
+  // The upload is a browser's bookmark file. The operation takes no identifier, so the matrix has nothing of workspace B to put in it: the file's links, folders and tags are text, matched among the caller's own.
+  importNetscape: {
+    query: { dryRun: "true" },
+    upload: { field: "file", filename: "bookmarks.html", type: "text/html", content: '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<DL><p>\n<DT><A HREF="https://example.com/walker">Walker bookmark</A>\n</DL><p>\n' },
+  },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

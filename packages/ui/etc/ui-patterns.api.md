@@ -10,6 +10,7 @@ import { ChangeEventHandler } from 'react';
 import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
 import { CompassIcon } from 'lucide-react';
 import { CopyIcon } from 'lucide-react';
+import { DownloadIcon } from 'lucide-react';
 import { ExternalLinkIcon } from 'lucide-react';
 import { FilterXIcon } from 'lucide-react';
 import type { FocusEvent as FocusEvent_2 } from 'react';
@@ -42,6 +43,7 @@ import { TableIcon } from 'lucide-react';
 import { TagIcon } from 'lucide-react';
 import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
+import { UploadIcon } from 'lucide-react';
 import { UsersIcon } from 'lucide-react';
 import { XIcon } from 'lucide-react';
 
@@ -564,6 +566,8 @@ export interface DisclosureProps {
     label: ReactNode;
 }
 
+export { DownloadIcon }
+
 // @public
 export function EmptyState(input: EmptyStateProps): ReactElement;
 
@@ -596,6 +600,7 @@ export const feedbackToast: {
     info: (title: string, description?: ReactNode) => string;
     success: (title: string, description?: ReactNode) => string;
     error: (title: string, description?: ReactNode) => string;
+    promise: <Value>(promise: Promise<Value>, messages: PromiseToastMessages<Value>) => Promise<Value>;
 };
 
 // @public
@@ -606,6 +611,28 @@ export interface FeedbackToastProviderProps {
     // (undocumented)
     children: ReactNode;
     regionLabel: string;
+}
+
+// @public
+export function FileDrop(input: FileDropProps): ReactElement;
+
+// @public (undocumented)
+export interface FileDropProps {
+    accept?: string;
+    action?: ReactNode;
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    dropLabel: ReactNode;
+    error?: ReactNode;
+    fileName?: ReactNode;
+    inputRef?: Ref<HTMLInputElement>;
+    // (undocumented)
+    label: ReactNode;
+    name?: string;
+    onFile: (file: File) => void;
 }
 
 export { FilterXIcon }
@@ -832,6 +859,19 @@ export { PinOffIcon }
 export { PlusIcon }
 
 export { PowerOffIcon }
+
+// @public
+export interface PromiseToastMessages<Value> {
+    error: PromiseToastText | ((reason: unknown) => PromiseToastText);
+    loading: PromiseToastText;
+    success: PromiseToastText | ((value: Value) => PromiseToastText);
+}
+
+// @public
+export type PromiseToastText = string | {
+    title: string;
+    description?: ReactNode;
+};
 
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";
@@ -1326,6 +1366,8 @@ export interface UnsavedGuardProps {
     title: ReactNode;
 }
 
+export { UploadIcon }
+
 // @public
 export function UrlInput(input: UrlInputProps): ReactElement;
 
@@ -1379,6 +1421,7 @@ export interface WizardProps {
     className?: string;
     // (undocumented)
     description?: ReactNode;
+    headingLevel?: 1 | 2;
     nextDisabled?: boolean;
     nextLabel: string;
     onBack?: () => void;

@@ -516,7 +516,9 @@
                   "invitation",
                   "team",
                   "bookmark",
-                  "share"
+                  "share",
+                  "export",
+                  "import"
                 ],
                 "type": "string"
               },
@@ -2511,6 +2513,300 @@
         ],
         "type": "object"
       },
+      "ExportBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bookmark's description; null when it has none"
+          },
+          "folders": {
+            "description": "The names of the caller's folders the bookmark is filed in, sorted by the bytes of the name; each is the name of an entry of the document's folders",
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "forwarding": {
+            "description": "Whether /go forwards to the bookmark by its slug; true only for a bookmark with a slug",
+            "type": "boolean"
+          },
+          "pinned": {
+            "description": "Whether the bookmark is pinned",
+            "type": "boolean"
+          },
+          "planArchived": {
+            "description": "Whether a downgrade of the plan archived the bookmark: it is exported with everything else, flagged",
+            "type": "boolean"
+          },
+          "ref": {
+            "description": "The export-local reference of the bookmark, `b1`, `b2` and so on in the order of the list; the entries of goPreferences name a bookmark by it",
+            "pattern": "^b[1-9][0-9]*$",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bookmark's slug; null when it has none"
+          },
+          "tags": {
+            "description": "The names of the caller's tags the bookmark carries, sorted by the bytes of the name; each is the name of an entry of the document's tags",
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          },
+          "url": {
+            "description": "The bookmark's address, an http or https URL, as it is stored",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "url",
+          "title",
+          "description",
+          "slug",
+          "forwarding",
+          "pinned",
+          "planArchived",
+          "folders",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "ExportDocument": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarks": {
+            "description": "Every bookmark the caller owns, plan-archived ones included and flagged, in the order of their creation",
+            "items": {
+              "$ref": "#/components/schemas/ExportBookmark"
+            },
+            "type": "array"
+          },
+          "exportedAt": {
+            "description": "When the export began, in UTC: the one timestamp the document holds",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "folders": {
+            "description": "Every folder the caller owns, used or not, sorted by the bytes of the name",
+            "items": {
+              "$ref": "#/components/schemas/ExportFolder"
+            },
+            "type": "array"
+          },
+          "format": {
+            "const": "slugbase-export",
+            "description": "Always slugbase-export: the document is a SlugBase export",
+            "type": "string"
+          },
+          "goPreferences": {
+            "description": "The caller's remembered slug choices whose bookmark is the caller's own and still has the slug and forwards, each as the slug and the ref of that bookmark, sorted by the bytes of the slug; a choice for another member's bookmark is not in it",
+            "items": {
+              "$ref": "#/components/schemas/ExportGoPreference"
+            },
+            "type": "array"
+          },
+          "shared": {
+            "description": "The bookmarks other members shared with the caller that the caller can read, plan-archived ones left out, in the order of their creation; empty unless the request asked for them with includeShared=true, and never read by an import",
+            "items": {
+              "$ref": "#/components/schemas/ExportSharedBookmark"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "description": "The name of every tag the caller owns, used or not, sorted by the bytes of the name",
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "const": 1,
+            "description": "The version of the format; a reader refuses a version newer than it supports",
+            "type": "number"
+          },
+          "workspace": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "The name of the workspace the content was exported from",
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "exportedAt",
+          "workspace",
+          "folders",
+          "tags",
+          "bookmarks",
+          "goPreferences",
+          "shared"
+        ],
+        "type": "object"
+      },
+      "ExportFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "description": "The folder's colour, 1 to 8: the number of the --folder-N theme token",
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "icon": {
+            "description": "The folder's icon, a lucide icon name",
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "description": "The folder's name, as the caller entered it",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "icon",
+          "color"
+        ],
+        "type": "object"
+      },
+      "ExportGoPreference": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkRef": {
+            "description": "The ref of the caller's own bookmark in this document's bookmarks that the choice names; never another member's bookmark, which has no ref",
+            "pattern": "^b[1-9][0-9]*$",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The slug the caller made a choice for",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "bookmarkRef"
+        ],
+        "type": "object"
+      },
+      "ExportSharedBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bookmark's description; null when it has none"
+          },
+          "ownerName": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The display name of the member who owns the bookmark; null when the bookmark has no owner, because its owner has left the workspace"
+          },
+          "shared": {
+            "const": true,
+            "description": "Always true: the bookmark is another member's, shared with the caller, and a re-import never creates it",
+            "type": "boolean"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bookmark's slug as its owner set it; null when it has none"
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          },
+          "url": {
+            "description": "The bookmark's address, an http or https URL, as it is stored",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "title",
+          "description",
+          "slug",
+          "ownerName",
+          "shared"
+        ],
+        "type": "object"
+      },
       "Folder": {
         "additionalProperties": false,
         "properties": {
@@ -3284,6 +3580,404 @@
         "required": [
           "items",
           "nextCursor"
+        ],
+        "type": "object"
+      },
+      "ImportBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "The bookmark's description; cut to 1 000 characters. A blank one is none",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folders": {
+            "description": "The names of the folders the bookmark is filed in, each of up to 1 000 characters; a folder the caller has under that name, without regard to case, is used, and any other is created. A name is not split at a slash",
+            "items": {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "forwarding": {
+            "description": "Whether /go forwards to the bookmark by its slug; off when left out, and off for a bookmark that has no slug or loses it",
+            "type": "boolean"
+          },
+          "pinned": {
+            "description": "Whether the bookmark is pinned",
+            "type": "boolean"
+          },
+          "planArchived": {
+            "description": "Whether a downgrade of the plan archived the bookmark when the file was made; it is ignored",
+            "type": "boolean"
+          },
+          "ref": {
+            "description": "The export-local reference of the bookmark, `b1`, `b2` and so on in the order of the list; the entries of goPreferences name a bookmark by it",
+            "pattern": "^b[1-9][0-9]*$",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The bookmark's slug; a blank one is none. It is trimmed and lower-cased, and it is dropped from the bookmark, which is still imported, when it is outside the slug grammar, the caller has it on a bookmark already (plan-archived or not) or an earlier bookmark of the file that is imported keeps it",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "description": "The names of the tags the bookmark carries, each of up to 1 000 characters; a tag the caller has under that name, without regard to case, is used, and any other is created",
+            "items": {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "description": "The bookmark's title; cut to 300 characters. A missing or blank title becomes the host of the URL",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "description": "The bookmark's address. It must be an http or https URL once normalised; anything else makes this bookmark a failure, not the file",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "ImportDroppedSlug": {
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "description": "The place of the bookmark in the file, counted from 1",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reason": {
+            "description": "slug_invalid: outside the slug grammar; slug_conflict: the caller has a bookmark with it already, plan-archived or not, or an earlier bookmark of the file that is imported keeps it",
+            "enum": [
+              "slug_invalid",
+              "slug_conflict"
+            ],
+            "type": "string"
+          },
+          "slug": {
+            "description": "The slug that was dropped, cut to 2 048 characters",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "title": {
+            "description": "The bookmark's title, cut to 300 characters; empty for a bookmark whose URL failed and that had no title",
+            "maxLength": 300,
+            "type": "string"
+          },
+          "url": {
+            "description": "The bookmark's address, cut to 2 048 characters",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "title",
+          "url",
+          "slug",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ImportEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarks": {
+            "description": "The bookmarks of the file, at most 5 000",
+            "items": {
+              "$ref": "#/components/schemas/ImportBookmark"
+            },
+            "maxItems": 5000,
+            "type": "array"
+          },
+          "exportedAt": {
+            "description": "When the export began, in UTC: the one timestamp the document holds",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "folders": {
+            "description": "The folders of the file: each exists after the import, used by a bookmark or not. The caller's folder of that name, without regard to case, is used; any other is created",
+            "items": {
+              "$ref": "#/components/schemas/ImportFolder"
+            },
+            "type": "array"
+          },
+          "format": {
+            "const": "slugbase-export",
+            "description": "Always slugbase-export: the document is a SlugBase export",
+            "type": "string"
+          },
+          "goPreferences": {
+            "description": "The exporter's remembered slug choices, each a slug and the ref of a bookmark of the file, at most 5 000: a choice is restored for the caller when that bookmark is created with that slug and forwards; any other choice is ignored and fails nothing",
+            "items": {
+              "$ref": "#/components/schemas/ImportGoPreference"
+            },
+            "maxItems": 5000,
+            "type": "array"
+          },
+          "shared": {
+            "description": "The bookmarks other members shared with the exporter, as the export writes them (url, title, description, slug, ownerName and shared: true, each within the limits of the export); each is checked as the format and then ignored, so a re-import never creates a copy of another member's bookmark",
+            "items": {
+              "$ref": "#/components/schemas/ExportSharedBookmark"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "description": "The tags of the file, each of up to 1 000 characters: each exists after the import, used by a bookmark or not, by the same rules as the folders. Control characters are removed and a name is cut to 40 characters",
+            "items": {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "description": "The version of the format; a version newer than 1 is refused with 422 and an error at version",
+            "maximum": 1,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "workspace": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "The name of the workspace the content was exported from",
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "bookmarks"
+        ],
+        "type": "object"
+      },
+      "ImportFailed": {
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "description": "The place of the bookmark in the file, counted from 1",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reason": {
+            "description": "url_not_allowed: not an http or https URL; url_invalid: empty, over-long or malformed",
+            "enum": [
+              "url_not_allowed",
+              "url_invalid"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "description": "The bookmark's title, cut to 300 characters; empty for a bookmark whose URL failed and that had no title",
+            "maxLength": 300,
+            "type": "string"
+          },
+          "url": {
+            "description": "The bookmark's address, cut to 2 048 characters",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "title",
+          "url",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ImportFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "description": "The folder's colour, 1 to 8, taken by a folder the import creates; any other value becomes the default colour. A folder the caller has keeps its own",
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "icon": {
+            "description": "The folder's icon, of up to 1 000 characters, taken by a folder the import creates; one outside the list a folder may carry becomes the default icon. A folder the caller has keeps its own",
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "name": {
+            "description": "The folder's name, of up to 1 000 characters; control characters are removed and it is cut to 64 characters, and a name that is empty then is ignored",
+            "maxLength": 1000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ImportGoPreference": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkRef": {
+            "description": "The ref of the bookmark of the file the choice names, of up to 1 000 characters; a ref that no bookmark of the file has, or that more than one has, restores nothing",
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "slug": {
+            "description": "The slug the choice is for, of up to 1 000 characters; it is trimmed and lower-cased, and a choice for one outside the slug grammar restores nothing",
+            "maxLength": 1000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "bookmarkRef"
+        ],
+        "type": "object"
+      },
+      "ImportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "description": "The bookmarks the import creates (with dryRun=true, would create)",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "detected": {
+            "additionalProperties": false,
+            "description": "What the file holds",
+            "properties": {
+              "bookmarks": {
+                "description": "The bookmarks in the file",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "folders": {
+                "description": "The distinct folder names in the file, compared without regard to case",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tags": {
+                "description": "The distinct tag names in the file, compared without regard to case",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bookmarks",
+              "folders",
+              "tags"
+            ],
+            "type": "object"
+          },
+          "droppedSlugs": {
+            "description": "The slugs that are dropped, in the order of the file",
+            "items": {
+              "$ref": "#/components/schemas/ImportDroppedSlug"
+            },
+            "type": "array"
+          },
+          "failed": {
+            "description": "The bookmarks whose URL the import refuses, in the order of the file",
+            "items": {
+              "$ref": "#/components/schemas/ImportFailed"
+            },
+            "type": "array"
+          },
+          "foldersCreated": {
+            "description": "The folders the import creates (with dryRun=true, would create): those of the file and of the bookmarks that are imported that the caller does not have",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "The bookmarks the import leaves out, in the order of the file",
+            "items": {
+              "$ref": "#/components/schemas/ImportSkipped"
+            },
+            "type": "array"
+          },
+          "slugsDropped": {
+            "description": "The bookmarks that lose their slug (with dryRun=true, would lose it)",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tagsCreated": {
+            "description": "The tags the import creates (with dryRun=true, would create), by the same rule",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "detected",
+          "created",
+          "skipped",
+          "failed",
+          "slugsDropped",
+          "droppedSlugs",
+          "foldersCreated",
+          "tagsCreated"
+        ],
+        "type": "object"
+      },
+      "ImportSkipped": {
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "description": "The place of the bookmark in the file, counted from 1",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reason": {
+            "description": "duplicate: the caller has a bookmark with this canonical URL or an earlier bookmark of the file has; bookmark_limit_reached: the workspace has no room left",
+            "enum": [
+              "duplicate",
+              "bookmark_limit_reached"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "description": "The bookmark's title, cut to 300 characters; empty for a bookmark whose URL failed and that had no title",
+            "maxLength": 300,
+            "type": "string"
+          },
+          "url": {
+            "description": "The bookmark's address, cut to 2 048 characters",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "title",
+          "url",
+          "reason"
         ],
         "type": "object"
       },
@@ -6266,7 +6960,9 @@
                 "invitation",
                 "team",
                 "bookmark",
-                "share"
+                "share",
+                "export",
+                "import"
               ],
               "type": "string"
             }
@@ -9476,6 +10172,523 @@
         "x-slugbase-scope": "read"
       }
     },
+    "/api/v1/export/json": {
+      "get": {
+        "operationId": "exportJson",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "description": "true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasSlug",
+            "required": false,
+            "schema": {
+              "description": "true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forwarding",
+            "required": false,
+            "schema": {
+              "description": "true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "url",
+            "required": false,
+            "schema": {
+              "description": "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "folderId",
+            "required": false,
+            "schema": {
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "type": "array"
+                }
+              ],
+              "description": "Lists the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered): repeat the parameter, at most 10 times. Tags are addressed by identifier, so a rename breaks no link. A tag that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, tags are not filtered on"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "description": "Selects by the filters of the list: whose bookmarks are matched, as the scope of GET /bookmarks says (all, mine, shared_with_me or shared_by_me); all when another filter is given and this one is left out. Any filter makes the request a selection, which holds the caller's own bookmarks that match in full and the ones shared with the caller as their readable fields only, at most 5 000; more are refused with 422",
+              "enum": [
+                "all",
+                "mine",
+                "shared_with_me",
+                "shared_by_me"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                }
+              ],
+              "description": "Selects the bookmarks with these identifiers: repeat the parameter, at most 100 times. The caller's own bookmarks are exported in full and bookmarks shared with the caller as their readable fields only; an identifier that is none of those (another member's bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark that is shared, or none at all) is ignored, and nothing in the file, the count or the audit event tells it apart from one that never existed. Not combined with the filters"
+            }
+          },
+          {
+            "in": "query",
+            "name": "includeShared",
+            "required": false,
+            "schema": {
+              "description": "true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone. Not combined with a selection, which holds the shared bookmarks it names or matches",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDocument"
+                }
+              }
+            },
+            "description": "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The list goPreferences holds the caller's remembered slug choices, each as a slug and bookmarkRef, the ref of the caller's own bookmark in the same document that the choice names and that still has the slug and forwards, sorted by slug; a choice for another member's bookmark is never in it, and the document holds no other member's choice. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. With id (at most 100) or the filters of the list (scope, folderId, tag, pinned, hasSlug, forwarding, q, url) the document holds that selection only: the caller's own bookmarks in bookmarks, in full, and the bookmarks shared with the caller in shared, as their readable fields only; folders and tags hold the ones those own bookmarks use, goPreferences the remembered choices for them, and an identifier of a bookmark the caller cannot read is ignored without a trace in the file, the count or the audit event. A selection by filters is refused with 422 when more than 5 000 bookmarks match. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
+            "headers": {
+              "Content-Disposition": {
+                "description": "An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name",
+                "required": true,
+                "schema": {
+                  "pattern": "^attachment; filename=\"slugbase-export-\\d{4}-\\d{2}-\\d{2}\\.json\"$",
+                  "type": "string"
+                }
+              },
+              "X-Export-Count": {
+                "description": "How many bookmarks the file holds when it begins: the caller's own and the ones shared with the caller that the file reads, in the JSON document (`bookmarks` plus `shared`) and in the browser file alike. A bookmark that is in several sections of the browser file counts once",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query is not valid (validation_failed): includeShared is neither true nor false, an id or a filter is malformed or more than 100 ids are named, id is combined with a filter, includeShared with a selection, the url is not a URL a bookmark can have, more than 5 000 bookmarks match the filters of a selection, or the request names a parameter the operation does not take"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again. Exports take from the bulk limit",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Export my content as SlugBase JSON",
+        "tags": [
+          "export"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "bulk",
+        "x-slugbase-scope": "read"
+      }
+    },
+    "/api/v1/export/netscape": {
+      "get": {
+        "operationId": "exportNetscape",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "description": "true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasSlug",
+            "required": false,
+            "schema": {
+              "description": "true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forwarding",
+            "required": false,
+            "schema": {
+              "description": "true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "url",
+            "required": false,
+            "schema": {
+              "description": "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "folderId",
+            "required": false,
+            "schema": {
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "type": "array"
+                }
+              ],
+              "description": "Lists the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered): repeat the parameter, at most 10 times. Tags are addressed by identifier, so a rename breaks no link. A tag that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, tags are not filtered on"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "description": "Selects by the filters of the list: whose bookmarks are matched, as the scope of GET /bookmarks says (all, mine, shared_with_me or shared_by_me); all when another filter is given and this one is left out. Any filter makes the request a selection, which holds the caller's own bookmarks that match in full and the ones shared with the caller as their readable fields only, at most 5 000; more are refused with 422",
+              "enum": [
+                "all",
+                "mine",
+                "shared_with_me",
+                "shared_by_me"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                }
+              ],
+              "description": "Selects the bookmarks with these identifiers: repeat the parameter, at most 100 times. The caller's own bookmarks are exported in full and bookmarks shared with the caller as their readable fields only; an identifier that is none of those (another member's bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark that is shared, or none at all) is ignored, and nothing in the file, the count or the audit event tells it apart from one that never existed. Not combined with the filters"
+            }
+          },
+          {
+            "in": "query",
+            "name": "includeShared",
+            "required": false,
+            "schema": {
+              "description": "true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone. Not combined with a selection, which holds the shared bookmarks it names or matches",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin, the forwarding flag and the go preferences are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. With id (at most 100) or the filters of the list (scope, folderId, tag, pinned, hasSlug, forwarding, q, url) the file holds that selection only: the caller's own bookmarks under the sections of the folders they are in, the others at the top level, and the bookmarks shared with the caller as above; an identifier of a bookmark the caller cannot read is ignored without a trace in the file, the count or the audit event, and a selection by filters is refused with 422 when more than 5 000 bookmarks match. A failure after the first byte ends the connection with the file unfinished",
+            "headers": {
+              "Content-Disposition": {
+                "description": "An attachment named slugbase-export-<date>.html, the date being the UTC day of the export; the name holds no workspace name",
+                "required": true,
+                "schema": {
+                  "pattern": "^attachment; filename=\"slugbase-export-\\d{4}-\\d{2}-\\d{2}\\.html\"$",
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "description": "text/html with the character set UTF-8, the character set the file is written in",
+                "required": true,
+                "schema": {
+                  "const": "text/html; charset=utf-8",
+                  "type": "string"
+                }
+              },
+              "X-Export-Count": {
+                "description": "How many bookmarks the file holds when it begins: the caller's own and the ones shared with the caller that the file reads, in the JSON document (`bookmarks` plus `shared`) and in the browser file alike. A bookmark that is in several sections of the browser file counts once",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query is not valid (validation_failed): includeShared is neither true nor false, an id or a filter is malformed or more than 100 ids are named, id is combined with a filter, includeShared with a selection, the url is not a URL a bookmark can have, more than 5 000 bookmarks match the filters of a selection, or the request names a parameter the operation does not take"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again. Exports take from the bulk limit",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Export my bookmarks as a browser bookmark file",
+        "tags": [
+          "export"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "bulk",
+        "x-slugbase-scope": "read"
+      }
+    },
     "/api/v1/favicons/{host}": {
       "get": {
         "operationId": "getFavicon",
@@ -11321,6 +12534,387 @@
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "go",
         "x-slugbase-scope": "read"
+      }
+    },
+    "/api/v1/import/json": {
+      "post": {
+        "operationId": "importJson",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dryRun",
+            "required": false,
+            "schema": {
+              "description": "true answers what the import would do and writes nothing; false, the default, imports the file",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skipDuplicates",
+            "required": false,
+            "schema": {
+              "description": "true, the default, skips a bookmark whose canonical URL the caller has already or that an earlier bookmark of the file has; false imports it",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with Idempotency-Replayed: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ImportEnvelope"
+                  },
+                  {
+                    "description": "The bookmarks of the file, at most 5 000",
+                    "items": {
+                      "$ref": "#/components/schemas/ImportBookmark"
+                    },
+                    "maxItems": 5000,
+                    "type": "array"
+                  }
+                ],
+                "description": "A SlugBase export document, or a plain array of bookmarks"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            },
+            "description": "What the import did, or with dryRun=true what it would do and nothing is written: the counts of what the file holds, the number of bookmarks created, the bookmarks left out (duplicate by canonical URL, or bookmark_limit_reached for those past the room the workspace had left under its bookmarks.max, read from the workspace's counter) and the bookmarks whose URL is refused, the slugs dropped and the folders and tags created. The bookmarks are created in the order of the file, each filed in its own folders, tagged with its own tags and with its slug, forwarding and pinned state, in one transaction with the counter, the folders, the tags and one import.completed audit event, so a failure leaves none of them. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing; an existing one keeps its icon and colour, and the folders and tags the file lists exist afterwards whether a bookmark uses them or not. A slug outside the grammar, one the caller has already or one an earlier bookmark of the file keeps is dropped from its bookmark with forwarding off, and the bookmark is still imported; a slug the caller takes on another bookmark in a request that runs at the same time is dropped the same way. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles and descriptions are cut to their limits, and all text is plain text. A plan-archived flag in the file is ignored. The remembered slug choices in goPreferences are restored for the caller, in the order of the file and in the same transaction: a choice is stored when the bookmark its bookmarkRef names (the ref of a bookmark of the file, which no other bookmark of the file has) was created by this import with the choice's slug, kept and forwarding, through the check that a member's own choice of that bookmark for the slug passes; a choice whose bookmark was skipped, failed or lost its slug, one whose ref names no bookmark or more than one, and one whose slug is outside the grammar restore nothing and fail nothing, and the choices of other members and workspaces are never changed. A dry run restores none. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body is not valid JSON, or the Idempotency-Key header is not a UUID"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The Idempotency-Key was used before for another request (idempotency_conflict)"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request body is over 5 MiB (payload_too_large)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. It is refused whole in the same way when the bookmarks it would create would make more than 100 000 folder and tag links together, a name that repeats on one bookmark being one link as the database compares names: the one error has the path empty and the code too_many_links. A bad URL or an over-long title is no reason for it: see the answer"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again. Imports take from the bulk limit",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"
+          }
+        },
+        "summary": "Import SlugBase JSON",
+        "tags": [
+          "import"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-idempotency": true,
+        "x-slugbase-rate": "bulk",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/import/netscape": {
+      "post": {
+        "operationId": "importNetscape",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dryRun",
+            "required": false,
+            "schema": {
+              "description": "true answers what the import would do and writes nothing; false, the default, imports the file",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skipDuplicates",
+            "required": false,
+            "schema": {
+              "description": "true, the default, skips a bookmark whose canonical URL the caller has already or that an earlier bookmark of the file has; false imports it",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with Idempotency-Replayed: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "description": "The bookmark file a browser exports (Netscape bookmark HTML, as Chrome, Edge, Firefox and Safari write it), of up to 5 MiB, read as UTF-8",
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            },
+            "description": "What the import did, or with dryRun=true what it would do and nothing is written, in the shape importJson answers. Each link of the file (an A element with an HREF) is one bookmark in the order of the file, filed in the one folder named by the H3 element of the list it sits in (a folder inside a folder gives its own name, not a path) and tagged with the names of its TAGS attribute, split at commas, at most 1 000 of them; a link with no title takes the host of its address. The file is read as text and nothing in it is run or followed. The counts of what the file holds say how many links it has and how many distinct folders and tags they name, compared without regard to case, those of links that fail or are skipped included; the bookmarks left out are the duplicates by canonical URL and, as bookmark_limit_reached, those past the room the workspace had left under its bookmarks.max, read from the workspace's counter; the links whose address is not an http or https URL (a bookmarklet, a place: query) are failed with url_not_allowed. Only the folders and tags of the bookmarks that are created are made, in one transaction with the bookmarks, the counter and one import.completed audit event, so a failure leaves none of them: a folder that no created link sits directly in, because it holds only other folders, or nothing, or only links that fail or are skipped, is not created, and foldersCreated and tagsCreated count what was made. Folders and tags are matched among the caller's own by name, without regard to case, and created when missing with the default icon and colour; an existing one keeps its own. A file names no slug and no go preference, so no bookmark has a slug, no choice is restored and slugsDropped is 0 with droppedSlugs empty. Every URL is checked as a bookmark's URL is, so only http and https are accepted; control characters are removed from all text, titles are cut to 300 characters, and all text is plain text. Sent with an Idempotency-Key, the answer is stored under it for 24 hours and replayed with Idempotency-Replayed: true"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body is not well-formed multipart/form-data, or the Idempotency-Key header is not a UUID"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), including one whose content type is neither JSON nor multipart/form-data, or the credential is an API token, which cannot call this operation (forbidden)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The Idempotency-Key was used before for another request, with another file included (idempotency_conflict)"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request body is over 5 MiB plus the envelope of the upload, or the file part is over 5 MiB (payload_too_large)"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request is not multipart/form-data (unsupported_media_type): one sent as JSON, or one that carries an API token, which is held to JSON before it is authenticated"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The upload is not one file (validation_failed; errors names each part): the file part is missing or is not a file, or the request carries another part. A file with more than 5 000 links is refused whole with one error, with the path empty and the code too_big. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. It is refused whole in the same way when the bookmarks it would create would make more than 100 000 folder and tag links together, a name that repeats on one bookmark being one link as the database compares names: the one error has the path empty and the code too_many_links. A bad link or an over-long title is no reason for it: see the answer"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again. Imports take from the bulk limit",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running"
+          }
+        },
+        "summary": "Import a browser bookmark file",
+        "tags": [
+          "import"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-idempotency": true,
+        "x-slugbase-rate": "bulk"
       }
     },
     "/api/v1/instance/accounts": {
@@ -19827,6 +21421,9 @@
       "name": "entitlements"
     },
     {
+      "name": "export"
+    },
+    {
       "name": "favicons"
     },
     {
@@ -19834,6 +21431,9 @@
     },
     {
       "name": "go"
+    },
+    {
+      "name": "import"
     },
     {
       "name": "instance"

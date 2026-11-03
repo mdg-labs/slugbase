@@ -1,8 +1,8 @@
 import { archiveBookmarks, restoreBookmarks } from "@slugbase/core";
 import { bookmarkArchiveTransaction } from "@slugbase/db";
 import { LimitedEntitlementSource } from "@slugbase/testing";
-import { useTestDatabase } from "@slugbase/testing/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import type { ModuleContext, ServerModule } from "../../src/create-server.ts";
@@ -35,6 +35,8 @@ beforeEach(async () => {
   await database().owner`TRUNCATE workspaces CASCADE`;
   await database().owner`TRUNCATE pgboss.job`;
 });
+
+afterEach(() => assertBookmarkCountMatches(database()));
 
 const payload = z.object({ workspaceId: z.string(), accountId: z.string(), bookmarkIds: z.string() });
 

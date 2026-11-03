@@ -56,7 +56,7 @@ function setup(challenge: { ok: boolean } = { ok: true }) {
     { operation: operationOf("delete", "/api/v1/things/{id}", "deleteThing"), handler },
     { operation: operationOf("get", "/api/v1/things", "listThings"), handler },
     { operation: operationOf("post", "/api/v1/auth/sign-in", "signIn"), handler },
-    { operation: operationOf("post", "/api/v1/import/netscape", "importNetscape"), handler, acceptsMultipart: true },
+    { operation: operationOf("post", "/api/v1/things/upload", "uploadThing"), handler, acceptsMultipart: true },
     { operation: operationOf("post", "/api/v1/events", "receiveEvent", { auth: "machine", audience: "machine" }), handler },
     {
       operation: operationOf("post", "/api/v1/contact", "sendContact", { auth: "anonymous", audience: "marketing-form" }),
@@ -229,9 +229,9 @@ describe("the content type", () => {
   it("is multipart/form-data on a route that declares it, and only there", async () => {
     const { server, seen } = setup();
     const headers = { origin: APP_ORIGIN, "content-type": "multipart/form-data; boundary=x" };
-    expect((await server.fetch(send("/api/v1/import/netscape", { method: "POST", headers, body: "--x--" }))).status).toBe(200);
-    expect((await server.fetch(send("/api/v1/import/netscape", { method: "POST", headers: { ...headers, origin: "https://evil.example" }, body: "--x--" }))).status).toBe(403);
-    expect((await server.fetch(send("/api/v1/import/netscape", { method: "POST", headers: { origin: APP_ORIGIN, "content-type": "text/plain" }, body: "x" }))).status).toBe(403);
+    expect((await server.fetch(send("/api/v1/things/upload", { method: "POST", headers, body: "--x--" }))).status).toBe(200);
+    expect((await server.fetch(send("/api/v1/things/upload", { method: "POST", headers: { ...headers, origin: "https://evil.example" }, body: "--x--" }))).status).toBe(403);
+    expect((await server.fetch(send("/api/v1/things/upload", { method: "POST", headers: { origin: APP_ORIGIN, "content-type": "text/plain" }, body: "x" }))).status).toBe(403);
     expect(seen).toHaveLength(1);
   });
 });

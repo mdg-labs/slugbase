@@ -188,6 +188,7 @@ describe("the shipped chain", () => {
       "sys_create_workspace_limited",
       "sys_create_personal_workspace_limited",
       "sys_bookmark_count_take",
+      "sys_bookmark_count_take_many",
       "sys_bookmark_delete",
       "sys_bookmark_delete_many",
       "sys_bookmark_archive_set",

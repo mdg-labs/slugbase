@@ -137,14 +137,47 @@ function fieldPath(path: readonly PropertyKey[]): string {
   return path.map((segment) => String(segment)).join(".");
 }
 
-/** The `errors[]` of a failed parse: where each issue is and its code, never the value that failed. */
-export function fieldErrors(error: z.core.$ZodError): ProblemFieldError[] {
-  return error.issues.flatMap((issue): ProblemFieldError[] => {
-    if (issue.code === "unrecognized_keys") {
-      return issue.keys.map((key) => ({ path: fieldPath([...issue.path, key]), code: issue.code }));
+/** The most entries `errors[]` of a failed request holds, whichever parts of it failed: a file of thousands of bad items answers the first of them, in the order the schema walks, not all. */
+export const MAX_FIELD_ERRORS = 100;
+
+/**
+ * The issues of the one branch of a failed union that the value could have been: the branches that only say the value is of another type as a whole (a plain array
+ * offered to the branch that is an object) are left out, and when exactly one branch is left, its issues name the fields. Undefined when no branch or more than one is left.
+ */
+function matchingBranch(issue: z.core.$ZodIssueInvalidUnion): readonly z.core.$ZodIssue[] | undefined {
+  const candidates = issue.errors.filter((branch) => !(branch.length === 1 && branch[0]?.code === "invalid_type" && branch[0].path.length === 0));
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function* fieldEntries(issues: readonly z.core.$ZodIssue[], prefix: readonly PropertyKey[]): Generator<ProblemFieldError> {
+  for (const issue of issues) {
+    const path = [...prefix, ...issue.path];
+    const branch = issue.code === "invalid_union" ? matchingBranch(issue) : undefined;
+    if (branch !== undefined) {
+      yield* fieldEntries(branch, path);
+    } else if (issue.code === "unrecognized_keys") {
+      for (const key of issue.keys) {
+        yield { path: fieldPath([...path, key]), code: issue.code };
+      }
+    } else {
+      yield { path: fieldPath(path), code: issue.code };
     }
-    return [{ path: fieldPath(issue.path), code: issue.code }];
-  });
+  }
+}
+
+/**
+ * The `errors[]` of a failed parse: where each issue is and its code, never the value that failed, and at most `MAX_FIELD_ERRORS` of them. A failed union names the fields of
+ * the one branch the value could have been (`matchingBranch`), and keeps `invalid_union` where it cannot tell.
+ */
+export function fieldErrors(error: z.core.$ZodError): ProblemFieldError[] {
+  const errors: ProblemFieldError[] = [];
+  for (const entry of fieldEntries(error.issues, [])) {
+    if (errors.length >= MAX_FIELD_ERRORS) {
+      break;
+    }
+    errors.push(entry);
+  }
+  return errors;
 }
 
 /** The problem an error answers with: validation, a deliberate failure, an unavailable port, or a `500`. */
@@ -388,6 +421,14 @@ export function responseStage(validation: ResponseValidation): ResponseStage {
       return;
     }
     const declaredNow = problem ? undefined : declaredResponse(context, response.status);
+    if (declaredNow?.kind === "binary" && declaredNow.stream === true) {
+      // A stream is never read here: its media type is checked and the body goes on as it is, so the server holds no more of an export than the client has asked for.
+      if ((response.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase() !== declaredNow.mediaType) {
+        await response.body?.cancel();
+        throw mismatch("", "wrong_content_type");
+      }
+      return;
+    }
     if (declaredNow?.kind === "binary") {
       // Bytes are checked as bytes: reading them as text would change them.
       const bytes = new Uint8Array(await response.arrayBuffer());

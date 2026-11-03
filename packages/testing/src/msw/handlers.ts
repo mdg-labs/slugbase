@@ -29,12 +29,30 @@ const MOCK_SET_COOKIE = "slugbase_session=mock-session; Path=/; HttpOnly; SameSi
 // address a client can follow; the mock sends the application root.
 const MOCK_LOCATION = "/";
 
+// The exports declare their `Content-Disposition` as an attachment named after the day, a pattern a schema of type string cannot satisfy: the JSON export's file is a .json, the Netscape export's a .html.
+const MOCK_CONTENT_DISPOSITION = 'attachment; filename="slugbase-export-2026-01-01.json"';
+const MOCK_NETSCAPE_CONTENT_DISPOSITION = 'attachment; filename="slugbase-export-2026-01-01.html"';
+
+const MOCK_NETSCAPE_FILE = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+    <DT><H3>Reading</H3>
+    <DL><p>
+        <DT><A HREF="https://example.com/" SHORTCUTURL="example" TAGS="later">Example</A>
+    </DL><p>
+</DL><p>
+`;
+
 function headerValue(document: OpenApiDocument, name: string, schema: unknown): string {
   switch (name.toLowerCase()) {
     case "set-cookie":
       return MOCK_SET_COOKIE;
     case "location":
       return MOCK_LOCATION;
+    case "content-disposition":
+      return JSON.stringify(schema).includes("\\.html") ? MOCK_NETSCAPE_CONTENT_DISPOSITION : MOCK_CONTENT_DISPOSITION;
     default:
       return String(fixtureFor(document, schema));
   }
@@ -85,6 +103,33 @@ export function baseFixtures(document: OpenApiDocument): Readonly<Record<string,
       setupTokenRequired: false,
     },
     getOpenApiDocument: document,
+    // The file of the Netscape export: the answer is bytes of text/html that a schema cannot describe, and the mock gives a file a browser would read, one section and one link.
+    exportNetscape: MOCK_NETSCAPE_FILE,
+    // The document of an export: a schema alone would give its arrays one entry each. The mock answers the same document whatever the query, so the list of go preferences stays empty and so does `shared`, which only a request with includeShared=true fills.
+    exportJson: {
+      format: "slugbase-export",
+      version: 1,
+      exportedAt: "2026-01-01T00:00:00.000Z",
+      workspace: { name: "Mock workspace" },
+      folders: [{ name: "Reading", icon: "folder", color: 1 }],
+      tags: ["later"],
+      bookmarks: [
+        {
+          ref: "b1",
+          url: "https://example.com/",
+          title: "Example",
+          description: null,
+          slug: "example",
+          forwarding: true,
+          pinned: false,
+          planArchived: false,
+          folders: ["Reading"],
+          tags: ["later"],
+        },
+      ],
+      goPreferences: [],
+      shared: [],
+    },
   };
 }
 

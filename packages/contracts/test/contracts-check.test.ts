@@ -127,6 +127,35 @@ describe("pnpm contracts:check", () => {
     expect(result.stderr).not.toContain("openapi.json");
   });
 
+  it("fails when the committed export schema differs from the Zod definition, and passes once it matches", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
+    const generated = scratch();
+    generate(before, generated);
+    const schemaFile = join(generated, "slugbase-export.schema.json");
+    const current = readFileSync(schemaFile, "utf8");
+    const edited = current.replace('"const": 1', '"const": 2');
+    expect(edited).not.toBe(current);
+    writeFileSync(schemaFile, edited);
+
+    const drifted = runCheck(before, generated);
+    expect(drifted.status).toBe(1);
+    expect(drifted.stderr).toContain("slugbase-export.schema.json");
+    expect(drifted.stderr).not.toContain("openapi.json");
+    expect(drifted.stderr).not.toContain("schema.d.ts");
+    expect(drifted.stderr).toContain("pnpm api:gen");
+
+    writeFileSync(schemaFile, current);
+    expect(runCheck(before, generated).status).toBe(0);
+  });
+
+  it("fails when the committed export schema is missing", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
+    const generated = scratch();
+    generate(before, generated);
+    rmSync(join(generated, "slugbase-export.schema.json"));
+    const result = runCheck(before, generated);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("slugbase-export.schema.json");
+  });
+
   it("fails when a committed file is missing", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const generated = scratch();
     generate(before, generated);

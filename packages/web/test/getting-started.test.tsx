@@ -166,7 +166,7 @@ describe("the checklist card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(world.patches).toEqual([]);
   });
 
-  it("gives each step its action, and no Import action while the app has no page for it", async () => {
+  it("gives each step its action, the Import step a link to the Import and export page", async () => {
     serve();
     await openApp("/");
 
@@ -175,7 +175,7 @@ describe("the checklist card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(within(region).getByRole("link", { name: "Forwarding" }).getAttribute("href")).toBe("/forwarding");
     expect(within(region).getByRole("link", { name: "Forwarding setup" }).getAttribute("href")).toBe("/forwarding");
     expect(within(region).getByRole("link", { name: "New folder" }).getAttribute("href")).toBe("/folders?create=1");
-    expect(within(region).queryByRole("link", { name: "Import" })).toBeNull();
+    expect(within(region).getByRole("link", { name: "Import" }).getAttribute("href")).toBe("/settings/account/data");
     expect(within(region).getByText("Import from your browser")).toBeTruthy();
   });
 
@@ -190,16 +190,13 @@ describe("the checklist card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     });
   });
 
-  it("links the Import action to the Import and export page once the app has that page", async () => {
+  it("leads the Import action to the Import and export page", async () => {
     serve();
-    await openApp("/", [{ id: "data", routes: [{ path: "/settings/account/data", component: () => <h1>Import and export</h1> }] }]);
+    await openApp("/");
 
-    const link = within(await card()).getByRole("link", { name: "Import" });
-    expect(link.getAttribute("href")).toBe("/settings/account/data");
+    await press(within(await card()).getByRole("link", { name: "Import" }));
 
-    await press(link);
-
-    expect(await screen.findByRole("heading", { name: "Import and export" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Import & export" })).toBeTruthy();
   });
 
   it("takes the place of nothing else: it is below the rows and follows the loading state of the screen", async () => {

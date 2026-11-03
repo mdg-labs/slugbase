@@ -91,6 +91,23 @@ export interface BinaryResponse<H extends ResponseHeaders = ResponseHeaders> {
   readonly description: string;
   readonly mediaType: string;
   readonly headers?: H;
+  /**
+   * The schema of the whole document the bytes carry, when they are one (an export): the generated document publishes it as the body of the media type, so the walker and the mock
+   * check a complete body. Production never validates it. Left out, the body is published as opaque bytes.
+   */
+  readonly schema?: z.ZodType;
+  /** True when the handler answers a `ReadableStream` of the bytes instead of the bytes: the server never holds the whole body, and the response stage does not read it. */
+  readonly stream?: boolean;
+}
+
+/** A binary response whose body is a stream; see `streamResponse`. */
+export interface StreamResponse<H extends ResponseHeaders = ResponseHeaders> extends BinaryResponse<H> {
+  readonly stream: true;
+}
+
+export interface StreamResponseOptions<H extends ResponseHeaders = ResponseHeaders> extends JsonResponseOptions<H> {
+  /** The schema of the whole body; see `BinaryResponse.schema`. */
+  readonly schema?: z.ZodType;
 }
 
 /** A response without a body; it may still document headers, as a redirect documents its `Location`. */
@@ -107,6 +124,25 @@ export function binaryResponse<H extends ResponseHeaders = ResponseHeaders>(
   options: JsonResponseOptions<H> = {},
 ): BinaryResponse<H> {
   return options.headers === undefined ? { kind: "binary", description, mediaType } : { kind: "binary", description, mediaType, headers: options.headers };
+}
+
+/**
+ * A response whose body is bytes of the media type `mediaType` that the handler produces piece by piece and answers as a `ReadableStream`, optionally with the schema of the whole
+ * body and the headers it documents. The response stage checks the `Content-Type` and never reads the body, so the server holds no more of an export than the client has asked for.
+ */
+export function streamResponse<H extends ResponseHeaders = ResponseHeaders>(
+  description: string,
+  mediaType: string,
+  options: StreamResponseOptions<H> = {},
+): StreamResponse<H> {
+  return {
+    kind: "binary",
+    description,
+    mediaType,
+    stream: true,
+    ...(options.schema === undefined ? {} : { schema: options.schema }),
+    ...(options.headers === undefined ? {} : { headers: options.headers }),
+  };
 }
 
 /** A response with a JSON body described by a Zod schema, and optionally the headers it documents. */
@@ -158,6 +194,18 @@ export type OperationResponses = { [S in OtherResponseStatus]?: JsonResponse | E
   [S in ProblemResponseStatus]: S extends 429 ? RateLimitedResponse : ProblemResponse;
 }>;
 
+/**
+ * The one file a multipart request carries. The operation's body is `multipart/form-data` with exactly one required binary part named `field`; the
+ * request pipeline does not parse it, so a handler reads the part itself and is given no body (a route that declares an upload is registered with
+ * `acceptsMultipart`, doc 04 section 5.1). Published as that media type with the part as `type: string, format: binary` and no other property.
+ */
+export interface OperationUpload {
+  /** The name of the form part, a plain identifier. */
+  readonly field: string;
+  /** What the file is, published as the description of the part. */
+  readonly description: string;
+}
+
 export interface OperationRequest {
   readonly params?: z.ZodObject;
   readonly query?: z.ZodObject;
@@ -169,6 +217,8 @@ export interface OperationRequest {
   readonly headers?: z.ZodObject;
   /** Object bodies must be strict: unknown fields are a 422 (doc 04 section 2.3). */
   readonly body?: z.ZodType;
+  /** A multipart body of one file, in place of a JSON `body`; the two are never declared together. */
+  readonly upload?: OperationUpload;
 }
 
 export interface OperationDefinition {

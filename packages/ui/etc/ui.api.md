@@ -10,6 +10,7 @@ import { ClassValue } from 'clsx';
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import { Input as InputPrimitive } from '@base-ui/react/input';
 import { Loader2Icon } from 'lucide-react';
+import { Progress as ProgressPrimitive } from '@base-ui/react/progress';
 import * as React_2 from 'react';
 import type { default as React_3 } from 'react';
 import { ReactElement } from 'react';
@@ -266,6 +267,23 @@ export type MediaQueryInput = {
     max?: Breakpoint | number;
     pointer?: "coarse" | "fine";
 };
+
+// @public (undocumented)
+export function Progress(input: ProgressPrimitive.Root.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function ProgressIndicator(input: ProgressPrimitive.Indicator.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function ProgressLabel(input: ProgressPrimitive.Label.Props): React_3.ReactElement;
+
+export { ProgressPrimitive }
+
+// @public (undocumented)
+export function ProgressTrack(input: ProgressPrimitive.Track.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function ProgressValue(input: ProgressPrimitive.Value.Props): React_3.ReactElement;
 
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";

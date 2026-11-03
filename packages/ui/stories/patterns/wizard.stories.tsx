@@ -59,3 +59,24 @@ export const Pending = (): React.ReactElement => (
     </FormField>
   </Wizard>
 );
+
+export const UnderAPageHeading = (): React.ReactElement => (
+  <div className="flex flex-col gap-4">
+    <h1 className="font-semibold text-xl">Import and export</h1>
+    <Wizard
+      backLabel="Back"
+      headingLevel={2}
+      nextLabel="Next"
+      onNext={() => undefined}
+      step={1}
+      stepCount={STEP_COUNT}
+      stepLabel="Step 1 of 3"
+      stepTitle="Choose a file"
+      title="Import"
+    >
+      <FormField label="Name">
+        <Input />
+      </FormField>
+    </Wizard>
+  </div>
+);

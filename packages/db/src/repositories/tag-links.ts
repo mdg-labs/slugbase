@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
-import { distinctIdentifiers, requireIdentifiers, uuidArray } from "./folder-links.ts";
+import { distinctIdentifiers, LINK_PAIRS_BATCH_SIZE, requireIdentifiers, uuidArray } from "./folder-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
 
 // The links between a member's bookmarks and the member's tags (doc 05 section 2.4, doc 02 sections 7.2 and 8.2, doc 10 T1 and T2), used by the
@@ -19,6 +19,12 @@ import { defineScopedRepository } from "./scoped.ts";
 //    locks its tags. A change that names tags by identifier only takes neither, unless it names `aiFields` (below). Both lock every tag they name that exists, the ones named by identifier and the
 //    existing ones named by name, in one statement (`lockTaggingTags`, `FOR KEY SHARE`), and insert the tags they create by name in the order of the lower-cased
 //    names (`resolveTagNames`), so that two taggings which create the same names cannot wait for each other at the unique index of the owner's tag names;
+//  - the import (`ImportRepository`) locks the workspace row once for the whole import (`sys_bookmark_count_take_many`), then the existing folders of the file (`FOR KEY SHARE`, by identifier)
+//    and the new folders it inserts, then the existing tags (`FOR KEY SHARE`, by identifier) and the new tags it inserts, and last its bookmarks, which are new rows nobody else holds. It takes the owner's
+//    membership row (`FOR KEY SHARE`) through the foreign key of the first folder, tag or bookmark it inserts, so after the existing folders and tags it locked, not before its tags as a tagging does. That is safe because it
+//    holds the workspace row by then: every path that takes the membership row exclusively (the departure of a member, the deletion of an account) takes the workspace row first and so waits for the
+//    import before it reaches that row, and a path that takes the membership row `FOR KEY SHARE` does not wait for the import's lock on it. So the import never waits for the membership row while holding a tag
+//    that its holder waits for;
 //  - a save that names `aiFields` counts them in `ai_suggestion_usage`, whose insert takes the owner's membership row through its foreign key. A creation has locked the
 //    workspace row and inserted its bookmark (which took the membership row) by then, so its count takes nothing new; an update that names them takes the workspace row and
 //    the owner's membership row (`FOR KEY SHARE`, `AiSuggestionRepository.holdMember`) before its bookmark, and a member who has left is answered `not_found`.
@@ -207,6 +213,27 @@ export async function insertTagLinksMany(tx: TenantTx, bookmarkIds: readonly str
     ON CONFLICT (bookmark_id, tag_id) DO NOTHING
     RETURNING tag_id`);
   return inserted.length;
+}
+
+/** Tags each bookmark of `pairs` with its own tag, leaving the links that exist, and answers how many were new: the pairs, where `insertTagLinksMany` writes every combination of two sets. Both sides are owned already, and so are the locks. */
+export async function insertTagLinkPairs(tx: TenantTx, pairs: readonly { readonly bookmarkId: string; readonly tagId: string }[]): Promise<number> {
+  const workspaceId = requireWorkspace(tx, "tagging bookmarks");
+  requireIdentifiers(
+    pairs.flatMap((pair) => [pair.bookmarkId, pair.tagId]),
+    "tagging bookmarks",
+  );
+  let added = 0;
+  for (let from = 0; from < pairs.length; from += LINK_PAIRS_BATCH_SIZE) {
+    const rows = JSON.stringify(pairs.slice(from, from + LINK_PAIRS_BATCH_SIZE).map((pair) => ({ bookmark_id: pair.bookmarkId, tag_id: pair.tagId })));
+    // The statement names the columns the application role may insert (a column grant).
+    const inserted = await tenantHandle(tx).execute<{ tag_id: string }>(sql`
+      INSERT INTO ${bookmarkTags} (workspace_id, bookmark_id, tag_id)
+      SELECT ${workspaceId}::uuid, r.bookmark_id, r.tag_id FROM jsonb_to_recordset(${rows}::text::jsonb) AS r(bookmark_id uuid, tag_id uuid)
+      ON CONFLICT (bookmark_id, tag_id) DO NOTHING
+      RETURNING tag_id`);
+    added += inserted.length;
+  }
+  return added;
 }
 
 /** Removes the links of every bookmark of `bookmarkIds` to every tag of `tagIds` and answers how many there were. */

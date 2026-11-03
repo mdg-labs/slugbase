@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { uuidv7 } from "../../src/auth/uuidv7.ts";
+import { ascendingUuidv7, uuidv7 } from "../../src/auth/uuidv7.ts";
 
 describe("uuidv7", () => {
   it("is a version 7, RFC 9562 variant UUID", () => {
@@ -17,5 +17,26 @@ describe("uuidv7", () => {
     const later = uuidv7(1_000_000_000_001);
     expect(earlier < later).toBe(true);
     expect(new Set(Array.from({ length: 200 }, () => uuidv7())).size).toBe(200);
+  });
+});
+
+describe("ascendingUuidv7", () => {
+  const millisecondOf = (id: string) => Number.parseInt(`${id.slice(0, 8)}${id.slice(9, 13)}`, 16);
+
+  it("ascends with every call, also when the clock stands still or steps back", () => {
+    const readings = [5_000, 5_000, 5_000, 4_000, 5_001, 9_000];
+    const next = ascendingUuidv7(() => readings.shift() ?? 0);
+
+    const milliseconds = Array.from({ length: 6 }, () => millisecondOf(next()));
+
+    expect(milliseconds).toEqual([5_000, 5_001, 5_002, 5_003, 5_004, 9_000]);
+  });
+
+  it("lists the identifiers in the order they were made when they are sorted as text and as bytes", () => {
+    const next = ascendingUuidv7(() => 1_000_000_000_000);
+    const ids = Array.from({ length: 5000 }, () => next());
+
+    expect([...ids].sort()).toEqual(ids);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

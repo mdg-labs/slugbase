@@ -53,7 +53,7 @@ const MAX_LINK_TAGS = 200;
 const MAX_ATTRIBUTES = 64;
 
 // Elements whose content is text and not markup: nothing in it is a tag.
-const RAW_TEXT_ELEMENTS = new Set(["script", "style", "textarea", "xmp", "iframe", "noembed", "noframes"]);
+const RAW_TEXT_ELEMENTS: ReadonlySet<string> = new Set(["script", "style", "textarea", "xmp", "iframe", "noembed", "noframes"]);
 
 const NAMED_ENTITIES: ReadonlyMap<string, string> = new Map<string, string>([
   ["amp", "&"],
@@ -92,7 +92,7 @@ const RAW_TEXT_END: Readonly<Record<string, RegExp>> = Object.fromEntries(
 );
 
 /** Character references are decoded once: the result of one is never read as another. A reference the parser does not know is left as written. */
-function decodeCharacterReferences(text: string): string {
+export function decodeCharacterReferences(text: string): string {
   return text.replace(CHARACTER_REFERENCE, (reference: string, decimal?: string, hexadecimal?: string, name?: string) => {
     if (name !== undefined) {
       return NAMED_ENTITIES.get(name) ?? reference;
@@ -156,7 +156,7 @@ function isLetter(code: number): boolean {
   return (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
 }
 
-interface StartTag {
+export interface StartTag {
   readonly name: string;
   /** The first value of each attribute, by lower-case name; empty for a tag the walk has no use for. */
   readonly attributes: ReadonlyMap<string, string>;
@@ -234,6 +234,77 @@ function readStartTag(text: string, start: number, keep: ReadonlySet<string>): S
   }
 }
 
+/** A piece of markup `nextMarkup` found: where it starts and where it ends, after its `>`. The text between two pieces is `text.slice(previous.end, next.start)`. */
+export type MarkupToken =
+  | { readonly kind: "start"; readonly start: number; readonly end: number; readonly tag: StartTag }
+  | { readonly kind: "end"; readonly start: number; readonly end: number; readonly name: string }
+  /** A comment, a doctype, a processing instruction or a CDATA section: nothing in it is read. */
+  | { readonly kind: "other"; readonly start: number; readonly end: number }
+  /** No more markup: the text ends at `start`, either with no further `<` or inside markup that is never finished, which is not read. */
+  | { readonly kind: "eof"; readonly start: number };
+
+/**
+ * The next piece of markup at or after `cursor`: one walk over the text with no backtracking, shared by every parser of untrusted HTML so that they read a comment, an end tag
+ * and a start tag the same way. A `<` that begins none of them is text, and so is everything the walk passes on the way. An unclosed comment, or a tag or end tag the text ends
+ * in, is the end of the text. Attributes are kept only for the start tags `keep` names.
+ */
+export function nextMarkup(text: string, cursor: number, keep: ReadonlySet<string>): MarkupToken {
+  let from = cursor;
+  for (;;) {
+    const open = text.indexOf("<", from);
+    if (open === -1) {
+      return { kind: "eof", start: text.length };
+    }
+    const next = text.charCodeAt(open + 1);
+    if (next === 0x21 && text.startsWith("--", open + 2)) {
+      // A comment. `<!-->` and `<!--->` are empty ones; an unclosed one runs to the end.
+      if (text.startsWith(">", open + 4)) {
+        return { kind: "other", start: open, end: open + 5 };
+      }
+      if (text.startsWith("->", open + 4)) {
+        return { kind: "other", start: open, end: open + 6 };
+      }
+      const close = text.indexOf("-->", open + 4);
+      return close === -1 ? { kind: "eof", start: open } : { kind: "other", start: open, end: close + 3 };
+    }
+    if (next === 0x21 || next === 0x3f || next === 0x2f) {
+      const close = text.indexOf(">", open + 2);
+      if (close === -1) {
+        return { kind: "eof", start: open };
+      }
+      if (next !== 0x2f) {
+        return { kind: "other", start: open, end: close + 1 };
+      }
+      let nameEnd = open + 2;
+      while (nameEnd < close && !isSpace(text.charCodeAt(nameEnd)) && text.charCodeAt(nameEnd) !== 0x2f) {
+        nameEnd += 1;
+      }
+      return { kind: "end", start: open, end: close + 1, name: text.slice(open + 2, nameEnd).toLowerCase() };
+    }
+    if (!isLetter(next)) {
+      from = open + 1;
+      continue;
+    }
+    const tag = readStartTag(text, open, keep);
+    return tag === undefined ? { kind: "eof", start: open } : { kind: "start", start: open, end: tag.end, tag };
+  }
+}
+
+/** Whether the content of the element is text and not markup (`script`, `style`, `textarea` and the like). */
+export function isRawTextElement(name: string): boolean {
+  return RAW_TEXT_ELEMENTS.has(name);
+}
+
+/** Where the closing tag of the raw-text element `name` (or `title`) begins at or after `from`, or -1 when the text never closes it. Nothing is searched twice by a caller that moves its cursor to the result. */
+export function rawTextEnd(text: string, name: string, from: number): number {
+  const end = RAW_TEXT_END[name];
+  if (end === undefined) {
+    return -1;
+  }
+  end.lastIndex = from;
+  return end.exec(text)?.index ?? -1;
+}
+
 // The `<meta>` keys the parser reads, each with the longest value it keeps.
 const META_KEYS: ReadonlyMap<string, number> = new Map([
   ["og:title", METADATA_TITLE_MAX_LENGTH],
@@ -297,62 +368,29 @@ function walkPage(input: PageMetadataInput): PageWalk | undefined {
 
   let cursor = 0;
   walk: while (cursor < length) {
-    const open = text.indexOf("<", cursor);
-    if (open === -1) {
+    const token = nextMarkup(text, cursor, KEPT_ATTRIBUTES);
+    if (token.kind === "eof") {
       break;
     }
-    const next = text.charCodeAt(open + 1);
-    if (next === 0x21 && text.startsWith("--", open + 2)) {
-      // A comment. `<!-->` and `<!--->` are empty ones; an unclosed one runs to the end.
-      if (text.startsWith(">", open + 4)) {
-        cursor = open + 5;
-        continue;
-      }
-      if (text.startsWith("->", open + 4)) {
-        cursor = open + 6;
-        continue;
-      }
-      const close = text.indexOf("-->", open + 4);
-      if (close === -1) {
-        break;
-      }
-      cursor = close + 3;
-      continue;
-    }
-    if (next === 0x21 || next === 0x3f || next === 0x2f) {
-      // A doctype, a processing instruction, a CDATA section or an end tag: nothing in it is read, except that an end tag closes an SVG.
-      const close = text.indexOf(">", open + 2);
-      if (close === -1) {
-        break;
-      }
-      if (next === 0x2f && svgDepth > 0 && /^svg[\s/>]/i.test(text.slice(open + 2, open + 6))) {
+    cursor = token.end;
+    if (token.kind === "end") {
+      // An end tag closes an SVG; nothing else in it is read.
+      if (token.name === "svg" && svgDepth > 0) {
         svgDepth -= 1;
       }
-      cursor = close + 1;
       continue;
     }
-    if (!isLetter(next)) {
-      cursor = open + 1;
+    if (token.kind === "other") {
       continue;
     }
+    const tag = token.tag;
 
-    const tag = readStartTag(text, open, KEPT_ATTRIBUTES);
-    if (tag === undefined) {
-      break;
-    }
-    cursor = tag.end;
-
-    if (RAW_TEXT_ELEMENTS.has(tag.name)) {
-      const end = RAW_TEXT_END[tag.name];
-      if (end === undefined) {
+    if (isRawTextElement(tag.name)) {
+      const closing = rawTextEnd(text, tag.name, cursor);
+      if (closing === -1) {
         break;
       }
-      end.lastIndex = cursor;
-      const closing = end.exec(text);
-      if (closing === null) {
-        break;
-      }
-      cursor = closing.index;
+      cursor = closing;
       continue;
     }
     switch (tag.name) {
@@ -360,18 +398,13 @@ function walkPage(input: PageMetadataInput): PageWalk | undefined {
         if (documentTitle !== null || svgDepth > 0) {
           break;
         }
-        const end = RAW_TEXT_END["title"];
-        if (end === undefined) {
-          break;
-        }
-        end.lastIndex = cursor;
-        const closing = end.exec(text);
-        if (closing === null) {
+        const closing = rawTextEnd(text, "title", cursor);
+        if (closing === -1) {
           // A title that is never closed takes the rest of the page, as in a browser; nothing after it is read, and no later search repeats this one.
           break walk;
         }
-        documentTitle = plainText(text.slice(cursor, closing.index), METADATA_TITLE_MAX_LENGTH);
-        cursor = closing.index;
+        documentTitle = plainText(text.slice(cursor, closing), METADATA_TITLE_MAX_LENGTH);
+        cursor = closing;
         break;
       }
       case "svg":

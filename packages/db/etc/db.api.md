@@ -25,12 +25,14 @@ import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { DashboardStore } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
+import type { ExportStore } from '@slugbase/core';
 import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderShareStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
 import type { GoPreferenceStore } from '@slugbase/core';
 import type { GoStore } from '@slugbase/core';
 import type { GoSuggestStore } from '@slugbase/core';
+import type { ImportStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -60,6 +62,7 @@ import type { InvitationSignupResult } from '@slugbase/core';
 import type { InvitationSignupSession } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
+import type { NetscapeExportStore } from '@slugbase/core';
 import { NewBookmark } from '@slugbase/core';
 import { PgColumn } from 'drizzle-orm/pg-core';
 import { PgTable } from 'drizzle-orm/pg-core';
@@ -620,6 +623,12 @@ export interface EntitlementUsage {
     readonly seatsUsed: number;
 }
 
+// @public (undocumented)
+export type ExportRepository = ExportStore & NetscapeExportStore;
+
+// @public
+export function exportRepository(tx: TenantTx): ExportRepository;
+
 // @public
 export type FaviconRecord = {
     readonly status: "ok";
@@ -769,6 +778,19 @@ export type IdentityUnlinkOutcome = "unlinked"
 | "not_found"
 /** The account has no password and no other identity; nothing changed. */
 | "last_sign_in_method";
+
+// @public
+export interface ImportRepository extends Omit<ImportStore, "insertBookmarks"> {
+    insertBookmarks(batch: {
+        readonly bookmarks: Parameters<ImportStore["insertBookmarks"]>[0]["bookmarks"];
+        readonly jobs: readonly QueuedJob[];
+    }): Promise<{
+        readonly slugsLost: readonly string[];
+    }>;
+}
+
+// @public
+export function importRepository(tx: TenantTx): ImportRepository;
 
 // @public (undocumented)
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {

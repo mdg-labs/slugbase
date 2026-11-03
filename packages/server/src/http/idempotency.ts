@@ -20,6 +20,8 @@ import { ProblemError, requestIdOf } from "./problem.ts";
 // The claim of a workspace operation locks the workspace's row (FOR KEY SHARE) before it inserts the key, whose
 // foreign key locks the account's row: account deletion locks the workspaces and then the account (doc 05 section
 // 7.1), so the two requests take the rows in one order and cannot deadlock.
+// The body of a route that declares `acceptsMultipart` is not in the validated input, so its request hash also covers the parts of the upload (`uploadDigest`): the same key with another file is a
+// conflict and not a replay of the first answer. The digest is of the content of the parts and not of the bytes of the request, which carry a boundary the client picks anew on every attempt.
 // A request without the header runs as usual. The handler of an operation that declares idempotency must
 // open its transaction through `tenant.withTenant` for a workspace operation, or `withTenant` with the
 // account alone for an account operation, which is what this stage opens.
@@ -66,11 +68,40 @@ function canonical(value: unknown): unknown {
 /**
  * SHA-256 of what the request asks for: the operation, the workspace it acts in and the parameters, query and
  * body as validated, with object members in a fixed order, so the same request spelled differently hashes the same.
+ * An upload, which is no part of the validated input, adds its digest (`uploadDigest`); a request without one hashes as it always did.
  */
-export function requestHash(context: ChainContext, operationId: string): Buffer {
+export function requestHash(context: ChainContext, operationId: string, upload?: string): Buffer {
   const input = context.get("input");
-  const asked = canonical([operationId, context.get("workspaceId") ?? null, input?.params, input?.query, input?.body]);
+  const asked = canonical([operationId, context.get("workspaceId") ?? null, input?.params, input?.query, input?.body, ...(upload === undefined ? [] : [upload])]);
   return createHash("sha256").update(JSON.stringify(asked)).digest();
+}
+
+/**
+ * SHA-256 of the parts of a multipart request, in order: each part's name, whether it is text or a file, and its content, each length-prefixed so that no two requests share a digest by where one part
+ * ends. The filename and the part headers are left out, and so is the boundary. A body that is not multipart (the handler answers it `415` or `400`, which stores nothing) is digested as the bytes it is.
+ */
+export async function uploadDigest(request: Request): Promise<string> {
+  const digest = createHash("sha256");
+  const add = (bytes: Uint8Array): void => {
+    digest.update(`${String(bytes.byteLength)}:`);
+    digest.update(bytes);
+  };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the body-limits stage has already read the whole request, at most the route's limit, into memory, so this parses bytes the server holds
+    for (const [name, value] of await request.clone().formData()) {
+      add(new TextEncoder().encode(name));
+      if (typeof value === "string") {
+        digest.update("s");
+        add(new TextEncoder().encode(value));
+      } else {
+        digest.update("f");
+        add(new Uint8Array(await value.arrayBuffer()));
+      }
+    }
+    return `parts:${digest.digest("hex")}`;
+  } catch {
+    return `bytes:${createHash("sha256").update(new Uint8Array(await request.clone().arrayBuffer())).digest("hex")}`;
+  }
 }
 
 function replay({ status, body }: StoredResponse): Response {
@@ -112,7 +143,7 @@ export function createIdempotency({ withTenant }: IdempotencyOptions): RequestSt
       inWorkspace && tenant !== undefined ? tenant.withTenant(fn) : withTenant({ accountId: principal.accountId, requestId: requestIdOf(context) }, fn);
 
     const operationId = route.operation.operationId;
-    const hash = requestHash(context, operationId);
+    const hash = requestHash(context, operationId, route.acceptsMultipart === true ? await uploadDigest(context.req.raw) : undefined);
     try {
       return await run(async (tx) => {
         const repository = idempotencyRepository(tx);

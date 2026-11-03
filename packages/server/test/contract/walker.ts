@@ -23,11 +23,21 @@ import { componentResolver, validateSchema, type ResolveReference } from "./sche
 // the declared media type, body and headers. A call that cannot be made (no
 // fixture, no hook) is a failure, never a skip.
 
+/** The one file of an operation that takes a multipart upload, sent as the part `field`. */
+export interface UploadParts {
+  readonly field: string;
+  readonly filename: string;
+  readonly type: string;
+  readonly content: string;
+}
+
 export interface RequestParts {
   /** Path parameter name to its value. */
   readonly path?: Readonly<Record<string, string>>;
   readonly query?: Readonly<Record<string, string | readonly string[]>>;
   readonly body?: unknown;
+  /** The file of an upload operation, in place of a JSON body. */
+  readonly upload?: UploadParts;
 }
 
 export interface OperationFixture extends RequestParts {
@@ -130,17 +140,25 @@ export interface RequestInit {
   /** A path with its query. */
   readonly url: string;
   readonly body?: unknown;
+  readonly upload?: UploadParts;
   readonly credentials?: Credentials;
   readonly origin: string;
 }
 
-/** A request as a browser or a client would make it: a mutation carries its origin and is JSON. */
-export function buildRequest({ method, url, body, credentials, origin }: RequestInit): Request {
+/** A request as a browser or a client would make it: a mutation carries its origin and is JSON, or multipart when it uploads a file. */
+export function buildRequest({ method, url, body, upload, credentials, origin }: RequestInit): Request {
   const headers = new Headers(credentials?.headers);
   const upper = method.toUpperCase();
   if (MUTATIONS.has(upper)) {
     headers.set("origin", origin);
-    headers.set("content-type", "application/json");
+    if (upload === undefined) {
+      headers.set("content-type", "application/json");
+    }
+  }
+  if (upload !== undefined) {
+    const form = new FormData();
+    form.set(upload.field, new File([upload.content], upload.filename, { type: upload.type }));
+    return new Request(new URL(url, BASE_URL), { method: upper, headers, body: form });
   }
   return new Request(new URL(url, BASE_URL), { method: upper, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
@@ -271,7 +289,7 @@ export async function walkContract(options: WalkerOptions): Promise<WalkerReport
     const exercise = async (scenario: string, credentials: Credentials | undefined, parts: RequestParts, expected: Expectation): Promise<void> => {
       let request: Request;
       try {
-        request = buildRequest({ method: operation.method, url: urlOf(operation, parts), body: parts.body, credentials, origin });
+        request = buildRequest({ method: operation.method, url: urlOf(operation, parts), body: parts.body, ...(parts.upload === undefined ? {} : { upload: parts.upload }), credentials, origin });
       } catch (error) {
         fail("fixture_incomplete", error instanceof Error ? error.message : String(error), scenario);
         return;

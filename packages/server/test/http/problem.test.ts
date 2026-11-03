@@ -6,6 +6,7 @@ import {
   jsonResponse,
   problemResponse,
   problemStatus,
+  streamResponse,
   type OperationDefinition,
 } from "@slugbase/contracts";
 import { PortUnavailable, unconfigured, type Adapters, type ErrorReportContext } from "@slugbase/core";
@@ -329,6 +330,87 @@ describe("response validation of a binary response", () => {
   it("compares the media type without parameters and ignoring case", async () => {
     const { request } = serveImage(() => new Response(PNG, { headers: { "content-type": "IMAGE/PNG; charset=binary" } }));
     expect((await request("/api/v1/images/1")).status).toBe(200);
+  });
+});
+
+describe("response validation of a streamed response", () => {
+  const rows = defineOperation({
+    method: "get",
+    path: "/api/v1/rows",
+    operationId: "getRows",
+    tag: "test",
+    auth: "anonymous",
+    rate: "none",
+    responses: { 200: streamResponse("rows", "application/json", { schema: z.strictObject({ rows: z.array(z.number()) }) }), 404: problemResponse("not found") },
+  });
+  const serveRows = (handler: RouteBinding["handler"], env = "test") => serve(handler, { env, operation: rows, path: "/api/v1/rows" });
+
+  /** A stream that records how many of its pieces were pulled, and which errors after the first piece when asked to. */
+  function counted(pieces: readonly string[], failAfterFirst = false) {
+    const state = { pulled: 0 };
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          const piece = pieces[state.pulled];
+          state.pulled += 1;
+          if (failAfterFirst && state.pulled === 2) {
+            controller.error(new Error("the source failed"));
+          } else if (piece === undefined) {
+            controller.close();
+          } else {
+            controller.enqueue(encoder.encode(piece));
+          }
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    return { body, state };
+  }
+
+  it("passes the body on without reading it, in development and in production, so no piece is pulled before the client asks", async () => {
+    for (const env of ["test", "production"]) {
+      const { body, state } = counted(['{"rows":[1,', "2]}"]);
+      const { request } = serveRows(() => new Response(body, { headers: { "content-type": "application/json" } }), env);
+      const response = await request("/api/v1/rows");
+      expect(response.status).toBe(200);
+      expect(state.pulled).toBe(0);
+      expect(await response.text()).toBe('{"rows":[1,2]}');
+    }
+  });
+
+  it("does not check the body against the schema: the stream is the handler's, and what it sends is what the client receives", async () => {
+    const { request } = serveRows(() => new Response('{"rows":"not a list"}', { headers: { "content-type": "application/json" } }));
+    const response = await request("/api/v1/rows");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('{"rows":"not a list"}');
+  });
+
+  it("answers 500, and cancels the body, for another content type", async () => {
+    for (const type of ["text/html", "application/octet-stream"]) {
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>({ cancel: () => void (cancelled = true) });
+      const { request } = serveRows(() => new Response(body, { headers: { "content-type": type } }));
+      const response = await request("/api/v1/rows");
+      expect(response.status, type).toBe(500);
+      expect(await response.json(), type).toMatchObject({ code: "internal" });
+      expect(cancelled, type).toBe(true);
+    }
+  });
+
+  it("compares the media type without parameters and ignoring case", async () => {
+    const { request } = serveRows(() => new Response("{}", { headers: { "content-type": "Application/JSON; charset=utf-8" } }));
+    expect((await request("/api/v1/rows")).status).toBe(200);
+  });
+
+  it("ends the connection when the body fails after the first piece: the client reads an error, never a finished body", async () => {
+    const { body } = counted(['{"rows":[1,', "2]}"], true);
+    const { request } = serveRows(() => new Response(body, { headers: { "content-type": "application/json" } }));
+    const response = await request("/api/v1/rows");
+    expect(response.status).toBe(200);
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe('{"rows":[1,');
+    await expect(reader.read()).rejects.toThrow("the source failed");
   });
 });
 

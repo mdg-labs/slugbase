@@ -31,6 +31,7 @@ existing line by adding its PR number.
 
 - **runtime floor** — code relies on a runtime API newer than the declared engine floor (`import.meta.main` under `engines` `>=24.0.0`), so a permitted runtime silently skips the code it guards — PR 409
 - **copied threshold list** — a runner classifies a tool's exit status against its own copy of the thresholds the tool enforces, the copy misses some, so a crossed threshold reads as a failed run instead of a regression — PR 622
+- **copied limit** — a client keeps its own literal of a limit the contracts package exports (an import cap shown in a message), beside siblings that import theirs, so a change to the server's cap leaves the client stating a stale number — PR 713
 
 - **path filter without the checker** — a job that runs a check only when its content changes omits the checker and its dependencies from the filter, so a tighter rule is first seen on the next unrelated content change — PR 685
 
@@ -111,10 +112,12 @@ existing line by adding its PR number.
 - **split moves the state** — splitting a test so that an assertion (an axe pass) runs in a test of its own sets up only the starting state, so the assertion no longer checks the state the original test reached after its actions — PR 629
 - **journey leaves its data** — a browser journey on a shared account creates rows through the API or a real save and never removes them, so they pile up across journeys and engines and reach later lists and counts, while a file header may still say nothing is made — PR 696
 - **URL pathname as a file path** — a test derives a path with `new URL(…, import.meta.url).pathname`, which stays percent-encoded, so a checkout path with a space or a non-ASCII character names a file that does not exist; `fileURLToPath` decodes it — PR 696
+- **insertion strands a comment** — a new test block is inserted between a block comment and the suite it describes, so the comment now documents the new suite and misleads its reader — PR 713
 - **tool behaviour restated from memory** — a comment beside a command describes what the tool does (how `--shard` divides tests) in words that differ from what it does and from the design doc, so the next change to the shard count reasons from the wrong model — PR 696
 
 ## Web UI
 
+- **route-private import** — a module outside a route imports a helper from a route's private file (a `-`-prefixed file TanStack Router keeps out of the tree), so a change to that route breaks an unrelated feature; shared helpers live outside `routes/` — PR 713
 - **degraded capability not gated** — a screen offers a flow whose server side silently does nothing when an optional capability is off (mail), instead of reading the feature flag the API publishes for it, so the user waits for a result that never comes — PR 500
 - **possessive in a shared string** — one catalog string serves two flows (acting on another member, and on oneself) but carries a third-person possessive ("their"), so the self flow addresses the viewer as someone else — PR 510
 - **data loaded for every viewer** — a component loads a whole paged list (walking every page) for every role, although it reads the result only for one role, so other viewers make every request for nothing — PR 510

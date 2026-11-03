@@ -306,7 +306,7 @@ describe("the default view", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(labelsOf(recent)).toEqual(["Docs", "Shared board"]);
     expect(labelsOf(await groupOf(dialog, "Pinned"))).toEqual(["Mail"]);
     expect(labelsOf(await groupOf(dialog, "Navigation"))).toEqual(["Home", "Bookmarks", "Folders", "Tags", "Forwarding", "Settings"]);
-    expect(labelsOf(await groupOf(dialog, "Actions"))).toEqual(["New bookmark", "New folder", "Switch workspace", "Toggle theme", "Sign out"]);
+    expect(labelsOf(await groupOf(dialog, "Actions"))).toEqual(["New bookmark", "New folder", "Import bookmarks", "Export bookmarks", "Switch workspace", "Toggle theme", "Sign out"]);
     expect(within(recent).getByText("docs.example.org · /go/docs")).toBeTruthy();
     const recentCall = to("GET", LIST).find((call) => call.search.get("sort") === "recently_opened");
     expect(recentCall?.search.get("limit")).toBe("5");
@@ -347,7 +347,7 @@ describe("the default view", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const dialog = await openPalette();
     await groupOf(dialog, "Recent");
     const status = (): string | null | undefined => dialog.querySelector("[role='status'][aria-live='polite']")?.textContent;
-    expect(status()).toBe("14 results");
+    expect(status()).toBe("16 results");
 
     fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "dark" } });
 
@@ -423,7 +423,7 @@ describe("the default view", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const dialog = await screen.findByRole("dialog", { name: "Befehlspalette" });
 
     expect(labelsOf(await groupOf(dialog, "Navigation"))).toEqual(["Start", "Lesezeichen", "Ordner", "Tags", "Weiterleitung", "Einstellungen"]);
-    expect(labelsOf(await groupOf(dialog, "Aktionen"))).toEqual(["Neues Lesezeichen", "Neuer Ordner", "Workspace wechseln", "Design umschalten", "Abmelden"]);
+    expect(labelsOf(await groupOf(dialog, "Aktionen"))).toEqual(["Neues Lesezeichen", "Neuer Ordner", "Lesezeichen importieren", "Lesezeichen exportieren", "Workspace wechseln", "Design umschalten", "Abmelden"]);
     expect(within(dialog).getByRole("group", { name: "Zuletzt geöffnet" })).toBeTruthy();
   });
 });

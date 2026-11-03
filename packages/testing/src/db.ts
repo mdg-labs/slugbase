@@ -8,6 +8,8 @@ import { createTestDatabase, type TestDatabase, type TestDatabaseOptions } from 
 
 export { createTestDatabase, dropTestTemplate, testTemplateName, withTestDatabase } from "@slugbase/db/testing";
 export type { MigrationChain, TestDatabase, TestDatabaseOptions, TestSql } from "@slugbase/db/testing";
+export { assertBookmarkCountMatches, bookmarkCountDrift } from "./bookmark-count.js";
+export type { BookmarkCountDrift } from "./bookmark-count.js";
 
 // Waiting for another run to release the cluster lock, or for another worker to
 // build the template, counts against a hook.
