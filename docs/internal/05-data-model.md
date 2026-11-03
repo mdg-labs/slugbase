@@ -320,7 +320,7 @@ Sharing grants **read** access only (doc 02 §8). A share whose bookmark owner h
 | `actor_account_id` | uuid | → accounts SET NULL; the account deletion keeps the event |
 | `actor_label` | text NOT NULL | Display name at the time ("Former member" later is never rewritten) |
 | `actor_token_id` | uuid | When `api_token`; no foreign key, so the event outlives the token's row (the retention purge removes a revoked token's row long before the event) |
-| `action` | text NOT NULL | Dotted catalog name (`bookmark.deleted`, `member.role_changed`, `billing.plan_changed`) — the recorded actions are listed in doc 02 §10 and defined in `packages/core/src/audit/`, each with a category and the metadata fields it may carry (bounded text or an identifier), which `parseAuditMetadata` checks before insert |
+| `action` | text NOT NULL | Dotted catalog name (`bookmark.bulk_deleted`, `member.role_changed`, `billing.plan_changed`) — the recorded actions are listed in doc 02 §10 and defined in `packages/core/src/audit/`, each with a category and the metadata fields it may carry (bounded text or an identifier), which `parseAuditMetadata` checks before insert |
 | `entity_type`, `entity_id` | text, uuid | What the event is about. The deletion of an account whose identifier is `entity_id` (a member) sets `entity_id` to NULL (§7.1) |
 | `metadata` | jsonb NOT NULL DEFAULT `'{}'` | Before/after of changed fields; never secrets, never full URLs of other members' private bookmarks. The deletion of the account that `transferTo` names removes that field (§7.1) |
 | `ip_prefix` | cidr | |
