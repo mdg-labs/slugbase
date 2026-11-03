@@ -4,6 +4,12 @@
 
 ```ts
 
+import { AccessModeChange } from '@slugbase/core';
+import type { AccessModeEndStore } from '@slugbase/core';
+import type { AccessModeEndStoreOutcome } from '@slugbase/core';
+import { AccessModeOutcome } from '@slugbase/core';
+import type { AccessModeRequest } from '@slugbase/core';
+import type { AccountAccessModeTransaction } from '@slugbase/core';
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditEventReader } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
@@ -87,6 +93,45 @@ export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", 
 // @public (undocumented)
 export type AccentPreset = (typeof ACCENT_PRESETS)[number];
 
+// @public
+export function accessModeEndStore(tx: TenantTx, jobsFor: (request: Parameters<AccessModeEndStore["end"]>[0]) => readonly QueuedJob[]): AccessModeEndStore;
+
+// @public (undocumented)
+export interface AccessModeStore {
+    close(): Promise<void>;
+    due(limit: number): Promise<readonly DueAccessMode[]>;
+}
+
+// @public (undocumented)
+export interface AccessModeStoreOptions {
+    poolSize?: number;
+    url: string;
+}
+
+// @public
+export type AccountAccessModeRecord = {
+    readonly mode: "full";
+} | {
+    readonly mode: "exportOnly";
+    readonly until: Date;
+};
+
+// @public (undocumented)
+export interface AccountAccessModeRepository {
+    end(request: {
+        readonly eventId: string;
+        readonly action: "disable" | "delete";
+        readonly soleWorkspaceIds: readonly string[];
+    }, jobs: readonly QueuedJob[]): Promise<AccessModeEndStoreOutcome>;
+    set(request: AccessModeRequest): Promise<AccessModeOutcome>;
+}
+
+// @public (undocumented)
+export function accountAccessModeRepository(tx: TenantTx): AccountAccessModeRepository;
+
+// @public
+export function accountAccessModeTransaction(tx: TenantTx, newId: () => string): AccountAccessModeTransaction;
+
 // @public (undocumented)
 export interface AccountDeletionRepository {
     delete(soleWorkspaceIds: readonly string[], jobs: readonly QueuedJob[]): Promise<boolean>;
@@ -119,6 +164,7 @@ export function accountIdentityRepository(tx: TenantTx): AccountIdentityReposito
 export interface AccountProfile {
     // (undocumented)
     readonly accent: AccentPreset | null;
+    readonly accessMode: "full" | "exportOnly";
     // (undocumented)
     readonly aiOptOut: boolean;
     // (undocumented)
@@ -131,6 +177,7 @@ export interface AccountProfile {
     readonly email: string;
     // (undocumented)
     readonly emailVerified: boolean;
+    readonly exportOnlyUntil: Date | null;
     // (undocumented)
     readonly hasPassword: boolean;
     // (undocumented)
@@ -287,6 +334,7 @@ export function auditEventRepository(tx: TenantTx): AuditEventRepository;
 
 // @public (undocumented)
 export interface AuthStore extends SetupStore, InstanceSettingsStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore, InvitationAccountStore, InvitationIdentityStore {
+    accountAccessMode(accountId: string): Promise<AccountAccessModeRecord | undefined>;
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -511,6 +559,9 @@ export interface ConnectionRoleOptions {
 }
 
 // @public
+export function createAccessModeStore(options: AccessModeStoreOptions): AccessModeStore;
+
+// @public
 export function createAuthStore(options: AuthStoreOptions): AuthStore;
 
 // @public
@@ -558,6 +609,14 @@ export interface DatabaseOptions {
 
 // @public
 export function defineScopedRepository<T extends WorkspaceTable, const M extends ScopedMethod = ScopedMethod>(name: string, table: T, options?: ScopedRepositoryOptions<T, M>): ScopedRepositoryDefinition<T, M>;
+
+// @public
+export interface DueAccessMode {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly endAction: "disable" | "delete";
+}
 
 // @public (undocumented)
 export interface EmailChangeRepository {
@@ -824,6 +883,7 @@ export interface InstanceRepository {
     requestVerification(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceVerificationOutcome>;
     resetMfa(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMfaResetOutcome>;
     secondFactorEnrolled(): Promise<boolean>;
+    setAccessMode(accountId: string, change: AccessModeChange, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<AccessModeOutcome>;
     settings(): Promise<InstanceSettings>;
     status(eventId: string, ipPrefix: string | null): Promise<InstanceCounts>;
     updateAccount(accountId: string, change: InstanceAccountChange, eventIds: {

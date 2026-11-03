@@ -6,6 +6,7 @@ import type { RateLimitRegistry } from "../config/index.ts";
 import type { Logger } from "../create-server.ts";
 import type { HookDispatcher } from "../hooks/index.ts";
 import type { Metrics } from "../metrics/index.ts";
+import { createAccessModeCheck, type AccessModeSource } from "./access-mode.ts";
 import { createAuthentication, type Authenticator, type Principal } from "./authenticate.ts";
 import { createAuthorization, type EntitlementCheck, type EntitlementUpgradeCheck, type SecondFactorCheck } from "./authorize.ts";
 import { bodyLimits } from "./body-limits.ts";
@@ -164,6 +165,11 @@ export interface ChainDependencies {
   readonly rateLimits: RateLimitRegistry;
   /** Resolves credentials into principals (stage 4); without one every request is anonymous. */
   readonly authenticators?: readonly Authenticator[];
+  /**
+   * Where stage 4 reads the access mode of the principal's account from, right after the credential resolved: an export-only account's
+   * requests are refused with `403 account_export_only` but for the few operations that read and export (doc 02 section 2.11).
+   */
+  readonly accessMode: AccessModeSource;
   /** Derives the active workspace, member and role of a principal (stage 7). */
   readonly tenantResolver: TenantResolver;
   /** The tenant transaction the handler's `tenant.withTenant` opens (stage 7). */
@@ -303,6 +309,7 @@ export function installChain(
     responseValidation,
     metrics,
     authenticators = [],
+    accessMode,
     tenantResolver,
     withTenant,
     entitlements,
@@ -325,7 +332,11 @@ export function installChain(
     "security-headers": securityHeaders.stage,
     "body-limits": bodyLimits,
     "ip-rate-limiting": rateLimiting.ipStage,
-    authentication: createAuthentication({ authenticators }),
+    // The access-mode check is part of stage 4: it runs on the principal the authenticators resolved, before the next stage.
+    authentication: ((authentication, accessModeCheck): RequestStage => (context, next) => authentication(context, () => accessModeCheck(context, next)))(
+      createAuthentication({ authenticators }),
+      createAccessModeCheck({ source: accessMode }),
+    ),
     "cross-site-protection": createCrossSiteProtection({ appOrigin, challenge, logger }),
     "rate-limiting": rateLimiting.stage,
     "tenant-resolution": createTenantResolution({ resolver: tenantResolver, withTenant }),

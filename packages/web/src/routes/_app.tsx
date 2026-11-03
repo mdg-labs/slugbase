@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { validateBookmarkModalSearch } from "../bookmarks/modal-search.ts";
 import { requireAccount } from "../account/require-account.ts";
 import { AppLayout } from "../shell/app-layout.tsx";
+import { EXPORT_ONLY_PATH } from "../shell/export-only.tsx";
 
 // The pages about the account itself and the instance admin pages are open to an account with no workspace to act
 // in: neither is a page of a workspace. The admin layout decides for itself who may see its pages.
@@ -18,6 +19,11 @@ export const Route = createFileRoute("/_app")({
   // nothing to show on the pages of a workspace: it is sent to the page that says what to do about that.
   beforeLoad: async ({ context, location }) => {
     const me = await requireAccount({ context, location });
+    // An account in the export-only access mode (doc 02 section 2.11) has the export page and nothing else.
+    if (me?.account.accessMode === "exportOnly" && location.pathname !== EXPORT_ONLY_PATH) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
+      throw redirect({ to: EXPORT_ONLY_PATH, replace: true });
+    }
     if (me?.activeWorkspaceId === null && !isWorkspaceFreePage(location.pathname)) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
       throw redirect({ to: "/no-workspace", replace: true });

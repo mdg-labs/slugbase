@@ -20,13 +20,114 @@ export function acceptInvitationWithAccount(input: InvitationSignupDependencies,
 export function acceptInvitationWithIdentity(input: InvitationIdentityDependencies, ask: InvitationIdentityAsk): Promise<InvitationIdentityResult>;
 
 // @public
+export type AccessModeChange = {
+    readonly mode: "full";
+} | {
+    readonly mode: "exportOnly";
+    readonly until: Date;
+    readonly endAction: ExportOnlyEndAction;
+};
+
+// @public
+export function accessModeChangeOf(request: Pick<SetAccountAccessModeRequest, "mode" | "until" | "endAction">): AccessModeChange;
+
+// @public (undocumented)
+export interface AccessModeEndDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: AccessModeEndStore;
+}
+
+// @public (undocumented)
+export type AccessModeEndOutcome =
+/** The account is disabled; `deletionBlocked` is true when its end action was `delete` and it could not be deleted yet. */
+    {
+    readonly kind: "disabled";
+    readonly deletionBlocked: boolean;
+}
+/** The account is deleted; `workspaces` were deleted with it. */
+| {
+    readonly kind: "deleted";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+}
+/** There was nothing to end: the period had not ended, or another run ended it. */
+| {
+    readonly kind: "not_due";
+}
+/** The workspaces of the account changed under the deletion; nothing was written, and the next run tries again. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface AccessModeEndRequest {
+    // (undocumented)
+    readonly action: ExportOnlyEndAction;
+    readonly eventId: string;
+    readonly events: readonly DomainEvent<"account.deleted">[];
+    readonly soleWorkspaceIds: readonly string[];
+}
+
+// @public
+export interface AccessModeEndStore {
+    end(request: AccessModeEndRequest): Promise<AccessModeEndStoreOutcome>;
+    scope(): Promise<AccountDeletionScope>;
+}
+
+// @public
+export type AccessModeEndStoreOutcome = "disabled" | "deleted" | "not_due" | "blocked" | "unavailable";
+
+// @public
+export type AccessModeOutcome =
+/** The account is export-only now, with the end date and end action asked for. */
+"set"
+/** The account is `full` again. */
+| "cleared"
+/** The account was in the state asked for already. */
+| "unchanged"
+/** There is no such account; for the exported service, also an account other than the one of the transaction. */
+| "unknown_account"
+/** The account is disabled: nothing is left to take out. */
+| "account_disabled"
+/** The account holds the instance-admin flag; an admin whose requests are all refused would still be the admin the instance keeps. */
+| "instance_admin"
+/** The end date is less than a day ahead. */
+| "until_too_soon";
+
+// @public (undocumented)
+export interface AccessModeRequest {
+    // (undocumented)
+    readonly change: AccessModeChange;
+    readonly eventId: string;
+}
+
+// @public
+export const ACCOUNT_ACCESS_MODES: readonly ["full", "exportOnly", "disabled"];
+
+// @public
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
 export const ACCOUNT_LIMIT_ENTITLEMENTS: readonly AccountLimitEntitlement[];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred", "accountDisabled", "mfaReset"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred", "accountDisabled", "mfaReset", "exportOnly"];
+
+// @public (undocumented)
+export type AccountAccessMode = (typeof ACCOUNT_ACCESS_MODES)[number];
+
+// @public
+export class AccountAccessModeError extends Error {
+    constructor(message: string);
+}
+
+// @public
+export interface AccountAccessModeTransaction {
+    readonly accountId: string;
+    newId(): string;
+    setAccessMode(request: AccessModeRequest): Promise<AccessModeOutcome>;
+    readonly workspaceId: string | undefined;
+}
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
@@ -2880,6 +2981,12 @@ export class EgressTooLarge extends EgressError {
 }
 
 // @public
+export function endAccessMode(input: AccessModeEndDependencies, ask: {
+    readonly accountId: string;
+    readonly endAction: ExportOnlyEndAction;
+}): Promise<AccessModeEndOutcome>;
+
+// @public
 export function endMembership(input: MembershipEndDependencies, ask: MembershipEndAsk): Promise<MembershipEndOutcome>;
 
 // @public
@@ -2992,6 +3099,9 @@ export interface ErrorReportPort extends Port {
 export function escapeHtml(text: string): string;
 
 // @public
+export const EXPORT_ONLY_END_ACTIONS: readonly ["disable", "delete"];
+
+// @public
 export const EXPORT_PAGE_SIZE = 500;
 
 // @public
@@ -3042,6 +3152,9 @@ export function exportNetscapeFilename(exportedAt: Date): string;
 
 // @public
 export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId" | "includeShared" | "only">): ReadableStream<Uint8Array>;
+
+// @public (undocumented)
+export type ExportOnlyEndAction = (typeof EXPORT_ONLY_END_ACTIONS)[number];
 
 // @public
 export type ExportSelection = {
@@ -4535,6 +4648,20 @@ export const INSTANCE_AUDIT_ACTIONS: {
     readonly "instance.account_enabled": {
         readonly metadata: {};
     };
+    readonly "instance.account_export_only_set": {
+        readonly metadata: {
+            readonly endAction: "text";
+            readonly until: "text";
+        };
+    };
+    readonly "instance.account_export_only_cleared": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_export_only_ended": {
+        readonly metadata: {
+            readonly endAction: "text";
+        };
+    };
     readonly "instance.account_mfa_reset": {
         readonly metadata: {};
     };
@@ -4560,8 +4687,18 @@ export const INSTANCE_SETTING_NAMES: readonly ["allowWorkspaceCreation", "displa
 // @public
 export const INSTANCE_TEST_MAIL_TEMPLATE = "testMail";
 
+// @public (undocumented)
+export interface InstanceAccessModeAsk extends InstanceAccountAsk {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly change: AccessModeChange;
+    readonly notify: boolean;
+}
+
 // @public
 export interface InstanceAccount {
+    readonly accessMode: AccountAccessMode;
     // (undocumented)
     readonly disabled: boolean;
     // (undocumented)
@@ -4570,6 +4707,8 @@ export interface InstanceAccount {
     readonly email: string;
     // (undocumented)
     readonly emailVerified: boolean;
+    readonly exportOnlyEndAction: ExportOnlyEndAction | null;
+    readonly exportOnlyUntil: Date | null;
     // (undocumented)
     readonly id: string;
     // (undocumented)
@@ -4578,6 +4717,11 @@ export interface InstanceAccount {
     // (undocumented)
     readonly mfaEnabled: boolean;
     readonly workspaceCount: number;
+}
+
+// @public (undocumented)
+export interface InstanceAccountAccessModeStore {
+    setAccessMode(accountId: string, change: AccessModeChange, notify: boolean, eventId: string, ipPrefix: string | null): Promise<AccessModeOutcome>;
 }
 
 // @public (undocumented)
@@ -4715,6 +4859,10 @@ export type InstanceAccountUpdateOutcome =
 | {
     readonly kind: "last_instance_admin";
     readonly field: "isInstanceAdmin" | "disabled";
+}
+/** The change grants the admin flag to an account in the export-only access mode, which is never an instance admin; nothing was written. */
+| {
+    readonly kind: "export_only";
 };
 
 // @public
@@ -6479,6 +6627,25 @@ export interface SessionCookieSpec {
 
 // @public
 export function sessionCookieSpec(appOrigin: string): SessionCookieSpec;
+
+// @public
+export function setAccountAccessMode(tx: AccountAccessModeTransaction, request: SetAccountAccessModeRequest): Promise<{
+    readonly outcome: AccessModeOutcome;
+}>;
+
+// @public (undocumented)
+export interface SetAccountAccessModeRequest {
+    readonly accountId: string;
+    readonly endAction?: ExportOnlyEndAction;
+    readonly mode: "full" | "exportOnly";
+    readonly until?: Date;
+}
+
+// @public
+export function setInstanceAccountAccessMode(input: {
+    readonly store: InstanceAccountAccessModeStore;
+    readonly newId: () => string;
+}, ask: InstanceAccessModeAsk): Promise<AccessModeOutcome>;
 
 // @public
 export const SHARE_ENTITLEMENTS: {

@@ -23,7 +23,7 @@ import {
 } from "../../src/create-server.ts";
 import { RouteTable, installChain, type ChainEnv } from "../../src/http/chain.ts";
 import type { EntitlementCheck, EntitlementSubject, EntitlementUpgradeCheck } from "../../src/http/authorize.ts";
-import { adapters, documentOf, fakeDatabase, hookDispatcher, recordingLogger, serverConfig, tenantDependencies, rateLimitDependencies } from "../support.ts";
+import { adapters, documentOf, fakeDatabase, hookDispatcher, recordingLogger, serverConfig, tenantDependencies, rateLimitDependencies, fakeAuthStore } from "../support.ts";
 
 // Stages 4, 7 and 9 of the chain (doc 01 section 4), exercised through the
 // operations a test module registers, with stub authenticators and a stub
@@ -209,6 +209,7 @@ function setup(options: SetupOptions = {}) {
   };
   const database = fakeDatabase();
   const server = createServer({
+    authStore: fakeAuthStore(),
     config: serverConfig(),
     adapters: { ...adapters(), tenantResolver: resolver } satisfies Adapters,
     modules: [module],
@@ -348,6 +349,7 @@ describe("stage 4: authentication", () => {
       }),
     };
     const server = createServer({
+      authStore: fakeAuthStore(),
       config: serverConfig(),
       adapters: adapters(),
       modules: [failing],

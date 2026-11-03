@@ -32,6 +32,9 @@ type SimpleRefusal =
   | "alreadyVerified"
   | "mailUnavailable"
   | "self"
+  | "instanceAdmin"
+  | "untilTooSoon"
+  | "exportOnly"
   | "invalid";
 
 /** Why an action on an account was refused, as far as the admin is told. A guard refusal carries the code the deployment's deletion guard answered with. */
@@ -50,6 +53,9 @@ const FIELD_CODES: Readonly<Record<string, SimpleRefusal>> = {
   no_password: "noPassword",
   already_verified: "alreadyVerified",
   self: "self",
+  instance_admin: "instanceAdmin",
+  until_too_soon: "untilTooSoon",
+  export_only: "exportOnly",
 };
 
 /** The refusal an error stands for, or undefined when the error is no answer the page explains. */
@@ -113,6 +119,23 @@ export function updateInstanceAccount(api: ApiClient, id: string, change: Accoun
     const { data, error } = await api.PATCH("/api/v1/instance/accounts/{id}", { params: { path: { id } }, body: change });
     if (data === undefined) {
       throw new Error("The account update did not answer with a document", { cause: error });
+    }
+    return {};
+  });
+}
+
+/** What `PUT /instance/accounts/{id}/access-mode` takes: the export-only period of the account, or its end. */
+export type AccessModeChange = { readonly mode: "full" } | { readonly mode: "exportOnly"; readonly until: string; readonly endAction: "disable" | "delete" };
+
+/**
+ * Sets the export-only access mode of an account, or clears it (doc 04 section 10.10). The call needs a fresh re-authentication, which the API
+ * client asks for with the shared prompt. A refusal the page explains is an answer; any other failure throws.
+ */
+export function setInstanceAccountAccessMode(api: ApiClient, id: string, change: AccessModeChange): Promise<AccountOutcome> {
+  return attempt(async () => {
+    const { data, error } = await api.PUT("/api/v1/instance/accounts/{id}/access-mode", { params: { path: { id } }, body: change });
+    if (data === undefined) {
+      throw new Error("The access mode request did not answer with a document", { cause: error });
     }
     return {};
   });

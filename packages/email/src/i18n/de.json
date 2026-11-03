@@ -130,5 +130,14 @@
     "body": "Eine Administratorin oder ein Administrator dieser {appName}-Instanz hat die Zwei-Faktor-Authentifizierung für dein Konto zurückgesetzt. Deine Authenticator-App und deine Backup-Codes funktionieren nicht mehr, deine Geräte wurden abgemeldet, und die Anmeldung fragt jetzt nur noch nach deinem Passwort.",
     "notYou": "Falls du die Administration nicht darum gebeten hast, wende dich sofort an die Administration dieser {appName}-Instanz. Schalte die Zwei-Faktor-Authentifizierung nach der Anmeldung wieder ein.",
     "action": "Zwei-Faktor-Authentifizierung einrichten"
+  },
+  "exportOnly": {
+    "subject": "Dein {appName}-Konto kann ab jetzt nur noch Daten exportieren",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Eine Administration dieser {appName}-Instanz hat deinen Zugang zum Konto beendet. Bis {until} kannst du dich noch anmelden, deine Lesezeichen ansehen und exportieren. Ändern kannst du nichts, und API-Tokens und Slug-Links funktionieren nicht mehr. Danach wird das Konto deaktiviert oder gelöscht.",
+    "how": "Um deine Daten mitzunehmen, melde dich an und öffne mit dem Button unten die Exportseite. Dort kannst du deine Lesezeichen für jeden Workspace, den du nutzt, als SlugBase-JSON-Datei oder als HTML-Datei für Browser herunterladen.",
+    "action": "Meine Daten exportieren",
+    "footer": "Du erhältst diese E-Mail, weil eine Administration dieser {appName}-Instanz dein Konto auf Export beschränkt hat."
   }
 }

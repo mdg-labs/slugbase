@@ -12,6 +12,7 @@ import {
   resendInstanceAccountVerification as resendInstanceAccountVerificationOperation,
   resetInstanceAccountMfa as resetInstanceAccountMfaOperation,
   sendInstanceTestMail,
+  setInstanceAccountAccessMode as setInstanceAccountAccessModeOperation,
   updateInstanceAccount as updateInstanceAccountOperation,
   updateInstanceSettings,
 } from "@slugbase/contracts";
@@ -28,9 +29,12 @@ import {
   requestInstanceAccountVerification,
   requestInstanceWorkspaceDeletion,
   resetInstanceAccountMfa,
+  setInstanceAccountAccessMode,
   updateInstanceAccount,
+  type AccessModeChange,
   type Adapters,
   type InstanceAccount,
+  type InstanceAccountAccessModeStore,
   type InstanceAccountDeletionStore,
   type InstanceAccountStore,
   type InstanceRecoveryStore,
@@ -108,7 +112,8 @@ import { route } from "../register.ts";
 // composition's `instanceAdminGrant` check, which can refuse it (Q44): a refusal is 403 with nothing written. The flag and the
 // disabled state are applied by one database call that checks the admin once, in a transaction that is rolled back on any refusal:
 // `last_instance_admin` (422 `validation_failed` with that field code on the field refused) when the change would leave no enabled instance admin, decided by the database under
-// the advisory lock of the set of admins, and 404 for an account that does not exist. Changing the flag, or disabling, deletes the
+// the advisory lock of the set of admins, `export_only` (422 `validation_failed` on `isInstanceAdmin`) when the flag is granted to an account in the
+// export-only access mode (doc 02 section 2.11), and 404 for an account that does not exist. Changing the flag, or disabling, deletes the
 // target's sessions, so the next request of each answers 401; a disabled account's API tokens are refused by their lookup. When the
 // account is disabled and mail is configured the email that tells it so is queued in the same transaction.
 //
@@ -123,6 +128,15 @@ import { route } from "../register.ts";
 // (503 `mail_unavailable` before anything is written otherwise). A disabled account is refused by all three, a refusal is 422 `validation_failed`
 // with a field code on `id` (`account_disabled`, `self`, `email_unverified`, `no_password`, `already_verified`), and 404 is an account that
 // does not exist; a reset of an account without a confirmed second factor changes nothing and answers 204 all the same.
+//
+// PUT /api/v1/instance/accounts/{id}/access-mode (doc 02 sections 2.11 and 11.2, doc 04 section 10.10, doc 05 section 3.3) sets or clears the export-only
+// access mode of an account: a period, ending at the given time (at least a day ahead), in which the account can sign in, read what it sees, run the
+// exports and delete itself, and every other request is refused with 403 `account_export_only` (stage 4 of the chain), and at the end of which the
+// account is disabled or deleted, as chosen. It needs a session that re-authenticated within ten minutes. One `sys_instance_set_account_access_mode`
+// call checks the admin again, changes the account and writes `instance.account_export_only_set` or `instance.account_export_only_cleared`; where mail
+// is configured the email that tells the account is queued in the same transaction. A disabled account and an instance admin are refused (422
+// `validation_failed` with the field code `account_disabled` or `instance_admin` on `id`), as is an end date less than a day ahead (`until_too_soon` on
+// `until`); 404 is an account that does not exist; a request for the state the account is in already changes nothing, writes no event and sends no email.
 //
 // Every route here answers 403 `forbidden`, with nothing written, when the database's own admin check refuses a caller whom the policy admitted: another
 // admin demoted, disabled or deleted the account in between (doc 05 section 7.1).
@@ -169,8 +183,11 @@ export const allowInstanceAdminGrant: InstanceAdminGrantCheck = () => true;
 const ADMIN_GRANT_REFUSED = "This deployment does not grant the instance-admin flag.";
 const NO_SUCH_ACCOUNT_TO_CHANGE = "There is no such account.";
 const LAST_INSTANCE_ADMIN = "The instance must keep an enabled instance admin.";
+const EXPORT_ONLY_ACCOUNT_ADMIN = "An account in the export-only access mode cannot be made an instance admin.";
 const MAIL_UNAVAILABLE = "Email delivery is not available on this instance.";
 const ACCOUNT_DISABLED = "The account is disabled; enable it first.";
+const EXPORT_ONLY_ADMIN = "An instance admin is not made export-only; clear the instance-admin flag first.";
+const EXPORT_ONLY_TOO_SOON = "The export-only period must end at least a day from now.";
 const OWN_MFA = "Your own two-factor authentication is turned off in your account settings, with your second factor.";
 const EMAIL_UNVERIFIED = "The account's address is not verified; mark it verified or resend the verification email first.";
 const NO_PASSWORD = "The account has no password to reset; it signs in through a provider.";
@@ -187,8 +204,41 @@ const OWN_ACCOUNT = "Your own account is deleted in your account settings.";
 const LAST_OWNER = "The account is the only owner of workspaces that have other members; transfer their ownership or delete them first.";
 const ACCOUNT_DELETION_UNAVAILABLE = "The account could not be deleted; try again.";
 
-function accountBody({ id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt, workspaceCount }: InstanceAccount) {
-  return { id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt: lastSignInAt === null ? null : lastSignInAt.toISOString(), workspaceCount };
+function accountBody({
+  id,
+  displayName,
+  email,
+  emailVerified,
+  mfaEnabled,
+  isInstanceAdmin,
+  disabled,
+  accessMode,
+  exportOnlyUntil,
+  exportOnlyEndAction,
+  lastSignInAt,
+  workspaceCount,
+}: InstanceAccount) {
+  return {
+    id,
+    displayName,
+    email,
+    emailVerified,
+    mfaEnabled,
+    isInstanceAdmin,
+    disabled,
+    accessMode,
+    exportOnlyUntil: exportOnlyUntil === null ? null : exportOnlyUntil.toISOString(),
+    exportOnlyEndAction,
+    lastSignInAt: lastSignInAt === null ? null : lastSignInAt.toISOString(),
+    workspaceCount,
+  };
+}
+
+/** The state the access-mode operation answers with: what the request named, which is what the account is in after it. */
+function accessModeBody(change: AccessModeChange) {
+  return change.mode === "full"
+    ? { accessMode: "full" as const, exportOnlyUntil: null, exportOnlyEndAction: null }
+    : { accessMode: "exportOnly" as const, exportOnlyUntil: change.until.toISOString(), exportOnlyEndAction: change.endAction };
 }
 
 const FORBIDDEN = "You do not have access to this resource.";
@@ -234,6 +284,15 @@ function accountStoreOf(tx: TenantTx): InstanceAccountStore {
     listAccounts: (eventId, ipPrefix) => repository.listAccounts(eventId, ipPrefix),
     updateAccount: (accountId, change, notify, eventIds, ipPrefix) =>
       repository.updateAccount(accountId, change, eventIds, ipPrefix, change.disabled === true && notify ? [queueMailSend(uuidv7(), "accountDisabled", accountId)] : []),
+  };
+}
+
+/** The access-mode operation of the instance admin, bound to the account-level transaction of the request; a mode that is set queues its email in that transaction. */
+function accessModeStoreOf(tx: TenantTx): InstanceAccountAccessModeStore {
+  const repository = instanceRepository(tx);
+  return {
+    setAccessMode: (accountId, change, notify, eventId, ipPrefix) =>
+      repository.setAccessMode(accountId, change, eventId, ipPrefix, notify ? [queueMailSend(uuidv7(), "exportOnly", accountId)] : []),
   };
 }
 
@@ -506,9 +565,36 @@ export function instanceRoutes({
             throw new ProblemError("not_found", NO_SUCH_ACCOUNT_TO_CHANGE);
           case "last_instance_admin":
             throw new ProblemError("validation_failed", LAST_INSTANCE_ADMIN, { errors: [{ path: outcome.field, code: "last_instance_admin" }] });
+          case "export_only":
+            throw new ProblemError("validation_failed", EXPORT_ONLY_ACCOUNT_ADMIN, { errors: [{ path: "isInstanceAdmin", code: "export_only" }] });
         }
       });
       return { status: 200, body: accountBody(account) };
+    }),
+
+    route(setInstanceAccountAccessModeOperation).handle(async ({ params, body }, context) => {
+      const { accountId } = sessionOf(context);
+      const change: AccessModeChange = body.mode === "full" ? { mode: "full" } : { mode: "exportOnly", until: new Date(body.until), endAction: body.endAction };
+      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, (tx) =>
+        setInstanceAccountAccessMode(
+          { store: accessModeStoreOf(tx), newId: uuidv7 },
+          { accountId: params.id.toLowerCase(), change, notify: adapters.mail.available, ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null },
+        ),
+      );
+      switch (outcome) {
+        case "set":
+        case "cleared":
+        case "unchanged":
+          return { status: 200, body: accessModeBody(change) };
+        case "unknown_account":
+          throw new ProblemError("not_found", NO_SUCH_ACCOUNT_TO_CHANGE);
+        case "account_disabled":
+          throw refusal(ACCOUNT_DISABLED, "account_disabled");
+        case "instance_admin":
+          throw refusal(EXPORT_ONLY_ADMIN, "instance_admin");
+        case "until_too_soon":
+          throw new ProblemError("validation_failed", EXPORT_ONLY_TOO_SOON, { errors: [{ path: "until", code: "until_too_soon" }] });
+      }
     }),
 
     route(deleteInstanceAccountOperation).handle(async ({ params }, context) => {

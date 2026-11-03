@@ -31,6 +31,8 @@ const ACCOUNT: Account = {
   hasPassword: true,
   mfaEnabled: false,
   isInstanceAdmin: false,
+  accessMode: "full",
+  exportOnlyUntil: null,
   pendingEmail: null,
 };
 

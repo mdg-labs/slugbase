@@ -46,6 +46,8 @@ function accountBody(profile: AccountProfile, isInstanceAdmin: boolean) {
     hasPassword: profile.hasPassword,
     mfaEnabled: profile.mfaEnabled,
     isInstanceAdmin,
+    accessMode: profile.accessMode,
+    exportOnlyUntil: profile.exportOnlyUntil === null ? null : profile.exportOnlyUntil.toISOString(),
     pendingEmail: profile.pendingEmail,
   };
 }

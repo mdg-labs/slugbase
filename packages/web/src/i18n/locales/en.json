@@ -44,6 +44,15 @@
       "shared": "Shared with you",
       "sharedBy": "{name}, shared by {owner}",
       "sharedLoadFailed": "The folders shared with you could not be loaded."
+    },
+    "exportOnly": {
+      "title": "Your account can only export its data",
+      "description": "An administrator ended your access. Until {date} you can sign in, view and export your bookmarks; you cannot change anything. After that the account is disabled or deleted.",
+      "action": "Export my data",
+      "workspace": {
+        "label": "Workspace to export from",
+        "description": "The export contains your bookmarks in the workspace chosen here."
+      }
     }
   },
   "home": {
@@ -1288,7 +1297,10 @@
         "invalid": "The change was refused. Reload the page and try again.",
         "lastOwner": "This account is the only owner of workspaces that have other members.",
         "billingActive": "This account has an active paid subscription. It has to be cancelled first.",
-        "guard": "This server does not allow this right now. Nothing was changed."
+        "guard": "This server does not allow this right now. Nothing was changed.",
+        "instanceAdmin": "An instance admin cannot be made export-only; clear the instance-admin flag first.",
+        "untilTooSoon": "The period must end at least a day from now.",
+        "exportOnly": "This account is in an export-only period and cannot be made an instance admin."
       },
       "action": {
         "resend": {
@@ -1342,6 +1354,30 @@
         },
         "delete": {
           "label": "Delete account"
+        },
+        "exportOnly": {
+          "label": "Set export-only",
+          "title": "Leave {name} an export-only period",
+          "description": "{name} can still sign in, view and export their bookmarks until the day you choose, and nothing else: no changes, no API tokens, no slug links, no invitations. After that the account is disabled or deleted. Where email is set up, {name} is told.",
+          "close": "Close",
+          "done": "{name} can only export until the end date.",
+          "day": {
+            "label": "Last day",
+            "description": "The period ends at the end of this day, at least a day from now.",
+            "required": "Choose the last day."
+          },
+          "endAction": {
+            "label": "Then",
+            "description": "A deletion follows the rules of deleting an account. If it cannot be made, because the account is the only owner of a workspace with other members, the account is disabled instead.",
+            "disable": "Disable the account",
+            "delete": "Delete the account"
+          }
+        },
+        "endExportOnly": {
+          "label": "End export-only",
+          "title": "End the export-only period of {name}?",
+          "description": "{name} gets full access again and is not disabled or deleted at the end date.",
+          "done": "{name} has full access again."
         }
       },
       "resetLink": {
@@ -1367,7 +1403,8 @@
           "close": "Close",
           "open": "Open workspaces"
         }
-      }
+      },
+      "exportOnly": "Export only until {date}"
     },
     "settings": {
       "title": "Settings & status",

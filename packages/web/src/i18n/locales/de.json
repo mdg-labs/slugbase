@@ -44,6 +44,15 @@
       "shared": "Mit dir geteilt",
       "sharedBy": "{name}, geteilt von {owner}",
       "sharedLoadFailed": "Die mit dir geteilten Ordner konnten nicht geladen werden."
+    },
+    "exportOnly": {
+      "title": "Dein Konto kann nur noch Daten exportieren",
+      "description": "Eine Administration hat deinen Zugang beendet. Bis {date} kannst du dich anmelden, deine Lesezeichen ansehen und exportieren; ändern kannst du nichts. Danach wird das Konto deaktiviert oder gelöscht.",
+      "action": "Meine Daten exportieren",
+      "workspace": {
+        "label": "Workspace für den Export",
+        "description": "Der Export enthält deine Lesezeichen im hier gewählten Workspace."
+      }
     }
   },
   "home": {
@@ -1288,7 +1297,10 @@
         "invalid": "Die Änderung wurde abgelehnt. Lade die Seite neu und versuche es noch einmal.",
         "lastOwner": "Dieses Konto ist der einzige Eigentümer von Workspaces, die weitere Mitglieder haben.",
         "billingActive": "Dieses Konto hat ein aktives kostenpflichtiges Abonnement. Es muss zuerst gekündigt werden.",
-        "guard": "Dieser Server erlaubt das gerade nicht. Es wurde nichts geändert."
+        "guard": "Dieser Server erlaubt das gerade nicht. Es wurde nichts geändert.",
+        "instanceAdmin": "Ein Instanzadmin kann nicht auf Export beschränkt werden; entferne zuerst die Instanzadmin-Rolle.",
+        "untilTooSoon": "Der Zeitraum muss mindestens einen Tag ab jetzt dauern.",
+        "exportOnly": "Dieses Konto befindet sich in einem reinen Exportzeitraum und kann nicht zum Instanzadmin gemacht werden."
       },
       "action": {
         "resend": {
@@ -1342,6 +1354,30 @@
         },
         "delete": {
           "label": "Konto löschen"
+        },
+        "exportOnly": {
+          "label": "Auf Export beschränken",
+          "title": "{name} einen Export-Zeitraum geben",
+          "description": "{name} kann sich bis zum gewählten Tag noch anmelden, die Lesezeichen ansehen und exportieren, sonst nichts: keine Änderungen, keine API-Tokens, keine Slug-Links, keine Einladungen. Danach wird das Konto deaktiviert oder gelöscht. Ist E-Mail eingerichtet, wird {name} informiert.",
+          "close": "Schließen",
+          "done": "{name} kann bis zum Enddatum nur noch exportieren.",
+          "day": {
+            "label": "Letzter Tag",
+            "description": "Der Zeitraum endet am Ende dieses Tages, mindestens einen Tag ab jetzt.",
+            "required": "Wähle den letzten Tag."
+          },
+          "endAction": {
+            "label": "Danach",
+            "description": "Ein Löschen folgt den Regeln zum Löschen eines Kontos. Ist das nicht möglich, weil das Konto einziger Eigentümer eines Workspace mit anderen Mitgliedern ist, wird das Konto stattdessen deaktiviert.",
+            "disable": "Konto deaktivieren",
+            "delete": "Konto löschen"
+          }
+        },
+        "endExportOnly": {
+          "label": "Export-Zeitraum beenden",
+          "title": "Export-Zeitraum von {name} beenden?",
+          "description": "{name} hat wieder vollen Zugriff und wird zum Enddatum weder deaktiviert noch gelöscht.",
+          "done": "{name} hat wieder vollen Zugriff."
         }
       },
       "resetLink": {
@@ -1367,7 +1403,8 @@
           "close": "Schließen",
           "open": "Workspaces öffnen"
         }
-      }
+      },
+      "exportOnly": "Nur Export bis {date}"
     },
     "settings": {
       "title": "Einstellungen & Status",

@@ -28,6 +28,11 @@ export const INSTANCE_AUDIT_ACTIONS = {
   "instance.account_admin_revoked": { metadata: {} },
   "instance.account_disabled": { metadata: {} },
   "instance.account_enabled": { metadata: {} },
+  // The export-only access mode (doc 02 section 2.11). `set` names the end action, `disable` or `delete`, and the end date (RFC 3339 UTC); `cleared` puts the account back to full; `ended` is the daily
+  // job applying the end action (the system is the actor), and after `delete` it names no account.
+  "instance.account_export_only_set": { metadata: { endAction: "text", until: "text" } },
+  "instance.account_export_only_cleared": { metadata: {} },
+  "instance.account_export_only_ended": { metadata: { endAction: "text" } },
   // The recovery actions (doc 02 section 11.2). A reset of the second factor, a resent verification email and an address marked
   // verified carry no metadata. A password-reset link names how it reached the account, `mail` or `link` (returned once to the
   // admin), and never the token.

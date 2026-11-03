@@ -200,6 +200,8 @@ describe("GET /api/v1/me", () => {
         hasPassword: true,
         mfaEnabled: false,
         isInstanceAdmin: false,
+        accessMode: "full",
+        exportOnlyUntil: null,
         pendingEmail: null,
       },
       memberships: [],

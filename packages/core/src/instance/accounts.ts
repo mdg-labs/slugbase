@@ -1,8 +1,13 @@
+import type { AccessModeChange, AccessModeOutcome, AccountAccessMode, ExportOnlyEndAction } from "../accounts/access-mode.ts";
+
 // The account operations of the CE instance admin (doc 02 section 11.2, doc 04 section 10.10, doc 05 sections 3.3
 // and 7.1, doc 10 T4 and T18): list every account without anything secret or any content, grant or clear the
 // instance-admin flag, disable or enable an account, and mark its address verified. Each is a `sys_instance_*` system operation that checks the
 // admin again in the database and writes its instance audit event in the same call, so this module decides what is
 // asked and how an answer is read, and never writes an event itself.
+//
+// The export-only access mode (doc 02 section 2.11) is set and cleared by `setInstanceAccountAccessMode`, which asks the database for it in the same
+// call that writes the audit event and, for a mode that is set, queues the email that tells the account.
 //
 // An account that is not an instance admin, and an instance admin who is disabled, are not counted as "another admin":
 // the instance must keep an admin who can sign in. The database decides that under the transaction-level advisory lock
@@ -17,6 +22,12 @@ export interface InstanceAccount {
   readonly mfaEnabled: boolean;
   readonly isInstanceAdmin: boolean;
   readonly disabled: boolean;
+  /** `disabled` while the account is disabled, `exportOnly` while it is in the export-only period, else `full`. */
+  readonly accessMode: AccountAccessMode;
+  /** The end of the export-only period; null unless `accessMode` is `exportOnly`. */
+  readonly exportOnlyUntil: Date | null;
+  /** What happens at the end of the period; null unless `accessMode` is `exportOnly`. */
+  readonly exportOnlyEndAction: ExportOnlyEndAction | null;
   /** Null while the account never completed a sign-in. */
   readonly lastSignInAt: Date | null;
   /** The workspaces, not being deleted, the account is a member of. */
@@ -36,7 +47,9 @@ export type InstanceAccountUpdateOutcome =
   /** The account does not exist; nothing was written. */
   | { readonly kind: "unknown_account" }
   /** The change would leave the instance without an enabled instance admin; `field` is the one of the ask it refused. */
-  | { readonly kind: "last_instance_admin"; readonly field: "isInstanceAdmin" | "disabled" };
+  | { readonly kind: "last_instance_admin"; readonly field: "isInstanceAdmin" | "disabled" }
+  /** The change grants the admin flag to an account in the export-only access mode, which is never an instance admin; nothing was written. */
+  | { readonly kind: "export_only" };
 
 /** The fields of an account an instance admin changes; a field left out stays as it is. */
 export interface InstanceAccountChange {
@@ -67,6 +80,16 @@ export interface InstanceAccountStore {
     eventIds: { readonly admin: string; readonly disabled: string; readonly verified: string },
     ipPrefix: string | null,
   ): Promise<InstanceAccountUpdateOutcome>;
+}
+
+export interface InstanceAccountAccessModeStore {
+  /**
+   * Sets or clears the export-only mode of the account through `sys_instance_set_account_access_mode`, which checks the calling
+   * admin again, writes the instance audit event (`instance.account_export_only_set` or `instance.account_export_only_cleared`, under
+   * `eventId`) in the same call, and, when `notify` is set and the answer is `set`, queues the email that tells the account in the same
+   * transaction. Anything but `set` and `cleared` writes and queues nothing.
+   */
+  setAccessMode(accountId: string, change: AccessModeChange, notify: boolean, eventId: string, ipPrefix: string | null): Promise<AccessModeOutcome>;
 }
 
 export interface InstanceAccountDependencies {
@@ -116,4 +139,22 @@ export async function updateInstanceAccount(
     { admin: newId(), disabled: newId(), verified: newId() },
     ask.ipPrefix,
   );
+}
+
+export interface InstanceAccessModeAsk extends InstanceAccountAsk {
+  readonly accountId: string;
+  readonly change: AccessModeChange;
+  /** Whether the email that tells the account can be queued, that is, whether mail is configured. */
+  readonly notify: boolean;
+}
+
+/**
+ * Sets or clears the export-only mode of the account. The end date of a mode that is set is at least a day ahead, which the database
+ * judges by its own clock; an admin account and a disabled account are refused.
+ */
+export function setInstanceAccountAccessMode(
+  { store, newId }: { readonly store: InstanceAccountAccessModeStore; readonly newId: () => string },
+  ask: InstanceAccessModeAsk,
+): Promise<AccessModeOutcome> {
+  return store.setAccessMode(ask.accountId, ask.change, ask.notify, newId(), ask.ipPrefix);
 }

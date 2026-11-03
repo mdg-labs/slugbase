@@ -57,6 +57,10 @@ import { defineJob } from "../job.ts";
 // section 2.7). It carries the account's identifier and nothing else, no secret or code, and is queued in the transaction
 // of the reset, so it is sent whatever becomes of the account before the worker runs.
 //
+// The "export-only" email (doc 02 sections 2.11 and 12) tells an account that an instance administrator left it a period in which it can only
+// sign in and take its data out, and when the period ends. It carries the account's identifier and nothing else; the end date is read when the
+// message is sent, and nothing is sent to an account that is no longer in the period.
+//
 // The "new sign-in" email (doc 02 section 12) carries what it shows, taken when the sign-in happened: the
 // time, the browser family and the coarse network prefix, none of which is a secret. The alert was queued
 // while the account's switch was on, so it is sent whatever becomes of the session or the switch before the
@@ -176,6 +180,14 @@ export const mailSendJob = defineJob({
         });
         const notice = accountNotification("emailChangeNotice", profile, { token: cancel.value });
         return pending === undefined ? [notice] : [notice, accountNotification("emailChange", { ...profile, email: pending }, { token: confirmation.value })];
+      }
+      if (template === "exportOnly") {
+        // The period is read as it is when the message is sent: one that was cleared, or has ended, since the job was queued has nothing to announce.
+        if (profile.accessMode !== "exportOnly" || profile.exportOnlyUntil === null) {
+          context.logger.warn("Mail not sent; the account is not in an export-only period", { template });
+          return [];
+        }
+        return [accountNotification(template, profile, { until: profile.exportOnlyUntil.toISOString() })];
       }
       if (template === INSTANCE_TEST_MAIL_TEMPLATE) {
         return [instanceTestMail(profile)];

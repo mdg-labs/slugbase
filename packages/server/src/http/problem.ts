@@ -35,6 +35,7 @@ const PROBLEM_TITLES: Record<ProblemCode, string> = {
   registration_refused: "Registration refused",
   cross_site_request: "Cross-site request refused",
   token_scope: "Token scope insufficient",
+  account_export_only: "Account is export-only",
   entitlement_required: "Plan does not include this feature",
   email_unverified: "Email address not verified",
   registration_closed: "Registration closed",

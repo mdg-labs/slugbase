@@ -188,7 +188,7 @@ async function mailJobs(): Promise<Record<string, unknown>[]> {
 }
 
 // The answer for the one field a test changes: `changed` when this call moved it, `unchanged` when the account already had the value.
-type FieldResult = { readonly kind: "changed" | "unchanged"; readonly account: InstanceAccount } | { readonly kind: "unknown_account" } | { readonly kind: "last_instance_admin" };
+type FieldResult = { readonly kind: "changed" | "unchanged"; readonly account: InstanceAccount } | { readonly kind: "unknown_account" } | { readonly kind: "last_instance_admin" } | { readonly kind: "export_only" };
 
 function fieldResult(outcome: InstanceAccountUpdateOutcome, field: "adminChanged" | "disabledChanged"): FieldResult {
   if (outcome.kind !== "updated") {
@@ -236,6 +236,9 @@ describe("sys_instance_list_accounts", () => {
       mfaEnabled: true,
       isInstanceAdmin: false,
       disabled: false,
+      accessMode: "full",
+      exportOnlyUntil: null,
+      exportOnlyEndAction: null,
       lastSignInAt: null,
       workspaceCount: 1,
     });
@@ -243,7 +246,7 @@ describe("sys_instance_list_accounts", () => {
     expect(listed.find((item) => item.id === disabled.id)).toMatchObject({ disabled: true });
     expect(listed.find((item) => item.id === caller)).toMatchObject({ isInstanceAdmin: true, mfaEnabled: true });
     for (const item of listed) {
-      expect(Object.keys(item).sort()).toEqual(["disabled", "displayName", "email", "emailVerified", "id", "isInstanceAdmin", "lastSignInAt", "mfaEnabled", "workspaceCount"]);
+      expect(Object.keys(item).sort()).toEqual(["accessMode", "disabled", "displayName", "email", "emailVerified", "exportOnlyEndAction", "exportOnlyUntil", "id", "isInstanceAdmin", "lastSignInAt", "mfaEnabled", "workspaceCount"]);
     }
     expect(JSON.stringify(listed)).not.toMatch(/argon2id|Secret plans|sealed/);
   });

@@ -37,6 +37,8 @@ export { credentialTokenRepository } from "./repositories/credential-tokens.ts";
 export type { CredentialTokenRepository, NewCredentialToken } from "./repositories/credential-tokens.ts";
 export { auditEventRepository } from "./repositories/audit-events.ts";
 export type { AuditEventRepository } from "./repositories/audit-events.ts";
+export { accessModeEndStore, accountAccessModeRepository, accountAccessModeTransaction } from "./repositories/account-access-mode.ts";
+export type { AccountAccessModeRepository } from "./repositories/account-access-mode.ts";
 export { accountDeletionRepository } from "./repositories/account-deletion.ts";
 export type { AccountDeletionRepository } from "./repositories/account-deletion.ts";
 export { entitlementRepository } from "./repositories/entitlements.ts";
@@ -89,6 +91,8 @@ export { listRepositoryMethods } from "./repositories/registry.ts";
 export type { RepositoryInput, RepositoryMethodEntry, ScopedMethod } from "./repositories/registry.ts";
 export { createRateLimitStore } from "./system/rate-limit.ts";
 export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTaken } from "./system/rate-limit.ts";
+export { createAccessModeStore } from "./system/access-mode.ts";
+export type { AccessModeStore, AccessModeStoreOptions, DueAccessMode } from "./system/access-mode.ts";
 export { createRetentionStore } from "./system/retention.ts";
 export type { RetentionPurgeCount, RetentionStore, RetentionStoreOptions } from "./system/retention.ts";
 export { USAGE_FLUSH_BATCH_SIZE, createUsageStore } from "./system/usage.ts";
@@ -99,6 +103,7 @@ export type { WorkspaceDeletionStore, WorkspaceDeletionStoreOptions } from "./sy
 export { WORKSPACE_PURGE_BATCH_SIZE, workspacePurgeOrder } from "./purge-registry.ts";
 export { createAuthStore } from "./system/auth.ts";
 export type {
+  AccountAccessModeRecord,
   ApiTokenPrincipalRecord,
   AuthStore,
   AuthStoreOptions,

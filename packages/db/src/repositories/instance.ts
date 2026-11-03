@@ -3,7 +3,10 @@ import {
   InstanceAdminRequiredError,
   isInstanceAuditAction,
   UNSET_INSTANCE_SETTINGS,
+  type AccessModeChange,
+  type AccessModeOutcome,
   type AccountDeletionWorkspace,
+  type ExportOnlyEndAction,
   type InstanceAccount,
   type InstanceAccountChange,
   type InstanceAccountDeletionRequest,
@@ -159,6 +162,14 @@ export interface InstanceRepository {
    */
   listAccounts(eventId: string, ipPrefix: string | null): Promise<readonly InstanceAccount[]>;
   /**
+   * Sets (`exportOnly`) or clears (`full`) the export-only access mode of the account through `sys_instance_set_account_access_mode`,
+   * which checks the calling admin again and writes the instance audit event `instance.account_export_only_set` or
+   * `instance.account_export_only_cleared`, under `eventId`, in the same call. `jobs` are queued in the same transaction, only when the
+   * answer is `set`. Every other answer writes and queues nothing. Raises, writing nothing, when the account of the transaction is not an
+   * instance admin with a second factor. Works in an account-level transaction.
+   */
+  setAccessMode(accountId: string, change: AccessModeChange, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<AccessModeOutcome>;
+  /**
    * Applies the change to the account in one call of `sys_instance_update_account`, which checks the calling admin once
    * for every field: grants or clears the instance-admin flag (`instance.account_admin_granted` or
    * `instance.account_admin_revoked`, under `eventIds.admin`), disables or enables the account
@@ -168,7 +179,8 @@ export interface InstanceRepository {
    * factor, API tokens, linked identities and the unused tokens of the account; the calling admin's own account is only
    * marked. A change of the flag, and disabling, delete every session of the account. A change that takes the only enabled admin away is
    * `last_instance_admin`, decided under the advisory lock of the set of admins (doc 05 section 7.1), with nothing
-   * written or queued; the field says which of the two it refused. A field that already has the value writes nothing.
+   * written or queued; the field says which of the two it refused. Granting the flag to an account in the export-only access mode is
+   * `export_only`, with nothing written or queued. A field that already has the value writes nothing.
    * `jobs` are queued in the same transaction, only when this call disabled the account. Raises, writing nothing, when
    * the account of the transaction is not an instance admin with a second factor. Works in an account-level
    * transaction.
@@ -350,7 +362,13 @@ function workspaceOf(row: WorkspaceRow): InstanceWorkspace {
   };
 }
 
-function accountOf(row: AccountColumns): InstanceAccount {
+/** The export-only period of an account, as `sys_instance_list_account_access_modes` reports it. */
+interface ExportOnlyPeriod {
+  readonly until: Date;
+  readonly endAction: ExportOnlyEndAction;
+}
+
+function accountOf(row: AccountColumns, periods: ReadonlyMap<string, ExportOnlyPeriod>): InstanceAccount {
   if (
     row.acct_id === null ||
     row.acct_name === null ||
@@ -363,6 +381,7 @@ function accountOf(row: AccountColumns): InstanceAccount {
   ) {
     throw new Error("an instance account function returned an account with a missing column");
   }
+  const period = row.acct_disabled ? undefined : periods.get(row.acct_id);
   return {
     id: row.acct_id,
     displayName: row.acct_name,
@@ -371,12 +390,15 @@ function accountOf(row: AccountColumns): InstanceAccount {
     mfaEnabled: row.acct_mfa_on,
     isInstanceAdmin: row.acct_admin,
     disabled: row.acct_disabled,
+    accessMode: row.acct_disabled ? "disabled" : period === undefined ? "full" : "exportOnly",
+    exportOnlyUntil: period?.until ?? null,
+    exportOnlyEndAction: period?.endAction ?? null,
     lastSignInAt: row.acct_last_sign_in === null ? null : new Date(row.acct_last_sign_in),
     workspaceCount: count(row.acct_workspaces, "the workspace count"),
   };
 }
 
-function accountChangeOf(rows: readonly AccountChangeRow[]): InstanceAccountUpdateOutcome {
+function accountChangeOf(rows: readonly AccountChangeRow[], periods: ReadonlyMap<string, ExportOnlyPeriod>): InstanceAccountUpdateOutcome {
   const row = rows[0];
   if (rows.length !== 1 || row === undefined) {
     throw new Error("sys_instance_update_account did not return exactly one row");
@@ -389,13 +411,15 @@ function accountChangeOf(rows: readonly AccountChangeRow[]): InstanceAccountUpda
         throw new Error("sys_instance_update_account refused a field it does not define");
       }
       return { kind: "last_instance_admin", field: row.refused_field };
+    case "export_only":
+      return { kind: "export_only" };
     case "updated":
       if (row.admin_changed === null || row.disabled_changed === null || row.verified_changed === null) {
         throw new Error("sys_instance_update_account did not say which fields changed");
       }
       return {
         kind: "updated",
-        account: accountOf(row),
+        account: accountOf(row, periods),
         adminChanged: row.admin_changed,
         disabledChanged: row.disabled_changed,
         verifiedChanged: row.verified_changed,
@@ -442,6 +466,40 @@ function auditEventOf(row: AuditRow): InstanceAuditEvent {
     metadata: Object.fromEntries(entries.map(([key, value]) => [key, String(value)])),
     ipPrefix: row.ip_prefix,
   };
+}
+
+interface PeriodRow extends Record<string, unknown> {
+  acct_id: string;
+  acct_until: Date | string;
+  acct_end_action: string;
+}
+
+function periodOf(row: PeriodRow): readonly [string, ExportOnlyPeriod] {
+  if (row.acct_end_action !== "disable" && row.acct_end_action !== "delete") {
+    throw new Error("an export-only period holds an end action outside disable and delete");
+  }
+  return [row.acct_id, { until: new Date(row.acct_until), endAction: row.acct_end_action }];
+}
+
+/** The export-only periods of every account, through the admin's own function; it checks the calling admin again. */
+async function exportOnlyPeriods(tx: TenantTx): Promise<ReadonlyMap<string, ExportOnlyPeriod>> {
+  const rows = await executeAsAdmin<PeriodRow>(tx, sql`SELECT acct_id, acct_until, acct_end_action FROM public.sys_instance_list_account_access_modes()`);
+  return new Map(rows.map(periodOf));
+}
+
+/**
+ * The export-only period of one account, through the function the chain reads too, which checks no caller: the answer to a change that took the
+ * calling admin's own standing away (their flag, or their enabled state) is still made.
+ */
+async function exportOnlyPeriodOf(tx: TenantTx, accountId: string): Promise<ReadonlyMap<string, ExportOnlyPeriod>> {
+  const rows = await tenantHandle(tx).execute<{ access_mode: string; export_only_until: Date | string | null; export_only_end_action: string | null } & Record<string, unknown>>(
+    sql`SELECT access_mode, export_only_until, export_only_end_action FROM public.sys_account_access_mode(${accountId}::uuid)`,
+  );
+  const row = rows[0];
+  if (row === undefined || row.access_mode !== "export_only" || row.export_only_until === null || row.export_only_end_action === null) {
+    return new Map();
+  }
+  return new Map([periodOf({ acct_id: accountId, acct_until: row.export_only_until, acct_end_action: row.export_only_end_action })]);
 }
 
 export function instanceRepository(tx: TenantTx): InstanceRepository {
@@ -629,7 +687,8 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
         SELECT acct_id, acct_name, acct_email, acct_verified, acct_mfa_on, acct_admin, acct_disabled,
           to_char(acct_last_sign_in AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS acct_last_sign_in, acct_workspaces::text AS acct_workspaces
         FROM public.sys_instance_list_accounts(${eventId}::uuid, ${ipPrefix}::cidr)`);
-      return rows.map(accountOf);
+      const periods = await exportOnlyPeriods(tx);
+      return rows.map((row) => accountOf(row, periods));
     },
 
     async updateAccount(accountId, change, eventIds, ipPrefix, jobs) {
@@ -638,13 +697,38 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
         FROM public.sys_instance_update_account(
           ${eventIds.admin}::uuid, ${eventIds.disabled}::uuid, ${eventIds.verified}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid,
           ${change.isInstanceAdmin ?? null}::boolean, ${change.disabled ?? null}::boolean, ${change.emailVerified ?? null}::boolean)`);
-      const result = accountChangeOf(rows);
+      const result = accountChangeOf(rows, rows[0]?.outcome === "updated" ? await exportOnlyPeriodOf(tx, accountId) : new Map());
       if (result.kind === "updated" && result.disabledChanged) {
         for (const job of jobs) {
           await enqueueInTenantTransaction(tx, job);
         }
       }
       return result;
+    },
+
+    async setAccessMode(accountId, change, eventId, ipPrefix, jobs) {
+      const exportOnly = change.mode === "exportOnly";
+      const outcome = await recoveryOutcome(
+        tx,
+        "sys_instance_set_account_access_mode",
+        sql`SELECT public.sys_instance_set_account_access_mode(
+          ${eventId}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid, ${exportOnly ? "export_only" : "full"}::text,
+          ${exportOnly ? change.until.toISOString() : null}::timestamptz, ${exportOnly ? change.endAction : null}::text) AS outcome`,
+      );
+      switch (outcome) {
+        case "set":
+          await enqueueAll(tx, jobs);
+          return outcome;
+        case "cleared":
+        case "unchanged":
+        case "unknown_account":
+        case "account_disabled":
+        case "instance_admin":
+        case "until_too_soon":
+          return outcome;
+        default:
+          throw new Error("sys_instance_set_account_access_mode answered an outcome it does not define");
+      }
     },
 
     async resetMfa(accountId, eventId, ipPrefix, jobs) {

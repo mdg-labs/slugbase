@@ -20,6 +20,7 @@ describe("the member.left subscriber", () => {
   it("is registered by the built-in modules for member.left and nothing else", () => {
     const modules = createBuiltInModules(
       {
+        accessMode: { due: () => Promise.resolve([]) },
         rateLimit: { purgeIdle: () => Promise.resolve(0) },
         retention: { purge: () => Promise.resolve([]) },
         workspaceDeletion: { purgeRows: () => Promise.resolve({}), finish: () => Promise.resolve(false) },

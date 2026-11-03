@@ -156,6 +156,8 @@ describe("PATCH /api/v1/me", () => {
       hasPassword: true,
       mfaEnabled: false,
       isInstanceAdmin: false,
+      accessMode: "full",
+      exportOnlyUntil: null,
       pendingEmail: null,
     });
     expect(text).not.toMatch(/argon2|password_hash|passwordHash|token_hash/i);

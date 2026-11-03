@@ -13,6 +13,7 @@ import { createMembershipTenantResolver, defersToMembershipResolver } from "./au
 import { createTokenRedeemLimit } from "./auth/token-redeem-limit.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
+import type { AccessModeSource } from "./http/access-mode.ts";
 import { denyEntitlements, noUpgradeAvailable, type EntitlementCheck, type SecondFactorCheck } from "./http/authorize.ts";
 import { bodyLimits } from "./http/body-limits.ts";
 import {
@@ -216,6 +217,11 @@ export interface CreateServerOptions {
    * account has a second factor enrolled from the database. A test passes a check of its own.
    */
   readonly secondFactor?: SecondFactorCheck;
+  /**
+   * Replaces where stage 4 reads the access mode of the principal's account from (doc 02 section 2.11), which by default is the
+   * database, through `authStore`. A test whose principals are not accounts of the database passes a source of its own.
+   */
+  readonly accessMode?: AccessModeSource;
   /**
    * Whether an instance admin may grant the instance-admin flag to an account (doc 04 section 10.10, Q44): the
    * composition's choice, never an edition flag (D4). By default it may, the Community Edition's; a composition
@@ -777,6 +783,8 @@ export function createServer(options: CreateServerOptions): Server {
     rateLimit: adapters.rateLimit,
     rateLimits: createRateLimitRegistry(config),
     authenticators: composition.authenticators,
+    // Stage 4 reads the account's access mode from the database on the same pool as the session lookup.
+    accessMode: options.accessMode ?? authStore,
     // A composition that has not chosen a resolver gets the one that reads the principal's memberships (doc 01 section 5.2).
     tenantResolver: defersToMembershipResolver(adapters.tenantResolver)
       ? createMembershipTenantResolver({ withTenant: context.withTenant })

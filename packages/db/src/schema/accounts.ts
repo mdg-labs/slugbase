@@ -41,6 +41,19 @@ export const accounts = pgTable(
     isInstanceAdmin: boolean().notNull().default(false),
     /** Set by an instance admin: blocks sign-in and invalidates the account's sessions. */
     disabledAt: timestamp({ withTimezone: true }),
+    /**
+     * `full`, or `export_only` while an instance admin or the composition has left the account a fixed period to take its data out:
+     * it can sign in, read and run the exports and nothing else (doc 02 section 2.11). The third mode, disabled, is `disabled_at`.
+     * Written by the system operations of src/sql/710-account-access-mode.sql only, which keep the three columns together: `full` with no end
+     * date and no end action, or `export_only` with both, the action `disable` or `delete`. The application role holds no privilege on
+     * them, read or write; they are read through `sys_account_access_mode`. No CHECK states this: a constraint added to the existing
+     * table would have to be added NOT VALID and validated by a later release (doc 05 section 5.2).
+     */
+    accessMode: text().notNull().default("full"),
+    /** When the export-only period ends and its end action runs; set exactly while `access_mode` is `export_only`. */
+    exportOnlyUntil: timestamp({ withTimezone: true }),
+    /** What happens when the period ends, `disable` or `delete`; set exactly while `access_mode` is `export_only`. */
+    exportOnlyEndAction: text(),
     lastSignInAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

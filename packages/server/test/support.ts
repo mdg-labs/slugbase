@@ -95,6 +95,8 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     signInAlertContext: unexpected("signInAlertContext"),
     lookupSession: unexpected("lookupSession"),
     lookupApiToken: unexpected("lookupApiToken"),
+    // Asked on every request of a principal that calls an operation outside the export-only list; a test that is not about the mode has full access.
+    accountAccessMode: () => Promise.resolve({ mode: "full" }),
     revokeSession: unexpected("revokeSession"),
     listSessions: unexpected("listSessions"),
     revokeAllSessions: unexpected("revokeAllSessions"),
@@ -139,10 +141,14 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
   };
 }
 
-/** The tenant dependencies of the chain for a test that does not exercise tenancy: nothing is resolved, and no transaction is opened. */
-export function tenantDependencies(): Pick<ChainDependencies, "tenantResolver" | "withTenant"> {
+/** The tenant dependencies of the chain for a test that does not exercise tenancy: nothing is resolved, no transaction is opened, and every account has full access. */
+export function tenantDependencies(): Pick<ChainDependencies, "tenantResolver" | "withTenant" | "accessMode"> {
   const database = fakeDatabase();
-  return { tenantResolver: adapters().tenantResolver, withTenant: database.withTenant.bind(database) };
+  return {
+    tenantResolver: adapters().tenantResolver,
+    withTenant: database.withTenant.bind(database),
+    accessMode: { accountAccessMode: () => Promise.resolve({ mode: "full" }) },
+  };
 }
 
 /** The rate-limit dependencies of the chain for a test that does not exercise limits: the default registry over an in-memory limiter. */

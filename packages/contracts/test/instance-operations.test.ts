@@ -5,7 +5,9 @@ import {
   INSTANCE_DISPLAY_NAME_MAX_LENGTH,
   INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH,
   InstanceAccountResetLinkSchema,
+  InstanceAccountAccessModeSchema,
   InstanceAccountSchema,
+  SetInstanceAccountAccessModeRequestSchema,
   InstanceSettingsSchema,
   InstanceStatusSchema,
   UpdateInstanceAccountRequestSchema,
@@ -28,6 +30,7 @@ import {
   resendInstanceAccountVerification,
   resetInstanceAccountMfa,
   sendInstanceTestMail,
+  setInstanceAccountAccessMode,
   updateInstanceAccount,
   updateInstanceSettings,
 } from "../src/operations/instance.ts";
@@ -302,10 +305,18 @@ describe("the instance account operations", () => {
       mfaEnabled: false,
       isInstanceAdmin: false,
       disabled: false,
+      accessMode: "full",
+      exportOnlyUntil: null,
+      exportOnlyEndAction: null,
       lastSignInAt: null,
       workspaceCount: 2,
     };
     expect(InstanceAccountSchema.safeParse(listed).success).toBe(true);
+    expect(InstanceAccountSchema.safeParse({ ...listed, accessMode: "exportOnly", exportOnlyUntil: "2026-12-01T10:00:00.000Z", exportOnlyEndAction: "delete" }).success).toBe(true);
+    expect(InstanceAccountSchema.safeParse({ ...listed, accessMode: "disabled", disabled: true }).success).toBe(true);
+    expect(InstanceAccountSchema.safeParse({ ...listed, accessMode: "trial" }).success).toBe(false);
+    expect(InstanceAccountSchema.safeParse({ ...listed, exportOnlyEndAction: "archive" }).success).toBe(false);
+    expect(InstanceAccountSchema.safeParse({ ...listed, accessMode: undefined }).success).toBe(false);
     expect(InstanceAccountSchema.safeParse({ ...listed, lastSignInAt: "2026-10-20T10:00:00.000Z" }).success).toBe(true);
     expect(InstanceAccountSchema.safeParse({ ...listed, passwordHash: "x" }).success).toBe(false);
     expect(InstanceAccountSchema.safeParse({ ...listed, mfaSecret: "x" }).success).toBe(false);
@@ -441,5 +452,46 @@ describe("the instance account deletion operation", () => {
   it("names the account by the path and takes no body", () => {
     expect(remove?.["requestBody"]).toBeUndefined();
     expect((remove?.["parameters"] as Obj[]).map((parameter) => [parameter["name"], parameter["in"]])).toEqual([["id", "path"]]);
+  });
+});
+
+describe("the instance access-mode operation", () => {
+  const operation = paths["/api/v1/instance/accounts/{id}/access-mode"]?.["put"];
+  const responses = (operation?.["responses"] ?? {}) as Record<string, Obj>;
+
+  it("is PUT /instance/accounts/{id}/access-mode for the instance admin, with the write bucket, re-authentication and no token scope", () => {
+    expect(setInstanceAccountAccessMode.operationId).toBe("setInstanceAccountAccessMode");
+    expect(operation?.["x-slugbase-auth"]).toBe("instanceAdmin");
+    expect(operation?.["x-slugbase-rate"]).toBe("write");
+    expect(operation?.["x-slugbase-reauth"]).toBe(true);
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+  });
+
+  it("answers 200 with the mode and every refusal as a problem document", () => {
+    expect(Object.keys(responses["200"]?.["content"] as Obj)).toEqual(["application/json"]);
+    for (const status of ["400", "401", "403", "404", "422", "429", "503"]) {
+      expect(Object.keys(responses[status]?.["content"] as Obj), status).toEqual(["application/problem+json"]);
+    }
+  });
+
+  it("takes full alone, or exportOnly with an end date and an end action, and nothing else", () => {
+    const parse = (body: unknown) => SetInstanceAccountAccessModeRequestSchema.safeParse(body);
+    expect(parse({ mode: "full" }).success).toBe(true);
+    expect(parse({ mode: "exportOnly", until: "2026-12-01T10:00:00.000Z", endAction: "delete" }).success).toBe(true);
+    expect(parse({ mode: "exportOnly", until: "2026-12-01T10:00:00.000Z", endAction: "disable" }).success).toBe(true);
+    expect(parse({ mode: "exportOnly", endAction: "delete" }).success).toBe(false);
+    expect(parse({ mode: "exportOnly", until: "2026-12-01T10:00:00.000Z" }).success).toBe(false);
+    expect(parse({ mode: "exportOnly", until: "tomorrow", endAction: "delete" }).success).toBe(false);
+    expect(parse({ mode: "exportOnly", until: "2026-12-01T10:00:00.000Z", endAction: "archive" }).success).toBe(false);
+    expect(parse({ mode: "full", until: "2026-12-01T10:00:00.000Z" }).success).toBe(false);
+    expect(parse({ mode: "disabled" }).success).toBe(false);
+    expect(parse({}).success).toBe(false);
+  });
+
+  it("answers a closed object that names the mode, the end date and the end action", () => {
+    expect(InstanceAccountAccessModeSchema.safeParse({ accessMode: "full", exportOnlyUntil: null, exportOnlyEndAction: null }).success).toBe(true);
+    expect(InstanceAccountAccessModeSchema.safeParse({ accessMode: "exportOnly", exportOnlyUntil: "2026-12-01T10:00:00.000Z", exportOnlyEndAction: "delete" }).success).toBe(true);
+    expect(InstanceAccountAccessModeSchema.safeParse({ accessMode: "disabled", exportOnlyUntil: null, exportOnlyEndAction: null }).success).toBe(false);
+    expect(InstanceAccountAccessModeSchema.safeParse({ accessMode: "full", exportOnlyUntil: null, exportOnlyEndAction: null, email: "x" }).success).toBe(false);
   });
 });

@@ -29,12 +29,14 @@ import { PaletteTrigger } from "../palette/palette-trigger.tsx";
 import { AppShortcuts } from "../shortcuts/app-shortcuts.tsx";
 import { DOCS_LINK_PROPS, useDocsUrl } from "../docs/docs-url.ts";
 import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
+import { ExportOnlyLayout, useRefreshOnExportOnly } from "./export-only.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
 import { SidebarFolders } from "./sidebar-folders.tsx";
 import { useWorkspaceSwitcher } from "./workspace-switcher.tsx";
 
 function AppLayoutShell(): ReactElement {
   const { t } = useTranslation();
+  useRefreshOnExportOnly();
   const { product } = useConfig();
   const docsUrl = useDocsUrl();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -213,9 +215,15 @@ function AppLayoutShell(): ReactElement {
 
 /**
  * The in-app layout route: the app shell around the page of the current route, under the account's
- * preferences. The sidebar lists the routes that exist; each page adds its own as it arrives.
+ * preferences. The sidebar lists the routes that exist; each page adds its own as it arrives. An account in the
+ * export-only access mode gets `ExportOnlyLayout` instead.
  */
 export function AppLayout(): ReactElement {
+  const account = useCachedAccount();
+  // An account in the export-only access mode (doc 02 section 2.11) has the export page and nothing else: the server refuses the rest.
+  if (account?.accessMode === "exportOnly") {
+    return <ExportOnlyLayout />;
+  }
   return (
     <AccountPreferences>
       <PaletteProvider>
