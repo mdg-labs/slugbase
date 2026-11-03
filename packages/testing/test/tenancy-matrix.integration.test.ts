@@ -1424,9 +1424,6 @@ describe("the shared bookmarks of the export across workspaces", () => {
   });
 });
 
-// The cache of AI suggestions locks the workspace row and the member's membership row before it writes (`holdMember`, which an update that counts accepted fields calls first,
-// and `store`): two rows of tables that no scoped repository covers, taken through the raw handle of the transaction, so the registry walk above cannot see them. This runs both
-// methods as shipped, through the repository, inside withTenant(A), as an account that is no member of A (it belongs to B) and as one that belongs to both, against the rows of B.
 describe("the remembered slug choices of the export across workspaces", () => {
   const MEMBER_OF_BOTH = "0192f3a0-3333-7000-8000-00000000a0aa";
   const OTHER_OF_A = "0192f3a0-3333-7000-8000-00000000a0ab";
@@ -1474,6 +1471,9 @@ describe("the remembered slug choices of the export across workspaces", () => {
   });
 });
 
+// The cache of AI suggestions locks the workspace row and the member's membership row before it writes (`holdMember`, which an update that counts accepted fields calls first,
+// and `store`): two rows of tables that no scoped repository covers, taken through the raw handle of the transaction, so the registry walk above cannot see them. This runs both
+// methods as shipped, through the repository, inside withTenant(A), as an account that is no member of A (it belongs to B) and as one that belongs to both, against the rows of B.
 describe("the member lock and the cache write across workspaces", () => {
   const ONLY_IN_B = "0192f3a0-3333-7000-8000-00000000a0a7";
   const IN_BOTH = "0192f3a0-3333-7000-8000-00000000a0a8";
