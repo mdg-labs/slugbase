@@ -61,7 +61,8 @@ export interface AuditListAsk {
   readonly workspaceId: string;
   readonly actorAccountId?: string | undefined;
   readonly actions?: readonly string[] | undefined;
-  readonly category?: AuditCategory | undefined;
+  /** Any of these categories; one named twice counts once. */
+  readonly categories?: readonly AuditCategory[] | undefined;
   readonly entityType?: string | undefined;
   readonly entityId?: string | undefined;
   readonly from?: string | undefined;
@@ -81,14 +82,14 @@ export function auditCategoryOf(action: string): AuditCategory | null {
   return isAuditAction(action) ? AUDIT_ACTIONS[action].category : null;
 }
 
-/** The action names the filter admits: those named, narrowed to the category when one is given; undefined when neither narrows the log. */
-function admittedActions(actions: readonly string[] | undefined, category: AuditCategory | undefined): readonly string[] | undefined {
-  const inCategory = category === undefined ? undefined : AUDIT_ACTION_NAMES.filter((name) => AUDIT_ACTIONS[name].category === category);
+/** The action names the filter admits: those named, narrowed to the categories when any are given; undefined when neither narrows the log. */
+function admittedActions(actions: readonly string[] | undefined, categories: readonly AuditCategory[] | undefined): readonly string[] | undefined {
+  const inCategories = categories === undefined ? undefined : AUDIT_ACTION_NAMES.filter((name) => categories.includes(AUDIT_ACTIONS[name].category));
   if (actions === undefined) {
-    return inCategory;
+    return inCategories;
   }
   const named = [...new Set(actions)].sort();
-  return inCategory === undefined ? named : named.filter((name) => inCategory.some((member) => member === name));
+  return inCategories === undefined ? named : named.filter((name) => inCategories.some((member) => member === name));
 }
 
 /** What a cursor is bound to: the workspace and every filter, written so that no two different lists share a scope. */
@@ -106,7 +107,7 @@ function cursorScope(ask: AuditListAsk, actions: readonly string[] | undefined):
 
 /** One page of the audit log of the workspace of the store's transaction, with the cursor of the next. */
 export async function listAuditEvents({ store, cursors }: AuditListDependencies, ask: AuditListAsk): Promise<AuditListOutcome> {
-  const actions = admittedActions(ask.actions, ask.category);
+  const actions = admittedActions(ask.actions, ask.categories);
   const scope = cursorScope(ask, actions);
   let after: AuditEventPosition | undefined;
   if (ask.cursor !== undefined) {

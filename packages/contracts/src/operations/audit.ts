@@ -81,8 +81,11 @@ export const AuditEventListQuerySchema = z.strictObject({
   action: z
     .union([AuditActionNameSchema, z.array(AuditActionNameSchema).max(AUDIT_ACTION_FILTER_MAX)])
     .optional()
-    .describe("Lists the events of these actions, matched exactly on the dotted name: repeat the parameter, at most 20 times, for any of several. With `category`, only the actions that belong to that category"),
-  category: z.enum(AUDIT_EVENT_CATEGORIES).optional().describe("Lists the events of the actions in this group"),
+    .describe("Lists the events of these actions, matched exactly on the dotted name: repeat the parameter, at most 20 times, for any of several. With `category`, only the actions that belong to one of those categories"),
+  category: z
+    .union([z.enum(AUDIT_EVENT_CATEGORIES), z.array(z.enum(AUDIT_EVENT_CATEGORIES)).max(AUDIT_EVENT_CATEGORIES.length)])
+    .optional()
+    .describe("Lists the events of the actions in this group: repeat the parameter, at most once per group, for the events of any of several. One named twice counts once"),
   entityType: AuditEntityTypeSchema.optional().describe("Lists the events about this kind of thing"),
   entityId: z.uuid().optional().describe("Lists the events about the thing with this identifier. One of another workspace, or an unknown one, lists nothing: an empty page, not an error"),
   from: AuditTimeBoundSchema.optional().describe("Lists the events made at or after this instant, RFC 3339 UTC, from year 0001 to 9999"),

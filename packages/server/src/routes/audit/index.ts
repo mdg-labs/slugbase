@@ -75,7 +75,7 @@ export function auditRoutes({ cursorSecret }: AuditRoutesOptions): RouteBinding[
             workspaceId: tenant.workspaceId,
             actorAccountId: query.actorAccountId,
             actions: query.action === undefined ? undefined : typeof query.action === "string" ? [query.action] : query.action,
-            category: query.category,
+            categories: query.category === undefined ? undefined : typeof query.category === "string" ? [query.category] : query.category,
             entityType: query.entityType,
             entityId: query.entityId,
             from: query.from,

@@ -7104,7 +7104,7 @@
                   "type": "array"
                 }
               ],
-              "description": "Lists the events of these actions, matched exactly on the dotted name: repeat the parameter, at most 20 times, for any of several. With `category`, only the actions that belong to that category"
+              "description": "Lists the events of these actions, matched exactly on the dotted name: repeat the parameter, at most 20 times, for any of several. With `category`, only the actions that belong to one of those categories"
             }
           },
           {
@@ -7112,18 +7112,39 @@
             "name": "category",
             "required": false,
             "schema": {
-              "description": "Lists the events of the actions in this group",
-              "enum": [
-                "workspace",
-                "member",
-                "invitation",
-                "team",
-                "bookmark",
-                "share",
-                "export",
-                "import"
+              "anyOf": [
+                {
+                  "enum": [
+                    "workspace",
+                    "member",
+                    "invitation",
+                    "team",
+                    "bookmark",
+                    "share",
+                    "export",
+                    "import"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "enum": [
+                      "workspace",
+                      "member",
+                      "invitation",
+                      "team",
+                      "bookmark",
+                      "share",
+                      "export",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "type": "array"
+                }
               ],
-              "type": "string"
+              "description": "Lists the events of the actions in this group: repeat the parameter, at most once per group, for the events of any of several. One named twice counts once"
             }
           },
           {

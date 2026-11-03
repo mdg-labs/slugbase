@@ -359,7 +359,7 @@ export const AuditEventEntitySchema: z.ZodObject<{
 export const AuditEventListQuerySchema: z.ZodObject<{
     actorAccountId: z.ZodOptional<z.ZodUUID>;
     action: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
-    category: z.ZodOptional<z.ZodEnum<{
+    category: z.ZodOptional<z.ZodUnion<readonly [z.ZodEnum<{
         member: "member";
         invitation: "invitation";
         team: "team";
@@ -368,7 +368,16 @@ export const AuditEventListQuerySchema: z.ZodObject<{
         workspace: "workspace";
         export: "export";
         import: "import";
-    }>>;
+    }>, z.ZodArray<z.ZodEnum<{
+        member: "member";
+        invitation: "invitation";
+        team: "team";
+        bookmark: "bookmark";
+        share: "share";
+        workspace: "workspace";
+        export: "export";
+        import: "import";
+    }>>]>>;
     entityType: z.ZodOptional<z.ZodString>;
     entityId: z.ZodOptional<z.ZodUUID>;
     from: z.ZodOptional<z.ZodISODateTime>;
@@ -6041,7 +6050,7 @@ export const listAuditEvents: {
         readonly query: z.ZodObject<{
             actorAccountId: z.ZodOptional<z.ZodUUID>;
             action: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
-            category: z.ZodOptional<z.ZodEnum<{
+            category: z.ZodOptional<z.ZodUnion<readonly [z.ZodEnum<{
                 member: "member";
                 invitation: "invitation";
                 team: "team";
@@ -6050,7 +6059,16 @@ export const listAuditEvents: {
                 workspace: "workspace";
                 export: "export";
                 import: "import";
-            }>>;
+            }>, z.ZodArray<z.ZodEnum<{
+                member: "member";
+                invitation: "invitation";
+                team: "team";
+                bookmark: "bookmark";
+                share: "share";
+                workspace: "workspace";
+                export: "export";
+                import: "import";
+            }>>]>>;
             entityType: z.ZodOptional<z.ZodString>;
             entityId: z.ZodOptional<z.ZodUUID>;
             from: z.ZodOptional<z.ZodISODateTime>;
@@ -12035,7 +12053,7 @@ export interface OperationTypes {
             query?: {
                 actorAccountId?: string;
                 action?: string | string[];
-                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import";
+                category?: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import") | ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import")[];
                 entityType?: string;
                 entityId?: string;
                 from?: string;
