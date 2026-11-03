@@ -2,6 +2,8 @@
 
 | Route | Doc path | Status | Last-synced SHA | Notes |
 | ----- | -------- | ------ | --------------- | ----- |
+| landing page (no app route) | docs/user/index.md | current | e986708a | order 0 |
+| getting started guide (the app links to `/docs/getting-started`) | docs/user/getting-started.mdx | current | e986708a | order 1 |
 | `/` | docs/user/home.mdx | missing | — | |
 | `/bookmarks` | docs/user/bookmarks.mdx | missing | — | |
 | bookmark modal (`?bookmark`, `?new`) | docs/user/add-and-edit-bookmarks.mdx | missing | — | overlay |

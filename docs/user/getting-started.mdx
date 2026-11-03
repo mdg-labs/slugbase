@@ -1,0 +1,157 @@
+---
+title: "Getting started"
+description: "Go from your first sign-in to a slug that opens a bookmark from the address bar."
+edition: both
+order: 1
+---
+
+This guide is for people new to SlugBase, whether it runs on your own server or as SlugBase Cloud. You are done when typing `go mail` in the address bar opens your bookmark.
+
+## What you'll need
+
+- A SlugBase to open: SlugBase Cloud, or a self-hosted SlugBase that someone has installed and started.
+- A desktop browser: Chrome, Firefox, Edge or Safari.
+
+## Quick start
+
+Complete these steps to open your first bookmark with a slug.
+
+<Steps>
+<Step title="Create your account or sign in">
+
+<Tabs>
+<Tab label="Self-hosted">
+
+<Callout>
+Self-hosted only. SlugBase must already be installed and running. The person who runs the server does that.
+</Callout>
+
+Open your server in the browser. On a new server the page **Set up SlugBase** appears.
+
+1. If the page asks for a **Setup token**, copy the latest token from the server's log. The server prints it when it starts.
+2. Under **Your account**, enter your **Name**, **Email** and **Password**. Use at least 12 characters for the password.
+3. Under **Your first workspace**, enter a **Workspace name**.
+4. Choose **Create account**, then **Go to Home**.
+
+Anyone who joins later uses the link in an invitation email. Public registration is off by default.
+
+</Tab>
+<Tab label="SlugBase Cloud">
+
+Go to https://cloud.slugbase.app and choose **Create an account**.
+
+1. Enter your **Name**, **Email** and **Password**, then choose **Create account**.
+2. Open the link in the email we send you. It works for 24 hours.
+3. On **Verify your email**, choose **Verify and sign in**.
+
+</Tab>
+</Tabs>
+
+If you already have an account, open **Sign in**, enter your **Email** and **Password**, and choose **Sign in**. If **Two-step verification** appears, enter the code, or choose **Use a backup code instead**.
+
+</Step>
+<Step title="Check that you are in a workspace">
+
+The sidebar shows your current workspace under **Workspace**. Setting up a self-hosted server and creating a SlugBase Cloud account both create your first workspace.
+
+If the page **You are not in a workspace yet** appears, choose **Create a workspace**, enter a **Name** and choose **Create workspace**. If it says **Waiting for an invitation**, ask a workspace owner to invite you.
+
+<Callout>
+Self-hosted only. An instance admin decides whether members can create workspaces. Where they cannot, wait for an invitation.
+</Callout>
+
+</Step>
+<Step title="Add a bookmark">
+
+Choose **New bookmark** in the top bar, or press `C` when no text field has focus. In the **New bookmark** dialog, paste the page address into **URL**. SlugBase reads the page's title and description. Check the **Title**, which every bookmark needs.
+
+</Step>
+<Step title="Give it a slug">
+
+In the same dialog, type a short word in **Slug**, such as `mail`. A slug uses lower-case letters, digits and hyphens. When it is free, the dialog says **This slug is free.** **Forwarding** is on once the bookmark has a slug. **Go address** shows the full address, and **Copy go address** copies it.
+
+Choose **Save**. **Bookmark saved.** appears, and the **Getting started** checklist on Home ticks **Add a bookmark** and **Give a bookmark a slug**.
+
+<Screenshot alt="The New bookmark dialog with a URL and the slug mail filled in" />
+
+</Step>
+<Step title="Open Forwarding and copy the search engine address">
+
+Choose **Forwarding** in the sidebar. Under **Set up your browser**, choose **Copy the search engine address** and note the **Keyword**, which is `go`.
+
+<Screenshot alt="The Set up your browser section on the Forwarding page" />
+
+</Step>
+<Step title="Add SlugBase to your browser as a search engine">
+
+Pick your browser. Paste the address you copied where the steps ask for the URL.
+
+<Tabs>
+<Tab label="Chrome">
+
+1. Open Settings, then Search engine, then Manage search engines and site search.
+2. Under Site search, choose Add.
+3. Enter SlugBase as the name and `go` as the shortcut, and paste the address as the URL.
+4. Choose Add to save it.
+
+</Tab>
+<Tab label="Firefox">
+
+1. Open Settings and choose Search.
+2. Under Search Shortcuts, choose Add.
+3. Enter SlugBase as the name, paste the address as the URL and enter `go` as the alias.
+4. Save the search engine.
+
+</Tab>
+<Tab label="Edge">
+
+1. Open Settings, then Privacy, search, and services, then Address bar and search.
+2. Choose Manage search engines, then Add.
+3. Enter SlugBase as the search engine and `go` as the shortcut, and paste the address as the URL.
+4. Choose Add to save it.
+
+</Tab>
+<Tab label="Safari">
+
+1. Safari has no setting for a custom search engine.
+2. Install a Safari extension that adds custom search engines.
+3. In the extension, add SlugBase with the address you copied and the keyword `go`.
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Test it and mark it done">
+
+Back on **Forwarding**, choose **Test it: open go/mail**. It opens `/go/mail` in a new tab, and your bookmark opens. Then choose **Mark as done** to tick **Set up the browser search engine** on the **Getting started** checklist.
+
+If none of your bookmarks has a slug that forwards yet, the link opens a sample address instead. SlugBase then says that no bookmark has that slug.
+
+</Step>
+<Step title="Open your bookmark from the address bar">
+
+Type `go mail` in the address bar of your browser and press Enter. The bookmark opens.
+
+If you are signed out, SlugBase asks you to sign in first and then takes you on. Slugs work in the workspace you have open. If several bookmarks shared with you have the same slug, SlugBase shows a page that says **go/mail matches 2 bookmarks**. Choose the one you mean. Select **Always use this for mail** to remember the choice.
+
+</Step>
+<Step title="Use the command palette in go mode">
+
+Press `⌘K` on macOS or `Ctrl K` elsewhere. Type `go mail`. A **Go** chip appears next to the input, and the slugs that match are listed. Press Enter to open the bookmark. Pasting a `/go/` link from your own SlugBase works the same way.
+
+<Screenshot alt="The command palette in go mode with the slug mail" />
+
+</Step>
+</Steps>
+
+**You're ready when:** typing `go mail` in the address bar, or in the command palette, opens your bookmark.
+
+## Next steps
+
+| Goal | Where in SlugBase |
+| ---- | ----------------- |
+| Keep related bookmarks together | **Folders** in the sidebar |
+| Label bookmarks | **Tags** in the sidebar |
+| Bring in the bookmarks you already have | **Import** on the **Getting started** checklist |
+| Review the slug choices you remembered | **Forwarding**, under **Remembered choices** |
+| See every shortcut | Press `?` to open **Keyboard shortcuts** |
