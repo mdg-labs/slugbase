@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { newIdempotencyKey } from "../../../../api/idempotency-key.ts";
 import { useConfig } from "../../../../config/config-context.tsx";
 import { TEAMS_QUERY_KEY } from "../../../../teams/teams.ts";
 import { useAllTeams } from "../../../../teams/use-all-teams.ts";
@@ -11,7 +12,6 @@ import {
   INVITATIONS_QUERY_KEY,
   inviteByEmail,
   looksLikeEmail,
-  newIdempotencyKey,
   splitAddresses,
   type InvitationRole,
   type InviteOutcome,

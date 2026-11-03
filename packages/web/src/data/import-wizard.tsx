@@ -5,11 +5,11 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery, ME_QUERY_KEY } from "../account/me.ts";
+import { newIdempotencyKey } from "../api/idempotency-key.ts";
 import { BOOKMARKS_QUERY_KEY } from "../bookmarks/bookmarks.ts";
 import { ENTITLEMENTS_QUERY_KEY } from "../entitlements/entitlements.ts";
 import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
 import { useFormat, type Format } from "../i18n/use-format.ts";
-import { newIdempotencyKey } from "../routes/_app/settings/workspace/-invitations.ts";
 import { TAGS_QUERY_KEY } from "../tags/tags.ts";
 import {
   IMPORT_ACCEPT,
