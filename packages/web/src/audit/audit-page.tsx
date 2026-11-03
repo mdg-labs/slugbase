@@ -1,8 +1,8 @@
 import { Button, Skeleton, Tooltip, TooltipPopup, TooltipTrigger } from "@slugbase/ui";
-import { AccountAvatar, Banner, DataTable, EmptyState, LoadMore, Loading, StatusBadge, type DataTableColumn } from "@slugbase/ui/patterns";
+import { Banner, DataTable, EmptyState, LoadMore, Loading, StatusBadge, type DataTableColumn } from "@slugbase/ui/patterns";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import type { ReactElement } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { EntitlementGate, entitlementsQuery, isEntitlementRequired } from "../entitlements/index.ts";
 import { Slot } from "../extensions/index.ts";
@@ -10,6 +10,8 @@ import { useFormat } from "../i18n/use-format.ts";
 import { WorkspaceAdminOnly } from "../shell/workspace-admin-only.tsx";
 import { useActiveWorkspaceId } from "../shell/workspace-members.ts";
 import { auditEventsQuery, type AuditEvent } from "./audit.ts";
+import { AuditEventPanel } from "./audit-event-panel.tsx";
+import { EventActor } from "./audit-actor.tsx";
 import { actionLabel, categoryLabel, entityLabel, targetNameOf } from "./audit-labels.ts";
 
 const SKELETON_ROWS = ["a", "b", "c", "d", "e"] as const;
@@ -27,33 +29,14 @@ function EventTime({ createdAt }: { createdAt: string }): ReactElement {
   );
 }
 
-/** The actor with the name it had at the time, and what it was when that is not an account that still exists. */
-function EventActor({ actor }: { actor: AuditEvent["actor"] }): ReactElement {
-  const { t } = useTranslation();
-  let note: string | undefined;
-  if (actor.type === "system") {
-    note = t("audit.actor.system");
-  } else if (actor.type === "api_token") {
-    note = t("audit.actor.apiToken");
-  } else if (actor.accountId === null) {
-    note = t("audit.actor.deleted");
-  }
-  return (
-    <span className="flex items-center gap-2">
-      <AccountAvatar name={actor.label} seed={actor.accountId ?? `${actor.type}:${actor.label}`} />
-      <span className="flex min-w-0 flex-col">
-        <span className="break-words font-medium">{actor.label}</span>
-        {note === undefined ? null : <span className="text-muted-foreground text-xs">{note}</span>}
-      </span>
-    </span>
-  );
-}
-
-function EventAction({ event }: { event: AuditEvent }): ReactElement {
+/** The action opens the event's panel; the button is the table's way into it, as a row has no link of its own. */
+function EventAction({ event, onOpen }: { event: AuditEvent; onOpen: () => void }): ReactElement {
   const { t } = useTranslation();
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <span>{actionLabel(t, event.action)}</span>
+      <Button className="h-auto px-0 text-start whitespace-normal" onClick={onOpen} size="sm" variant="link">
+        {actionLabel(t, event.action)}
+      </Button>
       {event.category === null ? (
         <StatusBadge variant="neutral">{t("audit.categories.other")}</StatusBadge>
       ) : (
@@ -90,13 +73,30 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
   const api = useRouter().options.context.api;
   const events = useInfiniteQuery(auditEventsQuery(api, workspaceId));
   const items = events.data?.pages.flatMap((page) => page.items) ?? [];
+  // The event is kept while the panel closes, so that its content does not empty out under the closing animation.
+  const [opened, setOpened] = useState<{ readonly event: AuditEvent; readonly open: boolean } | undefined>(undefined);
 
-  const columns: readonly DataTableColumn<AuditEvent>[] = [
-    { id: "time", header: t("audit.column.time"), cell: (event) => <EventTime createdAt={event.createdAt} /> },
-    { id: "actor", header: t("audit.column.actor"), cell: (event) => <EventActor actor={event.actor} /> },
-    { id: "action", header: t("audit.column.action"), cell: (event) => <EventAction event={event} /> },
-    { id: "target", header: t("audit.column.target"), cell: (event) => <EventTarget event={event} /> },
-  ];
+  // Stable between renders: the table makes a component of each cell, so a new list would remount the cells, and the button that opened the panel would be gone when the panel returns focus.
+  const columns = useMemo<readonly DataTableColumn<AuditEvent>[]>(
+    () => [
+      { id: "time", header: t("audit.column.time"), cell: (event) => <EventTime createdAt={event.createdAt} /> },
+      { id: "actor", header: t("audit.column.actor"), cell: (event) => <EventActor actor={event.actor} /> },
+      {
+        id: "action",
+        header: t("audit.column.action"),
+        cell: (event) => (
+          <EventAction
+            event={event}
+            onOpen={() => {
+              setOpened({ event, open: true });
+            }}
+          />
+        ),
+      },
+      { id: "target", header: t("audit.column.target"), cell: (event) => <EventTarget event={event} /> },
+    ],
+    [t],
+  );
 
   // A workspace without the entitlement is refused by the server, which is the gate's answer and not a failure.
   if (events.isError && events.data === undefined) {
@@ -140,6 +140,15 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
   return (
     <div className="flex flex-col gap-4">
       <DataTable columns={columns} label={t("audit.title")} rowKey={(event) => event.id} rows={items} />
+      {opened === undefined ? null : (
+        <AuditEventPanel
+          event={opened.event}
+          onOpenChange={(open) => {
+            setOpened({ event: opened.event, open });
+          }}
+          open={opened.open}
+        />
+      )}
       {events.isFetchNextPageError ? (
         <Banner
           action={

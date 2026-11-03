@@ -3102,6 +3102,44 @@
       "import": {
         "completed": "Import abgeschlossen"
       }
+    },
+    "panel": {
+      "description": "Alles, was dieses Ereignis festgehalten hat.",
+      "close": "Ereignisdetails schließen",
+      "time": "Zeit",
+      "actor": "Akteur",
+      "action": "Aktion",
+      "category": "Kategorie",
+      "target": "Ziel",
+      "entityId": "Kennung des Ziels",
+      "copyId": "Kennung kopieren",
+      "copied": "Kennung kopiert",
+      "metadata": "Details",
+      "noMetadata": "Dieses Ereignis hat keine weiteren Details festgehalten."
+    },
+    "metadata": {
+      "name": "Name",
+      "from": "Von",
+      "to": "Zu",
+      "setting": "Einstellung",
+      "demoteSelf": "Bisheriger Eigentümer herabgestuft",
+      "content": "Inhalte",
+      "transferTo": "Inhalte übertragen an",
+      "role": "Rolle",
+      "count": "Anzahl",
+      "targetKind": "Geteilt mit (Art)",
+      "targetId": "Geteilt mit (Kennung)",
+      "targetName": "Geteilt mit (Name)",
+      "bookmarks": "Lesezeichen",
+      "folders": "Ordner",
+      "tags": "Tags",
+      "shared": "Geteilt",
+      "created": "Erstellt",
+      "skipped": "Übersprungen",
+      "failed": "Fehlgeschlagen",
+      "slugsDropped": "Verworfene Slugs",
+      "foldersCreated": "Erstellte Ordner",
+      "tagsCreated": "Erstellte Tags"
     }
   },
   "sharing": {

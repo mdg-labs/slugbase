@@ -3102,6 +3102,44 @@
       "import": {
         "completed": "Import completed"
       }
+    },
+    "panel": {
+      "description": "Everything this event recorded.",
+      "close": "Close the event details",
+      "time": "Time",
+      "actor": "Actor",
+      "action": "Action",
+      "category": "Category",
+      "target": "Target",
+      "entityId": "Identifier of the target",
+      "copyId": "Copy the identifier",
+      "copied": "Identifier copied",
+      "metadata": "Details",
+      "noMetadata": "This event recorded no further details."
+    },
+    "metadata": {
+      "name": "Name",
+      "from": "From",
+      "to": "To",
+      "setting": "Setting",
+      "demoteSelf": "Previous owner demoted",
+      "content": "Content",
+      "transferTo": "Content transferred to",
+      "role": "Role",
+      "count": "Count",
+      "targetKind": "Shared with (kind)",
+      "targetId": "Shared with (identifier)",
+      "targetName": "Shared with (name)",
+      "bookmarks": "Bookmarks",
+      "folders": "Folders",
+      "tags": "Tags",
+      "shared": "Shared",
+      "created": "Created",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "slugsDropped": "Slugs dropped",
+      "foldersCreated": "Folders created",
+      "tagsCreated": "Tags created"
     }
   },
   "sharing": {

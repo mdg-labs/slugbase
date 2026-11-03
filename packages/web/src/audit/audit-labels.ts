@@ -55,6 +55,33 @@ const ENTITY_LABELS: Readonly<Record<string, (t: TFunction) => string>> = {
   folder: (t) => t("audit.entities.folder"),
 };
 
+// The metadata fields of `packages/core/src/audit/catalog.ts`, which the contract does not list (an event carries any text-to-text map): one literal `t()` call per field, so that the
+// catalog check sees each key. A field added to the catalog is added here and to both catalogs; until then the panel shows the field under its recorded key.
+const METADATA_LABELS: Readonly<Record<string, (t: TFunction) => string>> = {
+  name: (t) => t("audit.metadata.name"),
+  from: (t) => t("audit.metadata.from"),
+  to: (t) => t("audit.metadata.to"),
+  setting: (t) => t("audit.metadata.setting"),
+  demoteSelf: (t) => t("audit.metadata.demoteSelf"),
+  content: (t) => t("audit.metadata.content"),
+  transferTo: (t) => t("audit.metadata.transferTo"),
+  role: (t) => t("audit.metadata.role"),
+  count: (t) => t("audit.metadata.count"),
+  targetKind: (t) => t("audit.metadata.targetKind"),
+  targetId: (t) => t("audit.metadata.targetId"),
+  targetName: (t) => t("audit.metadata.targetName"),
+  bookmarks: (t) => t("audit.metadata.bookmarks"),
+  folders: (t) => t("audit.metadata.folders"),
+  tags: (t) => t("audit.metadata.tags"),
+  shared: (t) => t("audit.metadata.shared"),
+  created: (t) => t("audit.metadata.created"),
+  skipped: (t) => t("audit.metadata.skipped"),
+  failed: (t) => t("audit.metadata.failed"),
+  slugsDropped: (t) => t("audit.metadata.slugsDropped"),
+  foldersCreated: (t) => t("audit.metadata.foldersCreated"),
+  tagsCreated: (t) => t("audit.metadata.tagsCreated"),
+};
+
 function labelOf<Key extends string>(labels: Readonly<Record<Key, (t: TFunction) => string>>, t: TFunction, key: string): string | undefined {
   return Object.hasOwn(labels, key) ? labels[key as Key](t) : undefined;
 }
@@ -72,6 +99,11 @@ export function categoryLabel(t: TFunction, category: AuditCategory): string {
 /** The kind of thing an event is about, in the active language; a kind this version does not know shows its recorded name. */
 export function entityLabel(t: TFunction, type: string): string {
   return labelOf(ENTITY_LABELS, t, type) ?? type;
+}
+
+/** The name of a metadata field in the active language; a field this version does not know shows its recorded key. */
+export function metadataLabel(t: TFunction, key: string): string {
+  return labelOf(METADATA_LABELS, t, key) ?? key;
 }
 
 // The metadata keys that name the thing an event is about, and the actions whose `to` is such a name (for the others it is a role or a setting's value).

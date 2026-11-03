@@ -1,6 +1,6 @@
 import { AUDIT_EVENT_ACTIONS, AUDIT_EVENT_CATEGORIES } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
-import { actionLabel, categoryLabel, entityLabel, targetNameOf } from "../src/audit/audit-labels.ts";
+import { actionLabel, categoryLabel, entityLabel, metadataLabel, targetNameOf } from "../src/audit/audit-labels.ts";
 import de from "../src/i18n/locales/de.json" with { type: "json" };
 import en from "../src/i18n/locales/en.json" with { type: "json" };
 
@@ -31,6 +31,18 @@ describe.each(Object.entries(CATALOGS))("the %s catalog", (language, catalog) =>
   });
 });
 
+// The metadata fields of the catalog in `packages/core/src/audit/catalog.ts`, which the contract does not list; the web does not import the core package, so a field added there is added here.
+const METADATA_KEYS = [
+  "name", "from", "to", "setting", "demoteSelf", "content", "transferTo", "role", "count", "targetKind", "targetId", "targetName",
+  "bookmarks", "folders", "tags", "shared", "created", "skipped", "failed", "slugsDropped", "foldersCreated", "tagsCreated",
+] as const;
+
+describe.each(Object.entries(CATALOGS))("the %s catalog", (language, catalog) => {
+  it.each(METADATA_KEYS)("labels the metadata field %s", (key) => {
+    expect(messageAt(catalog, `audit.metadata.${key}`), `${language}: audit.metadata.${key}`).toBeDefined();
+  });
+});
+
 describe("the label functions", () => {
   // A translate function that answers with the key it was given, so that a label that is read from the wrong key shows.
   const t = ((key: string) => key) as Parameters<typeof actionLabel>[0];
@@ -42,6 +54,14 @@ describe("the label functions", () => {
     for (const category of AUDIT_EVENT_CATEGORIES) {
       expect(categoryLabel(t, category)).toBe(`audit.categories.${category}`);
     }
+  });
+
+  it("read the key of the catalog for every metadata field, and show the recorded key of one this version does not know", () => {
+    for (const key of METADATA_KEYS) {
+      expect(metadataLabel(t, key)).toBe(`audit.metadata.${key}`);
+    }
+    expect(metadataLabel(t, "newField")).toBe("newField");
+    expect(metadataLabel(t, "constructor")).toBe("constructor");
   });
 
   it("show the recorded name of an action or a kind of thing this version does not know", () => {
