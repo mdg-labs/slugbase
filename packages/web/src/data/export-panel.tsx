@@ -19,12 +19,16 @@ function isExportFormat(value: string): value is ExportFormat {
  * limit, a failure) is told in a toast with the wait the server asks for, and nothing is saved.
  */
 export function ExportPanel(): ReactElement {
+  const sharesWithMembers = useIsGranted("sharing.members");
+  const sharesWithTeams = useIsGranted("sharing.teams");
+  return <ExportPanelView offerShared={sharesWithMembers || sharesWithTeams} />;
+}
+
+/** The export panel with the choice of including shared bookmarks decided by the caller, which reads no entitlement. */
+export function ExportPanelView({ offerShared: mayShare }: { offerShared: boolean }): ReactElement {
   const { t } = useTranslation();
   const api = useRouter().options.context.api;
   const failureMessage = useExportFailureMessage();
-  const sharesWithMembers = useIsGranted("sharing.members");
-  const sharesWithTeams = useIsGranted("sharing.teams");
-  const mayShare = sharesWithMembers || sharesWithTeams;
 
   const [format, setFormat] = useState<ExportFormat>("json");
   const [includeShared, setIncludeShared] = useState(false);

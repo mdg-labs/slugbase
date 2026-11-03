@@ -218,3 +218,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 export function isSessionEnded(error: unknown): boolean {
   return error instanceof ApiProblemError && error.status === 401 && error.code !== "reauth_required";
 }
+
+/** Whether the error is the API refusing a request because the account is in the export-only access mode (`403 account_export_only`, doc 02 section 2.11). */
+export function isExportOnlyRefusal(error: unknown): boolean {
+  return error instanceof ApiProblemError && error.status === 403 && error.code === "account_export_only";
+}

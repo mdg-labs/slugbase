@@ -36,6 +36,10 @@ export interface AccountProfile {
   readonly emailVerified: boolean;
   readonly hasPassword: boolean;
   readonly mfaEnabled: boolean;
+  /** `exportOnly` while the account is in the export-only period (doc 02 section 2.11), else `full`; a disabled account has no session to read this. */
+  readonly accessMode: "full" | "exportOnly";
+  /** The end of the export-only period; null unless `accessMode` is `exportOnly`. */
+  readonly exportOnlyUntil: Date | null;
   /** The address an email change was requested for and not yet confirmed, as stored (doc 02 section 2.6); null when none is pending. */
   readonly pendingEmail: string | null;
 }
@@ -133,6 +137,14 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
       if (typeof mfaEnabled !== "boolean") {
         throw new Error("sys_account_mfa_enabled did not answer a boolean");
       }
+      // The mode is read through the function: the application role holds no privilege on its columns.
+      const mode = await handle.execute<{ access_mode: string; export_only_until: Date | null }>(
+        sql`SELECT access_mode, export_only_until FROM public.sys_account_access_mode(${tx.accountId}::uuid)`,
+      );
+      const accessRow = mode[0];
+      if (accessRow === undefined) {
+        return undefined;
+      }
       return {
         id: row.id,
         email: row.email,
@@ -149,6 +161,8 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
         emailVerified: row.emailVerifiedAt !== null,
         hasPassword,
         mfaEnabled,
+        accessMode: oneOf("access_mode", accessRow.access_mode, ["full", "export_only"]) === "full" ? "full" : "exportOnly",
+        exportOnlyUntil: accessRow.export_only_until === null ? null : new Date(accessRow.export_only_until),
         pendingEmail: row.pendingEmail,
       };
     },

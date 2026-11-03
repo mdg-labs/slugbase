@@ -39,6 +39,8 @@ it("mounts the app on #root and shows the product name that /api/config answers 
       hasPassword: true,
       mfaEnabled: false,
       isInstanceAdmin: false,
+      accessMode: "full",
+      exportOnlyUntil: null,
       pendingEmail: null,
     },
     memberships: [{ workspaceId: "0192f3a0-cccc-7000-8000-000000000001", name: "Home", role: "owner" }],

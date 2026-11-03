@@ -74,6 +74,7 @@ describe("the accounts table", () => {
       "locale", "theme", "accent", "default_bookmark_view", "single_key_shortcuts", "signin_alerts", "ai_opt_out",
       "analytics_consent", "consent_at", "onboarding", "is_instance_admin", "disabled_at", "last_sign_in_at",
       "created_at", "updated_at", "mfa_enabled_at", "mfa_secret", "mfa_secret_key_id", "mfa_last_step",
+      "access_mode", "export_only_until", "export_only_end_action",
     ]);
     const types = Object.fromEntries(columns.map((column) => [column.name, column.type]));
     expect(types["email"]).toBe("citext");
@@ -119,7 +120,9 @@ describe("the accounts table", () => {
       FROM pg_attribute a
       WHERE a.attrelid = 'public.accounts'::regclass AND a.attnum > 0 AND NOT a.attisdropped
       ORDER BY a.attnum`;
-    expect(rows.filter((row) => !row.app).map((row) => row.column)).toEqual(["password_hash", "mfa_enabled_at", "mfa_secret", "mfa_secret_key_id", "mfa_last_step"]);
+    expect(rows.filter((row) => !row.app).map((row) => row.column)).toEqual([
+      "password_hash", "mfa_enabled_at", "mfa_secret", "mfa_secret_key_id", "mfa_last_step", "access_mode", "export_only_until", "export_only_end_action",
+    ]);
     await expect(db.app.unsafe("SELECT password_hash FROM public.accounts")).rejects.toMatchObject({ code: "42501" });
     await expect(db.app.unsafe("SELECT * FROM public.accounts")).rejects.toMatchObject({ code: "42501" });
     const writes = await db.owner<{ privilege: string; app: boolean }[]>`

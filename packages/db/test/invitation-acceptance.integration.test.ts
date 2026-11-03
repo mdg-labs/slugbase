@@ -192,6 +192,23 @@ describe("sys_invitation_accept", () => {
     expect((await invitationRow(invitation.id)).status).toBe("pending");
   });
 
+  it("refuses an account in the export-only access mode as it does a disabled one, and accepts it again once the mode is cleared", async () => {
+    const { workspaceId } = await workspaceWithOwner();
+    const invitee = await account();
+    const invitation = await invite(workspaceId, invitee.email);
+    await asSystem(
+      db,
+      (tx) => tx`UPDATE accounts SET access_mode = 'export_only', export_only_until = now() + interval '2 days', export_only_end_action = 'disable' WHERE id = ${invitee.id}`,
+    );
+
+    expect(await accept(invitee.id, invitation.hash)).toEqual({ kind: "gone" });
+    expect(Object.keys(await members(workspaceId))).toHaveLength(1);
+    expect((await invitationRow(invitation.id)).status).toBe("pending");
+
+    await asSystem(db, (tx) => tx`UPDATE accounts SET access_mode = 'full', export_only_until = NULL, export_only_end_action = NULL WHERE id = ${invitee.id}`);
+    expect(await accept(invitee.id, invitation.hash)).toMatchObject({ kind: "accepted" });
+  });
+
   it("refuses an account whose address is not the invited one, one whose address is unverified and one that is disabled, and leaves the invitation pending for the right account", async () => {
     const { workspaceId } = await workspaceWithOwner();
     const invitee = await account({ verified: false });

@@ -131,7 +131,8 @@ export function importFailureOf(error: unknown): ImportFailure | undefined {
     case 400:
       return { kind: "invalid" };
     case 422:
-      if (error.errors.some((entry) => entry.path === "version")) {
+      // A version newer than this release reads is `too_big` at `version`; `0` or a wrong type errors at the same path with another code.
+      if (refused(error, "version", "too_big")) {
         return { kind: "newerVersion" };
       }
       if (refused(error, "", "too_many_new_names")) {

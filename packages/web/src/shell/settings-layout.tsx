@@ -29,6 +29,10 @@ export function SettingsLayout(): ReactElement {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const me = useQuery(meQuery(router.options.context.api));
   const inWorkspace = me.data !== undefined && me.data.activeWorkspaceId !== null;
+  // An account in the export-only access mode has the export page alone (doc 02 section 2.11), without the navigation to pages the server refuses.
+  if (me.data?.account.accessMode === "exportOnly") {
+    return <Outlet />;
+  }
   const groups: SettingsNavGroup[] = [
     {
       id: "account",

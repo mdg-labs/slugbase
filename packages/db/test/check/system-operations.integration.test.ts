@@ -201,6 +201,12 @@ describe("the shipped chain", () => {
       "sys_favicon_put",
       "slug_preferences_forget_unreadable",
       "sys_member_departure_apply",
+      "sys_instance_set_account_access_mode",
+      "sys_instance_list_account_access_modes",
+      "sys_account_set_access_mode",
+      "sys_account_access_mode",
+      "sys_account_access_mode_due",
+      "sys_account_access_mode_end",
     ]);
     expect(internalSystemOperations).toEqual(["sys_create_workspace"]);
     expect(internalSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);

@@ -7,6 +7,8 @@ import type { AuthStore } from "@slugbase/db";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createRateLimitRegistry } from "../../src/config/index.ts";
 import { createServer, type Server } from "../../src/create-server.ts";
+import { runMigrations } from "../../src/migrate/index.ts";
+import { urlOf } from "../migrate/support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { memoryRateLimiter } from "../http/rate-limit-support.ts";
 import { testKey, testSecretBox } from "../secret-box.ts";
@@ -53,7 +55,7 @@ interface World {
   readonly completed: IdentityCompleteRequest[];
 }
 
-function serve(env: Record<string, string> = {}, identity?: FakeIdentity, secretBox: SecretBoxPort = testSecretBox(testKey("oidc-1"))): World {
+function serve(env: Record<string, string> = {}, identity?: FakeIdentity, secretBox: SecretBoxPort = testSecretBox(testKey("oidc-1")), authStore: AuthStore = store): World {
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database()),
@@ -85,7 +87,7 @@ function serve(env: Record<string, string> = {}, identity?: FakeIdentity, secret
     migrations: [],
     logger: logs,
     database: tenantDatabase(database()),
-    authStore: store,
+    authStore,
   });
   return { server, origin: config.APP_ORIGIN, fake, logs, completed };
 }
@@ -1124,5 +1126,159 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the reauth intent", () 
     const bad = await approved(world, { subject, nonce: "other" }, "?intent=reauth", headers);
     expectFailed(await callback(world, bad.callbackUrl, bad.preAuth, headers));
     expect(await reauthAtOf(token)).toBeNull();
+  });
+});
+
+// An account in the export-only access mode (doc 02 section 2.11, doc 04 section 3.2) keeps its session, and the chain refuses every operation
+// outside a short list. An account without a password re-authenticates only through its provider, and deleting itself, which the mode leaves
+// to it, needs that: the start and the callback of the provider's sign-in are on the list, and the start judges by intent. The failure
+// scenarios: a re-authentication refused as export-only, so that the account cannot delete itself; a link or an invitation started from such
+// a session that stores a handshake; a link started before the mode and completed after it that writes an identity; and an access mode that
+// cannot be read, which must not let a start or a link go on.
+
+/** Puts an account in the export-only mode as the system does: the three columns together, the end date a few days ahead. */
+async function setExportOnly(accountId: string): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE accounts SET access_mode = 'export_only', export_only_until = now() + interval '3 days', export_only_end_action = 'delete' WHERE id = ${accountId}`;
+  });
+}
+
+async function accountCount(accountId: string): Promise<number> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ n: string }[]>`SELECT count(*)::text AS n FROM accounts WHERE id = ${accountId}`;
+  });
+  return Number(rows[0]?.n);
+}
+
+function deleteMe(world: World, token: string, email: string): Promise<Response> {
+  return world.server.fetch(
+    new Request(new URL("/api/v1/me", world.origin), {
+      method: "DELETE",
+      headers: { cookie: sessionCookie(token), origin: world.origin, "sec-fetch-site": "same-origin", "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    }),
+  );
+}
+
+async function expectExportOnly(response: Response): Promise<void> {
+  expect(response.status).toBe(403);
+  expect(response.headers.get("content-type")).toContain("application/problem+json");
+  expect(await response.json()).toMatchObject({ code: "account_export_only", status: 403, until: expect.any(String) as string });
+}
+
+describe("the provider's sign-in for a session of an account in the export-only mode", () => {
+  // Deleting the account queues its `account.deleted` event, and the queues exist once the image entrypoint has run migrate.
+  beforeAll(async () => {
+    await runMigrations({ url: urlOf(database().owner) });
+  });
+
+  it("re-authenticates the session through the provider, so that the account without a password can delete itself", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    await setExportOnly(account.id);
+    const headers = { cookie: sessionCookie(token) };
+    // Without a fresh re-authentication the deletion is refused as such, not as export-only.
+    expect((await deleteMe(world, token, account.email)).status).toBe(401);
+
+    const flow = await approved(world, { subject }, "?intent=reauth&returnTo=/export", headers);
+    const response = await callback(world, flow.callbackUrl, flow.preAuth, headers);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/export");
+    expect((await reauthAtOf(token))?.getTime()).toBeGreaterThan(Date.now() - 60_000);
+    const deleted = await deleteMe(world, token, account.email);
+    expect(deleted.status).toBe(204);
+    expect(await accountCount(account.id)).toBe(0);
+  });
+
+  it("is refused 403 account_export_only on the link intent with the session, storing nothing, even when the session has just re-authenticated", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await freshToken(world, account, subject);
+    await setExportOnly(account.id);
+    const before = await stateCount();
+
+    await expectExportOnly(await startWith(world, "?intent=link", { cookie: sessionCookie(token) }));
+
+    expect(await stateCount()).toBe(before);
+  });
+
+  it("is refused 403 account_export_only on the invite intent with the session, before the redemption is counted and with nothing stored", async () => {
+    const world = serve({ RATE_LIMIT_TOKEN_REDEEM_IP: "1/hour" });
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    await setExportOnly(account.id);
+    const before = await stateCount();
+    const invitation = `?intent=invite&invitation=${"A".repeat(43)}`;
+
+    // A second request would be limited if the first had been counted.
+    await expectExportOnly(await startWith(world, invitation, { cookie: sessionCookie(token) }));
+    await expectExportOnly(await startWith(world, invitation, { cookie: sessionCookie(token) }));
+
+    expect(await stateCount()).toBe(before);
+  });
+
+  it("still starts the login intent with the session", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    await setExportOnly(account.id);
+
+    const response = await startWith(world, "?intent=login", { cookie: sessionCookie(token) });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain(ISSUER);
+  });
+
+  it("links no identity when the mode was set after the link handshake began, and ends like any other refusal", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await freshToken(world, account, subject);
+    const headers = { cookie: sessionCookie(token) };
+    const flow = await approved(world, { subject: "linked-after-the-mode", email: "after@idp.example.test", emailVerified: true }, "?intent=link", headers);
+    await setExportOnly(account.id);
+
+    const response = await callback(world, flow.callbackUrl, flow.preAuth, headers);
+
+    expectFailed(response);
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "export_only" } });
+    expect((await identitiesOf(account.id)).map((row) => row.subject)).toEqual([subject]);
+  });
+
+  it("links the identity of an account with full access as before the mode existed", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await freshToken(world, account, subject);
+    const headers = { cookie: sessionCookie(token) };
+    const flow = await approved(world, { subject: "linked-with-full-access" }, "?intent=link", headers);
+
+    expect((await callback(world, flow.callbackUrl, flow.preAuth, headers)).headers.get("location")).toBe("/");
+    expect((await identitiesOf(account.id)).map((row) => row.subject)).toEqual([subject, "linked-with-full-access"]);
+  });
+
+  it("is an error, never a start or a link that goes on, when the access mode cannot be read", async () => {
+    const { account, subject } = await linkedAccount();
+    // The store answers every other question; the access mode is the one it stops answering once the handshake has begun.
+    let readable = true;
+    const unreadable = Object.create(store, {
+      accountAccessMode: { value: (accountId: string) => (readable ? store.accountAccessMode(accountId) : Promise.reject(new Error("connection refused"))) },
+    }) as AuthStore;
+    const world = serve({}, undefined, testSecretBox(testKey("oidc-1")), unreadable);
+    const token = await freshToken(world, account, subject);
+    const headers = { cookie: sessionCookie(token) };
+    const flow = await approved(world, { subject: "linked-when-unreadable" }, "?intent=link", headers);
+    const before = await stateCount();
+    readable = false;
+
+    const started = await startWith(world, "?intent=link", headers);
+    const completed = await callback(world, flow.callbackUrl, flow.preAuth, headers);
+
+    expect(started.status).toBe(500);
+    expect(completed.status).toBe(500);
+    expect(await stateCount()).toBe(before - 1);
+    expect((await identitiesOf(account.id)).map((row) => row.subject)).toEqual([subject]);
   });
 });

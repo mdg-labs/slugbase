@@ -119,6 +119,8 @@ function serverWith(extra: Record<string, string>, failure: (body: string) => Er
     migrations: [],
     logger,
     database,
+    // The stub credential names an account the database knows nothing of, so none has a mode to read: it has full access.
+    accessMode: { accountAccessMode: () => Promise.resolve({ mode: "full" as const }) },
   });
 }
 

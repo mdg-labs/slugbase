@@ -8,6 +8,7 @@ import { ME_QUERY_KEY } from "../account/me.ts";
 import {
   ADMIN_ACCOUNTS_QUERY_KEY,
   resetInstanceAccountMfa,
+  setInstanceAccountAccessMode,
   updateInstanceAccount,
   type AccountOutcome,
   type AccountRefusal,
@@ -41,6 +42,12 @@ export function useAccountRefusalMessage(): (refusal: AccountRefusal) => string 
         return t("admin.accounts.error.mailUnavailable");
       case "self":
         return t("admin.accounts.error.self");
+      case "instanceAdmin":
+        return t("admin.accounts.error.instanceAdmin");
+      case "untilTooSoon":
+        return t("admin.accounts.error.untilTooSoon");
+      case "exportOnly":
+        return t("admin.accounts.error.exportOnly");
       case "invalid":
         return t("admin.accounts.error.invalid");
       case "rateLimited":
@@ -66,7 +73,7 @@ export function useRefreshAfterRefusal(): (refusal: AccountRefusal) => void {
 }
 
 /** The actions that ask for a `confirm` before they change an account. */
-export type ConfirmedAction = "markVerified" | "resetMfa" | "disable" | "enable" | "promote" | "demote";
+export type ConfirmedAction = "markVerified" | "resetMfa" | "disable" | "enable" | "promote" | "demote" | "endExportOnly";
 
 /**
  * Asks the admin to confirm an action on an account (doc 03 section 12, `confirm`), says what it does to the account, and runs it. The
@@ -111,6 +118,8 @@ export function AccountActionConfirm({
           return updateInstanceAccount(api, account.id, { isInstanceAdmin: true });
         case "demote":
           return updateInstanceAccount(api, account.id, { isInstanceAdmin: false });
+        case "endExportOnly":
+          return setInstanceAccountAccessMode(api, account.id, { mode: "full" });
       }
     },
     onSuccess: (outcome) => {
@@ -148,6 +157,8 @@ export function AccountActionConfirm({
         return t("admin.accounts.action.promote.done", { name });
       case "demote":
         return t("admin.accounts.action.demote.done", { name });
+      case "endExportOnly":
+        return t("admin.accounts.action.endExportOnly.done", { name });
     }
   }
 
@@ -188,6 +199,12 @@ export function AccountActionConfirm({
           title: t("admin.accounts.action.demote.title", { name }),
           description: own ? t("admin.accounts.action.demote.descriptionOwn") : t("admin.accounts.action.demote.description", { name }),
           confirm: t("admin.accounts.action.demote.label"),
+        };
+      case "endExportOnly":
+        return {
+          title: t("admin.accounts.action.endExportOnly.title", { name }),
+          description: t("admin.accounts.action.endExportOnly.description", { name }),
+          confirm: t("admin.accounts.action.endExportOnly.label"),
         };
     }
   }

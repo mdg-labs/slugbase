@@ -8,6 +8,11 @@ import { withoutNul } from "./text.ts";
 
 export const WORKSPACE_ROLES = ["owner", "admin", "member"] as const;
 
+/** The access modes an account can be in (doc 02 section 2.11); `disabled` is the disabled state, in which an account has no session. */
+export const ACCOUNT_ACCESS_MODES = ["full", "exportOnly", "disabled"] as const;
+/** What happens when an export-only period ends. */
+export const EXPORT_ONLY_END_ACTIONS = ["disable", "delete"] as const;
+
 export const THEMES = ["light", "dark", "system"] as const;
 /** The six accent presets of doc 03 (Q36): a name of the palette, never a free colour. Periwinkle is the default. */
 export const ACCENT_PRESETS = ["periwinkle", "violet", "rose", "amber", "green", "teal"] as const;
@@ -74,6 +79,13 @@ export const AccountSchema = z
     isInstanceAdmin: z
       .boolean()
       .describe("Whether the account holds the instance-admin flag, as of this request; always false for an API token, which the instance operations refuse"),
+    accessMode: z
+      .enum(["full", "exportOnly"])
+      .describe("exportOnly while the account is in the period an instance admin left it to take its data out (doc 02 section 2.11): it can read what it sees, run the exports and delete itself, and every other request is refused with account_export_only; else full"),
+    exportOnlyUntil: z.iso
+      .datetime()
+      .nullable()
+      .describe("When the export-only period ends and the account is disabled or deleted, RFC 3339 UTC; null unless accessMode is exportOnly"),
     pendingEmail: z.string().nullable().describe("The address an email change was requested for and not yet confirmed, as stored; null when no change is pending"),
   })
   .meta({ id: "Account" });

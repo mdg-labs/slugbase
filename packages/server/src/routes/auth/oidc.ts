@@ -37,6 +37,7 @@ import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
 import type { TakeTokenRedeemLimit } from "../../auth/token-redeem-limit.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
+import { refuseExportOnly } from "../../http/access-mode.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
@@ -88,6 +89,12 @@ import { route } from "../register.ts";
 // The PKCE verifier is sealed together with the instant the handshake began. A callback that cannot open it (its
 // secret-box key was removed meanwhile) ends like any other failure. A `reauth` callback hands that instant to
 // the identity port, which refuses an ID token that was authenticated before it (doc 04 section 4.5).
+// A session of an account in the export-only access mode (doc 02 section 2.11) reaches both operations, because an account
+// without a password re-authenticates only through its provider and its own deletion needs that. The access-mode check of
+// the chain judges by operation, so these handlers judge by intent: the start refuses the `link` and `invite` intents of such a
+// session with `403 account_export_only` before it counts or stores anything (a link writes an identity, an invitation adds a
+// membership), and a `link` handshake that was started before the mode was set and comes back after it links nothing. The access
+// mode is read from the database, and a database that cannot answer is an error, never a start or a link that goes on.
 
 type NewFederatedAccount = NonNullable<NonNullable<Parameters<AuthStore["signInWithIdentity"]>[0]["firstLogin"]>["create"]>;
 
@@ -109,6 +116,7 @@ export interface OidcRoutesOptions {
     | "reauthenticateWithIdentity"
     | "inspectInvitation"
     | "acceptInvitationWithIdentity"
+    | "accountAccessMode"
   >;
   readonly identity: Pick<IdentityPort, "begin" | "complete">;
   /** Seals the PKCE verifier while the handshake is in flight, and opens it at the callback. */
@@ -150,6 +158,7 @@ type Refusal =
   | "cross_site_start"
   | "session_mismatch"
   | "reauth_required"
+  | "export_only"
   | "identity_in_use"
   | "unknown_account"
   | "invalid_invitation"
@@ -385,6 +394,15 @@ export function oidcRoutes({
     return { status: 302, headers: { Location: safeReturnTo(record.returnTo), "Set-Cookie": setSessionCookie(sessionCookie, token.value) } } as const;
   };
 
+  // A session on the request, complete or waiting for its second factor, of an account in the export-only mode is refused as the chain
+  // refuses it elsewhere; a request without a session is not the account's use of the application.
+  const refuseExportedSession = async (context: ChainContext): Promise<void> => {
+    const principal = context.get("principal");
+    if (principal?.kind === "session") {
+      await refuseExportOnly(store, principal.accountId);
+    }
+  };
+
   const start = route(startOidcSignIn).handle(async ({ params, query }, context) => {
     const intent = query.intent;
     let linkAccountId: string | null = null;
@@ -394,6 +412,9 @@ export function oidcRoutes({
         refused(context, params.provider, "cross_site_start");
         return failure;
       }
+      // Before the redemption is counted: the chain refused this request ahead of every stage while the operation was not in the
+      // export-only list, and a request that adds a membership to an account that may not is not a redemption.
+      await refuseExportedSession(context);
       // The redemption is counted whether or not the text is a token, like every other redemption.
       await takeRedeemLimit(context, signedInSession(context)?.accountId);
       invitationTokenHash = query.invitation === undefined ? undefined : hashCredentialToken(query.invitation);
@@ -410,6 +431,12 @@ export function oidcRoutes({
       if (!fromTheApplication(context)) {
         refused(context, params.provider, "cross_site_start");
         return failure;
+      }
+      // The account in the export-only mode re-authenticates through its provider and may not link another identity: that is
+      // refused before the re-authentication window is asked about, so the page does not send the account to re-authenticate for
+      // a link it may not make.
+      if (intent === "link") {
+        await refuseExportOnly(store, session.accountId);
       }
       // Starting a link is the one start that answers with a problem: the member is in the application, and the
       // page needs to tell "re-authenticate first" apart from a handshake that failed.
@@ -487,6 +514,17 @@ export function oidcRoutes({
       }
       if (record.intent === "link" && !reauthenticatedRecently(owner.reauthAt, now())) {
         return fail("reauth_required");
+      }
+      // A link started while the account had full access ends without writing an identity when the mode was set meanwhile. A source
+      // that cannot answer rejects, so the callback is an error and links nothing.
+      if (record.intent === "link") {
+        const mode = await store.accountAccessMode(owner.accountId);
+        if (mode === undefined) {
+          return fail("unknown_account");
+        }
+        if (mode.mode === "exportOnly") {
+          return fail("export_only");
+        }
       }
     }
     const code = codes[0];

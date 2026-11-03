@@ -182,6 +182,32 @@ describe("POST /import/json", { timeout: TEST_TIMEOUT_MS }, () => {
     ]);
   });
 
+  it("stores a description with its line breaks and tabs, \\r\\n as \\n and every other control character removed, and a title, folder and tag with none, the same in a dry run", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, shared } = await setup(world);
+    const lines = [
+      { url: "https://example.com/one", title: "T\nt\tx", description: "a\nb\tc", folders: ["F\nf"], tags: ["T\tt"] },
+      { url: "https://example.com/two", description: "x\r\ny\rz\u0007w\u0085v\u0000u" },
+    ];
+
+    const preview = await imported(world, a, lines, `${IMPORT}?dryRun=true`);
+    expect(preview.created).toBe(2);
+    expect(await stored(shared.workspaceId)).toMatchObject({ bookmarks: 0 });
+
+    expect((await imported(world, a, lines)).created).toBe(2);
+    const rows = await asSystem(
+      (tx) => tx<{ title: string; description: string | null }[]>`SELECT title, description FROM bookmarks WHERE workspace_id = ${shared.workspaceId} ORDER BY id`,
+    );
+    expect(rows).toEqual([
+      { title: "Ttx", description: "a\nb\tc" },
+      { title: "example.com", description: "x\ny\nzwvu" },
+    ]);
+    const names = await asSystem(
+      (tx) => tx<{ name: string }[]>`SELECT name FROM folders WHERE workspace_id = ${shared.workspaceId} UNION ALL SELECT name FROM tags WHERE workspace_id = ${shared.workspaceId} ORDER BY name`,
+    );
+    expect(names).toEqual([{ name: "Ff" }, { name: "Tt" }]);
+  });
+
   it("reports a javascript link of 3 000 characters as url_not_allowed, and an https one of that length as url_invalid, and stores neither", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);
@@ -199,7 +225,7 @@ describe("POST /import/json", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await stored(shared.workspaceId)).toMatchObject({ bookmarks: 0, counter: 0 });
   });
 
-  it("stores hostile text as plain text: control characters removed, a lone surrogate replaced, quotes, backslashes and markup kept as characters, and the title cut to its limit", async () => {
+  it("stores hostile text as plain text: control characters removed (a description keeps its line break), a lone surrogate replaced, quotes, backslashes and markup kept as characters, and the title cut to its limit", async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);
 
@@ -212,7 +238,7 @@ describe("POST /import/json", { timeout: TEST_TIMEOUT_MS }, () => {
     const rows = await asSystem((tx) => tx<{ title: string; description: string | null }[]>`SELECT title, description FROM bookmarks WHERE workspace_id = ${shared.workspaceId} ORDER BY id`);
     expect(Array.from(rows[0]?.title ?? "")).toHaveLength(300);
     expect(rows[0]?.title.startsWith(`<script>alert("x")</script>\\ '  \ufffd `)).toBe(true);
-    expect(rows[0]?.description).toBe('linebreak \ufffd {"a":1}');
+    expect(rows[0]?.description).toBe('line\nbreak \ufffd {"a":1}');
     expect(rows[1]?.title).toBe("__proto__");
   });
 

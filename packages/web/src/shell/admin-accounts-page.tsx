@@ -8,11 +8,12 @@ import { meQuery } from "../account/me.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { AccountActionConfirm, ResetLinkDialog, useAccountRefusalMessage, useRefreshAfterRefusal, type ConfirmedAction } from "./admin-account-dialogs.tsx";
 import { useAdminActionsEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
+import { AccessModeDialog } from "./admin-access-mode-dialog.tsx";
 import { AdminDeleteAccountDialog } from "./admin-delete-account-dialog.tsx";
 import { instanceAccountsQuery, issueInstanceAccountResetLink, resendInstanceAccountVerification, type InstanceAccount } from "./admin-accounts.ts";
 
 type Pending =
-  | { readonly kind: ConfirmedAction | "delete"; readonly account: InstanceAccount }
+  | { readonly kind: ConfirmedAction | "delete" | "exportOnly"; readonly account: InstanceAccount }
   | { readonly kind: "resetLink"; readonly account: InstanceAccount; readonly link: string };
 
 function matches(account: InstanceAccount, query: string): boolean {
@@ -40,7 +41,7 @@ function AccountsTable({
 
   function actionsOf(account: InstanceAccount): readonly RowAction[] {
     const own = account.id === viewerId;
-    const ask = (kind: ConfirmedAction | "delete") => () => {
+    const ask = (kind: ConfirmedAction | "delete" | "exportOnly") => () => {
       onAction({ kind, account });
     };
     const actions: RowAction[] = [];
@@ -58,10 +59,20 @@ function AccountsTable({
       account.disabled
         ? { id: "enable", label: t("admin.accounts.action.enable.label"), onSelect: ask("enable") }
         : { id: "disable", label: t("admin.accounts.action.disable.label"), onSelect: ask("disable") },
-      account.isInstanceAdmin
-        ? { id: "demote", label: t("admin.accounts.action.demote.label"), onSelect: ask("demote") }
-        : { id: "promote", label: t("admin.accounts.action.promote.label"), onSelect: ask("promote") },
     );
+    // An account in an export-only period is never made an instance admin: the server refuses it.
+    if (account.isInstanceAdmin) {
+      actions.push({ id: "demote", label: t("admin.accounts.action.demote.label"), onSelect: ask("demote") });
+    } else if (account.accessMode !== "exportOnly") {
+      actions.push({ id: "promote", label: t("admin.accounts.action.promote.label"), onSelect: ask("promote") });
+    }
+    // An admin, a disabled account and the admin's own account are not left a period to export in: the server refuses all three.
+    if (account.accessMode === "exportOnly") {
+      actions.push({ id: "endExportOnly", label: t("admin.accounts.action.endExportOnly.label"), onSelect: ask("endExportOnly") });
+    }
+    if (!account.disabled && !account.isInstanceAdmin) {
+      actions.push({ id: "exportOnly", label: t("admin.accounts.action.exportOnly.label"), onSelect: ask("exportOnly") });
+    }
     if (!own) {
       actions.push({ id: "delete", label: t("admin.accounts.action.delete.label"), destructive: true, onSelect: ask("delete") });
     }
@@ -105,7 +116,16 @@ function AccountsTable({
     {
       id: "status",
       header: t("admin.accounts.column.status"),
-      cell: (account) => <StatusBadge variant={account.disabled ? "error" : "success"}>{account.disabled ? t("admin.accounts.disabled") : t("admin.accounts.active")}</StatusBadge>,
+      cell: (account) =>
+        account.disabled ? (
+          <StatusBadge variant="error">{t("admin.accounts.disabled")}</StatusBadge>
+        ) : account.accessMode === "exportOnly" && account.exportOnlyUntil !== null ? (
+          <StatusBadge variant="warning">
+            {t("admin.accounts.exportOnly", { date: format.date(new Date(account.exportOnlyUntil), { dateStyle: "medium" }) })}
+          </StatusBadge>
+        ) : (
+          <StatusBadge variant="success">{t("admin.accounts.active")}</StatusBadge>
+        ),
     },
     {
       id: "actions",
@@ -254,9 +274,10 @@ export function AdminAccountsPage(): ReactElement {
     <>
       <h1 className="font-semibold text-2xl leading-none">{t("admin.accounts.title")}</h1>
       {body}
-      {pending === undefined || pending.kind === "delete" || pending.kind === "resetLink" ? null : (
+      {pending === undefined || pending.kind === "delete" || pending.kind === "resetLink" || pending.kind === "exportOnly" ? null : (
         <AccountActionConfirm account={pending.account} action={pending.kind} onClose={close} own={pending.account.id === me.data?.account.id} />
       )}
+      {pending?.kind === "exportOnly" ? <AccessModeDialog account={pending.account} onClose={close} /> : null}
       {pending?.kind === "delete" ? <AdminDeleteAccountDialog account={pending.account} onClose={close} /> : null}
       {pending?.kind === "resetLink" ? <ResetLinkDialog account={pending.account} link={pending.link} onClose={close} /> : null}
     </>

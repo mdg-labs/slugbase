@@ -33,6 +33,9 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- it for as long as it is disabled. A call that marks an address takes the target's backup-code rows
 -- first, the order sys_mfa_lock gives every writer of them. Everything else is as sys_instance_update_account was: the
 -- same locks, the same refusals, and the extra column verified_changed after disabled_changed.
+-- A change that grants the admin flag to an account in the export-only access mode (doc 02 section 2.11) answers
+-- 'export_only' with refused_field 'isInstanceAdmin' and changes and writes nothing: such an account has every request
+-- refused and is disabled or deleted when its period ends, so it cannot be one of the admins the instance keeps.
 CREATE OR REPLACE FUNCTION public.sys_instance_update_account(
     p_admin_event_id uuid, p_disabled_event_id uuid, p_verified_event_id uuid, p_ip_prefix cidr, p_account_id uuid,
     p_is_admin boolean, p_is_disabled boolean, p_mark_verified boolean
@@ -50,6 +53,7 @@ DECLARE
   v_was_admin boolean;
   v_was_disabled boolean;
   v_was_verified boolean;
+  v_was_export_only boolean;
   v_admin_change boolean;
   v_disabled_change boolean;
   v_verified_change boolean;
@@ -78,10 +82,16 @@ BEGIN
     RAISE EXCEPTION 'the instance operations are for instance admins with a second factor' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT a.is_instance_admin, a.disabled_at IS NOT NULL, a.email_verified_at IS NOT NULL INTO v_was_admin, v_was_disabled, v_was_verified
+  SELECT a.is_instance_admin, a.disabled_at IS NOT NULL, a.email_verified_at IS NOT NULL, a.access_mode = 'export_only'
+  INTO v_was_admin, v_was_disabled, v_was_verified, v_was_export_only
   FROM public.accounts a WHERE a.id = p_account_id;
   IF NOT FOUND THEN
     RETURN QUERY SELECT 'unknown_account'::text, NULL::text, NULL::boolean, NULL::boolean, NULL::boolean, NULL::uuid, NULL::text, NULL::text, NULL::boolean, NULL::boolean, NULL::boolean, NULL::boolean, NULL::timestamptz, NULL::bigint;
+    RETURN;
+  END IF;
+
+  IF p_is_admin IS TRUE AND NOT v_was_admin AND v_was_export_only THEN
+    RETURN QUERY SELECT 'export_only'::text, 'isInstanceAdmin'::text, NULL::boolean, NULL::boolean, NULL::boolean, NULL::uuid, NULL::text, NULL::text, NULL::boolean, NULL::boolean, NULL::boolean, NULL::boolean, NULL::timestamptz, NULL::bigint;
     RETURN;
   END IF;
 

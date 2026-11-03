@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { AccountAccessModeRecord } from '@slugbase/db';
 import { Adapters } from '@slugbase/core';
 import { AuthStore } from '@slugbase/db';
 import { BinaryResponse } from '@slugbase/contracts';
@@ -35,6 +36,11 @@ import { UsageStore } from '@slugbase/db';
 import { VersionInfoSchema } from '@slugbase/contracts';
 import type { WorkspaceRole } from '@slugbase/core';
 import { z } from 'zod';
+
+// @public
+export interface AccessModeSource {
+    accountAccessMode(accountId: string): Promise<AccountAccessModeRecord | undefined>;
+}
 
 // @public (undocumented)
 export const AI_KEYS: readonly ["AI_BASE_URL", "AI_API_KEY", "AI_MODEL", "AI_PROVIDER_NAME", "AI_ALLOWED_PRIVATE_HOST"];
@@ -184,6 +190,7 @@ export function createServer(options: CreateServerOptions): Server;
 
 // @public (undocumented)
 export interface CreateServerOptions {
+    readonly accessMode?: AccessModeSource;
     // (undocumented)
     readonly adapters: Adapters;
     readonly aiBudgetMs?: number;

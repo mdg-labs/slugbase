@@ -13,6 +13,7 @@ export const PROBLEM_CATALOG = [
   { status: 403, code: "registration_refused" },
   { status: 403, code: "cross_site_request" },
   { status: 403, code: "token_scope" },
+  { status: 403, code: "account_export_only" },
   { status: 403, code: "entitlement_required" },
   { status: 403, code: "email_unverified" },
   { status: 403, code: "registration_closed" },

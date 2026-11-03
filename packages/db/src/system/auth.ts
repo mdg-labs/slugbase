@@ -145,6 +145,11 @@ export interface AuthStore extends SetupStore, InstanceSettingsStore, MfaStore, 
    * last used more than a minute ago has its last-used time and that prefix written in the same call.
    */
   lookupApiToken(tokenHash: Buffer, ipPrefix: string | null): Promise<ApiTokenPrincipalRecord | undefined>;
+  /**
+   * The access mode of an account (doc 02 section 2.11) through `sys_account_access_mode`, for the check the HTTP chain makes on the request
+   * of a session or an API token: `full`, or `exportOnly` with the end date of the period; undefined for an account that does not exist.
+   */
+  accountAccessMode(accountId: string): Promise<AccountAccessModeRecord | undefined>;
   /** Deletes one session of an account; false when there was none. */
   revokeSession(sessionId: string, accountId: string): Promise<boolean>;
   /**
@@ -182,6 +187,14 @@ export interface AuthStoreOptions {
   url: string;
   /** Maximum number of connections in the pool. */
   poolSize?: number;
+}
+
+/** The access mode of an account as the chain reads it. */
+export type AccountAccessModeRecord = { readonly mode: "full" } | { readonly mode: "exportOnly"; readonly until: Date };
+
+interface AccessModeRow {
+  access_mode: string;
+  export_only_until: Date | null;
 }
 
 interface LoginRow {
@@ -366,6 +379,24 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
         reauthAt: row.reauth_at,
         isInstanceAdmin: row.is_instance_admin,
       };
+    },
+
+    async accountAccessMode(accountId) {
+      const rows = await client<AccessModeRow[]>`SELECT access_mode, export_only_until FROM sys_account_access_mode(${accountId}::uuid)`;
+      if (rows.length > 1) {
+        throw new Error("sys_account_access_mode returned more than one account");
+      }
+      const row = rows[0];
+      if (row === undefined) {
+        return undefined;
+      }
+      if (row.access_mode === "full") {
+        return { mode: "full" };
+      }
+      if (row.access_mode === "export_only" && row.export_only_until !== null) {
+        return { mode: "exportOnly", until: row.export_only_until };
+      }
+      throw new Error("sys_account_access_mode returned a mode outside full and export_only, or an export-only mode with no end date");
     },
 
     async lookupApiToken(tokenHash, ipPrefix) {

@@ -11,6 +11,9 @@ const account: InstanceAccount = {
   mfaEnabled: false,
   isInstanceAdmin: false,
   disabled: false,
+  accessMode: "full",
+  exportOnlyUntil: null,
+  exportOnlyEndAction: null,
   lastSignInAt: null,
   workspaceCount: 0,
 };

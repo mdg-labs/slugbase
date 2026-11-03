@@ -49,6 +49,14 @@
             ],
             "description": "The accent colour, one of the six preset names; null when none was chosen, which shows the default"
           },
+          "accessMode": {
+            "description": "exportOnly while the account is in the period an instance admin left it to take its data out (doc 02 section 2.11): it can read what it sees, run the exports and delete itself, and every other request is refused with account_export_only; else full",
+            "enum": [
+              "full",
+              "exportOnly"
+            ],
+            "type": "string"
+          },
           "aiOptOut": {
             "description": "Whether the account opted out of AI features",
             "type": "boolean"
@@ -81,6 +89,19 @@
           "emailVerified": {
             "description": "Whether the email address was verified",
             "type": "boolean"
+          },
+          "exportOnlyUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the export-only period ends and the account is disabled or deleted, RFC 3339 UTC; null unless accessMode is exportOnly"
           },
           "hasPassword": {
             "description": "Whether the account can sign in with a password; false for an account that signs in through an identity provider only",
@@ -154,6 +175,8 @@
           "hasPassword",
           "mfaEnabled",
           "isInstanceAdmin",
+          "accessMode",
+          "exportOnlyUntil",
           "pendingEmail"
         ],
         "type": "object"
@@ -3999,6 +4022,15 @@
       "InstanceAccount": {
         "additionalProperties": false,
         "properties": {
+          "accessMode": {
+            "description": "disabled for a disabled account, exportOnly while the account is in the period it was left to take its data out (it can read what it sees, run the exports and delete itself, and nothing else), else full",
+            "enum": [
+              "full",
+              "exportOnly",
+              "disabled"
+            ],
+            "type": "string"
+          },
           "disabled": {
             "description": "Whether the account is disabled: it cannot sign in, it has no session and its API tokens are refused",
             "type": "boolean"
@@ -4014,6 +4046,34 @@
           "emailVerified": {
             "description": "Whether the address was confirmed",
             "type": "boolean"
+          },
+          "exportOnlyEndAction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "disable",
+                  "delete"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What happens to the account when the period ends, disable or delete; null unless accessMode is exportOnly"
+          },
+          "exportOnlyUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the export-only period ends, RFC 3339 UTC; null unless accessMode is exportOnly"
           },
           "id": {
             "description": "The account's identifier",
@@ -4057,8 +4117,58 @@
           "mfaEnabled",
           "isInstanceAdmin",
           "disabled",
+          "accessMode",
+          "exportOnlyUntil",
+          "exportOnlyEndAction",
           "lastSignInAt",
           "workspaceCount"
+        ],
+        "type": "object"
+      },
+      "InstanceAccountAccessMode": {
+        "additionalProperties": false,
+        "properties": {
+          "accessMode": {
+            "description": "The mode the account is in after the request",
+            "enum": [
+              "full",
+              "exportOnly"
+            ],
+            "type": "string"
+          },
+          "exportOnlyEndAction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "disable",
+                  "delete"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What happens to the account when the period ends; null unless accessMode is exportOnly"
+          },
+          "exportOnlyUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the export-only period ends, RFC 3339 UTC; null unless accessMode is exportOnly"
+          }
+        },
+        "required": [
+          "accessMode",
+          "exportOnlyUntil",
+          "exportOnlyEndAction"
         ],
         "type": "object"
       },
@@ -5135,6 +5245,7 @@
               "registration_refused",
               "cross_site_request",
               "token_scope",
+              "account_export_only",
               "entitlement_required",
               "email_unverified",
               "registration_closed",
@@ -5691,6 +5802,54 @@
           "workspaceId"
         ],
         "type": "object"
+      },
+      "SetInstanceAccountAccessModeRequest": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "const": "full",
+                "description": "Puts the account back to full access and ends its export-only period",
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "endAction": {
+                "description": "What happens to the account at that time: disable it, or delete it with the rules of DELETE /me",
+                "enum": [
+                  "disable",
+                  "delete"
+                ],
+                "type": "string"
+              },
+              "mode": {
+                "const": "exportOnly",
+                "description": "Leaves the account a fixed period in which it can sign in, read what it sees and run the exports, and nothing else",
+                "type": "string"
+              },
+              "until": {
+                "description": "When the period ends, RFC 3339 UTC; at least one day ahead of the request",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode",
+              "until",
+              "endAction"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "SetupRequest": {
         "additionalProperties": false,
@@ -13205,7 +13364,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written"
+            "description": "The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled; or the flag is granted to an account in the export-only access mode, which is never an instance admin (the field code export_only on isInstanceAdmin). Nothing is written"
           },
           "429": {
             "content": {
@@ -13240,6 +13399,134 @@
           }
         },
         "summary": "Grant or clear the instance-admin flag of an account, disable or enable it, or mark its address verified",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "write",
+        "x-slugbase-reauth": true
+      }
+    },
+    "/api/v1/instance/accounts/{id}/access-mode": {
+      "put": {
+        "operationId": "setInstanceAccountAccessMode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The identifier of an account, as listed",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetInstanceAccountAccessModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceAccountAccessMode"
+                }
+              }
+            },
+            "description": "The account is in the mode the request names. exportOnly leaves it a period, ending at the given time, in which it can sign in (password, provider and second factor as usual), read its own profile and the workspaces and bookmarks it can see, run both exports, delete itself and sign out; every other request, every API-token request, every /go redirect, accepting an invitation and every write is refused with account_export_only (403). Where a mail adapter is configured the email that tells the account the end date is queued in the same transaction. When the time has passed, the daily maintenance job disables the account or deletes it, as chosen; a deletion that cannot be made without an owner for a workspace that has other members, or of the last enabled instance admin, disables it instead. full clears the mode. A request that asks for the state the account is in already changes nothing, writes no event and sends no email. Each change is written to the instance audit stream (instance.account_export_only_set or instance.account_export_only_cleared)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no account with that identifier"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation; the end date is less than a day ahead (validation_failed with the field code until_too_soon on until); the account is disabled (account_disabled on id) or holds the instance-admin flag (instance_admin on id), which the mode is not set on. Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Set or clear the export-only access mode of an account",
         "tags": [
           "instance"
         ],

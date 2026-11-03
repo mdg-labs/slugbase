@@ -21,6 +21,7 @@ const authStore: AuthStore = {
   signInAlertContext: unexpected,
   lookupSession: unexpected,
   lookupApiToken: unexpected,
+  accountAccessMode: unexpected,
   revokeSession: unexpected,
   listSessions: unexpected,
   revokeAllSessions: unexpected,

@@ -827,6 +827,13 @@
       "when": 1793613053579,
       "tag": "20261102095053_add_bookmark_import",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1793705369628,
+      "tag": "20261103112929_add_account_access_mode",
+      "breakpoints": true
     }
   ]
 }

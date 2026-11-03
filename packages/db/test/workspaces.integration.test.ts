@@ -425,6 +425,8 @@ describe("the account profile repository", () => {
       emailVerified: true,
       hasPassword: true,
       mfaEnabled: false,
+      accessMode: "full",
+      exportOnlyUntil: null,
       pendingEmail: null,
     });
     expect(JSON.stringify(profile)).not.toContain("argon2");

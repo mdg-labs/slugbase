@@ -110,6 +110,9 @@ interface Listed {
   readonly mfaEnabled: boolean;
   readonly isInstanceAdmin: boolean;
   readonly disabled: boolean;
+  readonly accessMode: string;
+  readonly exportOnlyUntil: string | null;
+  readonly exportOnlyEndAction: string | null;
   readonly lastSignInAt: string | null;
   readonly workspaceCount: number;
 }
@@ -143,12 +146,15 @@ describe("GET /instance/accounts", () => {
       mfaEnabled: true,
       isInstanceAdmin: false,
       disabled: false,
+      accessMode: "full",
+      exportOnlyUntil: null,
+      exportOnlyEndAction: null,
       lastSignInAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/) as string,
       workspaceCount: 1,
     });
     expect(body.items.find((item) => item.id === root.accountId)).toMatchObject({ isInstanceAdmin: true, mfaEnabled: true });
     for (const item of body.items) {
-      expect(Object.keys(item).sort()).toEqual(["disabled", "displayName", "email", "emailVerified", "id", "isInstanceAdmin", "lastSignInAt", "mfaEnabled", "workspaceCount"]);
+      expect(Object.keys(item).sort()).toEqual(["accessMode", "disabled", "displayName", "email", "emailVerified", "exportOnlyEndAction", "exportOnlyUntil", "id", "isInstanceAdmin", "lastSignInAt", "mfaEnabled", "workspaceCount"]);
     }
     expect(text).not.toMatch(/argon2|password|secret|sealed/i);
     expect(text).not.toContain(workspaceId);

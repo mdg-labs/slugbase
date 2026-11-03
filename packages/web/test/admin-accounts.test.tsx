@@ -26,6 +26,9 @@ function account(overrides: Partial<InstanceAccount>): InstanceAccount {
     mfaEnabled: false,
     isInstanceAdmin: false,
     disabled: false,
+    accessMode: "full",
+    exportOnlyUntil: null,
+    exportOnlyEndAction: null,
     lastSignInAt: "2026-05-04T10:30:00Z",
     workspaceCount: 3,
     ...overrides,
@@ -214,6 +217,7 @@ describe("the row actions", () => {
       "Send reset link",
       "Disable account",
       "Make instance admin",
+      "Set export-only",
       "Delete account",
     ]);
   }, SLOW_TEST_TIMEOUT_MS);
@@ -620,5 +624,116 @@ describe("deleting an account", () => {
 
     expect(await within(dialog).findByText("This is the only enabled instance admin. Make another account an instance admin first.")).toBeTruthy();
     expect(screen.queryByText("Grace Hopper is deleted.")).toBeNull();
+  }, SLOW_TEST_TIMEOUT_MS);
+});
+
+describe("the export-only access mode", () => {
+  const PERIOD = account({
+    id: "0192f3a0-aaaa-7000-8000-000000000013",
+    displayName: "Margaret Hamilton",
+    email: "margaret@example.org",
+    accessMode: "exportOnly",
+    exportOnlyUntil: "2026-12-01T10:00:00.000Z",
+    exportOnlyEndAction: "delete",
+  });
+  const accessModePath = (target: InstanceAccount): string => pathOf(target, "/access-mode");
+
+  async function chooseOption(select: string, option: string): Promise<void> {
+    await press(screen.getByRole("combobox", { name: select }));
+    await act(async () => {
+      const item = await screen.findByRole("option", { name: option });
+      // Base UI commits a click only after the press began on the item.
+      fireEvent.pointerDown(item);
+      fireEvent.click(item);
+      await Promise.resolve();
+    });
+  }
+
+  it("shows the end date as the status of an account in the period, and the other accounts as before", async () => {
+    stubAdminServer({ routes: withList(ME, GRACE, PERIOD, KATHERINE) });
+    await open();
+
+    expect(within(await rowOf("Margaret Hamilton")).getAllByRole("cell").at(-2)?.textContent).toBe("Export only until Dec 1, 2026");
+    expect(within(await rowOf("Grace Hopper")).getAllByRole("cell").at(-2)?.textContent).toBe("Active");
+    expect(within(await rowOf("Katherine Johnson")).getAllByRole("cell").at(-2)?.textContent).toBe("Disabled");
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("offers to end the period for an account in it, not to make it an instance admin, and to set one for an enabled account that is not an admin", async () => {
+    stubAdminServer({ routes: withList(ME, GRACE, PERIOD, KATHERINE) });
+    await open();
+
+    expect(await menuOf("Margaret Hamilton")).toEqual([
+      "Send reset link",
+      "Disable account",
+      "End export-only",
+      "Set export-only",
+      "Delete account",
+    ]);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("sends the period with the end of the chosen day and the end action, after the dialog asked for both", async () => {
+    const server = stubAdminServer({ routes: { ...withList(ME, GRACE), [`PUT ${accessModePath(GRACE)}`]: () => json({ accessMode: "exportOnly", exportOnlyUntil: "2099-01-15T22:59:00.000Z", exportOnlyEndAction: "delete" }) } });
+    await open();
+
+    await chooseAction("Grace Hopper", "Set export-only");
+    const dialog = await screen.findByRole("dialog", { name: "Leave Grace Hopper an export-only period" });
+    expect(server.received("PUT", accessModePath(GRACE))).toHaveLength(0);
+    await typeInto(within(dialog).getByLabelText("Last day"), "2099-01-15");
+    await chooseOption("Then", "Delete the account");
+    await press(within(dialog).getByRole("button", { name: "Set export-only" }));
+
+    expect((await screen.findAllByText("Grace Hopper can only export until the end date.")).length).toBeGreaterThan(0);
+    const [call] = server.received("PUT", accessModePath(GRACE));
+    expect(call?.body).toMatchObject({ mode: "exportOnly", endAction: "delete" });
+    const until = new Date((call?.body as { until: string }).until);
+    expect(until.getFullYear()).toBe(2099);
+    expect(until.getMonth()).toBe(0);
+    expect(until.getDate()).toBe(15);
+    await waitFor(() => {
+      expect(server.received("GET", LIST_PATH).length).toBeGreaterThan(1);
+    });
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("sends nothing and asks for the day when none was chosen", async () => {
+    const server = stubAdminServer({ routes: withList(ME, GRACE) });
+    await open();
+
+    await chooseAction("Grace Hopper", "Set export-only");
+    const dialog = await screen.findByRole("dialog", { name: "Leave Grace Hopper an export-only period" });
+    await press(within(dialog).getByRole("button", { name: "Set export-only" }));
+
+    expect(await within(dialog).findByText("Choose the last day.")).toBeTruthy();
+    expect(server.received("PUT", accessModePath(GRACE))).toHaveLength(0);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it.each([
+    ["until_too_soon", "until", "The period must end at least a day from now."],
+    ["instance_admin", "id", "An instance admin cannot be made export-only; clear the instance-admin flag first."],
+    ["account_disabled", "id", "This account is disabled. Enable it first."],
+  ])("explains the refusal %s in the dialog, which stays open, and reports nothing as done", async (code, path, message) => {
+    const server = stubAdminServer({ routes: { ...withList(ME, GRACE), [`PUT ${accessModePath(GRACE)}`]: () => validation(path, code) } });
+    await open();
+
+    await chooseAction("Grace Hopper", "Set export-only");
+    const dialog = await screen.findByRole("dialog", { name: "Leave Grace Hopper an export-only period" });
+    await typeInto(within(dialog).getByLabelText("Last day"), "2099-01-15");
+    await press(within(dialog).getByRole("button", { name: "Set export-only" }));
+
+    expect(await within(dialog).findByText(message)).toBeTruthy();
+    expect(screen.queryByText(/can only export until/)).toBeNull();
+    expect(server.received("PUT", accessModePath(GRACE))).toHaveLength(1);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("asks first and then ends the period, putting the account back to full access", async () => {
+    const server = stubAdminServer({ routes: { ...withList(ME, PERIOD), [`PUT ${accessModePath(PERIOD)}`]: () => json({ accessMode: "full", exportOnlyUntil: null, exportOnlyEndAction: null }) } });
+    await open();
+
+    await chooseAction("Margaret Hamilton", "End export-only");
+    const confirm = await screen.findByRole("alertdialog", { name: "End the export-only period of Margaret Hamilton?" });
+    expect(server.received("PUT", accessModePath(PERIOD))).toHaveLength(0);
+    await press(within(confirm).getAllByRole("button", { name: "End export-only" })[0] as HTMLElement);
+
+    expect((await screen.findAllByText("Margaret Hamilton has full access again.")).length).toBeGreaterThan(0);
+    expect(server.received("PUT", accessModePath(PERIOD)).map(({ body }) => body)).toEqual([{ mode: "full" }]);
   }, SLOW_TEST_TIMEOUT_MS);
 });

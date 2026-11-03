@@ -674,6 +674,23 @@ export interface paths {
         patch: operations["updateInstanceAccount"];
         trace?: never;
     };
+    "/api/v1/instance/accounts/{id}/access-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or clear the export-only access mode of an account */
+        put: operations["setInstanceAccountAccessMode"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/accounts/{id}/mfa-reset": {
         parameters: {
             query?: never;
@@ -1709,6 +1726,11 @@ export interface components {
         Account: {
             /** @description The accent colour, one of the six preset names; null when none was chosen, which shows the default */
             accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
+            /**
+             * @description exportOnly while the account is in the period an instance admin left it to take its data out (doc 02 section 2.11): it can read what it sees, run the exports and delete itself, and every other request is refused with account_export_only; else full
+             * @enum {string}
+             */
+            accessMode: "full" | "exportOnly";
             /** @description Whether the account opted out of AI features */
             aiOptOut: boolean;
             /**
@@ -1727,6 +1749,8 @@ export interface components {
             email: string;
             /** @description Whether the email address was verified */
             emailVerified: boolean;
+            /** @description When the export-only period ends and the account is disabled or deleted, RFC 3339 UTC; null unless accessMode is exportOnly */
+            exportOnlyUntil: string | null;
             /** @description Whether the account can sign in with a password; false for an account that signs in through an identity provider only */
             hasPassword: boolean;
             /**
@@ -3003,6 +3027,11 @@ export interface components {
             token: string;
         };
         InstanceAccount: {
+            /**
+             * @description disabled for a disabled account, exportOnly while the account is in the period it was left to take its data out (it can read what it sees, run the exports and delete itself, and nothing else), else full
+             * @enum {string}
+             */
+            accessMode: "full" | "exportOnly" | "disabled";
             /** @description Whether the account is disabled: it cannot sign in, it has no session and its API tokens are refused */
             disabled: boolean;
             /** @description The account's display name */
@@ -3011,6 +3040,10 @@ export interface components {
             email: string;
             /** @description Whether the address was confirmed */
             emailVerified: boolean;
+            /** @description What happens to the account when the period ends, disable or delete; null unless accessMode is exportOnly */
+            exportOnlyEndAction: ("disable" | "delete") | null;
+            /** @description When the export-only period ends, RFC 3339 UTC; null unless accessMode is exportOnly */
+            exportOnlyUntil: string | null;
             /**
              * Format: uuid
              * @description The account's identifier
@@ -3024,6 +3057,17 @@ export interface components {
             mfaEnabled: boolean;
             /** @description How many workspaces, not being deleted, the account is a member of */
             workspaceCount: number;
+        };
+        InstanceAccountAccessMode: {
+            /**
+             * @description The mode the account is in after the request
+             * @enum {string}
+             */
+            accessMode: "full" | "exportOnly";
+            /** @description What happens to the account when the period ends; null unless accessMode is exportOnly */
+            exportOnlyEndAction: ("disable" | "delete") | null;
+            /** @description When the export-only period ends, RFC 3339 UTC; null unless accessMode is exportOnly */
+            exportOnlyUntil: string | null;
         };
         InstanceAccountList: {
             /** @description Every account, oldest first */
@@ -3431,7 +3475,7 @@ export interface components {
              * @description Stable machine identifier
              * @enum {string}
              */
-            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
+            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "account_export_only" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
             /** @description English explanation; may contain user-supplied values */
             detail: string;
             /** @description Per-field errors */
@@ -3611,6 +3655,29 @@ export interface components {
              * @description The workspace the session acts in from its next request on; one the account is a member of
              */
             workspaceId: string;
+        };
+        SetInstanceAccountAccessModeRequest: {
+            /**
+             * @description Puts the account back to full access and ends its export-only period
+             * @constant
+             */
+            mode: "full";
+        } | {
+            /**
+             * @description What happens to the account at that time: disable it, or delete it with the rules of DELETE /me
+             * @enum {string}
+             */
+            endAction: "disable" | "delete";
+            /**
+             * @description Leaves the account a fixed period in which it can sign in, read what it sees and run the exports, and nothing else
+             * @constant
+             */
+            mode: "exportOnly";
+            /**
+             * Format: date-time
+             * @description When the period ends, RFC 3339 UTC; at least one day ahead of the request
+             */
+            until: string;
         };
         SetupRequest: {
             /** @description The first account's display name; surrounding whitespace is removed */
@@ -8174,7 +8241,98 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written */
+            /** @description The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled; or the flag is granted to an account in the export-only access mode, which is never an instance admin (the field code export_only on isInstanceAdmin). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setInstanceAccountAccessMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetInstanceAccountAccessModeRequest"];
+            };
+        };
+        responses: {
+            /** @description The account is in the mode the request names. exportOnly leaves it a period, ending at the given time, in which it can sign in (password, provider and second factor as usual), read its own profile and the workspaces and bookmarks it can see, run both exports, delete itself and sign out; every other request, every API-token request, every /go redirect, accepting an invitation and every write is refused with account_export_only (403). Where a mail adapter is configured the email that tells the account the end date is queued in the same transaction. When the time has passed, the daily maintenance job disables the account or deletes it, as chosen; a deletion that cannot be made without an owner for a workspace that has other members, or of the last enabled instance admin, disables it instead. full clears the mode. A request that asks for the state the account is in already changes nothing, writes no event and sends no email. Each change is written to the instance audit stream (instance.account_export_only_set or instance.account_export_only_cleared) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceAccountAccessMode"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no account with that identifier */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation; the end date is less than a day ahead (validation_failed with the field code until_too_soon on until); the account is disabled (account_disabled on id) or holds the instance-admin flag (instance_admin on id), which the mode is not set on. Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

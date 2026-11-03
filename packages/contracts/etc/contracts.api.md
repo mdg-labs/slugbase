@@ -65,6 +65,9 @@ export const AcceptInvitationRequestSchema: z.ZodObject<{
     password: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 
+// @public
+export const ACCOUNT_ACCESS_MODES: readonly ["full", "exportOnly", "disabled"];
+
 // @public (undocumented)
 export const AccountSchema: z.ZodObject<{
     id: z.ZodUUID;
@@ -108,6 +111,11 @@ export const AccountSchema: z.ZodObject<{
     hasPassword: z.ZodBoolean;
     mfaEnabled: z.ZodBoolean;
     isInstanceAdmin: z.ZodBoolean;
+    accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+    }>;
+    exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
     pendingEmail: z.ZodNullable<z.ZodString>;
 }, z.core.$strict>;
 
@@ -1167,12 +1175,14 @@ export interface ComponentTypes {
         };
         Account: {
             accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
+            accessMode: "full" | "exportOnly";
             aiOptOut: boolean;
             analyticsConsent: "unset" | "granted" | "denied";
             defaultView: "grid" | "table";
             displayName: string;
             email: string;
             emailVerified: boolean;
+            exportOnlyUntil: string | null;
             hasPassword: boolean;
             id: string;
             isInstanceAdmin: boolean;
@@ -1782,15 +1792,23 @@ export interface ComponentTypes {
             token: string;
         };
         InstanceAccount: {
+            accessMode: "full" | "exportOnly" | "disabled";
             disabled: boolean;
             displayName: string;
             email: string;
             emailVerified: boolean;
+            exportOnlyEndAction: ("disable" | "delete") | null;
+            exportOnlyUntil: string | null;
             id: string;
             isInstanceAdmin: boolean;
             lastSignInAt: string | null;
             mfaEnabled: boolean;
             workspaceCount: number;
+        };
+        InstanceAccountAccessMode: {
+            accessMode: "full" | "exportOnly";
+            exportOnlyEndAction: ("disable" | "delete") | null;
+            exportOnlyUntil: string | null;
         };
         InstanceAccountList: {
             items: ComponentTypes["schemas"]["InstanceAccount"][];
@@ -1979,7 +1997,7 @@ export interface ComponentTypes {
             [key: string]: unknown;
         };
         Problem: {
-            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
+            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "account_export_only" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
             detail: string;
             errors?: ComponentTypes["schemas"]["ProblemFieldError"][];
             requestId: string;
@@ -2073,6 +2091,13 @@ export interface ComponentTypes {
         };
         SetActiveWorkspaceRequest: {
             workspaceId: string;
+        };
+        SetInstanceAccountAccessModeRequest: {
+            mode: "full";
+        } | {
+            endAction: "disable" | "delete";
+            mode: "exportOnly";
+            until: string;
         };
         SetupRequest: {
             displayName: string;
@@ -3587,6 +3612,9 @@ export const EXPORT_NETSCAPE_CONTENT_TYPE = "text/html; charset=utf-8";
 export const EXPORT_NETSCAPE_DISPOSITION_PATTERN: RegExp;
 
 // @public
+export const EXPORT_ONLY_END_ACTIONS: readonly ["disable", "delete"];
+
+// @public
 export const EXPORT_OWNER_NAME_MAX_LENGTH = 100;
 
 // @public
@@ -4530,6 +4558,11 @@ export const getMe: {
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
         isInstanceAdmin: z.ZodBoolean;
+        accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+        }>;
+        exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
         pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>;
         memberships: z.ZodArray<z.ZodObject<{
@@ -5514,6 +5547,19 @@ export const INSTANCE_DISPLAY_NAME_MAX_LENGTH = 100;
 export const INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH = 500;
 
 // @public (undocumented)
+export const InstanceAccountAccessModeSchema: z.ZodObject<{
+    accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+    }>;
+    exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
+    exportOnlyEndAction: z.ZodNullable<z.ZodEnum<{
+        delete: "delete";
+        disable: "disable";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const InstanceAccountListSchema: z.ZodObject<{
     items: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
@@ -5523,6 +5569,16 @@ export const InstanceAccountListSchema: z.ZodObject<{
         mfaEnabled: z.ZodBoolean;
         isInstanceAdmin: z.ZodBoolean;
         disabled: z.ZodBoolean;
+        accessMode: z.ZodEnum<{
+            full: "full";
+            exportOnly: "exportOnly";
+            disabled: "disabled";
+        }>;
+        exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
+        exportOnlyEndAction: z.ZodNullable<z.ZodEnum<{
+            delete: "delete";
+            disable: "disable";
+        }>>;
         lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
         workspaceCount: z.ZodInt;
     }, z.core.$strict>>;
@@ -5551,6 +5607,16 @@ export const InstanceAccountSchema: z.ZodObject<{
     mfaEnabled: z.ZodBoolean;
     isInstanceAdmin: z.ZodBoolean;
     disabled: z.ZodBoolean;
+    accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+        disabled: "disabled";
+    }>;
+    exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
+    exportOnlyEndAction: z.ZodNullable<z.ZodEnum<{
+        delete: "delete";
+        disable: "disable";
+    }>>;
     lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
     workspaceCount: z.ZodInt;
 }, z.core.$strict>;
@@ -6478,6 +6544,16 @@ export const listInstanceAccounts: {
         mfaEnabled: z.ZodBoolean;
         isInstanceAdmin: z.ZodBoolean;
         disabled: z.ZodBoolean;
+        accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+        disabled: "disabled";
+        }>;
+        exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
+        exportOnlyEndAction: z.ZodNullable<z.ZodEnum<{
+        delete: "delete";
+        disable: "disable";
+        }>>;
         lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
         workspaceCount: z.ZodInt;
         }, z.core.$strict>>;
@@ -7052,6 +7128,11 @@ export const MeSchema: z.ZodObject<{
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
         isInstanceAdmin: z.ZodBoolean;
+        accessMode: z.ZodEnum<{
+            full: "full";
+            exportOnly: "exportOnly";
+        }>;
+        exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
         pendingEmail: z.ZodNullable<z.ZodString>;
     }, z.core.$strict>;
     memberships: z.ZodArray<z.ZodObject<{
@@ -15250,6 +15331,89 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    setInstanceAccountAccessMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["SetInstanceAccountAccessModeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceAccountAccessMode"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     startMfaEnrollment: {
         parameters: {
             query?: never;
@@ -17235,6 +17399,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/instance/accounts/{id}/access-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: OperationTypes["setInstanceAccountAccessMode"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/instance/accounts/{id}/mfa-reset": {
         parameters: {
             query?: never;
@@ -18342,6 +18523,9 @@ export const PROBLEM_CATALOG: readonly [{
     readonly code: "token_scope";
 }, {
     readonly status: 403;
+    readonly code: "account_export_only";
+}, {
+    readonly status: 403;
     readonly code: "entitlement_required";
 }, {
     readonly status: 403;
@@ -18454,6 +18638,7 @@ export const ProblemCodeSchema: z.ZodEnum<{
     registration_refused: "registration_refused";
     cross_site_request: "cross_site_request";
     token_scope: "token_scope";
+    account_export_only: "account_export_only";
     entitlement_required: "entitlement_required";
     email_unverified: "email_unverified";
     registration_closed: "registration_closed";
@@ -18524,6 +18709,7 @@ export const ProblemSchema: z.ZodObject<{
         registration_refused: "registration_refused";
         cross_site_request: "cross_site_request";
         token_scope: "token_scope";
+        account_export_only: "account_export_only";
         entitlement_required: "entitlement_required";
         email_unverified: "email_unverified";
         registration_closed: "registration_closed";
@@ -19565,6 +19751,65 @@ export const SetActiveWorkspaceRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const setInstanceAccountAccessMode: {
+    readonly method: "put";
+    readonly path: "/api/v1/instance/accounts/{id}/access-mode";
+    readonly operationId: "setInstanceAccountAccessMode";
+    readonly tag: "instance";
+    readonly summary: "Set or clear the export-only access mode of an account";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            mode: z.ZodLiteral<"full">;
+        }, z.core.$strict>, z.ZodObject<{
+            mode: z.ZodLiteral<"exportOnly">;
+            until: z.ZodISODateTime;
+            endAction: z.ZodEnum<{
+                delete: "delete";
+                disable: "disable";
+            }>;
+        }, z.core.$strict>], "mode">;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+        }>;
+        exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
+        exportOnlyEndAction: z.ZodNullable<z.ZodEnum<{
+        delete: "delete";
+        disable: "disable";
+        }>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const SetInstanceAccountAccessModeRequestSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    mode: z.ZodLiteral<"full">;
+}, z.core.$strict>, z.ZodObject<{
+    mode: z.ZodLiteral<"exportOnly">;
+    until: z.ZodISODateTime;
+    endAction: z.ZodEnum<{
+        delete: "delete";
+        disable: "disable";
+    }>;
+}, z.core.$strict>], "mode">;
+
+// @public (undocumented)
 export const SetupRequestSchema: z.ZodObject<{
     setupToken: z.ZodOptional<z.ZodString>;
     displayName: z.ZodString;
@@ -20395,6 +20640,16 @@ export const updateInstanceAccount: {
         mfaEnabled: z.ZodBoolean;
         isInstanceAdmin: z.ZodBoolean;
         disabled: z.ZodBoolean;
+        accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+        disabled: "disabled";
+        }>;
+        exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
+        exportOnlyEndAction: z.ZodNullable<z.ZodEnum<{
+        delete: "delete";
+        disable: "disable";
+        }>>;
         lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
         workspaceCount: z.ZodInt;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
@@ -20544,6 +20799,11 @@ export const updateMe: {
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
         isInstanceAdmin: z.ZodBoolean;
+        accessMode: z.ZodEnum<{
+        full: "full";
+        exportOnly: "exportOnly";
+        }>;
+        exportOnlyUntil: z.ZodNullable<z.ZodISODateTime>;
         pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;

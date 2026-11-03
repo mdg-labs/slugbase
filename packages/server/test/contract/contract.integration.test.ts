@@ -146,6 +146,8 @@ function serve(modules: readonly ServerModule[], document?: TestDocument, option
     // The stub world names its own instance admin, which the database knows nothing of; the walk of the committed document signs real accounts in and
     // leaves the check to the database.
     ...(options.memberships === true ? {} : { secondFactor: world.secondFactor }),
+    // Its principals are not accounts of the database either, so none of them has a mode to read: each has full access.
+    ...(options.memberships === true ? {} : { accessMode: { accountAccessMode: () => Promise.resolve({ mode: "full" as const }) } }),
   });
 }
 
@@ -371,12 +373,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the hundred and six that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the eighty-two whose policy has a role below it (the forty-nine of a member, the fifteen
-    // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
+    // One valid request for each operation. Each of the hundred and seven that need a session also answers 401 without one, each of the eighteen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the eighty-three whose policy has a role below it (the forty-nine of a member, the fifteen
+    // of an admin, the two of an owner and the sixteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
     // Each of the twenty-four that declare the write scope answers 403 token_scope to a token that may only read, each of the nine that declare an entitlement answers
     // 403 to an account without it (the seven of sharing declare none: their handlers decide the entitlement by the kind of target), and each of the forty-four that name a member, a recipient, a team, an invitation, a bookmark, a share, a slug, a host, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 106 + 17 + 82 + 25 + 10 + 44);
+    expect(report.calls).toBe(operations.length + 107 + 18 + 83 + 25 + 10 + 44);
   }, WALK_TIMEOUT_MS);
 });
 

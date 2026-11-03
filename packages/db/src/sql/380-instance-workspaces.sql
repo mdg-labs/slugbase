@@ -109,7 +109,7 @@ BEGIN
   END IF;
 
   IF p_owner_account_id IS NOT NULL THEN
-    PERFORM 1 FROM public.accounts o WHERE o.id = p_owner_account_id AND o.disabled_at IS NULL FOR SHARE;
+    PERFORM 1 FROM public.accounts o WHERE o.id = p_owner_account_id AND o.disabled_at IS NULL AND o.access_mode = 'full' FOR SHARE;
     IF NOT FOUND THEN
       RETURN QUERY SELECT 'unknown_account'::text, NULL::timestamptz;
       RETURN;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { ACCOUNT_ACCESS_MODES, EXPORT_ONLY_END_ACTIONS } from "./me.ts";
 import { withoutNul } from "./text.ts";
 import { WorkspaceNameSchema } from "./workspaces.ts";
 
@@ -396,6 +397,11 @@ export const InstanceAccountSchema = z
     mfaEnabled: z.boolean().describe("Whether a second factor is enrolled and confirmed"),
     isInstanceAdmin: z.boolean().describe("Whether the account holds the instance-admin flag"),
     disabled: z.boolean().describe("Whether the account is disabled: it cannot sign in, it has no session and its API tokens are refused"),
+    accessMode: z
+      .enum(ACCOUNT_ACCESS_MODES)
+      .describe("disabled for a disabled account, exportOnly while the account is in the period it was left to take its data out (it can read what it sees, run the exports and delete itself, and nothing else), else full"),
+    exportOnlyUntil: z.iso.datetime().nullable().describe("When the export-only period ends, RFC 3339 UTC; null unless accessMode is exportOnly"),
+    exportOnlyEndAction: z.enum(EXPORT_ONLY_END_ACTIONS).nullable().describe("What happens to the account when the period ends, disable or delete; null unless accessMode is exportOnly"),
     lastSignInAt: z.iso.datetime().nullable().describe("When a complete sign-in last happened, RFC 3339 UTC; null while the account never signed in"),
     workspaceCount: COUNT.describe("How many workspaces, not being deleted, the account is a member of"),
   })
@@ -470,7 +476,55 @@ export const updateInstanceAccount = defineOperation({
     ),
     404: problemResponse("There is no account with that identifier"),
     422: problemResponse(
-      "The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written",
+      "The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled; or the flag is granted to an account in the export-only access mode, which is never an instance admin (the field code export_only on isInstanceAdmin). Nothing is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const SetInstanceAccountAccessModeRequestSchema = z
+  .discriminatedUnion("mode", [
+    z.strictObject({ mode: z.literal("full").describe("Puts the account back to full access and ends its export-only period") }),
+    z.strictObject({
+      mode: z.literal("exportOnly").describe("Leaves the account a fixed period in which it can sign in, read what it sees and run the exports, and nothing else"),
+      until: z.iso.datetime().describe("When the period ends, RFC 3339 UTC; at least one day ahead of the request"),
+      endAction: z.enum(EXPORT_ONLY_END_ACTIONS).describe("What happens to the account at that time: disable it, or delete it with the rules of DELETE /me"),
+    }),
+  ])
+  .meta({ id: "SetInstanceAccountAccessModeRequest" });
+
+export const InstanceAccountAccessModeSchema = z
+  .strictObject({
+    accessMode: z.enum(["full", "exportOnly"]).describe("The mode the account is in after the request"),
+    exportOnlyUntil: z.iso.datetime().nullable().describe("When the export-only period ends, RFC 3339 UTC; null unless accessMode is exportOnly"),
+    exportOnlyEndAction: z.enum(EXPORT_ONLY_END_ACTIONS).nullable().describe("What happens to the account when the period ends; null unless accessMode is exportOnly"),
+  })
+  .meta({ id: "InstanceAccountAccessMode" });
+
+export const setInstanceAccountAccessMode = defineOperation({
+  method: "put",
+  path: "/api/v1/instance/accounts/{id}/access-mode",
+  operationId: "setInstanceAccountAccessMode",
+  tag: "instance",
+  summary: "Set or clear the export-only access mode of an account",
+  auth: "instanceAdmin",
+  rate: "write",
+  reauth: true,
+  request: { params: InstanceAccountParamsSchema, body: SetInstanceAccountAccessModeRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The account is in the mode the request names. exportOnly leaves it a period, ending at the given time, in which it can sign in (password, provider and second factor as usual), read its own profile and the workspaces and bookmarks it can see, run both exports, delete itself and sign out; every other request, every API-token request, every /go redirect, accepting an invitation and every write is refused with account_export_only (403). Where a mail adapter is configured the email that tells the account the end date is queued in the same transaction. When the time has passed, the daily maintenance job disables the account or deletes it, as chosen; a deletion that cannot be made without an owner for a workspace that has other members, or of the last enabled instance admin, disables it instead. full clears the mode. A request that asks for the state the account is in already changes nothing, writes no event and sends no email. Each change is written to the instance audit stream (instance.account_export_only_set or instance.account_export_only_cleared)",
+      InstanceAccountAccessModeSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written",
+    ),
+    404: problemResponse("There is no account with that identifier"),
+    422: problemResponse(
+      "The body did not pass validation; the end date is less than a day ahead (validation_failed with the field code until_too_soon on until); the account is disabled (account_disabled on id) or holds the instance-admin flag (instance_admin on id), which the mode is not set on. Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

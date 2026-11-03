@@ -1,7 +1,8 @@
 # Adds a Mailpit that catches every mail the stack sends, for the e2e journeys
 # (doc 08 section 5.1): the server and the worker send through it, and the
 # journeys read the mail back through its HTTP API. It also lifts the per-address
-# limit on redeeming invitation tokens for the journeys. It is an override file;
+# limit on redeeming invitation tokens and the limits of the bulk operations (an
+# import, a dry run of one, an export) for the journeys. It is an override file;
 # compose.yml alone, which is what an operator runs, has no mail relay and keeps
 # every default.
 #
@@ -41,6 +42,11 @@ services:
       # default of compose.yml and the image stays 10/hour, and the rate-limit
       # suite of the server proves that limit.
       RATE_LIMIT_TOKEN_REDEEM_IP: 1000/hour
+      # The import-and-export journey checks, previews, imports and exports a dozen times as one account from one
+      # address, each of them a token of the bulk bucket, which holds 20 an hour. Lifted for this stack alone, the
+      # same way; the default of compose.yml and the image stays 20/hour.
+      RATE_LIMIT_BULK_IP: 1000/hour
+      RATE_LIMIT_BULK_ACCOUNT: 1000/hour
 
   slugbase-worker:
     environment: *e2e-environment

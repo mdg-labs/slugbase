@@ -23,7 +23,7 @@ interface BuiltIn {
 // The jobs every worker runs, whatever modules it composes: the one list the worker registers and
 // `migrate` creates the queues from.
 const BUILT_IN: readonly BuiltIn[] = [
-  { name: "@slugbase/server/maintenance", contribute: maintenanceContribution },
+  { name: "@slugbase/server/maintenance", contribute: (stores, _subscribersFor, context) => maintenanceContribution(stores, context) },
   { name: "@slugbase/server/mail", contribute: () => ({ jobs: [...mailJobs, invitationSendJob] }) },
   // Fetches and caches the metadata of the page a bookmark points at (doc 02 section 5.4).
   { name: "@slugbase/server/bookmark-metadata", contribute: () => ({ jobs: [fetchMetadataJob] }) },
@@ -42,6 +42,7 @@ export function createBuiltInModules(stores: MaintenanceStores, subscribersFor: 
 }
 
 const NEVER_RUN: MaintenanceStores = {
+  accessMode: { due: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
   rateLimit: { purgeIdle: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
   retention: { purge: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
   workspaceDeletion: {

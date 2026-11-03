@@ -130,5 +130,14 @@
     "body": "An administrator of this {appName} instance reset two-factor authentication on your account. Your authenticator app and backup codes no longer work, your devices were signed out, and signing in now asks only for your password.",
     "notYou": "If you did not ask an administrator for this, contact the administrator of this {appName} instance right away. Once you are signed in, turn two-factor authentication back on.",
     "action": "Set up two-factor authentication"
+  },
+  "exportOnly": {
+    "subject": "Your {appName} account can only export its data from now on",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "An administrator of this {appName} instance has ended your access to the account. Until {until} you can still sign in, read your bookmarks and export them. You cannot change anything, and API tokens and slug links no longer work. After that the account is disabled or deleted.",
+    "how": "To take your data out, sign in and open the export page with the button below. There you can download your bookmarks as a SlugBase JSON file or as a browser HTML file, for each workspace you use.",
+    "action": "Export my data",
+    "footer": "You are receiving this email because an administrator of this {appName} instance made your account export-only."
   }
 }

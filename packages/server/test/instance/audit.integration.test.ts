@@ -29,6 +29,12 @@ beforeEach(() => clearInstanceEvents(database()));
  */
 const WRITTEN_BY_SETUP: readonly string[] = ["instance.setup_completed"];
 
+/**
+ * The one action of the catalog that no request of an admin writes: the daily job that ends an export-only period writes it, the system being its actor
+ * (`account-export-only.integration.test.ts`).
+ */
+const WRITTEN_BY_JOB: readonly string[] = ["instance.account_export_only_ended"];
+
 const document = loadOpenApiDocument();
 const INSTANCE_OPERATION_IDS = classifyOperations(document)
   .operations.filter((operation) => operation.path.startsWith("/api/v1/instance"))
@@ -78,6 +84,8 @@ describe("the instance audit stream", () => {
       { operationId: "issueInstanceAccountResetLink", method: "POST", path: () => `${ACCOUNT}/${recovered.id}/password-reset-link`, status: 200, actions: ["instance.account_reset_link_issued"], entity: () => recovered.id },
       { operationId: "resendInstanceAccountVerification", method: "POST", path: () => `${ACCOUNT}/${unverified.id}/verification-email`, status: 202, actions: ["instance.account_verification_resent"], entity: () => unverified.id },
       { operationId: "updateInstanceAccount", method: "PATCH", path: () => `${ACCOUNT}/${unverified.id}`, body: { emailVerified: true }, status: 200, actions: ["instance.account_email_verified"], entity: () => unverified.id },
+      { operationId: "setInstanceAccountAccessMode", method: "PUT", path: () => `${ACCOUNT}/${flagged.id}/access-mode`, body: { mode: "exportOnly", until: new Date(Date.now() + 3 * 86_400_000).toISOString(), endAction: "disable" }, status: 200, actions: ["instance.account_export_only_set"], entity: () => flagged.id },
+      { operationId: "setInstanceAccountAccessMode", method: "PUT", path: () => `${ACCOUNT}/${flagged.id}/access-mode`, body: { mode: "full" }, status: 200, actions: ["instance.account_export_only_cleared"], entity: () => flagged.id },
       { operationId: "deleteInstanceAccount", method: "DELETE", path: () => `${ACCOUNT}/${deleted.id}`, status: 204, actions: ["instance.account_deleted"], entity: () => deleted.id },
     ];
 
@@ -106,7 +114,7 @@ describe("the instance audit stream", () => {
       }
     }
 
-    const missing = INSTANCE_AUDIT_ACTION_NAMES.filter((action) => !seen.has(action) && !WRITTEN_BY_SETUP.includes(action));
+    const missing = INSTANCE_AUDIT_ACTION_NAMES.filter((action) => !seen.has(action) && !WRITTEN_BY_SETUP.includes(action) && !WRITTEN_BY_JOB.includes(action));
     expect(missing, "catalog actions no step of the script writes").toEqual([]);
     expect([...seen].filter((action) => !(INSTANCE_AUDIT_ACTION_NAMES as readonly string[]).includes(action))).toEqual([]);
   }, HOOK_TIMEOUT_MS);

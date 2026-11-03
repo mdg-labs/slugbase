@@ -44,6 +44,15 @@
       "shared": "Mit dir geteilt",
       "sharedBy": "{name}, geteilt von {owner}",
       "sharedLoadFailed": "Die mit dir geteilten Ordner konnten nicht geladen werden."
+    },
+    "exportOnly": {
+      "title": "Dein Konto kann nur noch Daten exportieren",
+      "description": "Eine Administration hat deinen Zugang beendet. Bis {date} kannst du dich anmelden, deine Lesezeichen ansehen und exportieren; ändern kannst du nichts. Danach wird das Konto deaktiviert oder gelöscht.",
+      "action": "Meine Daten exportieren",
+      "workspace": {
+        "label": "Workspace für den Export",
+        "description": "Der Export enthält deine Lesezeichen im hier gewählten Workspace."
+      }
     }
   },
   "home": {
@@ -130,6 +139,7 @@
       "empty": {
         "title": "Noch keine Lesezeichen",
         "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an.",
+        "import": "Aus dem Browser importieren",
         "sharedWithMe": {
           "title": "Bisher wurde nichts mit dir geteilt",
           "description": "Lesezeichen, die andere Mitglieder mit dir teilen, direkt, über ein Team oder über einen Ordner, erscheinen hier."
@@ -1287,7 +1297,10 @@
         "invalid": "Die Änderung wurde abgelehnt. Lade die Seite neu und versuche es noch einmal.",
         "lastOwner": "Dieses Konto ist der einzige Eigentümer von Workspaces, die weitere Mitglieder haben.",
         "billingActive": "Dieses Konto hat ein aktives kostenpflichtiges Abonnement. Es muss zuerst gekündigt werden.",
-        "guard": "Dieser Server erlaubt das gerade nicht. Es wurde nichts geändert."
+        "guard": "Dieser Server erlaubt das gerade nicht. Es wurde nichts geändert.",
+        "instanceAdmin": "Ein Instanzadmin kann nicht auf Export beschränkt werden; entferne zuerst die Instanzadmin-Rolle.",
+        "untilTooSoon": "Der Zeitraum muss mindestens einen Tag ab jetzt dauern.",
+        "exportOnly": "Dieses Konto befindet sich in einem reinen Exportzeitraum und kann nicht zum Instanzadmin gemacht werden."
       },
       "action": {
         "resend": {
@@ -1341,6 +1354,30 @@
         },
         "delete": {
           "label": "Konto löschen"
+        },
+        "exportOnly": {
+          "label": "Auf Export beschränken",
+          "title": "{name} einen Export-Zeitraum geben",
+          "description": "{name} kann sich bis zum gewählten Tag noch anmelden, die Lesezeichen ansehen und exportieren, sonst nichts: keine Änderungen, keine API-Tokens, keine Slug-Links, keine Einladungen. Danach wird das Konto deaktiviert oder gelöscht. Ist E-Mail eingerichtet, wird {name} informiert.",
+          "close": "Schließen",
+          "done": "{name} kann bis zum Enddatum nur noch exportieren.",
+          "day": {
+            "label": "Letzter Tag",
+            "description": "Der Zeitraum endet am Ende dieses Tages, mindestens einen Tag ab jetzt.",
+            "required": "Wähle den letzten Tag."
+          },
+          "endAction": {
+            "label": "Danach",
+            "description": "Ein Löschen folgt den Regeln zum Löschen eines Kontos. Ist das nicht möglich, weil das Konto einziger Eigentümer eines Workspace mit anderen Mitgliedern ist, wird das Konto stattdessen deaktiviert.",
+            "disable": "Konto deaktivieren",
+            "delete": "Konto löschen"
+          }
+        },
+        "endExportOnly": {
+          "label": "Export-Zeitraum beenden",
+          "title": "Export-Zeitraum von {name} beenden?",
+          "description": "{name} hat wieder vollen Zugriff und wird zum Enddatum weder deaktiviert noch gelöscht.",
+          "done": "{name} hat wieder vollen Zugriff."
         }
       },
       "resetLink": {
@@ -1366,7 +1403,8 @@
           "close": "Schließen",
           "open": "Workspaces öffnen"
         }
-      }
+      },
+      "exportOnly": "Nur Export bis {date}"
     },
     "settings": {
       "title": "Einstellungen & Status",
@@ -2295,13 +2333,35 @@
         "skipped": "Übersprungen",
         "failed": "Fehlgeschlagen",
         "slugsDropped": "Slugs verworfen",
-        "made": "{folders, plural, one {# Ordner} other {# Ordner}} und {tags, plural, one {# Tag} other {# Tags}} wurden angelegt."
+        "made": "{folders, plural, one {# Ordner} other {# Ordner}} und {tags, plural, one {# Tag} other {# Tags}} wurden angelegt.",
+        "download": "Bericht herunterladen",
+        "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden.",
+        "nothingLeftOut": "Es wurde nichts übersprungen und nichts ist fehlgeschlagen.",
+        "checklistNotUpdated": "Der Import ist abgeschlossen, aber die Checkliste „Erste Schritte“ konnte nicht aktualisiert werden.",
+        "groups": {
+          "skipped": {
+            "duplicate": "Als Duplikate übersprungen",
+            "limit": "Übersprungen, weil der Workspace voll war"
+          },
+          "failed": {
+            "urlNotAllowed": "Fehlgeschlagen: Die Adresse ist keine http- oder https-Adresse",
+            "urlInvalid": "Fehlgeschlagen: Die Adresse ist leer, zu lang oder fehlerhaft"
+          },
+          "slugs": {
+            "invalid": "Slug verworfen: kein gültiger Slug",
+            "conflict": "Slug verworfen: bereits vergeben"
+          }
+        },
+        "entry": {
+          "position": "Lesezeichen {position, number} in der Datei",
+          "slug": "Slug: {slug}"
+        }
       },
       "status": {
         "checking": "Die Datei wird geprüft.",
         "checkFailed": "Die Datei konnte nicht geprüft werden.",
         "running": "Der Import hat begonnen.",
-        "done": "Der Import ist abgeschlossen. {count, plural, one {# Lesezeichen wurde} other {# Lesezeichen wurden}} hinzugefügt.",
+        "done": "Der Import ist abgeschlossen. {created, number} hinzugefügt, {skipped, number} übersprungen, {failed, number} fehlgeschlagen, {slugs, number} Slugs verworfen.",
         "failed": "Der Import wurde nicht abgeschlossen."
       },
       "error": {

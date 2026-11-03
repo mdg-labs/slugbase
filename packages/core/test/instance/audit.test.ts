@@ -3,7 +3,7 @@ import { AUDIT_ACTION_NAMES, INSTANCE_AUDIT_ACTION_NAMES, INSTANCE_AUDIT_ACTIONS
 
 describe("the instance audit catalog", () => {
   it("names the actions of the stream in the dotted style, each with a closed metadata object", () => {
-    expect(INSTANCE_AUDIT_ACTION_NAMES).toEqual(["instance.setup_completed", "instance.status_viewed", "instance.settings_viewed", "instance.settings_changed", "instance.test_mail_queued", "instance.workspaces_viewed", "instance.workspace_created", "instance.workspace_owner_invited", "instance.workspace_deletion_requested", "instance.workspace_joined", "instance.accounts_viewed", "instance.account_admin_granted", "instance.account_admin_revoked", "instance.account_disabled", "instance.account_enabled", "instance.account_mfa_reset", "instance.account_reset_link_issued", "instance.account_verification_resent", "instance.account_email_verified", "instance.account_deleted"]);
+    expect(INSTANCE_AUDIT_ACTION_NAMES).toEqual(["instance.setup_completed", "instance.status_viewed", "instance.settings_viewed", "instance.settings_changed", "instance.test_mail_queued", "instance.workspaces_viewed", "instance.workspace_created", "instance.workspace_owner_invited", "instance.workspace_deletion_requested", "instance.workspace_joined", "instance.accounts_viewed", "instance.account_admin_granted", "instance.account_admin_revoked", "instance.account_disabled", "instance.account_enabled", "instance.account_export_only_set", "instance.account_export_only_cleared", "instance.account_export_only_ended", "instance.account_mfa_reset", "instance.account_reset_link_issued", "instance.account_verification_resent", "instance.account_email_verified", "instance.account_deleted"]);
     for (const name of INSTANCE_AUDIT_ACTION_NAMES) {
       expect(name).toMatch(/^instance\.[a-z_]+$/);
     }
@@ -28,6 +28,10 @@ describe("the instance audit catalog", () => {
     ] as const) {
       expect(INSTANCE_AUDIT_ACTIONS[name].metadata, name).toEqual({});
     }
+    // The end action and the end date of a period that is set; an event that ends one names the action and nothing of the account.
+    expect(INSTANCE_AUDIT_ACTIONS["instance.account_export_only_set"].metadata).toEqual({ endAction: "text", until: "text" });
+    expect(INSTANCE_AUDIT_ACTIONS["instance.account_export_only_cleared"].metadata).toEqual({});
+    expect(INSTANCE_AUDIT_ACTIONS["instance.account_export_only_ended"].metadata).toEqual({ endAction: "text" });
     // How the link reached the account, never the token.
     expect(INSTANCE_AUDIT_ACTIONS["instance.account_reset_link_issued"].metadata).toEqual({ delivery: "text" });
   });

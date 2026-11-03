@@ -19,9 +19,11 @@ export type {
   InstanceAccountDeletionStore,
   InstanceAccountDeletionStoreOutcome,
 } from "./account-deletion.ts";
-export { listInstanceAccounts, updateInstanceAccount } from "./accounts.ts";
+export { listInstanceAccounts, setInstanceAccountAccessMode, updateInstanceAccount } from "./accounts.ts";
 export type {
   InstanceAccount,
+  InstanceAccessModeAsk,
+  InstanceAccountAccessModeStore,
   InstanceAccountAsk,
   InstanceAccountChange,
   InstanceAccountDependencies,

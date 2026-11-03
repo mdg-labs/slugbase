@@ -227,6 +227,9 @@ export const FIXTURES: ContractFixtures = {
   // that does not exist, the declared 404; the route tests change accounts.
   listInstanceAccounts: {},
   updateInstanceAccount: { path: { id: UNKNOWN_ACCOUNT_ID }, body: { disabled: true }, status: 404 },
+  // The export-only mode names an account by identifier too, and the walker knows none it could leave to export only without taking the next call's
+  // caller away: its valid request names one that does not exist, the declared 404; the route tests set the mode.
+  setInstanceAccountAccessMode: { path: { id: UNKNOWN_ACCOUNT_ID }, body: { mode: "full" }, status: 404 },
   // The recovery operations name an account by identifier too, and the walker knows none whose second factor it could reset or whose reset link it
   // could issue without taking the next call's caller away: the reset and the link name the one that does not exist, the declared 404. The walked
   // server has no mail adapter, which the resend of a verification email asks about first, so its valid request is the declared 503

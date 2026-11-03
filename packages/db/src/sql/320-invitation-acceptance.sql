@@ -38,6 +38,8 @@ CREATE OR REPLACE FUNCTION public.sys_invitation_inspect(p_token_hash bytea)
 -- hold, NULL meaning unlimited (the entitlement engine supplies it); the members are counted under the lock of the
 -- workspace's row, which every acceptance into the workspace takes, so two acceptances cannot both take the last seat.
 -- When app_account_id() names an account, p_account_id must be that account.
+-- An account that is disabled, or in the export-only access mode (doc 02 section 2.11, 710-account-access-mode.sql), accepts no
+-- invitation: the outcome is 'gone', as for an account that does not exist.
 --
 -- The account also joins the teams the invitation names (team_ids), in the same transaction as the membership: those
 -- that are teams of the invitation's workspace now. A team that was deleted since the invitation was written, and an
@@ -108,7 +110,7 @@ BEGIN
   END IF;
 
   SELECT a.email, a.email_verified_at IS NOT NULL INTO v_account_email, v_account_verified
-  FROM public.accounts a WHERE a.id = p_account_id AND a.disabled_at IS NULL FOR SHARE;
+  FROM public.accounts a WHERE a.id = p_account_id AND a.disabled_at IS NULL AND a.access_mode = 'full' FOR SHARE;
   IF NOT FOUND THEN
     outcome := 'gone';
     RETURN NEXT;
