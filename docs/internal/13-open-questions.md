@@ -66,7 +66,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q86 | Private vulnerability reporting or `support@slugbase.app`; 3 days / 30 days / +7 days | Decided (maintainer) |
 | Q2 | User documentation lives in this repository (`docs/user/`, `docs/self-hosting/`, `docs/releases/`), written with `/customer-docs` and published at `slugbase.app/docs` by the one SlugBase site; no separate docs repository, no `docs.slugbase.app` | Decided (changed 2026-10-09) |
 | Q89 | Deleted on 2026-10-08 (maintainer decision), without a deprecation period | Decided (maintainer) |
-| Q111 | A change to the documentation on `main` requests a rebuild of the site through a generic `repository_dispatch` (`docs-published`); the target repository is a variable, and the workflow does nothing without it | Decided (maintainer) |
+| Q111 | A change to the documentation on `main` requests a rebuild of the site through a generic `workflow_dispatch` call (input `docs_sha`) of a target workflow; the target repository and workflow are variables, and the workflow does nothing without them | Decided (maintainer) |
 | Q112 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q113 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q114 | Cloud decision | Cloud — recorded in the Cloud documentation |
@@ -323,8 +323,9 @@ User docs keep their own review bar through the contract check and the `area:doc
 ### Q111 — Docs changes request a rebuild of the site
 **Status:** Decided (maintainer) · **Due:** Phase 6 · **Affects:** doc 09 §3.5, §4, §5.6, Q2, Cloud doc 07 §4.6, Cloud doc 11
 
-**Decision: when documentation changes on `main` of this repository, a workflow here asks the site repository to rebuild and deploy the site. It sends a GitHub `repository_dispatch` of type `docs-published` carrying the pushed commit. The target repository is configuration, not code: the workflow names no private repository and no host (doc 09 §4), and does nothing where the configuration is absent.** The full behaviour is the "docs-published hook" in doc 09 §3.5.
+**Decision: when documentation changes on `main` of this repository, a workflow here asks the site repository to rebuild and deploy the site. It calls the dispatch API of a target workflow, which runs as a `workflow_dispatch` with ref `main` and the input `docs_sha` set to the pushed commit. The target repository and workflow are configuration, not code: the workflow names no private repository and no host (doc 09 §4), and does nothing where the configuration is absent.** The full behaviour is the "docs-published hook" in doc 09 §3.5.
 Without this, a documentation fix would reach the site only with the next site change or a manual rebuild. The request makes publishing a consequence of merging, with no human step and no code in this repository that knows what receives it. Forks and self-hosters have no target configured, so for them it is a no-op. The receiving side validates the commit and treats the docs as untrusted build input; what it does after that is recorded in the Cloud documentation.
+- **Changed 2026-10-11:** the request was first a repository-level event, which GitHub lets only a token with write permission on the target repository's contents send. Calling the dispatch API of a workflow needs only `Actions: write`, which can start workflows but cannot push code, so the token is narrower.
 
 ---
 
