@@ -18,7 +18,7 @@ import {
 import { normalizeBookmarkUrl, type BookmarkUrlRefusal } from "../bookmarks/url.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import { parseSlug } from "../go/slug.ts";
-import { cleanText } from "./text.ts";
+import { cleanDescription, cleanText } from "./text.ts";
 
 // The preview of a SlugBase JSON import (doc 02 section 13.1, doc 04 section 10.9, doc 10 T13): what an import of the file would do, answered without writing anything. The file has passed the
 // contract's strict schemas, so its shape is known and its depth is bounded; what is left to judge here is each bookmark's content, which is untrusted: its URL goes through the bookmark URL
@@ -149,7 +149,7 @@ export function readImportBookmark(entry: ImportFileBookmark, position: number):
   if (!parsed.ok) {
     return { position, title, url: cleanText(entry.url, BOOKMARK_URL_MAX_LENGTH), reason: REFUSALS[parsed.reason] };
   }
-  const description = cleanText(entry.description ?? "", BOOKMARK_DESCRIPTION_MAX_LENGTH);
+  const description = cleanDescription(entry.description ?? "", BOOKMARK_DESCRIPTION_MAX_LENGTH);
   return {
     position,
     url: parsed.value.url,

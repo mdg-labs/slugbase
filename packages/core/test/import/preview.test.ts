@@ -88,6 +88,22 @@ describe("readImportBookmark", () => {
     expect(readImportBookmark({ url: "https://example.com/", title: null, description: null }, 1)).toMatchObject({ title: "example.com", description: null });
   });
 
+  it("keeps a line break and a tab in the description and removes every other control character, while the title, the slug and the names keep none", () => {
+    const read = readImportBookmark(
+      { url: "https://example.com/", title: "T\nt\tx", description: "a\nb\tc\r\nd\u0007e\u0085f\u0000g", slug: "bad\nslug", folders: ["F\nf"], tags: ["T\tt"] },
+      1,
+    );
+
+    expect(read).toMatchObject({ title: "Ttx", description: "a\nb\tc\ndefg", slug: { kind: "invalid", text: "badslug" }, folders: ["Ff"], tags: ["Tt"] });
+    expect(readImportBookmark({ url: "https://example.com/", description: "\n\t \u0007" }, 1)).toMatchObject({ description: null });
+  });
+
+  it("cuts the description to its limit after cleaning, in code points", () => {
+    const read = readImportBookmark({ url: "https://example.com/", description: `\u0007${"😀\n".repeat(600)}` }, 1);
+
+    expect(read).toMatchObject({ description: "😀\n".repeat(500).slice(0, -1) });
+  });
+
   it("refuses a URL that is not http or https as url_not_allowed, and one that is empty, over-long or malformed as url_invalid, with the URL and title made plain", () => {
     expect(readImportBookmark({ url: "javascript:alert(1)", title: "T\u0000" }, 2)).toEqual({ position: 2, title: "T", url: "javascript:alert(1)", reason: "url_not_allowed" });
     expect(readImportBookmark({ url: "data:text/html,<b>x</b>" }, 1)).toMatchObject({ reason: "url_not_allowed" });

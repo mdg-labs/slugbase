@@ -2480,6 +2480,9 @@ export function checkSuggestion(value: {
 export function chooseSlugBookmark(input: GoChooseDependencies, ask: GoChooseAsk): Promise<GoChooseOutcome>;
 
 // @public
+export function cleanDescription(value: string, max: number): string;
+
+// @public
 export function cleanText(value: string, max: number): string;
 
 // @public
@@ -6192,6 +6195,9 @@ export interface PersonalWorkspaceStore {
 export class PersonalWorkspaceUnavailableError extends Error {
     constructor();
 }
+
+// @public
+export function plainDescription(value: string): string;
 
 // @public
 export function plainText(value: string): string;

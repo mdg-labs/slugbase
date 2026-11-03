@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanText, cutCodePoints, plainText } from "../../src/index.ts";
+import { cleanDescription, cleanText, cutCodePoints, plainDescription, plainText } from "../../src/index.ts";
 
 // The text of an import file (doc 02 section 13.1, doc 10 T13): control characters out, lone surrogates replaced, ends trimmed, cut by code points.
 
@@ -18,6 +18,37 @@ describe("plainText", () => {
   it("replaces a lone surrogate, which no encoding of a stored value can carry, and keeps a pair", () => {
     expect(plainText("a\ud800b")).toBe("a�b");
     expect(plainText("😀")).toBe("😀");
+  });
+});
+
+describe("plainDescription", () => {
+  it("keeps a line break and a tab, and turns \\r\\n and a lone \\r into \\n", () => {
+    expect(plainDescription("a\nb\tc")).toBe("a\nb\tc");
+    expect(plainDescription("a\r\nb\rc\n\rd")).toBe("a\nb\nc\n\nd");
+  });
+
+  it("removes every other control character: C0, DEL and C1, NUL and the vertical tab, form feed, NEL and bell among them", () => {
+    const others = [...Array.from({ length: 0x20 }, (_, code) => code), 0x7f, ...Array.from({ length: 0x20 }, (_, index) => 0x80 + index)].filter((code) => ![0x09, 0x0a, 0x0d].includes(code));
+    expect(plainDescription(`a${others.map((code) => String.fromCharCode(code)).join("")}b`)).toBe("ab");
+    expect(plainDescription("a\u0007b\u0085c\u0000d\u000be\u000cf")).toBe("abcdef");
+    expect(plainDescription("a\u0000\nb")).toBe("a\nb");
+  });
+
+  it("trims the ends, line breaks and tabs included, and keeps the inside", () => {
+    expect(plainDescription("\n\t first\n\n  second \t\n")).toBe("first\n\n  second");
+  });
+
+  it("replaces a lone surrogate and keeps a pair", () => {
+    expect(plainDescription("a\ud800\nb 😀")).toBe("a�\nb 😀");
+  });
+});
+
+describe("cleanDescription", () => {
+  it("cleans the description, then cuts it by code points, counting a kept line break as one", () => {
+    expect(cleanDescription("a\r\nb\u0007c", 300)).toBe("a\nbc");
+    expect(cleanDescription("ab\r\ncd", 3)).toBe("ab");
+    expect(cleanDescription("a\r\n😀😀", 4)).toBe("a\n😀😀");
+    expect(cleanDescription("\u0000\u0007 \n\t", 300)).toBe("");
   });
 });
 

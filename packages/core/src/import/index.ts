@@ -23,4 +23,4 @@ export type {
   ImportStore,
   ImportTagToResolve,
 } from "./run.ts";
-export { cleanText, cutCodePoints, plainText } from "./text.ts";
+export { cleanDescription, cleanText, cutCodePoints, plainDescription, plainText } from "./text.ts";

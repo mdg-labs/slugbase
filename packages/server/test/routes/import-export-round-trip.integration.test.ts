@@ -11,7 +11,7 @@ import { tenantDatabase } from "../contract/support.ts";
 import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // The lossless-export promise (doc 02 sections 13.2 and 13.4, doc 08 section 5.1, doc 12 Phase 4 definition of done, Q29), through the whole chain over the migrated database. A seeded generator
-// builds workspaces of folders (name, icon, colour), tags, slugs, forwarding, pinned bookmarks, remembered slug choices, duplicate addresses and hostile and unicode text, with the named shapes of
+// builds workspaces of folders (name, icon, colour), tags, slugs, forwarding, pinned bookmarks, remembered slug choices, duplicate addresses and hostile and unicode text and descriptions with line breaks and tabs, with the named shapes of
 // the development seed among them. Each is exported, the document is imported with skipDuplicates=false into an empty workspace of the same member, and the export of that workspace has to be the
 // first document: only `exportedAt` and the workspace's name differ, and the document holds no identifier. The failure scenario: an exported field the import drops or rewrites, or an export that
 // lists the same content in another order, fails the comparison, and a failure names the seed and the case, which run again from the same numbers. Apart from that, a plan-archived bookmark comes
@@ -85,7 +85,7 @@ function withoutVolatile(document: ExportDocument): unknown {
   return { ...document, exportedAt: null, workspace: { name: null } };
 }
 
-// Text that has broken lists, modals and parsers; none of it holds a control character, which an import removes from a file's text (doc 10 T13) and which a title therefore could not keep.
+// Text that has broken lists, modals and parsers; none of it holds a control character, which an import removes from the title, address, slug and names of a file (doc 10 T13) and which those therefore could not keep.
 const TEXTS = [
   "Plain title",
   "<img src=x onerror=alert(1)>",
@@ -105,6 +105,9 @@ const TEXTS = [
   "Tab and em space inside",
   "x",
 ];
+
+// Descriptions keep a line break and a tab through an import (doc 02 section 13.1), so these are drawn beside the texts above. None holds a carriage return, which an import turns into a line break.
+const DESCRIPTIONS = [...TEXTS, "line one\nline two", "a\nb\tc", "Tab\tseparated\tcolumns", "first paragraph\n\nsecond paragraph\n  - indented\n\t- tabbed", "<b>bold</b>\n<script>alert(1)</script>\n😀\tx"];
 
 const PATHS = ["a", "docs/guide", "über/straße", "search?q=a b&x=1", "p?utm_source=newsletter&fbclid=abc", "page#section", "%E6%97%A5%E6%9C%AC", "a/../b", "emoji/🚀"];
 
@@ -154,7 +157,7 @@ function plan(seed: number, caseNumber: number): Plan {
     bookmarks.push({
       url,
       title: shape?.title ?? random.pick(TEXTS),
-      description: shape !== undefined ? shape.description : random.chance(0.5) ? random.pick(TEXTS) : null,
+      description: shape !== undefined ? shape.description : random.chance(0.5) ? random.pick(DESCRIPTIONS) : null,
       pinned: shape?.pinnedAt != null || random.chance(0.25),
       slug,
       forwarding,
