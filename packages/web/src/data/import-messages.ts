@@ -1,9 +1,6 @@
-import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_NEW_NAMES } from "@slugbase/contracts";
+import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES } from "@slugbase/contracts";
 import { useTranslation } from "react-i18next";
 import { waitOf, type FileRefusal, type ImportFailure } from "./import-api.ts";
-
-/** The most folder and tag names the bookmarks of one import file may name in total, whatever their number (the limit behind `too_many_links`). */
-const IMPORT_MAX_NAME_LINKS = 100_000;
 
 /** The sentence for a file that is turned away before a request, in the language of the page. */
 export function useFileRefusalMessage(): (refusal: FileRefusal) => string {
@@ -27,7 +24,7 @@ export function useImportFailureMessage(): (failure: ImportFailure) => string {
       case "tooManyBookmarks":
         return t("data.import.error.tooManyBookmarks", { count: IMPORT_MAX_BOOKMARKS });
       case "tooManyAssignments":
-        return t("data.import.error.tooManyAssignments", { count: IMPORT_MAX_NAME_LINKS });
+        return t("data.import.error.tooManyAssignments", { count: IMPORT_MAX_LINKS });
       case "invalid":
         return t("data.import.error.invalid");
       case "unreadable":

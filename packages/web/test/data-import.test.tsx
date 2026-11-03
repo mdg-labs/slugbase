@@ -1,6 +1,6 @@
 import { File as NodeFile } from "node:buffer";
 import type { ComponentTypes } from "@slugbase/contracts";
-import { IMPORT_MAX_BYTES } from "@slugbase/contracts";
+import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_BYTES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES } from "@slugbase/contracts";
 import { createHandlers, createResolverHandlers } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -525,6 +525,10 @@ describe("a refusal at the file field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
     expect(shown[0]).toMatch(/5,000 bookmarks/);
     expect(shown[1]).toMatch(/10,000 new folders and tags/);
     expect(shown[2]).toMatch(/100,000 uses/);
+    // Each count is the server's own cap from the contracts, so the sentence cannot drift from the limit the API enforces.
+    expect(shown[0]).toContain(`${IMPORT_MAX_BOOKMARKS.toLocaleString("en")} bookmarks`);
+    expect(shown[1]).toContain(`${IMPORT_MAX_NEW_NAMES.toLocaleString("en")} new folders and tags`);
+    expect(shown[2]).toContain(`${IMPORT_MAX_LINKS.toLocaleString("en")} uses`);
   });
 
   it("is told for the import itself as for the dry run", async () => {
