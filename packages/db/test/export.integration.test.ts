@@ -937,3 +937,180 @@ describe("the pages of the export on a workspace of 30 000 bookmarks", () => {
     expect(linked.length).toBeGreaterThan(0);
   });
 });
+
+// A selection of the export (doc 02 section 5.8, doc 10 T1 and T2). The failure scenario: an identifier of a bookmark the member can neither own nor read (another member's that is not shared with them, one of another workspace, a
+// shared one a downgrade archived) is in no read, no count and no folder or tag of the selection, and nothing in an answer tells it from an identifier that names no bookmark at all.
+
+describe("a selection of the export", () => {
+  const NO_SUCH_BOOKMARK = "0192f3a0-9999-7000-8000-000000000001";
+
+  interface Library {
+    readonly w: string;
+    readonly me: string;
+    readonly olga: string;
+    readonly mine: string;
+    readonly minePlain: string;
+    readonly archivedMine: string;
+    readonly shared: string;
+    readonly sharedOther: string;
+    readonly sharedArchived: string;
+    readonly hers: string;
+    readonly mineFolder: string;
+    readonly otherFolder: string;
+  }
+
+  async function library(): Promise<Library> {
+    const me = await account();
+    const olga = await account();
+    const w = await workspace([me, olga]);
+    const mine = await bookmark(w, me, { title: "Mine", slug: "mine", forwarding: true });
+    const minePlain = await bookmark(w, me, { title: "Mine, plain" });
+    const archivedMine = await bookmark(w, me, { title: "Mine, archived", archived: true });
+    const shared = await bookmark(w, olga, { title: "Shared with me", description: "About it", slug: "shared" });
+    const sharedOther = await bookmark(w, olga, { title: "Shared with me, not selected" });
+    const sharedArchived = await bookmark(w, olga, { title: "Shared, archived", archived: true });
+    const hers = await bookmark(w, olga, { title: "Hers alone" });
+    await shareBookmark(db, w, shared, olga, { accountId: me });
+    await shareBookmark(db, w, sharedOther, olga, { accountId: me });
+    await shareBookmark(db, w, sharedArchived, olga, { accountId: me });
+    const mineFolder = await folder(w, me, "Reading", [mine, archivedMine]);
+    await folder(w, me, "Unused by the selection", [minePlain]);
+    await folder(w, me, "Empty");
+    // The member filed a bookmark shared with them in a folder of theirs, and tagged it: no bookmark of their own uses the folder or the tag.
+    await folder(w, me, "Holds a shared one", [shared]);
+    await tag(w, me, "on a shared one", [shared]);
+    await tag(w, me, "news", [mine]);
+    await tag(w, me, "elsewhere", [minePlain]);
+    await tag(w, me, "unused");
+    const otherFolder = await folder(w, olga, "Her folder", [hers, shared]);
+    await tag(w, olga, "her-tag", [shared]);
+    return { w, me, olga, mine, minePlain, archivedMine, shared, sharedOther, sharedArchived, hers, mineFolder, otherFolder };
+  }
+
+  const reads = (l: Library, only: readonly string[]) =>
+    asMember(l.w, l.me, async (tx) => {
+      const repository = exportRepository(tx);
+      return {
+        bookmarks: await repository.bookmarks(l.me, undefined, 100, only),
+        shared: await repository.shared(l.me, undefined, 100, only),
+        folders: await repository.folders(l.me, undefined, 100, only),
+        tags: await repository.tags(l.me, undefined, 100, only),
+        summary: await repository.summary(l.me, true, only),
+      };
+    });
+
+  it("holds the member's own bookmarks of the selection in full, a plan-archived one included, and the shared ones as their readable fields only", async () => {
+    const l = await library();
+
+    const found = await reads(l, [l.mine, l.archivedMine, l.shared]);
+
+    expect(found.bookmarks.map((row) => row.id)).toEqual([l.mine, l.archivedMine].sort());
+    expect(found.bookmarks.find((row) => row.id === l.mine)).toMatchObject({ title: "Mine", slug: "mine", forwarding: true, folders: ["Reading"], tags: ["news"] });
+    expect(found.bookmarks.find((row) => row.id === l.archivedMine)).toMatchObject({ planArchived: true });
+    expect(found.shared.map((row) => row.id)).not.toContain(l.sharedOther);
+    expect(found.shared).toEqual([{ id: l.shared, url: expect.stringContaining("https://example.com/") as string, title: "Shared with me", description: "About it", slug: "shared", ownerName: "Test account" }]);
+    expect(JSON.stringify(found)).not.toMatch(/her-tag|Her folder/);
+  });
+
+  it("ignores an identifier of a bookmark the member can neither own nor read, and tells it from none in no read and no count", async () => {
+    const l = await library();
+    const other = await workspaceOfOthers();
+    const readable = [l.mine, l.shared];
+    const unreadable = [l.hers, l.sharedArchived, other, NO_SUCH_BOOKMARK];
+
+    const without = await reads(l, readable);
+    const withThem = await reads(l, [...readable, ...unreadable]);
+    const onlyThem = await reads(l, unreadable);
+
+    expect(withThem).toEqual(without);
+    expect(onlyThem.bookmarks).toEqual([]);
+    expect(onlyThem.shared).toEqual([]);
+    expect(onlyThem.folders).toEqual([]);
+    expect(onlyThem.tags).toEqual([]);
+    expect(onlyThem.summary).toMatchObject({ bookmarks: 0, folders: 0, tags: 0, shared: 0 });
+  });
+
+  it("holds the folders and tags the selected own bookmarks use, and not the ones only an unselected bookmark uses, an empty one, or another member's", async () => {
+    const l = await library();
+
+    const found = await reads(l, [l.mine, l.shared, l.hers]);
+
+    expect(found.folders).toEqual([{ name: "Reading", icon: "folder", color: 1 }]);
+    expect(found.tags).toEqual(["news"]);
+    expect(found.folders.map((row) => row.name)).not.toContain("Holds a shared one");
+    expect(found.summary).toMatchObject({ bookmarks: 1, folders: 1, tags: 1, shared: 1 });
+    expect((await reads(l, [l.minePlain])).folders.map((row) => row.name)).toEqual(["Unused by the selection"]);
+    expect((await reads(l, [l.shared])).folders).toEqual([]);
+  });
+
+  it("counts what the selection reads and what the whole export would, by the same rules", async () => {
+    const l = await library();
+
+    expect((await reads(l, [l.mine, l.minePlain, l.archivedMine, l.shared, l.sharedArchived])).summary).toMatchObject({ bookmarks: 3, folders: 2, tags: 2, shared: 1 });
+    expect(await asMember(l.w, l.me, (tx) => exportRepository(tx).summary(l.me, true))).toMatchObject({ bookmarks: 3, folders: 4, tags: 4, shared: 2 });
+    expect((await reads(l, [])).summary).toMatchObject({ bookmarks: 0, folders: 0, tags: 0, shared: 0 });
+  });
+
+  it("is no way to read another workspace: its bookmark is named in a transaction of this one and matches nothing", async () => {
+    const l = await library();
+    const outsider = await account();
+    const otherWorkspace = await workspace([outsider, l.me]);
+    const theirs = await bookmark(otherWorkspace, outsider, { title: "Of the other workspace" });
+    await shareBookmark(db, otherWorkspace, theirs, outsider, { accountId: l.me });
+
+    const found = await reads(l, [theirs, l.mine]);
+
+    expect(found.bookmarks.map((row) => row.id)).toEqual([l.mine]);
+    expect(found.shared).toEqual([]);
+    expect(found.summary).toMatchObject({ bookmarks: 1, shared: 0 });
+  });
+
+  it("restricts the sections of the Netscape export to the folders and the bookmarks of the selection", async () => {
+    const l = await library();
+    const read = (only: readonly string[]) =>
+      asMember(l.w, l.me, async (tx) => {
+        const repository = exportRepository(tx);
+        return {
+          sections: await repository.sections(l.me, undefined, 100, only),
+          filed: await repository.folderBookmarks(l.me, l.mineFolder, undefined, 100, only),
+          unfiled: await repository.unfiledBookmarks(l.me, undefined, 100, only),
+        };
+      });
+
+    const found = await read([l.mine, l.minePlain, l.hers]);
+
+    expect(found.sections.map((row) => row.name).sort()).toEqual(["Reading", "Unused by the selection"]);
+    expect(found.filed.map((row) => row.id)).toEqual([l.mine]);
+    expect(found.unfiled).toEqual([]);
+    const none = await read([NO_SUCH_BOOKMARK]);
+    expect(none).toEqual({ sections: [], filed: [], unfiled: [] });
+    const loose = await bookmark(l.w, l.me, { title: "Loose" });
+    await bookmark(l.w, l.me, { title: "Loose, not selected" });
+    expect((await read([loose, l.mine])).unfiled.map((row) => row.id)).toEqual([loose]);
+  });
+
+  it("restricts the remembered slug choices to the selected bookmarks", async () => {
+    const l = await library();
+    const choice = await bookmark(l.w, l.me, { title: "Chosen", slug: "chosen", forwarding: true });
+    await asSystem(db, (tx) => tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${l.w}, ${l.me}, 'mine', ${l.mine}), (${l.w}, ${l.me}, 'chosen', ${choice})`);
+
+    const read = (only: readonly string[]) => asMember(l.w, l.me, (tx) => exportRepository(tx).goPreferences(l.me, undefined, 100, only));
+
+    expect(await read([choice])).toEqual([{ slug: "chosen", bookmarkId: choice }]);
+    expect((await read([choice, l.mine])).map((row) => row.slug)).toEqual(["chosen", "mine"]);
+    expect(await read([l.minePlain])).toEqual([]);
+  });
+
+  it("takes identifiers only, so that nothing else reaches a statement", async () => {
+    const l = await library();
+
+    await expect(reads(l, ["not-an-identifier"])).rejects.toThrow("an export selection takes identifiers only");
+    await expect(reads(l, [`${l.mine}"}'; DROP TABLE bookmarks; --`])).rejects.toThrow("an export selection takes identifiers only");
+  });
+
+  async function workspaceOfOthers(): Promise<string> {
+    const outsider = await account();
+    const other = await workspace([outsider]);
+    return bookmark(other, outsider, { title: "Of another workspace" });
+  }
+});

@@ -267,7 +267,8 @@
         "partial": "Opened {opened, number} of {selected, number}. The others are not loaded in the list or have no web address."
       },
       "limited": {
-        "note": "{count, plural, one {# shared bookmark is selected, so only Open all is available.} other {# shared bookmarks are selected, so only Open all is available.}}",
+        "note": "{count, plural, one {# shared bookmark is selected, so only Open all and Export selection are available.} other {# shared bookmarks are selected, so only Open all and Export selection are available.}}",
+        "noteOpenOnly": "{count, plural, one {# shared bookmark is selected, so only Open all is available.} other {# shared bookmarks are selected, so only Open all is available.}}",
         "reason": "Bookmarks shared with you can be opened but not changed. Deselect them to use this action."
       },
       "pin": "Pin",
@@ -351,6 +352,25 @@
           "summary": "{count, plural, one {# bookmark will get these tags.} other {# bookmarks will get these tags.}}",
           "skipped": "{count, plural, one {# bookmark will be skipped because it no longer exists or can’t be changed.} other {# bookmarks will be skipped because they no longer exist or can’t be changed.}}",
           "tagCount": "{bookmarkCount, plural, one {# bookmark} other {# bookmarks}}, {added, number} new"
+        }
+      },
+      "export": {
+        "action": "Export selection",
+        "close": "Close",
+        "cancel": "Cancel",
+        "confirm": "Export",
+        "title": "Export {count, plural, one {# selected bookmark} other {# selected bookmarks}}",
+        "description": "Choose the file to download. Bookmarks shared with you are exported as their readable fields only.",
+        "success": "{count, plural, one {# bookmark exported} other {# bookmarks exported}}",
+        "descriptionFilters": "The selection follows the current filters: the file holds every bookmark that matches when the export runs. Bookmarks shared with you are exported as their readable fields only.",
+        "successDiffers": "{count, plural, one {# bookmark} other {# bookmarks}} exported, but {selected, number} were selected. The list changed since you selected.",
+        "successNoCount": "Export downloaded",
+        "failure": "The export was not downloaded",
+        "cancelled": "The export was cancelled",
+        "reason": {
+          "tooMany": "An export takes at most {max} selected bookmarks. Deselect some, or use Select all matching to export every bookmark that matches.",
+          "tooManyDeselect": "An export takes at most {max} selected bookmarks. Deselect some to export them.",
+          "capped": "More bookmarks match than the {cap} that can be exported at once. Narrow the filters to export them."
         }
       },
       "share": {
@@ -2325,6 +2345,7 @@
       "error": {
         "signedOut": "You have been signed out. Sign in again to export.",
         "unavailable": "The server is busy. Try again in a moment.",
+        "tooMany": "The export is too large for one file. Narrow the filters and try again.",
         "network": "The server could not be reached. Check your connection and try again.",
         "failed": "The export could not be made. Try again.",
         "rateLimited": {

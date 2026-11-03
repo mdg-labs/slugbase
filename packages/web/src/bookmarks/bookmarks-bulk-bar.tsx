@@ -1,15 +1,18 @@
 import { Button, Tooltip, TooltipPopup, TooltipTrigger } from "@slugbase/ui";
-import { BulkBar, BulkBarButton, Confirm, type BulkBarAction, ExternalLinkIcon, FolderIcon, PinIcon, PinOffIcon, Share2Icon, TagIcon, Trash2Icon, feedbackToast } from "@slugbase/ui/patterns";
+import { BulkBar, BulkBarButton, Confirm, type BulkBarAction, DownloadIcon, ExternalLinkIcon, FolderIcon, PinIcon, PinOffIcon, Share2Icon, TagIcon, Trash2Icon, feedbackToast } from "@slugbase/ui/patterns";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { EXPORT_SELECTION_IDS_MAX, exportFailureOf, fetchExport, saveFile, type ExportFormat, type ExportSelection } from "../data/export-api.ts";
+import { useExportFailureMessage } from "../data/export-messages.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { useSharingGranted } from "../sharing/index.ts";
 import type { BulkBookmarks } from "./bookmark-list-actions.ts";
 import type { BookmarkSelection } from "./bookmark-selection.ts";
 import { openInNewTab } from "./bookmark-open.ts";
 import { BOOKMARK_SELECT_ALL_CAP, bookmarkFailureOf, isSharedWithMe, listBookmarkIds, type Bookmark, type BulkShareTarget } from "./bookmarks.ts";
+import { BulkExportOverlay } from "./bulk-export-overlay.tsx";
 import { BulkLinkOverlay, type LinkAction } from "./bulk-link-overlay.tsx";
 import { BulkShareOverlay } from "./bulk-share-overlay.tsx";
 import type { BookmarkFilterParams } from "./list-search.ts";
@@ -22,6 +25,13 @@ interface SelectAllRequest {
 /** The identifiers a select-all found that are shared with the member, which belong to the selection it was made under. */
 interface SharedFound {
   readonly scope: string;
+  readonly ids: ReadonlySet<string>;
+}
+
+/** What a select-all found when it matched no more than the cap: the filters and the scope it was made under, and every identifier they matched. */
+interface AllMatching {
+  readonly scope: string;
+  readonly filters: BookmarkFilterParams;
   readonly ids: ReadonlySet<string>;
 }
 
@@ -59,8 +69,13 @@ export interface BookmarksBulkBarProps {
  * first ask which folder or tags, and a share which member or team with the preview of it, over the bookmarks selected when the
  * picker was opened. Share is offered where the workspace may share. Select all asks the API for the identifiers the filters match, at most the
  * select-all cap, and says so when more match. Delete first states how many bookmarks it removes and what happens to
- * their slugs. Bookmarks shared with the member can only be opened (doc 02 section 8.2, Q22): where the selection holds one,
- * the actions that change bookmarks stay in the bar disabled, each saying why, and the bar says that only "Open all" is left.
+ * their slugs. Bookmarks shared with the member can only be opened or exported as their readable fields (doc 02 section 8.2, Q22): where the selection holds one,
+ * the actions that change bookmarks stay in the bar disabled, each saying why, and the bar says that only "Open all" and "Export selection" are left.
+ * Export selection asks for the format, then downloads the selected bookmarks: by their identifiers when there are at most 100, and by the filters of the list
+ * when the selection is more than 100 and either exactly what "Select all matching" found or every match of a list that is fully loaded (Shift A on it).
+ * An export by the filters holds every bookmark that matches when it runs, so the dialog says the selection follows the filters, and the toast says both
+ * numbers when the file holds another number than the one selected. Any other selection of more than 100 is not exported, and the action says why.
+ * A failed export leaves the selection as it was.
  */
 export function BookmarksBulkBar({ selection, bulk, filters, total, items }: BookmarksBulkBarProps): ReactElement {
   const { t } = useTranslation();
@@ -74,6 +89,19 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
   const [sharing, setSharing] = useState<readonly string[] | undefined>(undefined);
   const sharingGranted = useSharingGranted();
   const [sharedFound, setSharedFound] = useState<SharedFound | undefined>(undefined);
+  const [allMatching, setAllMatching] = useState<AllMatching | undefined>(undefined);
+  // The format question is asked of the bookmarks selected when it was opened, so the count it states is the count it exports.
+  const [choosing, setChoosing] = useState<{ readonly selection: ExportSelection; readonly count: number } | undefined>(undefined);
+  const [exportRunning, setExportRunning] = useState(false);
+  const exportMessage = useExportFailureMessage();
+  const exportAbort = useRef<AbortController | undefined>(undefined);
+  const exportBusy = useRef(false);
+  useEffect(
+    () => () => {
+      exportAbort.current?.abort();
+    },
+    [],
+  );
   const selectAll = useMutation({
     mutationKey: ["bookmarks", "select-all"],
     // The request names the filters and the scope it was made under, which its answer is kept to.
@@ -86,11 +114,12 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
       const [found, shared] = await Promise.all([listBookmarkIds(api, asked), asked.scope === undefined && !ownThings ? listBookmarkIds(api, { ...asked, scope: "shared_with_me" }) : undefined]);
       return { ...found, shared: shared?.ids ?? [] };
     },
-    onSuccess: ({ ids, truncated, shared }, { scope }) => {
+    onSuccess: ({ ids, truncated, shared }, { scope, filters: asked }) => {
       if (scope === selection.scope) {
         selection.replace(ids, scope);
         setCapped(truncated);
         setSharedFound({ scope, ids: new Set(shared) });
+        setAllMatching(truncated ? undefined : { scope, filters: asked, ids: new Set(ids) });
       }
     },
     onError: (error) => {
@@ -108,9 +137,30 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
   if (size === 0 && sharedFound !== undefined) {
     setSharedFound(undefined);
   }
+  if (size === 0 && allMatching !== undefined) {
+    setAllMatching(undefined);
+  }
   const cap = format.number(BOOKMARK_SELECT_ALL_CAP);
-  const busy = bulk.running !== undefined || bulk.undoing || selectAll.isPending;
+  const busy = bulk.running !== undefined || bulk.undoing || selectAll.isPending || exportRunning;
   const ids = [...selection.ids];
+  // The selection is what "Select all matching" found, none added and none taken away since: only then do the filters name the same bookmarks.
+  const isAllMatching = useMemo(
+    () => allMatching !== undefined && allMatching.scope === selection.scope && allMatching.ids.size === selection.ids.size && [...selection.ids].every((id) => allMatching.ids.has(id)),
+    [allMatching, selection.scope, selection.ids],
+  );
+  // Every match is loaded and every one is selected (Shift A on a list that holds all of its matches): the filters of the list name the same bookmarks.
+  const isEveryLoaded = useMemo(
+    () => total !== null && items.length === total && selection.ids.size === items.length && items.every((bookmark) => selection.ids.has(bookmark.id)),
+    [total, items, selection.ids],
+  );
+  let exportSelection: ExportSelection | undefined;
+  if (size <= EXPORT_SELECTION_IDS_MAX) {
+    exportSelection = { kind: "ids", ids };
+  } else if (isAllMatching && allMatching !== undefined) {
+    exportSelection = { kind: "filter", filters: allMatching.filters };
+  } else if (isEveryLoaded) {
+    exportSelection = { kind: "filter", filters: filters };
+  }
   // A selection holds a shared bookmark when the list is the shared-with-me one, or a loaded bookmark of it is shared, or the select-all found it shared.
   const loadedShared = new Set(items.filter(isSharedWithMe).map((bookmark) => bookmark.id));
   const foundShared = sharedFound?.scope === selection.scope ? sharedFound.ids : NO_SHARED;
@@ -129,6 +179,63 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
       feedbackToast.info(t("bookmarks.bulk.openAll.partial", { opened, selected: ids.length }));
     }
   };
+
+  const runExport = async (format: ExportFormat, selected: ExportSelection, selectedCount: number): Promise<void> => {
+    if (exportBusy.current) {
+      return;
+    }
+    exportBusy.current = true;
+    setExportRunning(true);
+    const controller = new AbortController();
+    exportAbort.current = controller;
+    const followed = feedbackToast.promise(
+      fetchExport(router.options.context.api, { format, includeShared: false, selection: selected }, controller.signal).then((file) => {
+        // A request that was given up must not save a file whose bytes arrived anyway.
+        if (controller.signal.aborted) {
+          throw new DOMException("The export was cancelled", "AbortError");
+        }
+        saveFile(file);
+        return file;
+      }),
+      {
+        loading: t("data.export.loading"),
+        success: (file) => {
+          if (file.count === undefined) {
+            return { title: t("bookmarks.bulk.export.successNoCount"), description: file.fileName };
+          }
+          // A selection by the filters is what matches when the export runs, which is not always what was selected.
+          const differs = selected.kind === "filter" && file.count !== selectedCount;
+          return { title: differs ? t("bookmarks.bulk.export.successDiffers", { count: file.count, selected: selectedCount }) : t("bookmarks.bulk.export.success", { count: file.count }), description: file.fileName };
+        },
+        error: (reason) =>
+          reason instanceof DOMException && reason.name === "AbortError"
+            ? { title: t("bookmarks.bulk.export.cancelled") }
+            : { title: t("bookmarks.bulk.export.failure"), description: exportMessage(exportFailureOf(reason)) },
+      },
+    );
+    try {
+      await followed;
+    } catch {
+      // The toast has told the member why, and the selection stays as it was.
+    } finally {
+      exportBusy.current = false;
+      if (!controller.signal.aborted) {
+        setExportRunning(false);
+      }
+    }
+  };
+  const exportAction: BulkBarAction | undefined =
+    exportSelection === undefined
+      ? undefined
+      : {
+          id: "export",
+          label: t("bookmarks.bulk.export.action"),
+          icon: <DownloadIcon aria-hidden="true" />,
+          loading: exportRunning,
+          onSelect: () => {
+            setChoosing({ selection: exportSelection, count: size });
+          },
+        };
 
   let selectAllLabel: string;
   if (total === null) {
@@ -172,7 +279,9 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
     { id: "delete", label: t("bookmarks.bulk.delete.action"), icon: <Trash2Icon aria-hidden="true" />, destructive: true, loading: bulk.running === "delete", onSelect: () => { setDeleting(ids); } },
   ];
   const openAllAction: BulkBarAction = { id: "openAll", label: t("bookmarks.bulk.openAll.action"), icon: <ExternalLinkIcon aria-hidden="true" />, onSelect: openAll };
-  const actions: readonly BulkBarAction[] = limited ? [openAllAction] : [openAllAction, ...ownOnlyActions];
+  const exportCapped: BulkBarAction = { id: "export", label: t("bookmarks.bulk.export.action"), icon: <DownloadIcon aria-hidden="true" />, onSelect: () => undefined };
+  const exportActions: readonly BulkBarAction[] = exportAction === undefined ? [] : [exportAction];
+  const actions: readonly BulkBarAction[] = limited ? [openAllAction, ...exportActions] : [openAllAction, ...exportActions, ...ownOnlyActions];
   const confirmDelete = (): void => {
     if (deleting !== undefined) {
       bulk.run("delete", deleting, {
@@ -210,9 +319,14 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
             </BulkBarButton>
           ) : null}
           {capped ? <span className="text-muted-foreground text-sm">{t("bookmarks.bulk.selectAll.cappedNote", { cap })}</span> : null}
+          {exportAction === undefined ? <LimitedAction action={exportCapped} reason={
+                capped
+                  ? t("bookmarks.bulk.export.reason.capped", { cap })
+                  : t(offerSelectAll ? "bookmarks.bulk.export.reason.tooMany" : "bookmarks.bulk.export.reason.tooManyDeselect", { max: format.number(EXPORT_SELECTION_IDS_MAX) })
+              } /> : null}
           {limited ? (
             <>
-              <span className="text-muted-foreground text-sm">{t("bookmarks.bulk.limited.note", { count: sharedCount })}</span>
+              <span className="text-muted-foreground text-sm">{t(exportAction === undefined ? "bookmarks.bulk.limited.noteOpenOnly" : "bookmarks.bulk.limited.note", { count: sharedCount })}</span>
               {ownOnlyActions.map((action) => (
                 <LimitedAction action={action} key={action.id} reason={t("bookmarks.bulk.limited.reason")} />
               ))}
@@ -230,6 +344,20 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
           onSubmit={(target) => {
             bulk.run(linking.action, linking.ids, { target });
             setLinking(undefined);
+          }}
+        />
+      )}
+      {choosing === undefined ? null : (
+        <BulkExportOverlay
+          byFilters={choosing.selection.kind === "filter"}
+          count={choosing.count}
+          onClose={() => {
+            setChoosing(undefined);
+          }}
+          onSubmit={(exportFormat) => {
+            const { selection: chosen, count: chosenCount } = choosing;
+            setChoosing(undefined);
+            void runExport(exportFormat, chosen, chosenCount);
           }}
         />
       )}

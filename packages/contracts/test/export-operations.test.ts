@@ -4,6 +4,7 @@ import { buildOpenApiDocument, OperationDeclarationError, serializeOpenApiDocume
 import {
   AUDIT_EVENT_CATEGORIES,
   defineOperation,
+  EXPORT_COUNT_HEADER,
   EXPORT_DISPOSITION_PATTERN,
   EXPORT_NETSCAPE_DISPOSITION_PATTERN,
   ExportDocumentSchema,
@@ -140,15 +141,17 @@ describe("the export document", () => {
   });
 });
 
+const A_UUID = "0192f3a0-1111-7000-8000-000000000001";
+const ANOTHER_UUID = "0192f3a0-1111-7000-8000-000000000002";
+
 describe("the includeShared parameter", () => {
   const queryOf = (operation: Obj): Obj[] => (operation["parameters"] as Obj[]).filter((parameter) => parameter["in"] === "query");
 
-  it("is declared on both exports as an optional true or false, and nothing else is taken", () => {
+  it("is declared on both exports as an optional true or false", () => {
     const netscapeOperation = document.paths["/api/v1/export/netscape"]?.["get"] as Obj;
     for (const operation of [documented, netscapeOperation]) {
-      const parameters = queryOf(operation);
-      expect(parameters.map((parameter) => parameter["name"])).toEqual(["includeShared"]);
-      expect(parameters[0]).toMatchObject({ required: false, schema: { type: "string", enum: ["true", "false"] } });
+      const parameter = queryOf(operation).find((candidate) => candidate["name"] === "includeShared");
+      expect(parameter).toMatchObject({ required: false, schema: { type: "string", enum: ["true", "false"] } });
     }
     expect(exportJson.request.query).toBe(ExportQuerySchema);
     expect(exportNetscape.request.query).toBe(ExportQuerySchema);
@@ -158,7 +161,86 @@ describe("the includeShared parameter", () => {
     expect(ExportQuerySchema.safeParse({ includeShared: "true", id: "x" }).success).toBe(false);
   });
 
-  it("is described on both answers, with what a shared bookmark holds and what it never does", () => {
+  it("is not combined with a selection, which holds the shared bookmarks it names or matches", () => {
+    expect(ExportQuerySchema.safeParse({ includeShared: "true", id: A_UUID }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ includeShared: "false", pinned: "true" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ includeShared: "true", scope: "all" }).success).toBe(false);
+  });
+});
+
+describe("the selection parameters", () => {
+  const queryOf = (operation: Obj): Obj[] => (operation["parameters"] as Obj[]).filter((parameter) => parameter["in"] === "query");
+  const FILTERS = ["scope", "pinned", "hasSlug", "forwarding", "q", "url", "folderId", "tag"];
+
+  it("are the id and the filters of the list, on both exports, and nothing else is taken", () => {
+    const netscapeOperation = document.paths["/api/v1/export/netscape"]?.["get"] as Obj;
+    for (const operation of [documented, netscapeOperation]) {
+      const names = queryOf(operation).map((parameter) => parameter["name"]);
+      expect([...names].sort()).toEqual(["id", ...FILTERS, "includeShared"].sort());
+      for (const parameter of queryOf(operation)) {
+        expect(parameter["required"], String(parameter["name"])).toBe(false);
+      }
+    }
+    expect(ExportQuerySchema.safeParse({ sort: "recent" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ limit: "10" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ cursor: "x" }).success).toBe(false);
+  });
+
+  it("leave scope without a default, so that no parameter at all is still the whole export", () => {
+    expect(ExportQuerySchema.parse({})).toEqual({});
+    expect(ExportQuerySchema.parse({ pinned: "true" })).toEqual({ pinned: "true" });
+    const scope = queryOf(documented).find((parameter) => parameter["name"] === "scope");
+    expect((scope?.["schema"] as Obj)["default"]).toBeUndefined();
+  });
+
+  it("take one identifier or up to 100 repeated ones, each an identifier", () => {
+    expect(ExportQuerySchema.safeParse({ id: A_UUID }).success).toBe(true);
+    expect(ExportQuerySchema.safeParse({ id: [A_UUID, ANOTHER_UUID] }).success).toBe(true);
+    const many = Array.from({ length: 100 }, (_, index) => `0192f3a0-1111-7000-8000-${String(index).padStart(12, "0")}`);
+    expect(ExportQuerySchema.safeParse({ id: many }).success).toBe(true);
+    expect(ExportQuerySchema.safeParse({ id: [...many, A_UUID] }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ id: "not-an-id" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ id: [A_UUID, "not-an-id"] }).success).toBe(false);
+  });
+
+  it("take the filters of the list as the list takes them", () => {
+    expect(ExportQuerySchema.safeParse({ scope: "shared_with_me", folderId: A_UUID, tag: [A_UUID, ANOTHER_UUID], pinned: "true", hasSlug: "false", forwarding: "true", q: "docs", url: "https://example.com/" }).success).toBe(true);
+    expect(ExportQuerySchema.safeParse({ scope: "everyone" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ pinned: "yes" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ folderId: "x" }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ tag: Array.from({ length: 11 }, () => A_UUID) }).success).toBe(false);
+    expect(ExportQuerySchema.safeParse({ q: "" }).success).toBe(false);
+  });
+
+  it("are not combined: an id names the selection by itself", () => {
+    for (const filter of [{ scope: "mine" }, { pinned: "true" }, { hasSlug: "true" }, { forwarding: "false" }, { q: "docs" }, { url: "https://example.com/" }, { folderId: A_UUID }, { tag: A_UUID }]) {
+      expect(ExportQuerySchema.safeParse({ id: A_UUID, ...filter }).success, JSON.stringify(filter)).toBe(false);
+    }
+  });
+
+  it("are described on the answers and the 422 they can cause", () => {
+    for (const path of ["/api/v1/export/json", "/api/v1/export/netscape"]) {
+      const operation = document.paths[path]?.["get"] as Obj;
+      const responses = operation["responses"] as Record<string, { description: string }>;
+      expect(responses["200"]?.description, path).toMatch(/at most 100/);
+      expect(responses["200"]?.description, path).toMatch(/ignored without a trace/);
+      expect(responses["200"]?.description, path).toMatch(/more than 5 000 bookmarks match/);
+      expect(responses["422"]?.description, path).toMatch(/more than 5 000 bookmarks match/);
+    }
+  });
+
+  it("are answered with the number of bookmarks the file holds, in a header both exports declare", () => {
+    expect(EXPORT_COUNT_HEADER).toBe("X-Export-Count");
+    for (const path of ["/api/v1/export/json", "/api/v1/export/netscape"]) {
+      const operation = document.paths[path]?.["get"] as Obj;
+      const headers = ((operation["responses"] as Record<string, { headers?: Record<string, { schema: Obj }> }>)["200"]?.headers ?? {});
+      expect(headers[EXPORT_COUNT_HEADER]?.schema, path).toMatchObject({ type: "integer", minimum: 0 });
+    }
+  });
+});
+
+describe("the descriptions of the shared bookmarks", () => {
+  it("are described on both answers, with what a shared bookmark holds and what it never does", () => {
     for (const path of ["/api/v1/export/json", "/api/v1/export/netscape"]) {
       const operation = document.paths[path]?.["get"] as Obj;
       const description = (operation["responses"] as Record<string, { description: string }>)["200"]?.description ?? "";

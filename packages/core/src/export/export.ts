@@ -20,6 +20,11 @@ import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 // owner (null when the bookmark has no owner) and the flag `shared: true`, written field by field from what the store answers, so a row that carried more (a tag, a folder, the pin, a recipient) would still
 // not reach the file. The store answers only what the member can read at the moment of each page, so a share that ends during the export drops the bookmark from the pages not yet read; a bookmark
 // a downgrade archived is never read. Without it nothing shared is asked of the store and the list is empty.
+//
+// A selection (`only`, doc 02 section 5.8) restricts the document to the bookmarks named by identifier, which the route resolved before the first byte from the identifiers of the request or from the filters of the list. Every read then takes the
+// identifiers as one more condition besides the owner and the workspace it already names, so an identifier of a bookmark the member can neither own nor read matches nothing and the document, its counts and the audit event cannot tell it from one that never
+// existed. The member's own bookmarks of the selection are in `bookmarks` in full, the ones shared with the member in `shared` as their readable fields (a selection is the ask for them, so `includeShared` is not needed), `folders` and `tags` hold only the
+// ones those own bookmarks use, and `goPreferences` the choices for them.
 
 /** The most rows one page of the export holds. */
 export const EXPORT_PAGE_SIZE = 500;
@@ -75,18 +80,21 @@ export interface ExportSummary {
 }
 
 export interface ExportStore {
-  /** The name of the workspace of the transaction and the counts of what `ownerId` owns in it, and with `includeShared` of the bookmarks shared with `ownerId` that it can read; undefined when the workspace cannot be read. */
-  summary(ownerId: string, includeShared: boolean): Promise<ExportSummary | undefined>;
+  /**
+   * The name of the workspace of the transaction and the counts of what `ownerId` owns in it, and with `includeShared` of the bookmarks shared with `ownerId` that it can read; undefined when the workspace cannot be read. With `only`, the counts are of
+   * the bookmarks among those identifiers that `ownerId` owns (or can read through a share, with `includeShared`) and of the folders and tags those own bookmarks use; the same holds for every read below that takes `only`.
+   */
+  summary(ownerId: string, includeShared: boolean, only?: readonly string[]): Promise<ExportSummary | undefined>;
   /** At most `limit` of the folders `ownerId` owns whose name sorts after `after` (the first page when undefined), by the bytes of the name. */
-  folders(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportFolderRow[]>;
+  folders(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportFolderRow[]>;
   /** At most `limit` names of the tags `ownerId` owns that sort after `after` (the first page when undefined), by the bytes of the name. */
-  tags(ownerId: string, after: string | undefined, limit: number): Promise<readonly string[]>;
+  tags(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly string[]>;
   /** At most `limit` of the bookmarks `ownerId` owns, plan-archived ones included, whose identifier is greater than `after` (the first page when undefined), in the order of the identifier. */
-  bookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportBookmarkRow[]>;
+  bookmarks(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportBookmarkRow[]>;
   /** At most `limit` of the remembered slug choices of `ownerId` whose bookmark `ownerId` owns and that has the slug and forwards, plan-archived ones included, whose slug sorts after `after` (the first page when undefined), by the bytes of the slug. */
-  goPreferences(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportGoPreferenceRow[]>;
+  goPreferences(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportGoPreferenceRow[]>;
   /** At most `limit` of the bookmarks of other members that `accountId` can read through a share (directly, through a team or through a shared folder), plan-archived ones never, whose identifier is greater than `after` (the first page when undefined), in the order of the identifier. */
-  shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
+  shared(accountId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportSharedRow[]>;
 }
 
 export interface ExportStartDependencies {
@@ -102,6 +110,8 @@ export interface ExportStartAsk {
   readonly ipPrefix: string | null;
   /** Whether the export holds the bookmarks shared with the member, which the event then counts. */
   readonly includeShared: boolean;
+  /** The identifiers of a selection; the whole export when undefined. See `readsShared`. */
+  readonly only?: readonly string[] | undefined;
 }
 
 export type ExportStartOutcome =
@@ -109,9 +119,14 @@ export type ExportStartOutcome =
   /** The workspace of the request cannot be read (it is being deleted); nothing is recorded. */
   | { readonly kind: "unavailable" };
 
+/** Whether the bookmarks shared with the member are read: when the request asked for them, and always for a selection, which is the ask for the ones it names or matches. */
+export function readsShared(ask: { readonly includeShared: boolean; readonly only?: readonly string[] | undefined }): boolean {
+  return ask.includeShared || ask.only !== undefined;
+}
+
 /** Counts what the member owns and records the export as `export.created`, in the transaction the dependencies are bound to; nothing is written when the workspace cannot be read. */
 export async function startExport({ store, audit }: ExportStartDependencies, ask: ExportStartAsk): Promise<ExportStartOutcome> {
-  const summary = await store.summary(ask.accountId.toLowerCase(), ask.includeShared);
+  const summary = await store.summary(ask.accountId.toLowerCase(), readsShared(ask), ask.only);
   if (summary === undefined) {
     return { kind: "unavailable" };
   }
@@ -140,6 +155,8 @@ export interface ExportStreamAsk {
   readonly exportedAt: Date;
   /** Whether the `shared` list is read; it is written empty otherwise. */
   readonly includeShared: boolean;
+  /** The identifiers of a selection, as `ExportStartAsk.only`; the whole export when undefined. */
+  readonly only?: readonly string[] | undefined;
 }
 
 /** The name of the attachment: the UTC day of the export, and nothing of the workspace. */
@@ -162,7 +179,7 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
   let folderAfter: string | undefined;
   for (;;) {
     const after = folderAfter;
-    const rows = await page((store) => store.folders(owner, after, pageSize));
+    const rows = await page((store) => store.folders(owner, after, pageSize, ask.only));
     if (rows.length > 0) {
       yield separator + rows.map((row) => JSON.stringify({ name: row.name, icon: row.icon, color: row.color })).join(",");
       separator = ",";
@@ -178,7 +195,7 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
   let tagAfter: string | undefined;
   for (;;) {
     const after = tagAfter;
-    const names = await page((store) => store.tags(owner, after, pageSize));
+    const names = await page((store) => store.tags(owner, after, pageSize, ask.only));
     if (names.length > 0) {
       yield separator + names.map((name) => JSON.stringify(name)).join(",");
       separator = ",";
@@ -196,7 +213,7 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
   let bookmarkAfter: string | undefined;
   for (;;) {
     const after = bookmarkAfter;
-    const rows = await page((store) => store.bookmarks(owner, after, pageSize));
+    const rows = await page((store) => store.bookmarks(owner, after, pageSize, ask.only));
     if (rows.length > 0) {
       yield (
         separator +
@@ -236,7 +253,7 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
     let preferenceAfter: string | undefined;
     for (;;) {
       const after = preferenceAfter;
-      const rows = await page((store) => store.goPreferences(owner, after, pageSize));
+      const rows = await page((store) => store.goPreferences(owner, after, pageSize, ask.only));
       const written = rows.flatMap((row) => {
         const bookmarkRef = refOf.get(row.bookmarkId.toLowerCase());
         return bookmarkRef === undefined ? [] : [JSON.stringify({ slug: row.slug, bookmarkRef })];
@@ -252,12 +269,12 @@ async function* pieces({ page, pageSize = EXPORT_PAGE_SIZE }: ExportStreamDepend
     }
   }
   yield '],"shared":[';
-  if (ask.includeShared) {
+  if (readsShared(ask)) {
     separator = "";
     let sharedAfter: string | undefined;
     for (;;) {
       const after = sharedAfter;
-      const rows = await page((store) => store.shared(owner, after, pageSize));
+      const rows = await page((store) => store.shared(owner, after, pageSize, ask.only));
       if (rows.length > 0) {
         yield (
           separator +

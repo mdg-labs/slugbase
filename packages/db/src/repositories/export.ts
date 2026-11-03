@@ -27,6 +27,47 @@ import { sharedBookmarks } from "./bookmark-access.ts";
 // fields and the name of the owner, read from the account (null for a bookmark with no owner, and for an owner whose name the policy of accounts does not let the member read), and nothing of the owner's tags,
 // folders or pin, and nothing of who else the bookmark is shared with: none of those tables is read.
 
+// A selection (`only`, doc 02 section 5.8) is one more condition on the identifier of the bookmark in every statement, besides the workspace and the owner or the grants each already names: an identifier of a bookmark that the account owns or can
+// read matches, and any other matches nothing, so the answer and the counts hold nothing that tells it from an identifier that names no bookmark. The identifiers go in as one array parameter, whatever their number; each must be an identifier,
+// which a caller that resolved them always has. The folders and tags of a selection are the account's own that a selected bookmark of the account's own is filed in or carries, and a folder or tag that no selected bookmark uses is not read.
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The identifiers of a selection as a PostgreSQL array literal of UUIDs, which holds no character it would need to quote. */
+function uuidArray(only: readonly string[]): SQL {
+  if (!only.every((id) => UUID.test(id))) {
+    throw new Error("an export selection takes identifiers only");
+  }
+  return sql`${`{${only.join(",")}}`}::uuid[]`;
+}
+
+/** The condition that the bookmark is one of the selection; none for the whole export. */
+function selected(only: readonly string[] | undefined): SQL {
+  return only === undefined ? sql`TRUE` : sql`${bookmarks.id} = ANY(${uuidArray(only)})`;
+}
+
+/** The condition that the folder holds a bookmark of the selection that the owner owns; none for the whole export. */
+function usedFolder(owner: string, only: readonly string[] | undefined): SQL {
+  if (only === undefined) {
+    return sql`TRUE`;
+  }
+  return sql`EXISTS (
+    SELECT 1 FROM ${folderBookmarks} JOIN ${bookmarks} ON ${bookmarks.workspaceId} = ${folderBookmarks.workspaceId} AND ${bookmarks.id} = ${folderBookmarks.bookmarkId}
+    WHERE ${folderBookmarks.workspaceId} = ${folders.workspaceId} AND ${folderBookmarks.folderId} = ${folders.id} AND ${folderBookmarks.bookmarkId} = ANY(${uuidArray(only)}) AND ${bookmarks.ownerId} = ${owner}::uuid
+  )`;
+}
+
+/** The condition that the tag is on a bookmark of the selection that the owner owns; none for the whole export. */
+function usedTag(owner: string, only: readonly string[] | undefined): SQL {
+  if (only === undefined) {
+    return sql`TRUE`;
+  }
+  return sql`EXISTS (
+    SELECT 1 FROM ${bookmarkTags} JOIN ${bookmarks} ON ${bookmarks.workspaceId} = ${bookmarkTags.workspaceId} AND ${bookmarks.id} = ${bookmarkTags.bookmarkId}
+    WHERE ${bookmarkTags.workspaceId} = ${tags.workspaceId} AND ${bookmarkTags.tagId} = ${tags.id} AND ${bookmarkTags.bookmarkId} = ANY(${uuidArray(only)}) AND ${bookmarks.ownerId} = ${owner}::uuid
+  )`;
+}
+
 function requireWorkspace(tx: TenantTx): string {
   if (tx.workspaceId === undefined) {
     throw new TenantContextError("workspace_required", "the export needs a tenant transaction opened with a workspace");
@@ -48,27 +89,27 @@ function requireLimit(limit: number): void {
 }
 
 /** The bookmarks of the workspace that are shared with the member and that they can read now: not their own, not plan-archived. */
-function sharedWith(workspaceId: string, member: string): SQL {
-  return sql`${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.id} IN (${sharedBookmarks(member, workspaceId)}) AND ${bookmarks.ownerId} IS DISTINCT FROM ${member}::uuid AND ${bookmarks.planArchivedAt} IS NULL`;
+function sharedWith(workspaceId: string, member: string, only?: readonly string[]): SQL {
+  return sql`${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.id} IN (${sharedBookmarks(member, workspaceId)}) AND ${bookmarks.ownerId} IS DISTINCT FROM ${member}::uuid AND ${bookmarks.planArchivedAt} IS NULL AND ${selected(only)}`;
 }
 
 /** The statement of `ExportRepository.summary`, exported for the test that plans it. The count of the shared bookmarks is read only with `includeShared`, and is 0 without. */
-export function summaryStatement(tx: TenantTx, ownerId: string, includeShared = false): SQL {
+export function summaryStatement(tx: TenantTx, ownerId: string, includeShared = false, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
-  const shared = includeShared ? sql`(SELECT count(*) FROM ${bookmarks} WHERE ${sharedWith(workspaceId, owner)})::int` : sql`0`;
+  const shared = includeShared ? sql`(SELECT count(*) FROM ${bookmarks} WHERE ${sharedWith(workspaceId, owner, only)})::int` : sql`0`;
   return sql`
     SELECT ${workspaces.name} AS workspace_name,
-      (SELECT count(*) FROM ${bookmarks} WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid)::int AS bookmarks,
-      (SELECT count(*) FROM ${folders} WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid)::int AS folders,
-      (SELECT count(*) FROM ${tags} WHERE ${tags.workspaceId} = ${workspaceId}::uuid AND ${tags.ownerId} = ${owner}::uuid)::int AS tags,
+      (SELECT count(*) FROM ${bookmarks} WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid AND ${selected(only)})::int AS bookmarks,
+      (SELECT count(*) FROM ${folders} WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid AND ${usedFolder(owner, only)})::int AS folders,
+      (SELECT count(*) FROM ${tags} WHERE ${tags.workspaceId} = ${workspaceId}::uuid AND ${tags.ownerId} = ${owner}::uuid AND ${usedTag(owner, only)})::int AS tags,
       ${shared} AS shared
     FROM ${workspaces}
     WHERE ${workspaces.id} = ${workspaceId}::uuid`;
 }
 
 /** The statement of `ExportRepository.folders`, exported for the test that plans it. */
-export function foldersStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number): SQL {
+export function foldersStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
@@ -76,13 +117,13 @@ export function foldersStatement(tx: TenantTx, ownerId: string, after: string | 
   return sql`
     SELECT ${folders.name}::text AS name, ${folders.icon} AS icon, ${folders.color}::int AS color
     FROM ${folders}
-    WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid AND ${resume}
+    WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid AND ${usedFolder(owner, only)} AND ${resume}
     ORDER BY ${folders.name}::text COLLATE "C"
     LIMIT ${limit}::integer`;
 }
 
 /** The statement of `ExportRepository.tags`, exported for the test that plans it. */
-export function tagsStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number): SQL {
+export function tagsStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
@@ -90,13 +131,13 @@ export function tagsStatement(tx: TenantTx, ownerId: string, after: string | und
   return sql`
     SELECT ${tags.name}::text AS name
     FROM ${tags}
-    WHERE ${tags.workspaceId} = ${workspaceId}::uuid AND ${tags.ownerId} = ${owner}::uuid AND ${resume}
+    WHERE ${tags.workspaceId} = ${workspaceId}::uuid AND ${tags.ownerId} = ${owner}::uuid AND ${usedTag(owner, only)} AND ${resume}
     ORDER BY ${tags.name}::text COLLATE "C"
     LIMIT ${limit}::integer`;
 }
 
 /** The statement of `ExportRepository.bookmarks`, exported for the test that plans it. */
-export function bookmarksStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number): SQL {
+export function bookmarksStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
@@ -115,13 +156,13 @@ export function bookmarksStatement(tx: TenantTx, ownerId: string, after: string 
         WHERE ${bookmarkTags.workspaceId} = ${bookmarks.workspaceId} AND ${bookmarkTags.bookmarkId} = ${bookmarks.id} AND ${tags.ownerId} = ${owner}::uuid
       ), ARRAY[]::text[]) AS tag_names
     FROM ${bookmarks}
-    WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid AND ${resume}
+    WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid AND ${selected(only)} AND ${resume}
     ORDER BY ${bookmarks.id}
     LIMIT ${limit}::integer`;
 }
 
 /** The statement of `ExportRepository.goPreferences`, exported for the test that plans it. */
-export function goPreferencesStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number): SQL {
+export function goPreferencesStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
@@ -131,7 +172,7 @@ export function goPreferencesStatement(tx: TenantTx, ownerId: string, after: str
     FROM ${slugPreferences}
     JOIN ${bookmarks} ON ${bookmarks.workspaceId} = ${slugPreferences.workspaceId} AND ${bookmarks.id} = ${slugPreferences.bookmarkId}
     WHERE ${slugPreferences.workspaceId} = ${workspaceId}::uuid AND ${slugPreferences.accountId} = ${owner}::uuid
-      AND ${bookmarks.ownerId} = ${owner}::uuid AND ${bookmarks.slug} = ${slugPreferences.slug} AND ${bookmarks.forwarding} AND ${resume}
+      AND ${bookmarks.ownerId} = ${owner}::uuid AND ${bookmarks.slug} = ${slugPreferences.slug} AND ${bookmarks.forwarding} AND ${selected(only)} AND ${resume}
     ORDER BY ${slugPreferences.slug}::text COLLATE "C"
     LIMIT ${limit}::integer`;
 }
@@ -140,7 +181,7 @@ export function goPreferencesStatement(tx: TenantTx, ownerId: string, after: str
  * The statement of `ExportRepository.shared`, exported for the test that plans it: the bookmarks of other members that the member can read through a share, by identifier, with the display name of the
  * owner, resumed after the identifier of the last row of a page.
  */
-export function sharedStatement(tx: TenantTx, accountId: string, after: string | undefined, limit: number): SQL {
+export function sharedStatement(tx: TenantTx, accountId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const member = requireOwner(tx, accountId);
   requireLimit(limit);
@@ -149,7 +190,7 @@ export function sharedStatement(tx: TenantTx, accountId: string, after: string |
     SELECT ${bookmarks.id} AS id, ${bookmarks.url} AS url, ${bookmarks.title} AS title, ${bookmarks.description} AS description, ${bookmarks.slug} AS slug, ${accounts.displayName} AS owner_name
     FROM ${bookmarks}
     LEFT JOIN ${accounts} ON ${accounts.id} = ${bookmarks.ownerId}
-    WHERE ${sharedWith(workspaceId, member)} AND ${resume}
+    WHERE ${sharedWith(workspaceId, member, only)} AND ${resume}
     ORDER BY ${bookmarks.id}
     LIMIT ${limit}::integer`;
 }
@@ -167,7 +208,7 @@ function tagNamesOf(owner: string): SQL {
  * The statement of `ExportRepository.sections`, exported for the test that plans it: the folders the member owns by identifier, which a rename does not change, so the pages of a download
  * that a member renames folders during cannot move a folder past the cursor. The identifier is read to name the section and position the next page, and is never written to the file.
  */
-export function sectionsStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number): SQL {
+export function sectionsStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
@@ -175,7 +216,7 @@ export function sectionsStatement(tx: TenantTx, ownerId: string, after: string |
   return sql`
     SELECT ${folders.id} AS id, ${folders.name}::text AS name
     FROM ${folders}
-    WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid AND ${resume}
+    WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid AND ${usedFolder(owner, only)} AND ${resume}
     ORDER BY ${folders.id}
     LIMIT ${limit}::integer`;
 }
@@ -185,7 +226,7 @@ export function sectionsStatement(tx: TenantTx, ownerId: string, after: string |
  * walks the primary key of `folder_bookmarks` from the identifier after which the page resumes. A bookmark is read only when the member owns it as well as the folder, so a bookmark of another
  * member filed in the member's folder is in no answer.
  */
-export function folderBookmarksStatement(tx: TenantTx, ownerId: string, folderId: string, after: string | undefined, limit: number): SQL {
+export function folderBookmarksStatement(tx: TenantTx, ownerId: string, folderId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
@@ -199,7 +240,7 @@ export function folderBookmarksStatement(tx: TenantTx, ownerId: string, folderId
         SELECT ${folders.id} FROM ${folders}
         WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid AND ${folders.id} = ${folderId}::uuid
       )
-      AND ${bookmarks.ownerId} = ${owner}::uuid AND ${resume}
+      AND ${bookmarks.ownerId} = ${owner}::uuid AND ${selected(only)} AND ${resume}
     ORDER BY ${folderBookmarks.bookmarkId}
     LIMIT ${limit}::integer`;
 }
@@ -208,7 +249,7 @@ export function folderBookmarksStatement(tx: TenantTx, ownerId: string, folderId
  * The statement of `ExportRepository.unfiledBookmarks`, exported for the test that plans it. A bookmark is unfiled when it is filed in none of the member's folders, so one that sits only in
  * another member's folder is unfiled for the member, as it is in the JSON export.
  */
-export function unfiledBookmarksStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number): SQL {
+export function unfiledBookmarksStatement(tx: TenantTx, ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
@@ -216,7 +257,7 @@ export function unfiledBookmarksStatement(tx: TenantTx, ownerId: string, after: 
   return sql`
     SELECT ${bookmarks.id} AS id, ${bookmarks.url} AS url, ${bookmarks.title} AS title, ${bookmarks.slug} AS slug, ${tagNamesOf(owner)} AS tag_names
     FROM ${bookmarks}
-    WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid AND ${resume}
+    WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid AND ${selected(only)} AND ${resume}
       AND NOT EXISTS (
         SELECT 1 FROM ${folderBookmarks} JOIN ${folders} ON ${folders.workspaceId} = ${folderBookmarks.workspaceId} AND ${folders.id} = ${folderBookmarks.folderId}
         WHERE ${folderBookmarks.workspaceId} = ${bookmarks.workspaceId} AND ${folderBookmarks.bookmarkId} = ${bookmarks.id} AND ${folders.ownerId} = ${owner}::uuid
@@ -247,23 +288,23 @@ export type ExportRepository = ExportStore & NetscapeExportStore;
 /** The reads of the export bound to the open transaction; every method needs a transaction opened with a workspace. */
 export function exportRepository(tx: TenantTx): ExportRepository {
   return {
-    async summary(ownerId, includeShared): Promise<ExportSummary | undefined> {
-      const [row] = await tenantHandle(tx).execute<{ workspace_name: string; bookmarks: number; folders: number; tags: number; shared: number }>(summaryStatement(tx, ownerId, includeShared));
+    async summary(ownerId, includeShared, only): Promise<ExportSummary | undefined> {
+      const [row] = await tenantHandle(tx).execute<{ workspace_name: string; bookmarks: number; folders: number; tags: number; shared: number }>(summaryStatement(tx, ownerId, includeShared, only));
       return row === undefined ? undefined : { workspaceName: row.workspace_name, bookmarks: row.bookmarks, folders: row.folders, tags: row.tags, shared: row.shared };
     },
 
-    async folders(ownerId, after, limit): Promise<readonly ExportFolderRow[]> {
-      const rows = await tenantHandle(tx).execute<{ name: string; icon: string; color: number }>(foldersStatement(tx, ownerId, after, limit));
+    async folders(ownerId, after, limit, only): Promise<readonly ExportFolderRow[]> {
+      const rows = await tenantHandle(tx).execute<{ name: string; icon: string; color: number }>(foldersStatement(tx, ownerId, after, limit, only));
       return rows.map((row) => ({ name: row.name, icon: row.icon, color: row.color }));
     },
 
-    async tags(ownerId, after, limit): Promise<readonly string[]> {
-      const rows = await tenantHandle(tx).execute<{ name: string }>(tagsStatement(tx, ownerId, after, limit));
+    async tags(ownerId, after, limit, only): Promise<readonly string[]> {
+      const rows = await tenantHandle(tx).execute<{ name: string }>(tagsStatement(tx, ownerId, after, limit, only));
       return rows.map((row) => row.name);
     },
 
-    async bookmarks(ownerId, after, limit): Promise<readonly ExportBookmarkRow[]> {
-      const rows = await tenantHandle(tx).execute<BookmarkRow>(bookmarksStatement(tx, ownerId, after, limit));
+    async bookmarks(ownerId, after, limit, only): Promise<readonly ExportBookmarkRow[]> {
+      const rows = await tenantHandle(tx).execute<BookmarkRow>(bookmarksStatement(tx, ownerId, after, limit, only));
       return rows.map((row) => ({
         id: row.id,
         url: row.url,
@@ -278,28 +319,28 @@ export function exportRepository(tx: TenantTx): ExportRepository {
       }));
     },
 
-    async goPreferences(ownerId, after, limit): Promise<readonly ExportGoPreferenceRow[]> {
-      const rows = await tenantHandle(tx).execute<{ slug: string; bookmark_id: string }>(goPreferencesStatement(tx, ownerId, after, limit));
+    async goPreferences(ownerId, after, limit, only): Promise<readonly ExportGoPreferenceRow[]> {
+      const rows = await tenantHandle(tx).execute<{ slug: string; bookmark_id: string }>(goPreferencesStatement(tx, ownerId, after, limit, only));
       return rows.map((row) => ({ slug: row.slug, bookmarkId: row.bookmark_id }));
     },
 
-    async shared(accountId, after, limit): Promise<readonly ExportSharedRow[]> {
-      const rows = await tenantHandle(tx).execute<{ id: string; url: string; title: string; description: string | null; slug: string | null; owner_name: string | null }>(sharedStatement(tx, accountId, after, limit));
+    async shared(accountId, after, limit, only): Promise<readonly ExportSharedRow[]> {
+      const rows = await tenantHandle(tx).execute<{ id: string; url: string; title: string; description: string | null; slug: string | null; owner_name: string | null }>(sharedStatement(tx, accountId, after, limit, only));
       return rows.map((row) => ({ id: row.id, url: row.url, title: row.title, description: row.description, slug: row.slug, ownerName: row.owner_name }));
     },
 
-    async sections(ownerId, after, limit): Promise<readonly NetscapeSectionRow[]> {
-      const rows = await tenantHandle(tx).execute<{ id: string; name: string }>(sectionsStatement(tx, ownerId, after, limit));
+    async sections(ownerId, after, limit, only): Promise<readonly NetscapeSectionRow[]> {
+      const rows = await tenantHandle(tx).execute<{ id: string; name: string }>(sectionsStatement(tx, ownerId, after, limit, only));
       return rows.map((row) => ({ id: row.id, name: row.name }));
     },
 
-    async folderBookmarks(ownerId, folderId, after, limit): Promise<readonly NetscapeBookmarkRow[]> {
-      const rows = await tenantHandle(tx).execute<NetscapeRow>(folderBookmarksStatement(tx, ownerId, folderId, after, limit));
+    async folderBookmarks(ownerId, folderId, after, limit, only): Promise<readonly NetscapeBookmarkRow[]> {
+      const rows = await tenantHandle(tx).execute<NetscapeRow>(folderBookmarksStatement(tx, ownerId, folderId, after, limit, only));
       return rows.map(netscapeRow);
     },
 
-    async unfiledBookmarks(ownerId, after, limit): Promise<readonly NetscapeBookmarkRow[]> {
-      const rows = await tenantHandle(tx).execute<NetscapeRow>(unfiledBookmarksStatement(tx, ownerId, after, limit));
+    async unfiledBookmarks(ownerId, after, limit, only): Promise<readonly NetscapeBookmarkRow[]> {
+      const rows = await tenantHandle(tx).execute<NetscapeRow>(unfiledBookmarksStatement(tx, ownerId, after, limit, only));
       return rows.map(netscapeRow);
     },
   };

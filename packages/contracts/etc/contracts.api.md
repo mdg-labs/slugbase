@@ -3572,6 +3572,9 @@ export const EntitlementUsageSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public
+export const EXPORT_COUNT_HEADER = "X-Export-Count";
+
+// @public
 export const EXPORT_DISPOSITION_PATTERN: RegExp;
 
 // @public
@@ -3588,6 +3591,12 @@ export const EXPORT_OWNER_NAME_MAX_LENGTH = 100;
 
 // @public
 export const EXPORT_REF_PATTERN: RegExp;
+
+// @public
+export const EXPORT_SELECTION_FILTERS: readonly ["scope", "pinned", "hasSlug", "forwarding", "q", "url", "folderId", "tag"];
+
+// @public
+export const EXPORT_SELECTION_IDS_MAX = 100;
 
 // @public
 export const EXPORT_VERSION = 1;
@@ -3671,6 +3680,29 @@ export const exportJson: {
     readonly scope: "read";
     readonly request: {
         readonly query: z.ZodObject<{
+            url: z.ZodOptional<z.ZodString>;
+            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+            q: z.ZodOptional<z.ZodString>;
+            forwarding: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            pinned: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            hasSlug: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            folderId: z.ZodOptional<z.ZodUUID>;
+            scope: z.ZodOptional<z.ZodEnum<{
+                all: "all";
+                mine: "mine";
+                shared_with_me: "shared_with_me";
+                shared_by_me: "shared_by_me";
+            }>>;
+            id: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
             includeShared: z.ZodOptional<z.ZodEnum<{
                 true: "true";
                 false: "false";
@@ -3679,6 +3711,10 @@ export const exportJson: {
     };
     readonly responses: {
         readonly 200: StreamResponse<    {
+        "X-Export-Count": {
+        readonly description: "How many bookmarks the file holds when it begins: the caller's own and the ones shared with the caller that the file reads, in the JSON document (`bookmarks` plus `shared`) and in the browser file alike. A bookmark that is in several sections of the browser file counts once";
+        readonly schema: z.ZodNumber;
+        };
         "Content-Disposition": {
         description: string;
         schema: z.ZodString;
@@ -3704,6 +3740,29 @@ export const exportNetscape: {
     readonly scope: "read";
     readonly request: {
         readonly query: z.ZodObject<{
+            url: z.ZodOptional<z.ZodString>;
+            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+            q: z.ZodOptional<z.ZodString>;
+            forwarding: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            pinned: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            hasSlug: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            folderId: z.ZodOptional<z.ZodUUID>;
+            scope: z.ZodOptional<z.ZodEnum<{
+                all: "all";
+                mine: "mine";
+                shared_with_me: "shared_with_me";
+                shared_by_me: "shared_by_me";
+            }>>;
+            id: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
             includeShared: z.ZodOptional<z.ZodEnum<{
                 true: "true";
                 false: "false";
@@ -3712,6 +3771,10 @@ export const exportNetscape: {
     };
     readonly responses: {
         readonly 200: StreamResponse<    {
+        "X-Export-Count": {
+        readonly description: "How many bookmarks the file holds when it begins: the caller's own and the ones shared with the caller that the file reads, in the JSON document (`bookmarks` plus `shared`) and in the browser file alike. A bookmark that is in several sections of the browser file counts once";
+        readonly schema: z.ZodNumber;
+        };
         "Content-Type": {
         description: string;
         schema: z.ZodLiteral<"text/html; charset=utf-8">;
@@ -3731,6 +3794,29 @@ export const exportNetscape: {
 
 // @public (undocumented)
 export const ExportQuerySchema: z.ZodObject<{
+    url: z.ZodOptional<z.ZodString>;
+    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+    q: z.ZodOptional<z.ZodString>;
+    forwarding: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    pinned: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    hasSlug: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    folderId: z.ZodOptional<z.ZodUUID>;
+    scope: z.ZodOptional<z.ZodEnum<{
+        all: "all";
+        mine: "mine";
+        shared_with_me: "shared_with_me";
+        shared_by_me: "shared_by_me";
+    }>>;
+    id: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
     includeShared: z.ZodOptional<z.ZodEnum<{
         true: "true";
         false: "false";
@@ -9961,6 +10047,15 @@ export interface OperationTypes {
     exportJson: {
         parameters: {
             query?: {
+                pinned?: "true" | "false";
+                hasSlug?: "true" | "false";
+                forwarding?: "true" | "false";
+                q?: string;
+                url?: string;
+                folderId?: string;
+                tag?: string | string[];
+                scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
+                id?: string | string[];
                 includeShared?: "true" | "false";
             };
             header?: never;
@@ -9972,6 +10067,7 @@ export interface OperationTypes {
             200: {
                 headers: {
                     "Content-Disposition": string;
+                    "X-Export-Count": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10025,6 +10121,15 @@ export interface OperationTypes {
     exportNetscape: {
         parameters: {
             query?: {
+                pinned?: "true" | "false";
+                hasSlug?: "true" | "false";
+                forwarding?: "true" | "false";
+                q?: string;
+                url?: string;
+                folderId?: string;
+                tag?: string | string[];
+                scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
+                id?: string | string[];
                 includeShared?: "true" | "false";
             };
             header?: never;
@@ -10037,6 +10142,7 @@ export interface OperationTypes {
                 headers: {
                     "Content-Disposition": string;
                     "Content-Type": "text/html; charset=utf-8";
+                    "X-Export-Count": number;
                     [name: string]: unknown;
                 };
                 content: {

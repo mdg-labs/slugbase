@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_SLUG_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH } from "./bookmarks.ts";
+import { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_SCOPES, BOOKMARK_SLUG_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH, BookmarkIdsQuerySchema } from "./bookmarks.ts";
 import { defineOperation, problemResponse, rateLimitedResponse, streamResponse } from "./define.ts";
 import { FOLDER_COLOR_MAX, FOLDER_COLOR_MIN, FOLDER_NAME_MAX_LENGTH } from "./folders.ts";
 import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
@@ -13,6 +13,7 @@ import { WORKSPACE_NAME_MAX_LENGTH } from "./workspaces.ts";
 // identifiers and no timestamp but `exportedAt`. Content that is another member's, and content that has no owner, is never in it: the one exception is the list `shared`, which holds the
 // bookmarks other members shared with the caller when the request asks for them (`includeShared=true`), as their readable fields only and each flagged as shared; it holds none of the owner's
 // tags, folders or pin and nothing of who else the bookmark is shared with, and a bookmark whose share has ended, or that a downgrade of the plan archived, is not in it.
+// A selection (doc 02 section 5.8): the request names bookmarks by `id`, or by the filters of the list, and the document then holds those that the caller owns or that are shared with the caller, as below; the shared ones are in `shared` whether or not `includeShared` asks for them.
 
 /** The `format` member of the document. */
 export const EXPORT_FORMAT = "slugbase-export";
@@ -76,9 +77,53 @@ export const ExportSharedBookmarkSchema = z
   })
   .meta({ id: "ExportSharedBookmark" });
 
-export const ExportQuerySchema = z.strictObject({
-  includeShared: z.enum(["true", "false"]).optional().describe("true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone"),
-});
+/** The most bookmarks an export names by `id`. */
+export const EXPORT_SELECTION_IDS_MAX = 100;
+
+/** The name of the header that holds how many bookmarks the export holds. */
+export const EXPORT_COUNT_HEADER = "X-Export-Count";
+
+/** The filters of the list that choose a selection, which "select all matching" names; `scope` is one of them. */
+export const EXPORT_SELECTION_FILTERS = ["scope", "pinned", "hasSlug", "forwarding", "q", "url", "folderId", "tag"] as const;
+
+const ExportCountHeader = {
+  [EXPORT_COUNT_HEADER]: {
+    description: "How many bookmarks the file holds when it begins: the caller's own and the ones shared with the caller that the file reads, in the JSON document (`bookmarks` plus `shared`) and in the browser file alike. A bookmark that is in several sections of the browser file counts once",
+    schema: z.number().int().min(0),
+  },
+} as const;
+
+// A selection is the bookmarks the caller names by `id` (at most 100), or the ones the list filters match (at most the select-all cap): the same filters as `GET /bookmarks/ids`, so that "select all matching" exports what it selects.
+// `scope` has no default here: no selection parameter at all is the whole export of the caller's own content, and any one of them makes the request a selection, whose scope is `all` when left out, as the list's is.
+export const ExportQuerySchema = BookmarkIdsQuerySchema.omit({ scope: true })
+  .extend({
+    scope: z
+      .enum(BOOKMARK_SCOPES)
+      .optional()
+      .describe(
+        "Selects by the filters of the list: whose bookmarks are matched, as the scope of GET /bookmarks says (all, mine, shared_with_me or shared_by_me); all when another filter is given and this one is left out. Any filter makes the request a selection, which holds the caller's own bookmarks that match in full and the ones shared with the caller as their readable fields only, at most 5 000; more are refused with 422",
+      ),
+    id: z
+      .union([z.uuid(), z.array(z.uuid()).max(EXPORT_SELECTION_IDS_MAX)])
+      .optional()
+      .describe(
+        "Selects the bookmarks with these identifiers: repeat the parameter, at most 100 times. The caller's own bookmarks are exported in full and bookmarks shared with the caller as their readable fields only; an identifier that is none of those (another member's bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark that is shared, or none at all) is ignored, and nothing in the file, the count or the audit event tells it apart from one that never existed. Not combined with the filters",
+      ),
+    includeShared: z
+      .enum(["true", "false"])
+      .optional()
+      .describe(
+        "true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone. Not combined with a selection, which holds the shared bookmarks it names or matches",
+      ),
+  })
+  .refine((query) => query.id === undefined || EXPORT_SELECTION_FILTERS.every((name) => query[name] === undefined), {
+    path: ["id"],
+    message: "id is not combined with the filters of the list",
+  })
+  .refine((query) => query.includeShared === undefined || (query.id === undefined && EXPORT_SELECTION_FILTERS.every((name) => query[name] === undefined)), {
+    path: ["includeShared"],
+    message: "includeShared is not combined with a selection",
+  });
 
 export const ExportDocumentSchema = z
   .strictObject({
@@ -106,7 +151,7 @@ export const exportJson = defineOperation({
   request: { query: ExportQuerySchema },
   responses: {
     200: streamResponse(
-      "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The list goPreferences holds the caller's remembered slug choices, each as a slug and bookmarkRef, the ref of the caller's own bookmark in the same document that the choice names and that still has the slug and forwards, sorted by slug; a choice for another member's bookmark is never in it, and the document holds no other member's choice. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
+      "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The list goPreferences holds the caller's remembered slug choices, each as a slug and bookmarkRef, the ref of the caller's own bookmark in the same document that the choice names and that still has the slug and forwards, sorted by slug; a choice for another member's bookmark is never in it, and the document holds no other member's choice. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. With id (at most 100) or the filters of the list (scope, folderId, tag, pinned, hasSlug, forwarding, q, url) the document holds that selection only: the caller's own bookmarks in bookmarks, in full, and the bookmarks shared with the caller in shared, as their readable fields only; folders and tags hold the ones those own bookmarks use, goPreferences the remembered choices for them, and an identifier of a bookmark the caller cannot read is ignored without a trace in the file, the count or the audit event. A selection by filters is refused with 422 when more than 5 000 bookmarks match. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
       "application/json",
       {
         schema: ExportDocumentSchema,
@@ -115,12 +160,13 @@ export const exportJson = defineOperation({
             description: "An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name",
             schema: z.string().regex(EXPORT_DISPOSITION_PATTERN),
           },
+          ...ExportCountHeader,
         },
       },
     ),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
-    422: problemResponse("The query is not valid (validation_failed): includeShared is neither true nor false, or the request names a parameter the operation does not take"),
+    422: problemResponse("The query is not valid (validation_failed): includeShared is neither true nor false, an id or a filter is malformed or more than 100 ids are named, id is combined with a filter, includeShared with a selection, the url is not a URL a bookmark can have, more than 5 000 bookmarks match the filters of a selection, or the request names a parameter the operation does not take"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Exports take from the bulk limit"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -143,7 +189,7 @@ export const exportNetscape = defineOperation({
   request: { query: ExportQuerySchema },
   responses: {
     200: streamResponse(
-      "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin, the forwarding flag and the go preferences are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the file unfinished",
+      "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin, the forwarding flag and the go preferences are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. With id (at most 100) or the filters of the list (scope, folderId, tag, pinned, hasSlug, forwarding, q, url) the file holds that selection only: the caller's own bookmarks under the sections of the folders they are in, the others at the top level, and the bookmarks shared with the caller as above; an identifier of a bookmark the caller cannot read is ignored without a trace in the file, the count or the audit event, and a selection by filters is refused with 422 when more than 5 000 bookmarks match. A failure after the first byte ends the connection with the file unfinished",
       "text/html",
       {
         headers: {
@@ -155,12 +201,13 @@ export const exportNetscape = defineOperation({
             description: "An attachment named slugbase-export-<date>.html, the date being the UTC day of the export; the name holds no workspace name",
             schema: z.string().regex(EXPORT_NETSCAPE_DISPOSITION_PATTERN),
           },
+          ...ExportCountHeader,
         },
       },
     ),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
-    422: problemResponse("The query is not valid (validation_failed): includeShared is neither true nor false, or the request names a parameter the operation does not take"),
+    422: problemResponse("The query is not valid (validation_failed): includeShared is neither true nor false, an id or a filter is malformed or more than 100 ids are named, id is combined with a filter, includeShared with a selection, the url is not a URL a bookmark can have, more than 5 000 bookmarks match the filters of a selection, or the request names a parameter the operation does not take"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again. Exports take from the bulk limit"),
     503: problemResponse("The service is temporarily unavailable"),
   },

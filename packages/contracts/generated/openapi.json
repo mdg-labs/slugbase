@@ -10178,10 +10178,145 @@
         "parameters": [
           {
             "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "description": "true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasSlug",
+            "required": false,
+            "schema": {
+              "description": "true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forwarding",
+            "required": false,
+            "schema": {
+              "description": "true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "url",
+            "required": false,
+            "schema": {
+              "description": "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "folderId",
+            "required": false,
+            "schema": {
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "type": "array"
+                }
+              ],
+              "description": "Lists the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered): repeat the parameter, at most 10 times. Tags are addressed by identifier, so a rename breaks no link. A tag that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, tags are not filtered on"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "description": "Selects by the filters of the list: whose bookmarks are matched, as the scope of GET /bookmarks says (all, mine, shared_with_me or shared_by_me); all when another filter is given and this one is left out. Any filter makes the request a selection, which holds the caller's own bookmarks that match in full and the ones shared with the caller as their readable fields only, at most 5 000; more are refused with 422",
+              "enum": [
+                "all",
+                "mine",
+                "shared_with_me",
+                "shared_by_me"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                }
+              ],
+              "description": "Selects the bookmarks with these identifiers: repeat the parameter, at most 100 times. The caller's own bookmarks are exported in full and bookmarks shared with the caller as their readable fields only; an identifier that is none of those (another member's bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark that is shared, or none at all) is ignored, and nothing in the file, the count or the audit event tells it apart from one that never existed. Not combined with the filters"
+            }
+          },
+          {
+            "in": "query",
             "name": "includeShared",
             "required": false,
             "schema": {
-              "description": "true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone",
+              "description": "true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone. Not combined with a selection, which holds the shared bookmarks it names or matches",
               "enum": [
                 "true",
                 "false"
@@ -10199,7 +10334,7 @@
                 }
               }
             },
-            "description": "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The list goPreferences holds the caller's remembered slug choices, each as a slug and bookmarkRef, the ref of the caller's own bookmark in the same document that the choice names and that still has the slug and forwards, sorted by slug; a choice for another member's bookmark is never in it, and the document holds no other member's choice. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
+            "description": "The caller's own bookmarks, folders and tags in the active workspace as one SlugBase export document, streamed as an attachment and stored nowhere. The list goPreferences holds the caller's remembered slug choices, each as a slug and bookmarkRef, the ref of the caller's own bookmark in the same document that the choice names and that still has the slug and forwards, sorted by slug; a choice for another member's bookmark is never in it, and the document holds no other member's choice. With includeShared=true the list shared also holds the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read, as url, title, description, slug, ownerName and shared: true and nothing else, so never the owner's tags, folders or pin nor who else the bookmark is shared with; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in it. Without it shared is empty. With id (at most 100) or the filters of the list (scope, folderId, tag, pinned, hasSlug, forwarding, q, url) the document holds that selection only: the caller's own bookmarks in bookmarks, in full, and the bookmarks shared with the caller in shared, as their readable fields only; folders and tags hold the ones those own bookmarks use, goPreferences the remembered choices for them, and an identifier of a bookmark the caller cannot read is ignored without a trace in the file, the count or the audit event. A selection by filters is refused with 422 when more than 5 000 bookmarks match. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the document unfinished, so what was received does not parse as JSON",
             "headers": {
               "Content-Disposition": {
                 "description": "An attachment named slugbase-export-<date>.json, the date being the UTC day of the export; the name holds no workspace name",
@@ -10207,6 +10342,15 @@
                 "schema": {
                   "pattern": "^attachment; filename=\"slugbase-export-\\d{4}-\\d{2}-\\d{2}\\.json\"$",
                   "type": "string"
+                }
+              },
+              "X-Export-Count": {
+                "description": "How many bookmarks the file holds when it begins: the caller's own and the ones shared with the caller that the file reads, in the JSON document (`bookmarks` plus `shared`) and in the browser file alike. A bookmark that is in several sections of the browser file counts once",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               }
             }
@@ -10239,7 +10383,7 @@
                 }
               }
             },
-            "description": "The query is not valid (validation_failed): includeShared is neither true nor false, or the request names a parameter the operation does not take"
+            "description": "The query is not valid (validation_failed): includeShared is neither true nor false, an id or a filter is malformed or more than 100 ids are named, id is combined with a filter, includeShared with a selection, the url is not a URL a bookmark can have, more than 5 000 bookmarks match the filters of a selection, or the request names a parameter the operation does not take"
           },
           "429": {
             "content": {
@@ -10288,10 +10432,145 @@
         "parameters": [
           {
             "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "description": "true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasSlug",
+            "required": false,
+            "schema": {
+              "description": "true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forwarding",
+            "required": false,
+            "schema": {
+              "description": "true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "url",
+            "required": false,
+            "schema": {
+              "description": "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "folderId",
+            "required": false,
+            "schema": {
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "type": "array"
+                }
+              ],
+              "description": "Lists the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered): repeat the parameter, at most 10 times. Tags are addressed by identifier, so a rename breaks no link. A tag that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, tags are not filtered on"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "description": "Selects by the filters of the list: whose bookmarks are matched, as the scope of GET /bookmarks says (all, mine, shared_with_me or shared_by_me); all when another filter is given and this one is left out. Any filter makes the request a selection, which holds the caller's own bookmarks that match in full and the ones shared with the caller as their readable fields only, at most 5 000; more are refused with 422",
+              "enum": [
+                "all",
+                "mine",
+                "shared_with_me",
+                "shared_by_me"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                }
+              ],
+              "description": "Selects the bookmarks with these identifiers: repeat the parameter, at most 100 times. The caller's own bookmarks are exported in full and bookmarks shared with the caller as their readable fields only; an identifier that is none of those (another member's bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark that is shared, or none at all) is ignored, and nothing in the file, the count or the audit event tells it apart from one that never existed. Not combined with the filters"
+            }
+          },
+          {
+            "in": "query",
             "name": "includeShared",
             "required": false,
             "schema": {
-              "description": "true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone",
+              "description": "true adds the bookmarks shared with the caller to the answer, as their readable fields only and flagged as shared (never the owner's tags, folders or pin, nor who else they are shared with); false, the default, holds the caller's own bookmarks alone. Not combined with a selection, which holds the shared bookmarks it names or matches",
               "enum": [
                 "true",
                 "false"
@@ -10310,7 +10589,7 @@
                 }
               }
             },
-            "description": "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin, the forwarding flag and the go preferences are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. A failure after the first byte ends the connection with the file unfinished",
+            "description": "The caller's own bookmarks in the active workspace as a Netscape bookmark file (text/html; charset=utf-8) that browsers import, streamed as an attachment and stored nowhere: one level of sections, one per folder, a bookmark that is in several folders under each of them and a bookmark that is in none at the top level. A link carries the bookmark's address, its title, its slug as SHORTCUTURL and its tags, comma-separated, as TAGS; every title, address, folder name, tag and slug is HTML-escaped. Plan-archived bookmarks are included, since the format has no flag for them, and the description, the pin, the forwarding flag and the go preferences are left out. With includeShared=true the bookmarks other members shared with the caller (directly, through a team or through a shared folder) that the caller can read at the moment each page is read are added at the top level, before the first section, with their address, title and slug and no tags, so never the owner's tags or folders; a bookmark whose share has ended, one a downgrade of the plan archived and one of another workspace is not in the file. A tag name that holds a comma is split at it by the format. The export is recorded in the workspace's audit log as export.created with counts only (bookmarks, folders, tags and shared), before the first byte. With id (at most 100) or the filters of the list (scope, folderId, tag, pinned, hasSlug, forwarding, q, url) the file holds that selection only: the caller's own bookmarks under the sections of the folders they are in, the others at the top level, and the bookmarks shared with the caller as above; an identifier of a bookmark the caller cannot read is ignored without a trace in the file, the count or the audit event, and a selection by filters is refused with 422 when more than 5 000 bookmarks match. A failure after the first byte ends the connection with the file unfinished",
             "headers": {
               "Content-Disposition": {
                 "description": "An attachment named slugbase-export-<date>.html, the date being the UTC day of the export; the name holds no workspace name",
@@ -10326,6 +10605,15 @@
                 "schema": {
                   "const": "text/html; charset=utf-8",
                   "type": "string"
+                }
+              },
+              "X-Export-Count": {
+                "description": "How many bookmarks the file holds when it begins: the caller's own and the ones shared with the caller that the file reads, in the JSON document (`bookmarks` plus `shared`) and in the browser file alike. A bookmark that is in several sections of the browser file counts once",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               }
             }
@@ -10358,7 +10646,7 @@
                 }
               }
             },
-            "description": "The query is not valid (validation_failed): includeShared is neither true nor false, or the request names a parameter the operation does not take"
+            "description": "The query is not valid (validation_failed): includeShared is neither true nor false, an id or a filter is malformed or more than 100 ids are named, id is combined with a filter, includeShared with a selection, the url is not a URL a bookmark can have, more than 5 000 bookmarks match the filters of a selection, or the request names a parameter the operation does not take"
           },
           "429": {
             "content": {

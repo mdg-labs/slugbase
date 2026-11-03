@@ -461,7 +461,7 @@ describe("a selection with shared bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }
     for (const name of ["Add to folder", "Remove from folder", "Add tags", "Remove tags", "Share", "Pin", "Unpin", "Delete"]) {
       expect((toolbar.getByRole<HTMLButtonElement>("button", { name })).disabled).toBe(true);
     }
-    toolbar.getByText("1 shared bookmark is selected, so only Open all is available.");
+    toolbar.getByText("1 shared bookmark is selected, so only Open all and Export selection are available.");
 
     const delete_ = toolbar.getByRole("button", { name: "Delete" });
     const trigger = delete_.parentElement as HTMLElement;

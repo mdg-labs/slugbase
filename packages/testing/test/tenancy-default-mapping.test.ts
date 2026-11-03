@@ -105,6 +105,18 @@ describe("PATH_PARAMETER_MAPPING", () => {
         "importJson.[].slug",
         "importJson.shared[].slug",
         "importJson.goPreferences[].slug",
+        "exportJson.id",
+        "exportJson.id[]",
+        "exportJson.hasSlug",
+        "exportJson.folderId",
+        "exportJson.tag",
+        "exportJson.tag[]",
+        "exportNetscape.id",
+        "exportNetscape.id[]",
+        "exportNetscape.hasSlug",
+        "exportNetscape.folderId",
+        "exportNetscape.tag",
+        "exportNetscape.tag[]",
       ]),
     );
   });
@@ -179,6 +191,18 @@ describe("PATH_PARAMETER_MAPPING", () => {
       "leaveWorkspace.transferTo": "member",
       "transferWorkspaceOwnership.accountId": "member",
       "listAuditEvents.actorAccountId": "member",
+      "exportJson.id": "bookmark",
+      "exportJson.id[]": "bookmark",
+      "exportJson.hasSlug": "bookmark",
+      "exportJson.folderId": "folder",
+      "exportJson.tag": "tag",
+      "exportJson.tag[]": "tag",
+      "exportNetscape.id": "bookmark",
+      "exportNetscape.id[]": "bookmark",
+      "exportNetscape.hasSlug": "bookmark",
+      "exportNetscape.folderId": "folder",
+      "exportNetscape.tag": "tag",
+      "exportNetscape.tag[]": "tag",
     };
     for (const input of contractInputs()) {
       const kind = expected[input] ?? "bookmark";

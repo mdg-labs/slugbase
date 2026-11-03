@@ -3038,7 +3038,36 @@ export interface ExportGoPreferenceRow {
 export function exportNetscapeFilename(exportedAt: Date): string;
 
 // @public
-export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId" | "includeShared">): ReadableStream<Uint8Array>;
+export function exportNetscapeStream(dependencies: NetscapeStreamDependencies, ask: Pick<ExportStreamAsk, "accountId" | "includeShared" | "only">): ReadableStream<Uint8Array>;
+
+// @public
+export type ExportSelection = {
+    readonly kind: "ids";
+    readonly ids: readonly string[];
+} | {
+    readonly kind: "filter";
+    readonly filter: BookmarkFilterAsk & {
+        readonly scope: BookmarkScope;
+    };
+};
+
+// @public (undocumented)
+export type ExportSelectionOutcome =
+/** The identifiers to export, lower-cased and without repeats. */
+    {
+    readonly kind: "selected";
+    readonly only: readonly string[];
+}
+/** More identifiers are named than an export takes, or the filters match more bookmarks than the select-all cap; nothing was read for the export. */
+| {
+    readonly kind: "too_many";
+    readonly limit: number;
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was read. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+};
 
 // @public
 export interface ExportSharedRow {
@@ -3064,6 +3093,7 @@ export interface ExportStartAsk {
     readonly includeShared: boolean;
     // (undocumented)
     readonly ipPrefix: string | null;
+    readonly only?: readonly string[] | undefined;
     // (undocumented)
     readonly workspaceId: string;
 }
@@ -3087,12 +3117,12 @@ export type ExportStartOutcome = {
 
 // @public (undocumented)
 export interface ExportStore {
-    bookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportBookmarkRow[]>;
-    folders(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportFolderRow[]>;
-    goPreferences(ownerId: string, after: string | undefined, limit: number): Promise<readonly ExportGoPreferenceRow[]>;
-    shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
-    summary(ownerId: string, includeShared: boolean): Promise<ExportSummary | undefined>;
-    tags(ownerId: string, after: string | undefined, limit: number): Promise<readonly string[]>;
+    bookmarks(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportBookmarkRow[]>;
+    folders(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportFolderRow[]>;
+    goPreferences(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportGoPreferenceRow[]>;
+    shared(accountId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportSharedRow[]>;
+    summary(ownerId: string, includeShared: boolean, only?: readonly string[]): Promise<ExportSummary | undefined>;
+    tags(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly string[]>;
 }
 
 // @public
@@ -3105,6 +3135,7 @@ export interface ExportStreamAsk {
     // (undocumented)
     readonly exportedAt: Date;
     readonly includeShared: boolean;
+    readonly only?: readonly string[] | undefined;
     // (undocumented)
     readonly workspaceName: string;
 }
@@ -5725,10 +5756,10 @@ export interface NetscapeBookmarkRow {
 
 // @public
 export interface NetscapeExportStore {
-    folderBookmarks(ownerId: string, folderId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
-    sections(ownerId: string, after: string | undefined, limit: number): Promise<readonly NetscapeSectionRow[]>;
-    shared(accountId: string, after: string | undefined, limit: number): Promise<readonly ExportSharedRow[]>;
-    unfiledBookmarks(ownerId: string, after: string | undefined, limit: number): Promise<readonly NetscapeBookmarkRow[]>;
+    folderBookmarks(ownerId: string, folderId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly NetscapeBookmarkRow[]>;
+    sections(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly NetscapeSectionRow[]>;
+    shared(accountId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly ExportSharedRow[]>;
+    unfiledBookmarks(ownerId: string, after: string | undefined, limit: number, only?: readonly string[]): Promise<readonly NetscapeBookmarkRow[]>;
 }
 
 // @public (undocumented)
@@ -6233,6 +6264,12 @@ export function readFolder(input: FolderReadDependencies, ask: FolderReadAsk): P
 export function readImportBookmark(entry: ImportFileBookmark, position: number): ImportBookmark | ImportRefusal;
 
 // @public
+export function readsShared(ask: {
+    readonly includeShared: boolean;
+    readonly only?: readonly string[] | undefined;
+}): boolean;
+
+// @public
 export function readTeam(input: TeamReadDependencies<"find">, ask: {
     readonly teamId: string;
 }): Promise<TeamDetail | undefined>;
@@ -6304,6 +6341,9 @@ export function resendInvitation(input: InvitationActionDependencies, ask: Invit
 
 // @public
 export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
+
+// @public
+export function resolveExportSelection(store: Pick<BookmarkBulkStore, "ids">, selection: ExportSelection): Promise<ExportSelectionOutcome>;
 
 // @public
 export function resolveInWorkspace(input: GoWorkspaceResolveDependencies, ask: GoResolveAsk): Promise<GoWorkspaceResolution>;

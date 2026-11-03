@@ -173,17 +173,18 @@ function world(accountId: string) {
   const routeOf = (id: string): BookmarkSharedVia | undefined => Object.values(MEMBERS).find((member) => member.id === id)?.route;
   const ownRow = { id: BOOKMARK, url: "https://example.com/docs", title: "Docs", description: null, slug: "docs", forwarding: true, pinned: true, planArchived: false, folders: [], tags: ["private"] };
   const sharedRow = { id: BOOKMARK, url: "https://example.com/docs", title: "Docs", description: null, slug: "docs", ownerName: "Olga Owner" };
-  const sharedFor = (id: string, after: string | undefined) => (id !== OWNER && routeOf(id) !== undefined && (after === undefined || BOOKMARK > after) ? [sharedRow] : []);
+  const named = (only: readonly string[] | undefined): boolean => only === undefined || only.includes(BOOKMARK);
+  const sharedFor = (id: string, after: string | undefined, only: readonly string[] | undefined) => (id !== OWNER && routeOf(id) !== undefined && (after === undefined || BOOKMARK > after) && named(only) ? [sharedRow] : []);
   const exporting: ExportStore & NetscapeExportStore = {
     summary: () => Promise.resolve({ workspaceName: "Home", bookmarks: 0, folders: 0, tags: 0, shared: 0 }),
     folders: () => Promise.resolve([]),
     tags: () => Promise.resolve([]),
     goPreferences: () => Promise.resolve([]),
-    bookmarks: (ownerId, after) => Promise.resolve(ownerId === OWNER && (after === undefined || BOOKMARK > after) ? [ownRow] : []),
-    shared: (id, after) => Promise.resolve(sharedFor(id, after)),
+    bookmarks: (ownerId, after, _limit, only) => Promise.resolve(ownerId === OWNER && (after === undefined || BOOKMARK > after) && named(only) ? [ownRow] : []),
+    shared: (id, after, _limit, only) => Promise.resolve(sharedFor(id, after, only)),
     sections: () => Promise.resolve([]),
     folderBookmarks: () => Promise.resolve([]),
-    unfiledBookmarks: (ownerId, after) => Promise.resolve(ownerId === OWNER && (after === undefined || BOOKMARK > after) ? [{ id: BOOKMARK, url: ownRow.url, title: ownRow.title, slug: ownRow.slug, tags: ownRow.tags }] : []),
+    unfiledBookmarks: (ownerId, after, _limit, only) => Promise.resolve(ownerId === OWNER && (after === undefined || BOOKMARK > after) && named(only) ? [{ id: BOOKMARK, url: ownRow.url, title: ownRow.title, slug: ownRow.slug, tags: ownRow.tags }] : []),
   };
 
   const audits: AuditRecord[] = [];
@@ -338,6 +339,32 @@ const PROBES: Readonly<Record<Action, readonly Probe[]>> = {
       run: async (accountId, w) => {
         const text = await new Response(exportNetscapeStream({ page: (read) => read(w.exporting), onFailure: () => undefined }, { accountId, includeShared: true })).text();
         // The owner's own link carries its tags; a recipient's never does.
+        expect(text.includes("TAGS="), "the owner's tags").toBe(accountId === OWNER);
+        return text.includes(">Docs</A>") ? "allowed" : "hidden";
+      },
+    },
+    {
+      // A selection by identifier reaches the bookmark as the whole export does and no one else: the request names it, which grants nothing.
+      name: "export the bookmark selected by its identifier as JSON",
+      run: async (accountId, w) => {
+        const text = await new Response(
+          exportStream({ page: (read) => read(w.exporting), onFailure: () => undefined }, { accountId, workspaceName: "Home", exportedAt: NOW, includeShared: false, only: [BOOKMARK] }),
+        ).text();
+        const document = ExportDocumentSchema.parse(JSON.parse(text));
+        const own = document.bookmarks.some((entry) => entry.title === "Docs");
+        const shared = document.shared.some((entry) => entry.title === "Docs");
+        expect(own, "in the member's own bookmarks").toBe(accountId === OWNER);
+        for (const entry of document.shared) {
+          expect(entry).toEqual({ url: "https://example.com/docs", title: "Docs", description: null, slug: "docs", ownerName: "Olga Owner", shared: true });
+        }
+        expect(text.includes("private"), "the owner's tag").toBe(accountId === OWNER);
+        return own || shared ? "allowed" : "hidden";
+      },
+    },
+    {
+      name: "export the bookmark selected by its identifier as a browser bookmark file",
+      run: async (accountId, w) => {
+        const text = await new Response(exportNetscapeStream({ page: (read) => read(w.exporting), onFailure: () => undefined }, { accountId, includeShared: false, only: [BOOKMARK] })).text();
         expect(text.includes("TAGS="), "the owner's tags").toBe(accountId === OWNER);
         return text.includes(">Docs</A>") ? "allowed" : "hidden";
       },

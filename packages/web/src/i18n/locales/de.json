@@ -267,7 +267,8 @@
         "partial": "{opened, number} von {selected, number} geöffnet. Die übrigen sind in der Liste nicht geladen oder haben keine Webadresse."
       },
       "limited": {
-        "note": "{count, plural, one {# geteiltes Lesezeichen ist ausgewählt, daher steht nur Alle öffnen zur Verfügung.} other {# geteilte Lesezeichen sind ausgewählt, daher steht nur Alle öffnen zur Verfügung.}}",
+        "note": "{count, plural, one {# geteiltes Lesezeichen ist ausgewählt, daher stehen nur Alle öffnen und Auswahl exportieren zur Verfügung.} other {# geteilte Lesezeichen sind ausgewählt, daher stehen nur Alle öffnen und Auswahl exportieren zur Verfügung.}}",
+        "noteOpenOnly": "{count, plural, one {# geteiltes Lesezeichen ist ausgewählt, daher steht nur Alle öffnen zur Verfügung.} other {# geteilte Lesezeichen sind ausgewählt, daher steht nur Alle öffnen zur Verfügung.}}",
         "reason": "Mit dir geteilte Lesezeichen kannst du öffnen, aber nicht ändern. Hebe ihre Auswahl auf, um diese Aktion zu nutzen."
       },
       "pin": "Anheften",
@@ -351,6 +352,25 @@
           "summary": "{count, plural, one {# Lesezeichen erhält diese Tags.} other {# Lesezeichen erhalten diese Tags.}}",
           "skipped": "{count, plural, one {# Lesezeichen wird übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen werden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
           "tagCount": "{bookmarkCount, plural, one {# Lesezeichen} other {# Lesezeichen}}, {added, number} neu"
+        }
+      },
+      "export": {
+        "action": "Auswahl exportieren",
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "confirm": "Exportieren",
+        "title": "{count, plural, one {# ausgewähltes Lesezeichen} other {# ausgewählte Lesezeichen}} exportieren",
+        "description": "Wähle die Datei, die heruntergeladen wird. Mit dir geteilte Lesezeichen werden nur mit ihren lesbaren Feldern exportiert.",
+        "success": "{count, plural, one {# Lesezeichen exportiert} other {# Lesezeichen exportiert}}",
+        "descriptionFilters": "Die Auswahl folgt den aktuellen Filtern: Die Datei enthält jedes Lesezeichen, das beim Export passt. Mit dir geteilte Lesezeichen werden nur mit ihren lesbaren Feldern exportiert.",
+        "successDiffers": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} exportiert, aber {selected, number} waren ausgewählt. Die Liste hat sich seit deiner Auswahl geändert.",
+        "successNoCount": "Export heruntergeladen",
+        "failure": "Der Export wurde nicht heruntergeladen",
+        "cancelled": "Der Export wurde abgebrochen",
+        "reason": {
+          "tooMany": "Ein Export umfasst höchstens {max} ausgewählte Lesezeichen. Wähle einige ab oder nutze „Alle Treffer auswählen“, um alle passenden Lesezeichen zu exportieren.",
+          "tooManyDeselect": "Ein Export umfasst höchstens {max} ausgewählte Lesezeichen. Wähle einige ab, um sie zu exportieren.",
+          "capped": "Es passen mehr Lesezeichen, als auf einmal exportiert werden können ({cap}). Schränke die Filter ein, um sie zu exportieren."
         }
       },
       "share": {
@@ -2325,6 +2345,7 @@
       "error": {
         "signedOut": "Du wurdest abgemeldet. Melde dich erneut an, um zu exportieren.",
         "unavailable": "Der Server ist ausgelastet. Versuche es gleich noch einmal.",
+        "tooMany": "Der Export ist für eine Datei zu groß. Schränke die Filter ein und versuche es erneut.",
         "network": "Der Server ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
         "failed": "Der Export konnte nicht erstellt werden. Versuche es erneut.",
         "rateLimited": {

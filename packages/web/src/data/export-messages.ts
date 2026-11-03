@@ -11,6 +11,8 @@ export function useExportFailureMessage(): (failure: ExportFailure) => string {
         return t("data.export.error.signedOut");
       case "unavailable":
         return t("data.export.error.unavailable");
+      case "tooMany":
+        return t("data.export.error.tooMany");
       case "network":
         return t("data.export.error.network");
       case "failed":
