@@ -7,14 +7,20 @@ import { ProblemError } from "./problem.ts";
 // sessions and API tokens still resolve, so that the account can sign in and take its data out, and this check refuses everything else
 // with `403 account_export_only`, so no route can forget it: an API-token request, every `/go` redirect, accepting an invitation and
 // every write. A session may call only the operations below, which read what the account can see, run the two exports, change which
-// workspace the session acts in, delete the account itself and finish a sign-in or a sign-out. A request without a principal is not the
-// account's and is outside this check; the sign-in and recovery operations that need none are the account's way in, not a use of it.
+// workspace the session acts in, delete the account itself and finish a sign-in or a sign-out, through the provider too. A request without a
+// principal is not the account's and is outside this check; the sign-in and recovery operations that need none are the account's way in, not
+// a use of it.
 
 /** The operations a session of an export-only account may call; every other operation, and every operation of an API token, is refused. */
 export const EXPORT_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   // Finishing a sign-in and ending the session, which also serve a session waiting for its second factor.
   "verifyMfa",
   "logout",
+  // The provider's sign-in and re-authentication: an account without a password re-authenticates only through its provider, and the deletion
+  // below needs that. The set is keyed by operation, not by intent, so the start's handler refuses the `link` and `invite` intents of a
+  // session of an export-only account itself (`refuseExportOnly`): the first writes an identity and the second adds a membership.
+  "startOidcSignIn",
+  "completeOidcSignIn",
   // The configuration the web app reads at boot with its session cookie, which is anonymous by policy and shows nothing of the account.
   "getApiConfig",
   // Reading the account itself and the workspaces, bookmarks, folders and tags it can see.
@@ -46,6 +52,21 @@ export interface AccessModeSource {
 const DETAIL = "This account can only read and export its data until its access ends.";
 
 /**
+ * Refuses an account that is in the export-only mode with `403 account_export_only`, naming when the period ends, for the code that judges
+ * an intent of an operation the set above admits. An account that is gone is `401 unauthenticated`, and a source that cannot answer rejects,
+ * so the caller ends in an error, never in a request that goes on.
+ */
+export async function refuseExportOnly(source: AccessModeSource, accountId: string): Promise<void> {
+  const mode = await source.accountAccessMode(accountId);
+  if (mode === undefined) {
+    throw new ProblemError("unauthenticated", "The credential was not accepted.");
+  }
+  if (mode.mode === "exportOnly") {
+    throw new ProblemError("account_export_only", DETAIL, { members: { until: mode.until.toISOString() } });
+  }
+}
+
+/**
  * A request of a principal that is not a session calling an allowed operation reads the account's mode from the database, and
  * an export-only account is refused with `403 account_export_only`, naming when the period ends. A database that cannot answer
  * is an error, never a request that goes on, and an account that is gone since the credential resolved is `401 unauthenticated`.
@@ -60,13 +81,7 @@ export function createAccessModeCheck({ source }: { readonly source: AccessModeS
     if (principal.kind === "session" && EXPORT_ONLY_OPERATIONS.has(operation.operationId)) {
       return next();
     }
-    const mode = await source.accountAccessMode(principal.accountId);
-    if (mode === undefined) {
-      throw new ProblemError("unauthenticated", "The credential was not accepted.");
-    }
-    if (mode.mode === "exportOnly") {
-      throw new ProblemError("account_export_only", DETAIL, { members: { until: mode.until.toISOString() } });
-    }
+    await refuseExportOnly(source, principal.accountId);
     return next();
   };
 }

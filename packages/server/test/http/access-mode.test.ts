@@ -40,6 +40,8 @@ const OPERATIONS = {
   acceptInvitation: operationOf("post", "/api/v1/invitations/accept", "acceptInvitation", "anonymous"),
   logout: operationOf("post", "/api/v1/auth/logout", "logout", "partial"),
   openThing: operationOf("get", "/api/v1/open", "getApiConfig", "anonymous"),
+  oidcStart: operationOf("get", "/api/v1/auth/oidc/idp/start", "startOidcSignIn", "anonymous"),
+  oidcCallback: operationOf("get", "/api/v1/auth/oidc/idp/callback", "completeOidcSignIn", "anonymous"),
 };
 
 const session: SessionPrincipal = { kind: "session", sessionId: "stub-session", accountId: ACCOUNT, activeWorkspaceId: undefined, instanceAdmin: false };
@@ -142,6 +144,24 @@ describe("an export-only account", () => {
     expect((await call("GET", "/api/v1/open", "session")).status).toBe(200);
     expect(reached).toEqual(["getApiConfig"]);
     expect(lookups).toEqual([]);
+  });
+
+  it("reaches the provider's sign-in and re-authentication with its session, without asking the database for the mode, which the start's handler judges by intent", async () => {
+    const { call, reached, lookups } = build(EXPORT_ONLY);
+    expect((await call("GET", "/api/v1/auth/oidc/idp/start", "session")).status).toBe(200);
+    expect((await call("GET", "/api/v1/auth/oidc/idp/callback", "session")).status).toBe(200);
+    expect(reached).toEqual(["startOidcSignIn", "completeOidcSignIn"]);
+    expect(lookups).toEqual([]);
+  });
+
+  it("is still refused on the provider's sign-in with an API token", async () => {
+    const { call, reached } = build(EXPORT_ONLY);
+    for (const path of ["/api/v1/auth/oidc/idp/start", "/api/v1/auth/oidc/idp/callback"]) {
+      const response = await call("GET", path, "token");
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ code: "account_export_only" });
+    }
+    expect(reached).toEqual([]);
   });
 
   it("is not judged when there is no principal: a request without a credential is outside the check", async () => {
