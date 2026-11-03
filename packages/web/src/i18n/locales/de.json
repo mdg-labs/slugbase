@@ -3025,6 +3025,29 @@
       "title": "Noch keine Ereignisse",
       "description": "Änderungen an Mitgliedern, Teams, Freigaben und Einstellungen werden hier aufgezeichnet."
     },
+    "filters": {
+      "label": "Audit-Log filtern",
+      "clear": "Filter zurücksetzen",
+      "noMatch": {
+        "title": "Keine Ereignisse passen zu diesen Filtern",
+        "description": "Versuche andere Filter oder setze sie zurück, um das ganze Log zu sehen."
+      },
+      "actor": {
+        "label": "Akteur",
+        "placeholder": "Beliebiger Akteur",
+        "empty": "Kein Mitglied passt.",
+        "loading": "Mitglieder werden geladen",
+        "unavailable": "Die Mitglieder konnten nicht geladen werden, daher steht der Akteur-Filter nicht zur Verfügung.",
+        "former": "Ehemaliges Mitglied",
+        "unknown": "Akteur"
+      },
+      "category": {
+        "label": "Aktionskategorie",
+        "placeholder": "Beliebige Kategorie",
+        "empty": "Keine Kategorie passt.",
+        "remove": "Kategorie {name} entfernen"
+      }
+    },
     "column": {
       "time": "Zeit",
       "actor": "Akteur",

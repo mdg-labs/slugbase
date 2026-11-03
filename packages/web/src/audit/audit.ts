@@ -1,6 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { infiniteQueryOptions } from "@tanstack/react-query";
 import type { ApiClient } from "../api/client.ts";
+import type { AuditCategory } from "./audit-search.ts";
 
 export type AuditEvent = ComponentTypes["schemas"]["AuditEvent"];
 
@@ -12,6 +13,10 @@ export const AUDIT_PAGE_SIZE = 50;
 /** What narrows the list: the page asks for the whole log until a filter adds its field here. */
 export interface AuditListParams {
   readonly limit?: number;
+  /** Only events made by this account. */
+  readonly actorAccountId?: string;
+  /** Only events of these groups of actions, any of them. */
+  readonly category?: readonly AuditCategory[];
 }
 
 /**
@@ -22,12 +27,16 @@ export interface AuditListParams {
  */
 export function auditEventsQuery(api: ApiClient, workspaceId: string | undefined, params: AuditListParams = {}) {
   const limit = params.limit ?? AUDIT_PAGE_SIZE;
+  const filters = {
+    ...(params.actorAccountId === undefined ? {} : { actorAccountId: params.actorAccountId }),
+    ...(params.category === undefined || params.category.length === 0 ? {} : { category: [...params.category] }),
+  };
   return infiniteQueryOptions({
-    queryKey: [...AUDIT_QUERY_KEY, "list", workspaceId ?? null, { limit }],
+    queryKey: [...AUDIT_QUERY_KEY, "list", workspaceId ?? null, { limit, ...filters }],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
       const { data, error } = await api.GET("/api/v1/audit-events", {
-        params: { query: { limit, ...(pageParam === undefined ? {} : { cursor: pageParam }) } },
+        params: { query: { limit, ...filters, ...(pageParam === undefined ? {} : { cursor: pageParam }) } },
         signal,
       });
       if (data === undefined) {

@@ -7,12 +7,15 @@ import { useTranslation } from "react-i18next";
 import { EntitlementGate, entitlementsQuery, isEntitlementRequired } from "../entitlements/index.ts";
 import { Slot } from "../extensions/index.ts";
 import { useFormat } from "../i18n/use-format.ts";
+import { useAllMembers } from "../teams/use-all-members.ts";
 import { WorkspaceAdminOnly } from "../shell/workspace-admin-only.tsx";
 import { useActiveWorkspaceId } from "../shell/workspace-members.ts";
 import { auditEventsQuery, type AuditEvent } from "./audit.ts";
 import { AuditEventPanel } from "./audit-event-panel.tsx";
 import { EventActor } from "./audit-actor.tsx";
+import { AuditFilters } from "./audit-filters.tsx";
 import { actionLabel, categoryLabel, entityLabel, targetNameOf } from "./audit-labels.ts";
+import { hasActiveFilters, useAuditSearch, useAuditSearchControls } from "./audit-search.ts";
 
 const SKELETON_ROWS = ["a", "b", "c", "d", "e"] as const;
 
@@ -71,7 +74,17 @@ function EventTarget({ event }: { event: AuditEvent }): ReactElement {
 function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
   const { t } = useTranslation();
   const api = useRouter().options.context.api;
-  const events = useInfiniteQuery(auditEventsQuery(api, workspaceId));
+  const search = useAuditSearch();
+  const controls = useAuditSearchControls();
+  const members = useAllMembers();
+  const filtered = hasActiveFilters(search);
+  // The filters are part of the query's key, so a change of them starts the list again from its first page.
+  const events = useInfiniteQuery(
+    auditEventsQuery(api, workspaceId, {
+      ...(search.actor === undefined ? {} : { actorAccountId: search.actor }),
+      ...(search.category === undefined ? {} : { category: search.category }),
+    }),
+  );
   const items = events.data?.pages.flatMap((page) => page.items) ?? [];
   // The event is kept while the panel closes, so that its content does not empty out under the closing animation.
   const [opened, setOpened] = useState<{ readonly event: AuditEvent; readonly open: boolean } | undefined>(undefined);
@@ -99,11 +112,13 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
   );
 
   // A workspace without the entitlement is refused by the server, which is the gate's answer and not a failure.
+  if (events.isError && events.data === undefined && isEntitlementRequired(events.error)) {
+    return <Slot name="entitlement.upgradeAction" />;
+  }
+  // The filter bar stays through every state of the list, so that a filter that leaves nothing, or fails, can be changed or taken off.
+  let body: ReactElement;
   if (events.isError && events.data === undefined) {
-    if (isEntitlementRequired(events.error)) {
-      return <Slot name="entitlement.upgradeAction" />;
-    }
-    return (
+    body = (
       <Banner
         action={
           <Button
@@ -122,9 +137,8 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
         variant="error"
       />
     );
-  }
-  if (events.isPending) {
-    return (
+  } else if (events.isPending) {
+    body = (
       <Loading className="p-0" label={t("audit.loading")}>
         <div className="flex flex-col gap-2">
           {SKELETON_ROWS.map((key) => (
@@ -133,49 +147,67 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
         </div>
       </Loading>
     );
-  }
-  if (items.length === 0) {
-    return <EmptyState description={t("audit.empty.description")} title={t("audit.empty.title")} />;
+  } else if (items.length === 0) {
+    body = filtered ? (
+      <EmptyState
+        actions={
+          <Button onClick={controls.clearFilters} variant="outline">
+            {t("audit.filters.clear")}
+          </Button>
+        }
+        description={t("audit.filters.noMatch.description")}
+        title={t("audit.filters.noMatch.title")}
+      />
+    ) : (
+      <EmptyState description={t("audit.empty.description")} title={t("audit.empty.title")} />
+    );
+  } else {
+    body = (
+      <div className="flex flex-col gap-4">
+        <DataTable columns={columns} label={t("audit.title")} rowKey={(event) => event.id} rows={items} />
+        {opened === undefined ? null : (
+          <AuditEventPanel
+            event={opened.event}
+            onOpenChange={(open) => {
+              setOpened({ event: opened.event, open });
+            }}
+            open={opened.open}
+          />
+        )}
+        {events.isFetchNextPageError ? (
+          <Banner
+            action={
+              <Button
+                loading={events.isFetchingNextPage}
+                onClick={() => {
+                  void events.fetchNextPage();
+                }}
+                size="sm"
+                variant="outline"
+              >
+                {t("settings.account.loadFailed.retry")}
+              </Button>
+            }
+            title={t("audit.loadMoreFailed")}
+            variant="error"
+          />
+        ) : null}
+        <LoadMore
+          count={t("audit.count", { count: items.length })}
+          hasMore={events.hasNextPage && !events.isFetchNextPageError}
+          loading={events.isFetchingNextPage}
+          loadMoreLabel={t("audit.loadMore")}
+          onLoadMore={() => {
+            void events.fetchNextPage();
+          }}
+        />
+      </div>
+    );
   }
   return (
     <div className="flex flex-col gap-4">
-      <DataTable columns={columns} label={t("audit.title")} rowKey={(event) => event.id} rows={items} />
-      {opened === undefined ? null : (
-        <AuditEventPanel
-          event={opened.event}
-          onOpenChange={(open) => {
-            setOpened({ event: opened.event, open });
-          }}
-          open={opened.open}
-        />
-      )}
-      {events.isFetchNextPageError ? (
-        <Banner
-          action={
-            <Button
-              loading={events.isFetchingNextPage}
-              onClick={() => {
-                void events.fetchNextPage();
-              }}
-              size="sm"
-              variant="outline"
-            >
-              {t("settings.account.loadFailed.retry")}
-            </Button>
-          }
-          title={t("audit.loadMoreFailed")}
-          variant="error"
-        />
-      ) : null}
-      <LoadMore
-        count={t("audit.count", { count: items.length })}
-        hasMore={events.hasNextPage && !events.isFetchNextPageError}
-        loading={events.isFetchingNextPage}
-        loadMoreLabel={t("audit.loadMore")}
-        onLoadMore={() => {
-          void events.fetchNextPage();
-        }}
-      />
+      <AuditFilters controls={controls} members={members} search={search} />
+      {body}
     </div>
   );
 }

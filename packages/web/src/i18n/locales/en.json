@@ -3025,6 +3025,29 @@
       "title": "No events yet",
       "description": "Changes to members, teams, sharing and settings are recorded here."
     },
+    "filters": {
+      "label": "Filter the audit log",
+      "clear": "Clear filters",
+      "noMatch": {
+        "title": "No events match these filters",
+        "description": "Try other filters, or clear them to see the whole log."
+      },
+      "actor": {
+        "label": "Actor",
+        "placeholder": "Any actor",
+        "empty": "No member matches.",
+        "loading": "Loading members",
+        "unavailable": "The members could not be loaded, so the actor filter is not available.",
+        "former": "Former member",
+        "unknown": "Actor"
+      },
+      "category": {
+        "label": "Action category",
+        "placeholder": "Any category",
+        "empty": "No category matches.",
+        "remove": "Remove category {name}"
+      }
+    },
     "column": {
       "time": "Time",
       "actor": "Actor",
