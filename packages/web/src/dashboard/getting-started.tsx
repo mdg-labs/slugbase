@@ -1,6 +1,6 @@
 import { Button, Checkbox } from "@slugbase/ui";
 import { Banner, SettingsSection, UsageMeter } from "@slugbase/ui/patterns";
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useId, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
@@ -8,14 +8,14 @@ import { useCanSaveBookmarks } from "../bookmarks/can-save-bookmarks.ts";
 import { useBookmarkModal } from "../bookmarks/modal-search.ts";
 import type { Dashboard } from "./dashboard.ts";
 
-/** Where the Import and export page lives (doc 03 section 11.5). The Import action appears once the app has a route there. */
+/** Where the Import and export page lives (doc 03 section 11.5). */
 const IMPORT_PAGE = "/settings/account/data";
 
 interface Step {
   readonly id: "bookmark" | "slug" | "browser" | "folder" | "import";
   readonly label: string;
   readonly done: boolean;
-  /** The step's action, or nothing where the action has nowhere to go yet. */
+  /** The step's action, or nothing where the member cannot take it. */
   readonly action: ReactElement | null;
 }
 
@@ -29,10 +29,8 @@ function ActionLink({ to, search, children }: { readonly to: string; readonly se
 
 function useSteps(onboarding: Dashboard["onboarding"]): readonly Step[] {
   const { t } = useTranslation();
-  const router = useRouter();
   const modal = useBookmarkModal();
   const canSave = useCanSaveBookmarks();
-  const hasImportPage = Object.hasOwn(router.routesByPath, IMPORT_PAGE);
   return [
     {
       id: "bookmark",
@@ -62,7 +60,7 @@ function useSteps(onboarding: Dashboard["onboarding"]): readonly Step[] {
         </ActionLink>
       ),
     },
-    { id: "import", label: t("home.gettingStarted.step.import"), done: onboarding.importDone, action: hasImportPage ? <ActionLink to={IMPORT_PAGE}>{t("home.gettingStarted.action.import")}</ActionLink> : null },
+    { id: "import", label: t("home.gettingStarted.step.import"), done: onboarding.importDone, action: <ActionLink to={IMPORT_PAGE}>{t("home.gettingStarted.action.import")}</ActionLink> },
   ];
 }
 

@@ -34,6 +34,7 @@ export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps, 
 export { FOLDER_ICON_COMPONENTS } from "./folder-icons.ts";
 export { FormField, type FormFieldProps } from "./form-field.tsx";
 export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
+export { GroupedResults, type GroupedResultsGroup, type GroupedResultsProps } from "./grouped-results.tsx";
 export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
 export { LoadMore, type LoadMorePageSize, type LoadMoreProps } from "./load-more.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";

@@ -583,6 +583,29 @@ describe("states", () => {
     expect(window.location.search).toBe("?new=1");
   });
 
+  it("offers Import from browser beside New bookmark on an empty workspace, linking to the Import and export page", async () => {
+    use({ fixtures: { listBookmarks: page([]) } });
+    await openApp("/bookmarks");
+
+    await screen.findByRole("heading", { level: 2, name: "No bookmarks yet" });
+    const main = screen.getByRole("main");
+    expect(within(main).getByRole("button", { name: "New bookmark" })).toBeDefined();
+    const link = within(main).getByRole("link", { name: "Import from browser" });
+    expect(link.getAttribute("href")).toBe("/settings/account/data");
+    await press(link);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Import & export" })).toBeDefined();
+    expect(window.location.pathname).toBe("/settings/account/data");
+  });
+
+  it("offers no Import from browser when filters, not an empty workspace, leave nothing", async () => {
+    use({ fixtures: { listBookmarks: page([]) } });
+    await openApp("/bookmarks?pinned=true");
+
+    await screen.findByText("No bookmarks match these filters");
+    expect(screen.queryByRole("link", { name: "Import from browser" })).toBeNull();
+  });
+
   it("says no bookmark matches when filters leave nothing, and clears them", async () => {
     use({ fixtures: { listBookmarks: page([]) } });
     await openApp("/bookmarks?pinned=true&sort=oldest&size=48");

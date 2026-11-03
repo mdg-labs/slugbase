@@ -690,6 +690,27 @@ export type FormStays = (next: FormAddress, current: FormAddress) => boolean;
 
 export { ForwardIcon }
 
+// @public
+export function GroupedResults(input: GroupedResultsProps): ReactElement | null;
+
+// @public (undocumented)
+export interface GroupedResultsGroup {
+    children: ReactNode;
+    count: number;
+    countLabel?: string;
+    id: string;
+    label: ReactNode;
+}
+
+// @public (undocumented)
+export interface GroupedResultsProps {
+    // (undocumented)
+    className?: string;
+    defaultOpen?: readonly string[];
+    // (undocumented)
+    groups: readonly GroupedResultsGroup[];
+}
+
 export { HomeIcon }
 
 export { InboxIcon }

@@ -1,7 +1,7 @@
 import { Button, Skeleton } from "@slugbase/ui";
-import { Banner, CardGrid, Confirm, EmptyState, FilterXIcon, InboxIcon, Loading, LoadMore, PlusIcon } from "@slugbase/ui/patterns";
+import { Banner, CardGrid, Confirm, EmptyState, FilterXIcon, InboxIcon, Loading, LoadMore, PlusIcon, UploadIcon } from "@slugbase/ui/patterns";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useAllFolders, useSharedFolders } from "../folders/use-all-folders.ts";
@@ -164,7 +164,15 @@ export function BookmarksPage(): ReactElement {
       <div className={PAGE_FRAME}>
         {heading}
         <EmptyState
-          actions={newBookmark}
+          actions={
+            <>
+              {newBookmark}
+              <Button render={<Link to="/settings/account/data" />} variant="outline">
+                <UploadIcon aria-hidden="true" />
+                {t("bookmarks.list.empty.import")}
+              </Button>
+            </>
+          }
           description={t("bookmarks.list.empty.description")}
           headingLevel={2}
           icon={<InboxIcon aria-hidden="true" />}

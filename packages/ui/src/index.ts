@@ -7,6 +7,7 @@ export {
   type BreakpointQuery,
   type MediaQueryInput,
 } from "./hooks/use-media-query.ts";
+export * from "./components/ui/accordion.tsx";
 export * from "./components/ui/alert.tsx";
 export * from "./components/ui/badge.tsx";
 export * from "./components/ui/breadcrumb.tsx";

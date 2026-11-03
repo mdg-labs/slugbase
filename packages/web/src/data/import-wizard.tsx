@@ -1,10 +1,11 @@
 import { Button, Progress, ProgressIndicator, ProgressLabel, ProgressTrack } from "@slugbase/ui";
-import { CheckboxField, FileDrop, MetricTile, Wizard, useUnsavedForm } from "@slugbase/ui/patterns";
+import { CheckboxField, FileDrop, Wizard, useUnsavedForm } from "@slugbase/ui/patterns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery, ME_QUERY_KEY } from "../account/me.ts";
+import { useUpdatePreferences } from "../account/use-update-preferences.ts";
 import { newIdempotencyKey } from "../api/idempotency-key.ts";
 import { BOOKMARKS_QUERY_KEY } from "../bookmarks/bookmarks.ts";
 import { ENTITLEMENTS_QUERY_KEY } from "../entitlements/entitlements.ts";
@@ -22,6 +23,7 @@ import {
   type ImportResult,
 } from "./import-api.ts";
 import { useFileRefusalMessage, useImportFailureMessage } from "./import-messages.ts";
+import { ImportResultView } from "./import-result.tsx";
 
 const STEP_COUNT = 3;
 const FILE_STEP = 1;
@@ -72,6 +74,7 @@ export function ImportWizard(): ReactElement {
   const queryClient = useQueryClient();
   const api = router.options.context.api;
   const me = useQuery(meQuery(api));
+  const markImportDone = useUpdatePreferences();
   const refusalMessage = useFileRefusalMessage();
   const failureMessage = useImportFailureMessage();
 
@@ -152,6 +155,7 @@ export function ImportWizard(): ReactElement {
     idempotencyKey.current ??= newIdempotencyKey();
     setBusy("import");
     setFailed(null);
+    markImportDone.reset();
     setStep(RUN_STEP);
     try {
       const answer = await sendImport(
@@ -163,6 +167,10 @@ export function ImportWizard(): ReactElement {
       idempotencyKey.current = null;
       for (const queryKey of [BOOKMARKS_QUERY_KEY, FOLDERS_QUERY_KEY, TAGS_QUERY_KEY, ENTITLEMENTS_QUERY_KEY, ME_QUERY_KEY]) {
         void queryClient.invalidateQueries({ queryKey });
+      }
+      if (answer.created > 0) {
+        // The import wrote, so the Getting started step is done. A failed save leaves the result on screen and says so there.
+        markImportDone.mutate({ onboarding: { importDone: true } });
       }
       if (mounted.current) {
         setResult(answer);
@@ -187,6 +195,7 @@ export function ImportWizard(): ReactElement {
   function choose(next: File): void {
     const turnedAway = fileRefusalOf(next);
     idempotencyKey.current = null;
+    markImportDone.reset();
     setPreview(null);
     setResult(null);
     setFailed(null);
@@ -212,6 +221,7 @@ export function ImportWizard(): ReactElement {
     setPreview(null);
     setResult(null);
     setFailed(null);
+    markImportDone.reset();
   }
 
   function retry(): void {
@@ -242,7 +252,7 @@ export function ImportWizard(): ReactElement {
   } else if (busy === "import") {
     status = t("data.import.status.running");
   } else if (step === RUN_STEP && result !== null) {
-    status = t("data.import.status.done", { count: result.created });
+    status = t("data.import.status.done", { created: result.created, skipped: result.skipped.length, failed: result.failed.length, slugs: result.slugsDropped });
   } else if (failed !== null) {
     status = failed.phase === "import" ? t("data.import.status.failed") : t("data.import.status.checkFailed");
   }
@@ -352,19 +362,7 @@ export function ImportWizard(): ReactElement {
             </ProgressTrack>
           </Progress>
         ) : null}
-        {step === RUN_STEP && result !== null ? (
-          <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <MetricTile label={t("data.import.result.created")} value={format.number(result.created)} />
-              <MetricTile label={t("data.import.result.skipped")} value={format.number(result.skipped.length)} />
-              <MetricTile label={t("data.import.result.failed")} value={format.number(result.failed.length)} />
-              <MetricTile label={t("data.import.result.slugsDropped")} value={format.number(result.slugsDropped)} />
-            </div>
-            <p className="text-muted-foreground text-sm">
-              {t("data.import.result.made", { folders: result.foldersCreated, tags: result.tagsCreated })}
-            </p>
-          </>
-        ) : null}
+        {step === RUN_STEP && result !== null ? <ImportResultView checklistNotUpdated={markImportDone.isError} result={result} /> : null}
       </Wizard>
     </>
   );

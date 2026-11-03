@@ -130,6 +130,7 @@
       "empty": {
         "title": "Noch keine Lesezeichen",
         "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an.",
+        "import": "Aus dem Browser importieren",
         "sharedWithMe": {
           "title": "Bisher wurde nichts mit dir geteilt",
           "description": "Lesezeichen, die andere Mitglieder mit dir teilen, direkt, über ein Team oder über einen Ordner, erscheinen hier."
@@ -2295,13 +2296,35 @@
         "skipped": "Übersprungen",
         "failed": "Fehlgeschlagen",
         "slugsDropped": "Slugs verworfen",
-        "made": "{folders, plural, one {# Ordner} other {# Ordner}} und {tags, plural, one {# Tag} other {# Tags}} wurden angelegt."
+        "made": "{folders, plural, one {# Ordner} other {# Ordner}} und {tags, plural, one {# Tag} other {# Tags}} wurden angelegt.",
+        "download": "Bericht herunterladen",
+        "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden.",
+        "nothingLeftOut": "Es wurde nichts übersprungen und nichts ist fehlgeschlagen.",
+        "checklistNotUpdated": "Der Import ist abgeschlossen, aber die Checkliste „Erste Schritte“ konnte nicht aktualisiert werden.",
+        "groups": {
+          "skipped": {
+            "duplicate": "Als Duplikate übersprungen",
+            "limit": "Übersprungen, weil der Workspace voll war"
+          },
+          "failed": {
+            "urlNotAllowed": "Fehlgeschlagen: Die Adresse ist keine http- oder https-Adresse",
+            "urlInvalid": "Fehlgeschlagen: Die Adresse ist leer, zu lang oder fehlerhaft"
+          },
+          "slugs": {
+            "invalid": "Slug verworfen: kein gültiger Slug",
+            "conflict": "Slug verworfen: bereits vergeben"
+          }
+        },
+        "entry": {
+          "position": "Lesezeichen {position, number} in der Datei",
+          "slug": "Slug: {slug}"
+        }
       },
       "status": {
         "checking": "Die Datei wird geprüft.",
         "checkFailed": "Die Datei konnte nicht geprüft werden.",
         "running": "Der Import hat begonnen.",
-        "done": "Der Import ist abgeschlossen. {count, plural, one {# Lesezeichen wurde} other {# Lesezeichen wurden}} hinzugefügt.",
+        "done": "Der Import ist abgeschlossen. {created, number} hinzugefügt, {skipped, number} übersprungen, {failed, number} fehlgeschlagen, {slugs, number} Slugs verworfen.",
         "failed": "Der Import wurde nicht abgeschlossen."
       },
       "error": {

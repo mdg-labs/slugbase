@@ -155,6 +155,23 @@ describe("the checklist card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(within(region).getByText("3 of 5 done")).toBeTruthy();
   });
 
+  it("ticks the Import step from importDone alone and keeps its link", async () => {
+    world = newWorld({ stored: { browserSetupDone: false, importDone: true, checklistDismissed: false } });
+    serve();
+    await openApp("/");
+
+    const region = await card();
+    expect(ticked(region)).toEqual({
+      "Add a bookmark": true,
+      "Give a bookmark a slug": false,
+      "Set up the browser search engine": false,
+      "Create a folder": false,
+      "Import from your browser": true,
+    });
+    expect(within(region).getByText("2 of 5 done")).toBeTruthy();
+    expect(within(region).getByRole("link", { name: "Import" }).getAttribute("href")).toBe("/settings/account/data");
+  });
+
   it("does not tick a step by clicking its box", async () => {
     serve();
     await openApp("/");

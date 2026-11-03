@@ -130,6 +130,7 @@
       "empty": {
         "title": "No bookmarks yet",
         "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself.",
+        "import": "Import from browser",
         "sharedWithMe": {
           "title": "Nothing has been shared with you yet",
           "description": "Bookmarks that other members share with you, directly, through a team or through a folder, appear here."
@@ -2295,13 +2296,35 @@
         "skipped": "Skipped",
         "failed": "Failed",
         "slugsDropped": "Slugs dropped",
-        "made": "{folders, plural, one {# folder} other {# folders}} and {tags, plural, one {# tag} other {# tags}} were created."
+        "made": "{folders, plural, one {# folder} other {# folders}} and {tags, plural, one {# tag} other {# tags}} were created.",
+        "download": "Download report",
+        "downloadFailed": "The report could not be downloaded.",
+        "nothingLeftOut": "Nothing was skipped and nothing failed.",
+        "checklistNotUpdated": "The import finished, but the Getting started checklist could not be updated.",
+        "groups": {
+          "skipped": {
+            "duplicate": "Skipped as duplicates",
+            "limit": "Skipped because the workspace was full"
+          },
+          "failed": {
+            "urlNotAllowed": "Failed: the address is not an http or https address",
+            "urlInvalid": "Failed: the address is empty, too long or malformed"
+          },
+          "slugs": {
+            "invalid": "Slug dropped: not a valid slug",
+            "conflict": "Slug dropped: already taken"
+          }
+        },
+        "entry": {
+          "position": "Bookmark {position, number} in the file",
+          "slug": "Slug: {slug}"
+        }
       },
       "status": {
         "checking": "Checking the file.",
         "checkFailed": "The file could not be checked.",
         "running": "The import has started.",
-        "done": "The import finished. {count, plural, one {# bookmark was} other {# bookmarks were}} added.",
+        "done": "The import finished. {created, number} added, {skipped, number} skipped, {failed, number} failed, {slugs, number} slugs dropped.",
         "failed": "The import did not finish."
       },
       "error": {

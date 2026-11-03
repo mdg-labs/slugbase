@@ -7,7 +7,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { allowSlowRender, json, meBody, renderApp, stubBrowserApis, stubMatchMedia, WORKSPACE_NAME } from "./support.tsx";
+import { ACCOUNT_BODY, allowSlowRender, json, meBody, renderApp, stubBrowserApis, stubMatchMedia, WORKSPACE_NAME } from "./support.tsx";
 
 // The import wizard of /settings/account/data (doc 03 section 11.5, doc 02 section 13.1) against the handlers generated from openapi.json.
 // The failure scenarios are a file that is sent although it is the wrong kind or too large, a preview or an import shown as done when the
@@ -55,12 +55,18 @@ interface World {
   appended: { readonly name: string; readonly value: string | Blob; readonly fileName: string | undefined }[];
   /** What each call answers, by its place in the list of calls of its kind (dry run or import); the default is the success. */
   answer: (seen: Seen, call: number) => Response | Promise<Response> | undefined;
+  /** The bodies of PATCH /me, and the status it is refused with, if any. */
+  patches: unknown[];
+  refusePatch: number | undefined;
+  /** The blobs the page handed to the object URL it saves a file through, and the names it gave the downloads. */
+  saved: Blob[];
+  downloads: string[];
 }
 
 let world: World;
 
 function newWorld(): World {
-  return { seen: [], appended: [], answer: () => undefined };
+  return { seen: [], appended: [], answer: () => undefined, patches: [], refusePatch: undefined, saved: [], downloads: [] };
 }
 
 function problemOf(status: number, code: string, errors?: readonly { path: string; code: string }[], headers: Record<string, string> = {}): Response {
@@ -112,7 +118,17 @@ function serve(): void {
     }
     return json(RESULT);
   };
-  server.use(...createResolverHandlers(document_, { getMe: () => json(meBody()), importJson: handle("json"), importNetscape: handle("netscape") }));
+  server.use(
+    ...createResolverHandlers(document_, {
+      getMe: () => json(meBody()),
+      updateMe: async (request) => {
+        world.patches.push(await request.json());
+        return world.refusePatch === undefined ? json(ACCOUNT_BODY) : problemOf(world.refusePatch, "unavailable");
+      },
+      importJson: handle("json"),
+      importNetscape: handle("netscape"),
+    }),
+  );
 }
 
 beforeAll(() => {
@@ -165,11 +181,26 @@ beforeEach(async () => {
   stubBrowserApis();
   stubMatchMedia();
   vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
+  // jsdom has no object URLs and cannot save a file: the test sees what the page hands to them.
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    writable: true,
+    value: (blob: Blob) => {
+      world.saved.push(blob);
+      return "blob:import-report";
+    },
+  });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: () => undefined });
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(this: HTMLAnchorElement) {
+    world.downloads.push(this.download);
+  });
   serve();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  Reflect.deleteProperty(URL, "createObjectURL");
+  Reflect.deleteProperty(URL, "revokeObjectURL");
 });
 
 async function openPage(): Promise<void> {
@@ -404,7 +435,7 @@ describe("step 3, the run", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     }
     expect(tiles).toMatchObject({ Added: "9", Skipped: "2", Failed: "1", "Slugs dropped": "1" });
     expect(screen.getByText("2 folders and 4 tags were created.")).toBeTruthy();
-    expect(announcements()).toContain("The import finished. 9 bookmarks were added.");
+    expect(announcements()).toContain("The import finished. 9 added, 2 skipped, 1 failed, 1 slugs dropped.");
     const run = world.seen.filter((seen) => seen.dryRun === "false");
     expect(run).toHaveLength(1);
     expect(run[0]?.key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -453,6 +484,141 @@ describe("step 3, the run", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   });
 });
 
+describe("the result", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  const MIXED: ImportResult = {
+    detected: { bookmarks: 9, folders: 1, tags: 1 },
+    created: 3,
+    skipped: [
+      { position: 2, title: "Same", url: "https://example.com/same", reason: "duplicate" },
+      { position: 3, title: "", url: "https://example.com/untitled", reason: "duplicate" },
+      { position: 4, title: "Late", url: "https://example.com/late", reason: "bookmark_limit_reached" },
+    ],
+    failed: [{ position: 5, title: "Bookmarklet", url: "javascript:void(0)", reason: "url_not_allowed" }],
+    slugsDropped: 1,
+    droppedSlugs: [{ position: 7, title: "Docs", url: "https://example.com/docs", slug: "docs", reason: "slug_conflict" }],
+    foldersCreated: 1,
+    tagsCreated: 1,
+  };
+
+  async function toResult(): Promise<void> {
+    await openPage();
+    await toPreview();
+    await press(screen.getByRole("button", { name: "Import" }));
+    await screen.findByRole("heading", { level: 3, name: "Import finished" });
+  }
+
+  function groupButtons(): string[] {
+    return screen.queryAllByRole("button", { name: /^(Skipped|Failed|Slug dropped)/ }).map((button) => button.textContent);
+  }
+
+  it("groups what was left out by reason, each with its count, and leaves out the groups that are empty", async () => {
+    world.answer = (seen) => (seen.dryRun === "false" ? json(MIXED) : undefined);
+
+    await toResult();
+
+    expect(groupButtons()).toEqual([
+      "Skipped as duplicates2",
+      "Skipped because the workspace was full1",
+      "Failed: the address is not an http or https address1",
+      "Slug dropped: already taken1",
+    ]);
+    expect(screen.queryByText(/not a valid slug/)).toBeNull();
+    expect(screen.queryByText(/empty, too long or malformed/)).toBeNull();
+    expect(screen.queryByText("Nothing was skipped and nothing failed.")).toBeNull();
+  });
+
+  it("lets several groups stay open, and shows the entries as text, an untitled one by its address", async () => {
+    world.answer = (seen) => (seen.dryRun === "false" ? json(MIXED) : undefined);
+    await toResult();
+
+    await press(screen.getByRole("button", { name: /^Skipped as duplicates/ }));
+    await press(screen.getByRole("button", { name: /^Slug dropped: already taken/ }));
+
+    expect(screen.getByRole("button", { name: /^Skipped as duplicates/ }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: /^Slug dropped: already taken/ }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Same")).toBeTruthy();
+    expect(screen.getByText("https://example.com/same")).toBeTruthy();
+    expect(screen.getByText("https://example.com/untitled")).toBeTruthy();
+    expect(screen.getByText("Slug: docs")).toBeTruthy();
+    expect(screen.getByText("Bookmark 7 in the file")).toBeTruthy();
+  });
+
+  it("says that nothing was skipped or failed when that is so, and shows no group", async () => {
+    world.answer = (seen) => (seen.dryRun === "false" ? json({ ...MIXED, skipped: [], failed: [], droppedSlugs: [], slugsDropped: 0 }) : undefined);
+
+    await toResult();
+
+    expect(screen.getByText("Nothing was skipped and nothing failed.")).toBeTruthy();
+    expect(groupButtons()).toEqual([]);
+  });
+
+  it("downloads the whole result as a JSON file made in the browser", async () => {
+    world.answer = (seen) => (seen.dryRun === "false" ? json(MIXED) : undefined);
+    await toResult();
+
+    await press(screen.getByRole("button", { name: "Download report" }));
+
+    expect(world.downloads).toEqual(["slugbase-import-report.json"]);
+    expect(world.saved).toHaveLength(1);
+    const [report] = world.saved;
+    expect(report?.type).toBe("application/json");
+    expect(JSON.parse((await report?.text()) ?? "null")).toEqual(MIXED);
+  });
+
+  it("says so beside the button when the report cannot be saved", async () => {
+    world.answer = (seen) => (seen.dryRun === "false" ? json(MIXED) : undefined);
+    await toResult();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      writable: true,
+      value: () => {
+        throw new Error("no object URLs");
+      },
+    });
+
+    await press(screen.getByRole("button", { name: "Download report" }));
+
+    expect(screen.getByText("The report could not be downloaded.")).toBeTruthy();
+    expect(world.downloads).toEqual([]);
+  });
+
+  it("ticks the import step of the checklist once, through PATCH /me, after an import that wrote", async () => {
+    await toResult();
+
+    await waitFor(() => {
+      expect(world.patches).toEqual([{ onboarding: { importDone: true } }]);
+    });
+    expect(screen.queryByText(/checklist could not be updated/)).toBeNull();
+  });
+
+  it("patches nothing for a preview, for an import that wrote nothing, or for an import that failed", async () => {
+    world.answer = (seen) => (seen.dryRun === "false" ? json({ ...MIXED, created: 0 }) : undefined);
+    await toResult();
+    expect(world.patches).toEqual([]);
+
+    world.answer = (seen) => (seen.dryRun === "false" ? problemOf(503, "unavailable") : undefined);
+    await press(screen.getByRole("button", { name: "Import another file" }));
+    await toPreview();
+    await press(screen.getByRole("button", { name: "Import" }));
+    expect(await screen.findByText("The import could not be done. Try again.")).toBeTruthy();
+
+    expect(world.patches).toEqual([]);
+  });
+
+  it("keeps the result on screen and says the checklist was not updated when the patch fails", async () => {
+    world.refusePatch = 503;
+    await toResult();
+
+    expect(await screen.findByText("The import finished, but the Getting started checklist could not be updated.")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 3, name: "Import finished" })).toBeTruthy();
+    expect(screen.getByText("2 folders and 4 tags were created.")).toBeTruthy();
+    expect(world.patches).toEqual([{ onboarding: { importDone: true } }]);
+
+    await press(screen.getByRole("button", { name: "Import another file" }));
+    expect(screen.queryByText(/checklist could not be updated/)).toBeNull();
+  });
+});
+
 describe("a refusal at the file field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   const CASES: readonly [string, () => Response, string][] = [
     ["413", () => problemOf(413, "payload_too_large"), "This file is larger than 5 MiB. Split it into smaller files."],
@@ -461,6 +627,16 @@ describe("a refusal at the file field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
       "422 for a newer version",
       () => problemOf(422, "validation_failed", [{ path: "version", code: "too_big" }]),
       "This file was made by a newer version of SlugBase than this one can read. Update SlugBase, or export the file again from this one.",
+    ],
+    [
+      "422 for a version of 0 (too_small)",
+      () => problemOf(422, "validation_failed", [{ path: "version", code: "too_small" }]),
+      "This is not a valid SlugBase JSON file or browser bookmark file.",
+    ],
+    [
+      "422 for a version of the wrong type (invalid_type)",
+      () => problemOf(422, "validation_failed", [{ path: "version", code: "invalid_type" }]),
+      "This is not a valid SlugBase JSON file or browser bookmark file.",
     ],
     [
       "422 for too many new folders and tags",
