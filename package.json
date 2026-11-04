@@ -11,11 +11,12 @@
   "scripts": {
     "preinstall": "node scripts/check-node.mjs",
     "build": "turbo run build",
-    "lint": "turbo run lint && pnpm lint:forbidden-terms && pnpm lint:external-hosts && pnpm lint:workflow-triggers && pnpm lint:docs-published && pnpm lint:environment-docs",
+    "lint": "turbo run lint && pnpm lint:forbidden-terms && pnpm lint:external-hosts && pnpm lint:workflow-triggers && pnpm lint:docs-published && pnpm lint:environment-docs && pnpm lint:release-plan",
     "lint:forbidden-terms": "bash scripts/check-forbidden-terms.test.sh && bash scripts/check-forbidden-terms.sh",
     "lint:external-hosts": "bash scripts/check-external-hosts.test.sh && bash scripts/check-external-hosts.sh",
     "lint:workflow-triggers": "bash scripts/check-workflow-triggers.test.sh && bash scripts/check-workflow-triggers.sh",
     "lint:docs-published": "bash scripts/docs-published-dispatch.test.sh",
+    "lint:release-plan": "bash scripts/release-plan.test.sh",
     "lint:environment-docs": "bash scripts/check-environment-docs.test.sh && node scripts/check-environment-docs.mjs",
     "docs:check": "node scripts/docs-check/docs-check.ts",
     "typecheck": "turbo run typecheck",

@@ -36,8 +36,18 @@ export function recordingLogger(): Logger & { readonly entries: RecordedLog[]; r
 
 // A server under test does not migrate when it starts unless the test asks for it: the databases of most
 // tests are fakes, and the migration of the real one has tests of its own.
+//
+// The database URLs name an IP literal on a port nothing listens on: a server that starts without a fake
+// store or database and opens a connection fails at once on every runner, where a host name would wait on a
+// resolver. A test that wants a real database overrides both with the harness's.
+export const REFUSING_DATABASE_URL = "postgres://slugbase_app:Zq8-prod-app-pw@127.0.0.1:1/slugbase";
+export const REFUSING_DATABASE_MIGRATE_URL = "postgres://slugbase_migrator:Zq8-prod-mig-pw@127.0.0.1:1/slugbase";
+
 export function serverConfig(overrides: Record<string, string | undefined> = {}) {
-  return loadConfig("server", productionEnv({ MIGRATE_ON_START: "false", ...overrides })).config;
+  return loadConfig(
+    "server",
+    productionEnv({ DATABASE_URL: REFUSING_DATABASE_URL, DATABASE_MIGRATE_URL: REFUSING_DATABASE_MIGRATE_URL, MIGRATE_ON_START: "false", ...overrides }),
+  ).config;
 }
 
 /**
