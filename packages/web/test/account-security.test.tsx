@@ -50,10 +50,12 @@ interface ServerOptions {
   update?: (call: number) => Response | Promise<Response>;
   hasPassword?: boolean;
   signinAlerts?: boolean;
+  /** Whether the server can send email (`features.mail`); off unless a test says otherwise, as in the other fixtures. */
+  mail?: boolean;
 }
 
 /** A server with a signed-in account whose sessions are `initial`, which revokes the sessions it is told to. */
-function stubServer({ sessions, password, reauth, revoke, update, hasPassword = true, signinAlerts = true }: ServerOptions = {}, initial: readonly Session[] = [CURRENT, LAPTOP, PHONE]): Server {
+function stubServer({ sessions, password, reauth, revoke, update, hasPassword = true, signinAlerts = true, mail = false }: ServerOptions = {}, initial: readonly Session[] = [CURRENT, LAPTOP, PHONE]): Server {
   let listed = [...initial];
   let ended = false;
   let alerts = signinAlerts;
@@ -69,7 +71,7 @@ function stubServer({ sessions, password, reauth, revoke, update, hasPassword = 
       body: text === "" ? undefined : (JSON.parse(text) as unknown),
     };
     if (pathname === "/api/config") {
-      return json(CONFIG_BODY);
+      return json({ ...CONFIG_BODY, features: { ...CONFIG_BODY.features, mail } });
     }
     if (ended && (pathname === ME_PATH || pathname === SESSION_PATH)) {
       return problem(401, "unauthenticated", "req-401");
@@ -178,6 +180,24 @@ describe("the sign-in alerts switch", () => {
     const alerts = await screen.findByRole("switch", { name: "Email me when a new device signs in" });
 
     expect(alerts.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("says that this server sends no email, and keeps the stored choice, when mail is not set up", async () => {
+    const server = stubServer({ mail: false });
+    await openSecurity();
+    const alerts = await screen.findByRole("switch", { name: "Email me when a new device signs in" });
+
+    expect(screen.getByText("This server sends no email, so no alert is sent until email is set up. Your choice is kept, and alerts start once it is.")).toBeTruthy();
+    expect(alerts.getAttribute("aria-checked")).toBe("true");
+    expect(server.to("PATCH", ME_PATH)).toEqual([]);
+  });
+
+  it("says nothing about missing email when the server can send it", async () => {
+    stubServer({ mail: true });
+    await openSecurity();
+    await screen.findByRole("switch", { name: "Email me when a new device signs in" });
+
+    expect(screen.queryByText(/This server sends no email/)).toBeNull();
   });
 
   it("sends exactly that change when it is turned off", async () => {

@@ -1021,6 +1021,7 @@
       "thisWorkspace": "diesem Workspace",
       "description": "Prüfe die Schreibweise oder lege selbst ein Lesezeichen mit diesem Slug an.",
       "create": "Lesezeichen mit diesem Slug anlegen",
+      "home": "Zur Startseite",
       "switch": "Gefunden in: {workspace} — wechseln und fortfahren"
     }
   },
@@ -1511,6 +1512,7 @@
         "description": "Die Adresse, mit der du dich anmeldest.",
         "change": "E-Mail ändern",
         "noMail": "Zum Ändern deiner E-Mail-Adresse ist ein Bestätigungslink nötig, und dieser Server kann keine E-Mails versenden. Bitte deine Instanz-Administration, den E-Mail-Versand einzurichten.",
+        "noMailAdmin": "Zum Ändern deiner E-Mail-Adresse ist ein Bestätigungslink nötig, und dieser Server kann keine E-Mails versenden. Richte den E-Mail-Versand in der Konfiguration des Servers ein (die SMTP-Einstellungen), um sie zu ändern.",
         "pending": {
           "badge": "Bestätigung ausstehend",
           "description": "Für {email} wurde ein Bestätigungslink angefordert. Deine Adresse bleibt unverändert, bis sie bestätigt ist.",
@@ -1846,6 +1848,7 @@
           "label": "Per E-Mail benachrichtigen, wenn sich ein neues Gerät anmeldet",
           "description": "Die E-Mail nennt Zeit, Browser und Netzwerk der Anmeldung, nie eine vollständige Adresse."
         },
+        "noMail": "Dieser Server versendet keine E-Mails, daher wird keine Warnung gesendet, bis der E-Mail-Versand eingerichtet ist. Deine Auswahl bleibt erhalten, und die Warnungen beginnen, sobald er eingerichtet ist.",
         "error": {
           "saveFailed": "Diese Änderung wurde nicht gespeichert."
         }

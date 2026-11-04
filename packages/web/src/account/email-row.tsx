@@ -111,7 +111,8 @@ function ChangeEmailForm({ account, onClose }: { account: Account; onClose: () =
  * while a change is pending, the "Pending verification" badge with Resend and Cancel. Resend asks for the pending
  * address again, which replaces the earlier request and its links (doc 02 section 2.6). A server that cannot send email
  * would record the address and send no link (doc 04 section 10.3), so the row offers neither Change nor Resend then and
- * says to ask the instance admin; Cancel stays, so a change asked for before mail went away can still be dropped.
+ * says why: the address is shown as a field that cannot be edited, and the note tells an instance admin to set up email
+ * and anyone else to ask the instance admin; Cancel stays, so a change asked for before mail went away can still be dropped.
  */
 export function EmailRow({ account }: { account: Account }): ReactElement {
   const { t } = useTranslation();
@@ -151,7 +152,7 @@ export function EmailRow({ account }: { account: Account }): ReactElement {
   return (
     <div className="flex flex-col gap-3">
       <FormField description={t("settings.account.email.description")} label={t("settings.account.email.label")} name="email">
-        <Input readOnly type="email" value={account.email} />
+        <Input disabled={!features.mail} readOnly type="email" value={account.email} />
       </FormField>
       {features.mail ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -167,7 +168,7 @@ export function EmailRow({ account }: { account: Account }): ReactElement {
           </Button>
         </div>
       ) : (
-        <p className="text-muted-foreground text-sm">{t("settings.account.email.noMail")}</p>
+        <p className="text-muted-foreground text-sm">{account.isInstanceAdmin ? t("settings.account.email.noMailAdmin") : t("settings.account.email.noMail")}</p>
       )}
       {pendingEmail === null ? null : (
         <div className="flex flex-col gap-2">

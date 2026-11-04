@@ -1021,6 +1021,7 @@
       "thisWorkspace": "this workspace",
       "description": "Check the spelling, or create a bookmark with this slug yourself.",
       "create": "Create a bookmark with this slug",
+      "home": "Go to Home",
       "switch": "Found in: {workspace} — switch and continue"
     }
   },
@@ -1511,6 +1512,7 @@
         "description": "The address you sign in with.",
         "change": "Change email",
         "noMail": "Changing your email needs a confirmation link, and this server cannot send email. Ask your instance admin to set up email.",
+        "noMailAdmin": "Changing your email needs a confirmation link, and this server cannot send email. Set up email in the server's configuration (the SMTP settings) to change it.",
         "pending": {
           "badge": "Pending verification",
           "description": "A confirmation link was requested for {email}. Your address stays as it is until it is confirmed.",
@@ -1846,6 +1848,7 @@
           "label": "Email me when a new device signs in",
           "description": "The email shows the time, the browser and the network of the sign-in, never a full address."
         },
+        "noMail": "This server sends no email, so no alert is sent until email is set up. Your choice is kept, and alerts start once it is.",
         "error": {
           "saveFailed": "This change was not saved."
         }
