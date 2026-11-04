@@ -162,7 +162,9 @@ describe("the event panel", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
 
     expect(within(panel).getByRole("heading", { name: "Workspace renamed" })).toBeTruthy();
     expect(panel.getAttribute("aria-labelledby")).not.toBeNull();
-    expect(panel.contains(document.activeElement)).toBe(true);
+    await waitFor(() => {
+      expect(panel.contains(document.activeElement)).toBe(true);
+    });
     const time = panel.querySelector("time");
     expect(time?.getAttribute("datetime")).toBe(AT);
     expect(time?.textContent).toMatch(/2026/);
@@ -195,7 +197,9 @@ describe("the event panel", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(document.activeElement).toBe(button);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(button);
+    });
   });
 
   it("closes with the close button and gives focus back", async () => {
@@ -210,7 +214,9 @@ describe("the event panel", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(document.activeElement).toBe(button);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(button);
+    });
   });
 
   it("closes with the backdrop and gives focus back", async () => {
@@ -229,7 +235,9 @@ describe("the event panel", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(document.activeElement).toBe(button);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(button);
+    });
   });
 
   it("opens the event of the button pressed and shows another's when another is pressed", async () => {
