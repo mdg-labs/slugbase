@@ -9,7 +9,7 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- sys_instance_settings(event_id, ip_prefix): the settings as they are stored (every column NULL while no row exists),
 -- and the instance audit event 'instance.settings_viewed' for the account of the transaction, in the same call, under
--- the check of sys_instance_status. Reading the settings as an instance admin is an action of the admin and is
+-- the check of sys_instance_status (the flag, not disabled, no second factor). Reading the settings as an instance admin is an action of the admin and is
 -- audited like the status; the sign-in page and the workspace routes read the table directly and write no event.
 CREATE OR REPLACE FUNCTION public.sys_instance_settings(p_event_id uuid, p_ip_prefix cidr)
   RETURNS TABLE (allow_workspace_creation boolean, display_name text, sign_in_notice text)
@@ -25,9 +25,9 @@ BEGIN
 
   SELECT a.display_name INTO v_label
   FROM public.accounts a
-  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.mfa_enabled_at IS NOT NULL AND a.disabled_at IS NULL;
+  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.disabled_at IS NULL;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'the instance operations are for instance admins with a second factor' USING ERRCODE = 'insufficient_privilege';
+    RAISE EXCEPTION 'the instance operations are for instance admins' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   INSERT INTO public.audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, metadata, ip_prefix)
@@ -42,8 +42,8 @@ $$;
 
 -- sys_instance_update_settings(...): changes the settings whose p_set_* flag is true, to the value that follows it
 -- (NULL clears the setting, so the default of the deployment applies again), and leaves the others as they are. The
--- row is created by the first call. Like every sys_instance_* function it repeats the check of the instanceAdmin
--- policy inside its own body: the account of the transaction (app_account_id(), never an argument) must hold the
+-- row is created by the first call. Like every sys_instance_* function it repeats the check of its policy, instanceAdmin,
+-- inside its own body: the account of the transaction (app_account_id(), never an argument) must hold the
 -- instance-admin flag, have a second factor enrolled and not be disabled, otherwise it raises insufficient_privilege
 -- and writes nothing. The audit event 'instance.settings_changed' names the settings that changed, never a value,
 -- and is written in the same call under the identifier the application generated (Q91). A call that changes no
@@ -115,7 +115,7 @@ END
 $$;
 
 -- sys_instance_test_mail(event_id, ip_prefix): the instance audit event 'instance.test_mail_queued' for the account of
--- the transaction, written under the check of sys_instance_update_settings, so the test email that the caller queues
+-- the transaction, written under the check of sys_instance_status (the flag, not disabled, no second factor), so the test email that the caller queues
 -- in the same transaction exists exactly when its event does. It sends and queues nothing itself.
 CREATE OR REPLACE FUNCTION public.sys_instance_test_mail(p_event_id uuid, p_ip_prefix cidr)
   RETURNS void
@@ -131,9 +131,9 @@ BEGIN
 
   SELECT a.display_name INTO v_label
   FROM public.accounts a
-  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.mfa_enabled_at IS NOT NULL AND a.disabled_at IS NULL;
+  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.disabled_at IS NULL;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'the instance operations are for instance admins with a second factor' USING ERRCODE = 'insufficient_privilege';
+    RAISE EXCEPTION 'the instance operations are for instance admins' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   INSERT INTO public.audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, metadata, ip_prefix)

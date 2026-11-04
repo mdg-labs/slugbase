@@ -4,10 +4,12 @@ import { ACCOUNT_ACCESS_MODES, EXPORT_ONLY_END_ACTIONS } from "./me.ts";
 import { withoutNul } from "./text.ts";
 import { WorkspaceNameSchema } from "./workspaces.ts";
 
-// The instance tag of doc 04 section 10.10: the operations of the CE instance admin. Every one of them declares
-// the `instanceAdmin` policy, which admits a complete browser session of an account that holds the flag and has a
-// second factor enrolled, and no API token (doc 04 sections 1.2 and 4.2, Q44, Q45). The operations are mounted on
-// every deployment and answer `403 forbidden` to everyone when no account holds the flag.
+// The instance tag of doc 04 section 10.10: the operations of the CE instance admin. Each declares one of two
+// policies. `instanceAdmin` admits a complete browser session of an account that holds the flag and has a second
+// factor enrolled. `instanceAdminWithoutSecondFactor` is declared by the read-only status and settings, the workspace
+// list, workspace creation and the test mail, and asks for the flag and the complete session alone. Neither admits an
+// API token (doc 04 sections 1.2 and 4.2, Q44, Q45). The operations are mounted on every deployment and answer
+// `403 forbidden` to everyone when no account holds the flag.
 
 const COUNT = z.int().min(0);
 
@@ -63,7 +65,7 @@ export const getInstanceStatus = defineOperation({
   operationId: "getInstanceStatus",
   tag: "instance",
   summary: "Read the status of the instance",
-  auth: "instanceAdmin",
+  auth: "instanceAdminWithoutSecondFactor",
   rate: "read",
   responses: {
     200: jsonResponse(
@@ -72,7 +74,7 @@ export const getInstanceStatus = defineOperation({
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"),
+    403: problemResponse("The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -116,13 +118,13 @@ export const getInstanceSettings = defineOperation({
   operationId: "getInstanceSettings",
   tag: "instance",
   summary: "Read the instance settings",
-  auth: "instanceAdmin",
+  auth: "instanceAdminWithoutSecondFactor",
   rate: "read",
   responses: {
     200: jsonResponse("The settings as stored; a setting that was never set, or was cleared, is null", InstanceSettingsSchema),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"),
+    403: problemResponse("The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -159,14 +161,14 @@ export const sendInstanceTestMail = defineOperation({
   operationId: "sendInstanceTestMail",
   tag: "instance",
   summary: "Send a test email to the caller",
-  auth: "instanceAdmin",
+  auth: "instanceAdminWithoutSecondFactor",
   rate: "write",
   responses: {
     202: emptyResponse("A test message to the caller's address is queued for the background worker, and the action is written to the instance audit stream"),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is queued",
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is queued",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("No mail adapter is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is queued"),
@@ -261,7 +263,7 @@ export const listInstanceWorkspaces = defineOperation({
   operationId: "listInstanceWorkspaces",
   tag: "instance",
   summary: "List every workspace of the instance",
-  auth: "instanceAdmin",
+  auth: "instanceAdminWithoutSecondFactor",
   rate: "read",
   responses: {
     200: jsonResponse(
@@ -270,7 +272,7 @@ export const listInstanceWorkspaces = defineOperation({
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"),
+    403: problemResponse("The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -282,7 +284,7 @@ export const createInstanceWorkspace = defineOperation({
   operationId: "createInstanceWorkspace",
   tag: "instance",
   summary: "Create a workspace for an owner account or an owner invitation",
-  auth: "instanceAdmin",
+  auth: "instanceAdminWithoutSecondFactor",
   rate: "write",
   request: { body: CreateInstanceWorkspaceRequestSchema },
   responses: {
@@ -293,7 +295,7 @@ export const createInstanceWorkspace = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written",
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is written",
     ),
     422: problemResponse(
       "The body did not pass validation: a field the operation does not declare, a name that is blank, longer than 64 characters or holds a NUL character, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written",

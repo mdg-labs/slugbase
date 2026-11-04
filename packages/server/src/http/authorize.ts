@@ -37,7 +37,8 @@ export function entitlementRequired(entitlement: string, upgradeAvailable: boole
 
 /**
  * Whether the account has a second factor enrolled, which the `instanceAdmin` policy needs besides the flag (doc 04
- * section 10.10, Q45). It is asked on the request's own transaction and only for an operation of that policy.
+ * section 10.10, Q45). It is asked on the request's own transaction and only for an operation of that policy;
+ * `instanceAdminWithoutSecondFactor` never asks it.
  */
 export type SecondFactorCheck = (subject: { readonly accountId: string; readonly requestId: string }) => Promise<boolean>;
 
@@ -98,7 +99,8 @@ export function refuseUncallableToken(principal: Principal | undefined, operatio
  * forbidden`), and a principal with no workspace is answered `404 not_found`
  * by all three; `instanceAdmin` needs a complete session of an account that holds the instance-admin flag and has a
  * second factor enrolled (`403 forbidden` for a token, another account and an admin without one; a session still
- * waiting for its second factor has been answered `401 mfa_required` before); an operation that declares `reauth` needs a session
+ * waiting for its second factor has been answered `401 mfa_required` before), and `instanceAdminWithoutSecondFactor`
+ * the same session and flag without asking for the second factor; an operation that declares `reauth` needs a session
  * re-authenticated within the window of `reauthenticatedRecently` (`401 reauth_required`); a declared
  * entitlement must be held (`403 entitlement_required`).
  */
@@ -153,6 +155,11 @@ export function createAuthorization({
     if (auth === "instanceAdmin") {
       // The flag comes from this request's session lookup; the second factor is asked of the database last, only for an admin, and a failure to answer is a refusal.
       if (!(principal.kind === "session" && principal.instanceAdmin && (await secondFactor({ accountId: principal.accountId, requestId: requestIdOf(context) })))) {
+        throw new ProblemError("forbidden", DETAILS.forbidden);
+      }
+    } else if (auth === "instanceAdminWithoutSecondFactor") {
+      // The flag and the complete session are all this policy asks; the second factor is not read.
+      if (!(principal.kind === "session" && principal.instanceAdmin)) {
         throw new ProblemError("forbidden", DETAILS.forbidden);
       }
     }

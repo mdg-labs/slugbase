@@ -9,9 +9,9 @@ import { adapters, recordingLogger, serverConfig } from "../support.ts";
 import { HOOK_TIMEOUT_MS, SESSION_COOKIE, bearer, send, workspaceHarness, type World } from "../workspaces/support.ts";
 
 // GET /api/v1/instance/status through the whole chain over the migrated database (doc 04 section 10.10, doc 02
-// section 11.3, doc 10 T3 and T15). The failure scenarios: a caller the instanceAdmin policy excludes that is
-// answered the status (an API token, a session waiting for its second factor, an account without the flag, an
-// admin without a second factor), a status that leaks a credential, and a viewed status that leaves no event in
+// section 11.3, doc 10 T3 and T15). The failure scenarios: a caller the instanceAdminWithoutSecondFactor policy
+// excludes that is answered the status (an API token, a session waiting for its second factor, an account without
+// the flag), an admin without a second factor that is refused it, a status that leaks a credential, and a viewed status that leaves no event in
 // the instance audit stream.
 
 const STATUS = "/api/v1/instance/status";
@@ -175,7 +175,17 @@ describe("GET /instance/status", () => {
     }
   });
 
-  describe("refuses everyone the instanceAdmin policy excludes, writing no event and counting nothing", () => {
+  it("answers an instance admin who has no second factor enrolled, and writes the event of the read", async () => {
+    const world = harness.serve();
+    const admin = await caller(world, { flag: true, mfa: false });
+
+    const response = await send(world, "GET", STATUS, { cookie: admin.cookie });
+
+    expect(response.status).toBe(200);
+    expect((await instanceEvents()).map((event) => [event.actor_account_id, event.action])).toEqual([[admin.accountId, "instance.status_viewed"]]);
+  });
+
+  describe("refuses everyone the instance policy excludes, writing no event and counting nothing", () => {
     it("answers 401 unauthenticated without a credential", async () => {
       const world = harness.serve();
       const response = await send(world, "GET", STATUS, {});
@@ -224,15 +234,6 @@ describe("GET /instance/status", () => {
       expect(await instanceEvents()).toEqual([]);
     });
 
-    it("answers 403 forbidden to an instance admin who has no second factor enrolled", async () => {
-      const world = harness.serve();
-      const admin = await caller(world, { flag: true, mfa: false });
-      const response = await send(world, "GET", STATUS, { cookie: admin.cookie });
-      expect(response.status).toBe(403);
-      expect(await codeOf(response)).toBe("forbidden");
-      expect(await instanceEvents()).toEqual([]);
-    });
-
     it("answers 403 forbidden to everyone on a deployment where no account holds the flag", async () => {
       const world = harness.serve();
       const withFactor = await caller(world, { flag: false, mfa: true });
@@ -242,14 +243,14 @@ describe("GET /instance/status", () => {
       }
     });
 
-    it("lets an admin whose second factor was removed after sign-in no further: the factor is read on every request", async () => {
+    it("lets an admin whose instance-admin flag was removed after sign-in no further: the flag is read on every request", async () => {
       const world = harness.serve();
-      const admin = await caller(world, { flag: true, mfa: true });
+      const admin = await caller(world, { flag: true, mfa: false });
       expect((await send(world, "GET", STATUS, { cookie: admin.cookie })).status).toBe(200);
 
       await database().owner.begin(async (tx) => {
         await tx`SELECT set_config('app.account_id', ${admin.accountId}, true)`;
-        await tx`UPDATE accounts SET mfa_enabled_at = NULL, mfa_secret = NULL, mfa_secret_key_id = NULL WHERE id = ${admin.accountId}`;
+        await tx`UPDATE accounts SET is_instance_admin = false WHERE id = ${admin.accountId}`;
       });
 
       expect((await send(world, "GET", STATUS, { cookie: admin.cookie })).status).toBe(403);

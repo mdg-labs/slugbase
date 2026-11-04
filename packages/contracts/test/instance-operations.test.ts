@@ -42,24 +42,69 @@ type Obj = Record<string, unknown>;
 const document = JSON.parse(serializeOpenApiDocument(buildOpenApiDocument(operations))) as Obj;
 const paths = document["paths"] as Record<string, Record<string, Obj>>;
 
+/** The operations that ask for the flag and a complete session alone (Q45); every other instance operation also needs a second factor. */
+const WITHOUT_SECOND_FACTOR = ["getInstanceStatus", "getInstanceSettings", "listInstanceWorkspaces", "createInstanceWorkspace", "sendInstanceTestMail"] as const;
+
+/** The operations that declare re-authentication; none of them is among the five above. */
+const REAUTHENTICATED = [
+  "addInstanceAdminMembership",
+  "issueInstanceWorkspaceOwnerInvitation",
+  "deleteInstanceWorkspace",
+  "updateInstanceAccount",
+  "setInstanceAccountAccessMode",
+  "resetInstanceAccountMfa",
+  "issueInstanceAccountResetLink",
+  "deleteInstanceAccount",
+] as const;
+
+const instanceOperations = Object.entries(paths)
+  .filter(([path]) => path === "/api/v1/instance" || path.startsWith("/api/v1/instance/"))
+  .flatMap(([path, item]) => Object.entries(item).map(([method, operation]) => ({ path, method, operation, operationId: operation["operationId"] as string })));
+
 describe("the operations under /api/v1/instance", () => {
-  it("all declare the instanceAdmin policy and no token scope, so no API token can call one", () => {
-    const instance = Object.entries(paths).filter(([path]) => path === "/api/v1/instance" || path.startsWith("/api/v1/instance/"));
-    expect(instance.length).toBeGreaterThan(0);
-    for (const [path, item] of instance) {
-      for (const [method, operation] of Object.entries(item)) {
-        expect(operation["x-slugbase-auth"], `${method.toUpperCase()} ${path}`).toBe("instanceAdmin");
-        expect(operation["x-slugbase-scope"], `${method.toUpperCase()} ${path}`).toBeUndefined();
+  it("declare no token scope, so no API token can call one", () => {
+    expect(instanceOperations.length).toBe(16);
+    for (const { path, method, operation } of instanceOperations) {
+      expect(operation["x-slugbase-scope"], `${method.toUpperCase()} ${path}`).toBeUndefined();
+    }
+  });
+
+  it("declare instanceAdminWithoutSecondFactor for exactly the five read-only and workspace-creation operations and instanceAdmin for every other", () => {
+    for (const { operationId, operation } of instanceOperations) {
+      const expected = (WITHOUT_SECOND_FACTOR as readonly string[]).includes(operationId) ? "instanceAdminWithoutSecondFactor" : "instanceAdmin";
+      expect(operation["x-slugbase-auth"], operationId).toBe(expected);
+    }
+    expect(instanceOperations.filter(({ operation }) => operation["x-slugbase-auth"] === "instanceAdminWithoutSecondFactor").map(({ operationId }) => operationId).toSorted()).toEqual(
+      [...WITHOUT_SECOND_FACTOR].toSorted(),
+    );
+  });
+
+  it("keep re-authentication on every operation that declared it, and declare none on the five", () => {
+    for (const { operationId, operation } of instanceOperations) {
+      expect(operation["x-slugbase-reauth"] === true, operationId).toBe((REAUTHENTICATED as readonly string[]).includes(operationId));
+    }
+  });
+
+  it("state in their 403 answer that the five need no second factor and the others a second factor", () => {
+    for (const { operationId, operation } of instanceOperations) {
+      const responses = operation["responses"] as Record<string, Obj>;
+      const description = responses["403"]?.["description"] as string;
+      if ((WITHOUT_SECOND_FACTOR as readonly string[]).includes(operationId)) {
+        expect(description, operationId).toContain("needs no second factor");
+        expect(description, operationId).not.toContain("second factor enrolled");
+      } else {
+        expect(description, operationId).toContain("second factor enrolled");
       }
     }
   });
 
-  it("are the only operations that declare the instanceAdmin policy", () => {
+  it("are the only operations that declare an instance policy", () => {
     const declared = Object.entries(paths).flatMap(([path, item]) =>
       Object.values(item)
-        .filter((operation) => operation["x-slugbase-auth"] === "instanceAdmin")
+        .filter((operation) => operation["x-slugbase-auth"] === "instanceAdmin" || operation["x-slugbase-auth"] === "instanceAdminWithoutSecondFactor")
         .map(() => path),
     );
+    expect(declared.length).toBe(16);
     expect(declared.every((path) => path.startsWith("/api/v1/instance/"))).toBe(true);
   });
 });
@@ -70,7 +115,7 @@ describe("getInstanceStatus", () => {
   it("is a read of the instance admin, in the read bucket, with problem+json refusals", () => {
     expect(getInstanceStatus.operationId).toBe("getInstanceStatus");
     expect(operation?.["operationId"]).toBe("getInstanceStatus");
-    expect(operation?.["x-slugbase-auth"]).toBe("instanceAdmin");
+    expect(operation?.["x-slugbase-auth"]).toBe("instanceAdminWithoutSecondFactor");
     expect(operation?.["x-slugbase-rate"]).toBe("read");
     const responses = operation?.["responses"] as Record<string, Obj>;
     for (const status of ["400", "401", "403", "429", "503"]) {
@@ -108,7 +153,7 @@ describe("the instance settings operations", () => {
     const write = paths["/api/v1/instance/settings"]?.["patch"];
     expect(getInstanceSettings.operationId).toBe("getInstanceSettings");
     expect(updateInstanceSettings.operationId).toBe("updateInstanceSettings");
-    expect(read?.["x-slugbase-auth"]).toBe("instanceAdmin");
+    expect(read?.["x-slugbase-auth"]).toBe("instanceAdminWithoutSecondFactor");
     expect(read?.["x-slugbase-rate"]).toBe("read");
     expect(write?.["x-slugbase-auth"]).toBe("instanceAdmin");
     expect(write?.["x-slugbase-rate"]).toBe("write");
@@ -119,7 +164,7 @@ describe("the instance settings operations", () => {
   it("answers the test email with 202, or 503 and the problem document when no mail adapter is configured", () => {
     const operation = paths["/api/v1/instance/mail/test"]?.["post"];
     expect(sendInstanceTestMail.operationId).toBe("sendInstanceTestMail");
-    expect(operation?.["x-slugbase-auth"]).toBe("instanceAdmin");
+    expect(operation?.["x-slugbase-auth"]).toBe("instanceAdminWithoutSecondFactor");
     expect(operation?.["x-slugbase-rate"]).toBe("write");
     const responses = operation?.["responses"] as Record<string, Obj>;
     expect(responses["202"]?.["content"]).toBeUndefined();
@@ -202,7 +247,11 @@ describe("the instance workspace operations", () => {
       "createInstanceWorkspace",
       "deleteInstanceWorkspace",
     ]);
-    expect([list?.["x-slugbase-auth"], create?.["x-slugbase-auth"], remove?.["x-slugbase-auth"]]).toEqual(["instanceAdmin", "instanceAdmin", "instanceAdmin"]);
+    expect([list?.["x-slugbase-auth"], create?.["x-slugbase-auth"], remove?.["x-slugbase-auth"]]).toEqual([
+      "instanceAdminWithoutSecondFactor",
+      "instanceAdminWithoutSecondFactor",
+      "instanceAdmin",
+    ]);
     expect([list?.["x-slugbase-rate"], create?.["x-slugbase-rate"], remove?.["x-slugbase-rate"]]).toEqual(["read", "write", "write"]);
     expect([list?.["x-slugbase-reauth"], create?.["x-slugbase-reauth"], remove?.["x-slugbase-reauth"]]).toEqual([undefined, undefined, true]);
     problemOnly(list, ["400", "401", "403", "429", "503"]);

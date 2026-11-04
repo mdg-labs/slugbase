@@ -187,6 +187,8 @@ function setup(options: SetupOptions = {}) {
     owner: operationOf("/api/v1/owner-check", "checkOwner", "owner", { scope: "read" }),
     unscoped: operationOf("/api/v1/tokens", "listTokens", "account"),
     instance: operationOf("/api/v1/instance/probe", "listAccounts", "instanceAdmin"),
+    instanceOpen: operationOf("/api/v1/instance/open-probe", "getOpenInstanceProbe", "instanceAdminWithoutSecondFactor"),
+    instanceOpenReauth: operationOf("/api/v1/instance/open-probe/delete", "removeOpenThing", "instanceAdminWithoutSecondFactor", { method: "post", reauth: true }),
     gated: operationOf("/api/v1/gated-items", "listGatedItems", "member", { scope: "read", entitlement: "teams.manage" }),
     machine: operationOf("/api/v1/events", "receiveEvent", "machine", { method: "post", audience: "machine" }),
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
@@ -261,6 +263,7 @@ describe("the failure scenario (T3): an anonymous caller of an operation that re
     ["/api/v1/owner-check"],
     ["/api/v1/account-check"],
     ["/api/v1/instance/probe"],
+    ["/api/v1/instance/open-probe"],
   ])("answers 401 on %s too", async (path) => {
     const { server, seen } = setup();
     expect((await server.fetch(get(path))).status).toBe(401);
@@ -560,6 +563,70 @@ describe("stage 9: authorization", () => {
     });
   });
 
+  describe("the instanceAdminWithoutSecondFactor policy (Q45)", () => {
+    const OPEN = "/api/v1/instance/open-probe";
+
+    it("admits an instance admin session whose account has no second factor, and never asks the check", async () => {
+      const asked: string[] = [];
+      const { server, seen } = setup({
+        secondFactor: ({ accountId }) => {
+          asked.push(accountId);
+          return Promise.resolve(false);
+        },
+      });
+      expect((await server.fetch(get(OPEN, cookieOf("instanceAdmin")))).status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["getOpenInstanceProbe"]);
+      expect(asked).toEqual([]);
+    });
+
+    it("admits the admin when the second-factor check cannot answer, which the policy does not read", async () => {
+      const { server, seen } = setup({ secondFactor: () => Promise.reject(new Error("database down")) });
+      expect((await server.fetch(get(OPEN, cookieOf("instanceAdmin")))).status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["getOpenInstanceProbe"]);
+    });
+
+    it("refuses an account without the flag, even one with a second factor, with 403 forbidden", async () => {
+      const { server, seen } = setup({ secondFactor: () => Promise.resolve(true) });
+      for (const who of ["owner", "admin", "member", "outsider"] as const) {
+        const response = await server.fetch(get(OPEN, cookieOf(who)));
+        expect(response.status, who).toBe(403);
+        expect(await codeOf(response), who).toBe("forbidden");
+      }
+      expect(seen).toEqual([]);
+    });
+
+    it("refuses an API token with 403 forbidden, whatever its scope", async () => {
+      const { server, seen } = setup({ secondFactor: () => Promise.resolve(true) });
+      for (const authorization of ["Bearer slb_owner_write", "Bearer slb_member_read"]) {
+        const response = await server.fetch(get(OPEN, { authorization }));
+        expect(response.status, authorization).toBe(403);
+        expect(await codeOf(response), authorization).toBe("forbidden");
+      }
+      expect(seen).toEqual([]);
+    });
+
+    it("answers a session still waiting for its second factor 401 mfa_required before the policy", async () => {
+      const { server, seen } = setup();
+      const response = await server.fetch(get(OPEN, { cookie: "sid=instanceAdmin; state=partial" }));
+      expect(response.status).toBe(401);
+      expect(await codeOf(response)).toBe("mfa_required");
+      expect(seen).toEqual([]);
+    });
+
+    it("keeps a declared re-authentication: a stale session of the admin is answered 401 reauth_required, a fresh one is admitted, and a stale non-admin is forbidden", async () => {
+      const { server, seen } = setup();
+      const path = "/api/v1/instance/open-probe/delete";
+      const stale = await server.fetch(post(path, { ...BROWSER_MUTATION, cookie: "sid=instanceAdmin; state=stale" }));
+      expect(stale.status).toBe(401);
+      expect(await codeOf(stale)).toBe("reauth_required");
+      const outsider = await server.fetch(post(path, { ...BROWSER_MUTATION, cookie: "sid=owner; state=stale" }));
+      expect(outsider.status).toBe(403);
+      const fresh = await server.fetch(post(path, { ...BROWSER_MUTATION, cookie: "sid=instanceAdmin; state=fresh" }));
+      expect(fresh.status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["removeOpenThing"]);
+    });
+  });
+
   describe("API tokens", () => {
     it("refuses a read-only token on a write operation with 403 token_scope", async () => {
       const { server, seen } = setup();
@@ -579,7 +646,7 @@ describe("stage 9: authorization", () => {
 
     it("refuses a token on an operation that declares no scope with 403 forbidden", async () => {
       const { server, seen } = setup();
-      for (const path of ["/api/v1/tokens", "/api/v1/instance/probe"]) {
+      for (const path of ["/api/v1/tokens", "/api/v1/instance/probe", "/api/v1/instance/open-probe"]) {
         const response = await server.fetch(get(path, { authorization: "Bearer slb_owner_write" }));
         expect(response.status, path).toBe(403);
         expect(await codeOf(response)).toBe("forbidden");
@@ -718,6 +785,7 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       ["/api/v1/admin-check", "admin"],
       ["/api/v1/owner-check", "owner"],
       ["/api/v1/instance/probe", "instanceAdmin"],
+      ["/api/v1/instance/open-probe", "instanceAdmin"],
       ["/api/v1/tokens", "member"],
     ] as const)("answers 401 mfa_required on %s, before the handler", async (path, who) => {
       const { server, seen } = setup();
@@ -787,6 +855,22 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       expect(response.status).toBe(403);
       expect(await codeOf(response)).toBe("forbidden");
       expect(handled).toEqual([]);
+    });
+
+    it("admits an instance admin session when the chain is given no second-factor check, under the policy that does not read it", async () => {
+      const { app, handled } = chainWith(session("instanceAdmin"), operationOf("/api/v1/instance/open-probe", "getOpenInstanceProbe", "instanceAdminWithoutSecondFactor"));
+      expect((await app.request("http://localhost/api/v1/instance/open-probe")).status).toBe(200);
+      expect(handled).toEqual(["handler"]);
+    });
+
+    it("refuses an account without the flag and an API token on the policy that does not read the second factor, when the chain is given no check", async () => {
+      const operation = operationOf("/api/v1/instance/open-probe", "getOpenInstanceProbe", "instanceAdminWithoutSecondFactor");
+      for (const principal of [session("owner"), token("owner", "read-write")]) {
+        const { app, handled } = chainWith(principal, operation);
+        const response = await app.request("http://localhost/api/v1/instance/open-probe");
+        expect(response.status, principal.kind).toBe(403);
+        expect(handled).toEqual([]);
+      }
     });
 
     it("refuses an API token on an operation that declares reauth even when the operation also declares a scope", async () => {

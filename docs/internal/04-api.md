@@ -30,7 +30,7 @@ Every operation declares, next to its schemas:
 ```ts
 defineOperation({
   method: 'post', path: '/bookmarks', tag: 'bookmarks', operationId: 'createBookmark',
-  auth: 'member',            // x-slugbase-auth: anonymous | account | member | admin | owner | instanceAdmin | machine
+  auth: 'member',            // x-slugbase-auth: anonymous | account | member | admin | owner | instanceAdmin | instanceAdminWithoutSecondFactor | machine
   entitlement: undefined,    // x-slugbase-entitlement, e.g. 'sharing.teams'
   rate: 'write',             // x-slugbase-rate: bucket from §7, or 'none' for probes and machine routes
   scope: 'write',            // x-slugbase-scope: API-token scope required, read | write; absent = not token-callable
@@ -137,7 +137,7 @@ Every error is an RFC 9457 problem document:
 | 401 | `unauthenticated` | No valid session or token; also the one generic answer to sign-in with an unknown email, a wrong password or a disabled account, and to a revoked, expired or disabled-account token |
 | 401 | `mfa_required` | Session exists at `partial` level; complete `POST /auth/mfa/verify` |
 | 401 | `reauth_required` | Sensitive operation needs a fresh re-authentication (§4.4) |
-| 403 | `forbidden` | Authenticated, can see the resource, may not do this; also a bearer request to an account or member operation that is not token-callable, an instance-admin operation without MFA enrolled, and `POST /setup` with a missing or wrong setup token |
+| 403 | `forbidden` | Authenticated, can see the resource, may not do this; also a bearer request to an account or member operation that is not token-callable, an operation of the `instanceAdmin` policy (§10.10) without MFA enrolled, and `POST /setup` with a missing or wrong setup token |
 | 403 | `registration_refused` | A deployment's registration policy refused this sign-up (doc 01 §13); the response is the same for every refusal reason |
 | 403 | `cross_site_request` | Origin / Fetch-Metadata / content-type check failed (§5) |
 | 403 | `token_scope` | API token has `read` scope on a write operation |
@@ -392,7 +392,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 
 ## 10. Operation inventory
 
-`Auth` column: `anon` = anonymous allowed (cross-site rules still apply to mutations), `partial` = a `partial` session is enough, `acct` = any signed-in account (session only unless marked †), `mem` / `adm` / `own` = member / admin / owner of the active workspace, `inst` = CE instance admin, `mach` = machine. † = also callable with an API token (scope in brackets). `Ent` = entitlement checked. `Rate` = bucket from §7 (blank = `read`/`write` by method). `Re` = requires re-authentication (§4.4).
+`Auth` column: `anon` = anonymous allowed (cross-site rules still apply to mutations), `partial` = a `partial` session is enough, `acct` = any signed-in account (session only unless marked †), `mem` / `adm` / `own` = member / admin / owner of the active workspace, `inst` = CE instance admin (both instance policies, §10.10), `mach` = machine. † = also callable with an API token (scope in brackets). `Ent` = entitlement checked. `Rate` = bucket from §7 (blank = `read`/`write` by method). `Re` = requires re-authentication (§4.4).
 
 ### 10.1 meta
 
@@ -607,7 +607,12 @@ Mounted on both editions; on Cloud no account carries the flag, so every call is
 | DELETE | `/instance/accounts/{id}` | Delete another account with the rules of `DELETE /me` (doc 02 §2.10, doc 05 §7.1), ownership resolved first; no body, `204`. In one transaction it reads the account's scope under the locks of `sys_instance_account_deletion_scope`, refuses with `409 last_owner` while the account is the only owner of a workspace that has other members (the problem document lists each such workspace as `workspaces: [{ id, name }]`), asks the deletion guard with `requestedBy: instanceAdmin` for the account and for every workspace that would be deleted with it, naming the account that is deleted (a refusal is its code, `409 billing_active`; a guard that throws or times out is `503`), and then deletes the account, marks the workspaces where it was the only member and queues their `workspace.delete` jobs and `account.deleted`, and writes `instance.account_deleted` (the account's identifier as entity, no address, no metadata); a refusal changes and writes nothing. `404` for an account that does not exist; `422 validation_failed` with the field code `last_instance_admin` on `id` when the account is the only enabled instance admin, and `self` on `id` for the calling admin's own account, which `DELETE /me` deletes (it asks for the typed address and ends the session, which this route does not). A disabled account can be deleted | ✓ |
 | POST | `/instance/mail/test` | Queue a test email to the caller's address, in the caller's language: `202` with no body (the `mail.send` job sends it and the audit event `instance.test_mail_queued` is written in the transaction that queues it), or `503 mail_unavailable` when no mail adapter is configured, with nothing queued or recorded | |
 
-All `/instance/*` operations require `inst`, a `full` session (never a token), and MFA enrolled on the calling account (Q45), and write audit events into a deployment-level audit stream (doc 05 §2.9).
+All `/instance/*` operations require `inst` and a `full` session (never a token), and write audit events into a deployment-level audit stream (doc 05 §2.9). They declare one of two policies (Q45):
+
+- **`instanceAdmin`**: the instance-admin flag, a `full` session and MFA enrolled on the calling account, `403 forbidden` for an admin without it. Every destructive or access-changing operation and the list of accounts declare it: `PATCH /instance/settings`, the membership, owner-invitation and delete operations of workspaces, and every operation of `/instance/accounts`. Those that carry ✓ in `Re` also need a recent re-authentication.
+- **`instanceAdminWithoutSecondFactor`**: the flag and a `full` session, and nothing about MFA; the second factor is not read, so an admin who has not enrolled one is admitted. Declared by `GET /instance/status`, `GET /instance/settings`, `GET /instance/workspaces`, `POST /instance/workspaces` and `POST /instance/mail/test`, none of which declares re-authentication.
+
+Both refuse an API token and a non-admin account with `403 forbidden`, and answer a `partial` session `401 mfa_required` before the policy is read. The database functions of doc 05 §3.3 repeat the same split.
 
 ### 10.11 Cloud module: billing
 

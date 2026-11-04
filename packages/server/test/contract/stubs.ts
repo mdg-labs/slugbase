@@ -101,13 +101,14 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
   };
 
   const owner = sessionCredentials(fixture.a.owner.accountId);
-  const authorized = (policy: string): Credentials => (policy === "instanceAdmin" ? sessionCredentials(INSTANCE_ADMIN_ACCOUNT) : owner);
+  const authorized = (policy: string): Credentials => (policy === "instanceAdmin" || policy === "instanceAdminWithoutSecondFactor" ? sessionCredentials(INSTANCE_ADMIN_ACCOUNT) : owner);
   const justBelow: Readonly<Record<string, string>> = {
     member: OUTSIDER_ACCOUNT,
     admin: fixture.a.member.accountId,
     owner: fixture.a.admin.accountId,
     // A session of the workspace owner, who is not an instance admin.
     instanceAdmin: fixture.a.owner.accountId,
+    instanceAdminWithoutSecondFactor: fixture.a.owner.accountId,
   };
 
   return {

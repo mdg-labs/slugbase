@@ -450,7 +450,7 @@ describe("apps/slugbase main server and the instance admin operations", () => {
   const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
   const STATUS = "/api/v1/instance/status";
 
-  it("composes GET /api/v1/instance/status: it asks for a credential, and refuses the first admin, whom setup signs in without a second factor", async () => {
+  it("composes GET /api/v1/instance/status: it asks for a credential, and answers the first admin, whom setup signs in without a second factor", async () => {
     const { status, output, observed } = await runServer(env(), async (port) => {
       const anonymous = await get(port, STATUS);
       const created = await post(port, "/api/v1/setup", first);
@@ -463,8 +463,8 @@ describe("apps/slugbase main server and the instance admin operations", () => {
     expect(anonymous).toMatch(/^HTTP\/1\.1 401 /);
     expect(anonymous).toContain('"code":"unauthenticated"');
     expect(created).toMatch(/^HTTP\/1\.1 201 /);
-    expect(signedIn).toMatch(/^HTTP\/1\.1 403 /);
-    expect(signedIn).toContain('"code":"forbidden"');
+    expect(signedIn).toMatch(/^HTTP\/1\.1 200 /);
+    expect(signedIn).toContain('"activeSessions"');
   }, 60_000);
 });
 
@@ -488,7 +488,7 @@ describe("apps/slugbase main server and the instance admin workspace operations"
   });
   const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
 
-  it("composes GET, POST and DELETE /api/v1/instance/workspaces and POST /api/v1/instance/workspaces/{id}/membership: each asks for a credential, and each refuses the first admin, whom setup signs in without a second factor", async () => {
+  it("composes GET, POST and DELETE /api/v1/instance/workspaces and POST /api/v1/instance/workspaces/{id}/membership: each asks for a credential, and the first admin, whom setup signs in without a second factor, is answered by the list and the creation and refused by the deletion and the membership", async () => {
     const WORKSPACES = "/api/v1/instance/workspaces";
     const unknown = "0192f3a0-aaaa-7000-8000-00000000dead";
     const { status, output, observed } = await runServer(env(), async (port) => {
@@ -523,8 +523,8 @@ describe("apps/slugbase main server and the instance admin workspace operations"
       "HTTP/1.1 401 Unauthorized unauthenticated",
       "HTTP/1.1 401 Unauthorized unauthenticated",
       "HTTP/1.1 401 Unauthorized unauthenticated",
-      "HTTP/1.1 403 Forbidden forbidden",
-      "HTTP/1.1 403 Forbidden forbidden",
+      "HTTP/1.1 200 OK ",
+      "HTTP/1.1 201 Created ",
       "HTTP/1.1 403 Forbidden forbidden",
       "HTTP/1.1 403 Forbidden forbidden",
     ]);

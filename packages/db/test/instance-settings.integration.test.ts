@@ -5,8 +5,9 @@ import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
 
 // The instance settings and the test email of the instance admin (doc 05 sections 2.2 and 3.3, doc 02 section
-// 11.3, doc 10 T3). The failure scenarios: an account that is not an instance admin with a second factor that reaches
-// sys_instance_update_settings or sys_instance_test_mail directly, the application role that writes the table
+// 11.3, doc 10 T3). The failure scenarios: an account that is not an instance admin, or for
+// sys_instance_update_settings not one with a second factor, that reaches a settings function or
+// sys_instance_test_mail directly, the application role that writes the table
 // itself, and a value outside the limits of the columns.
 
 const HOOK_TIMEOUT_MS = 300_000;
@@ -291,7 +292,6 @@ describe("sys_instance_settings", () => {
 
   it.each([
     ["a member who holds no flag", { mfa: true }],
-    ["an admin who has no second factor enrolled", { admin: true }],
     ["a disabled admin", { admin: true, mfa: true, disabled: true }],
     ["an account with neither", {}],
   ] satisfies [string, Options][])("raises for %s, which reads nothing and writes no event", async (_name, options) => {
@@ -336,7 +336,6 @@ describe("sys_instance_test_mail", () => {
 
   it.each([
     ["a member who holds no flag", { mfa: true }],
-    ["an admin who has no second factor enrolled", { admin: true }],
     ["a disabled admin", { admin: true, mfa: true, disabled: true }],
   ] satisfies [string, Options][])("raises for %s, and writes no event and queues no message", async (_name, options) => {
     const caller = await account(options);

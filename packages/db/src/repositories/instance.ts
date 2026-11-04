@@ -35,7 +35,8 @@ import { tenantHandle, type TenantTx } from "../tenant.ts";
 // What the CE instance admin's operations read from the database (doc 04 section 10.10, doc 05 sections 2.9 and
 // 3.3, doc 02 section 11, doc 10 T3 and T15). The counts and the stream of instance audit events are reached only
 // through the `sys_instance_*` and `sys_list_instance_audit` system operations, each of which checks inside its own
-// body that the account of the transaction is an instance admin with a second factor and raises otherwise; this
+// body that the account of the transaction is an enabled instance admin, with a second factor enrolled for every function
+// but the five of the instanceAdminWithoutSecondFactor policy (Q45), and raises otherwise; this
 // repository adds nothing to that check and bypasses none of it. When that check refuses an account that another admin's
 // committed change has just demoted, disabled or deleted, the call throws `InstanceAdminRequiredError` and the transaction
 // rolls back (doc 05 section 7.1). The background-job health is read from the
@@ -858,9 +859,13 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
 }
 
 // The message of the refusal the `sys_instance_*` functions raise with `insufficient_privilege` when the account of the
-// transaction fails their own admin check. A `42501` is also what a missing grant or a row-level security violation
-// raises, and those must stay defects, so a refusal is recognised by its code and this message together.
-const ADMIN_REQUIRED_MESSAGE = "the instance operations are for instance admins with a second factor";
+// transaction fails their own admin check: the one of the functions that need a second factor enrolled, and the one of the
+// five that need only the flag (Q45). A `42501` is also what a missing grant or a row-level security violation
+// raises, and those must stay defects, so a refusal is recognised by its code and one of these messages together.
+const ADMIN_REQUIRED_MESSAGES: ReadonlySet<unknown> = new Set([
+  "the instance operations are for instance admins with a second factor",
+  "the instance operations are for instance admins",
+]);
 
 function isAdminRequiredRefusal(error: unknown): boolean {
   // Drizzle wraps the driver's error, which holds the SQLSTATE and the message the function raised.
@@ -868,7 +873,7 @@ function isAdminRequiredRefusal(error: unknown): boolean {
   for (let depth = 0; depth < 4 && typeof current === "object" && current !== null; depth += 1) {
     const { code, message, cause } = current as { code?: unknown; message?: unknown; cause?: unknown };
     if (typeof code === "string") {
-      return code === "42501" && message === ADMIN_REQUIRED_MESSAGE;
+      return code === "42501" && ADMIN_REQUIRED_MESSAGES.has(message);
     }
     current = cause;
   }

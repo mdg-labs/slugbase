@@ -13930,7 +13930,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is queued"
+            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is queued"
           },
           "429": {
             "content": {
@@ -13968,7 +13968,7 @@
         "tags": [
           "instance"
         ],
-        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-auth": "instanceAdminWithoutSecondFactor",
         "x-slugbase-rate": "write"
       }
     },
@@ -14014,7 +14014,7 @@
                 }
               }
             },
-            "description": "The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"
+            "description": "The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation"
           },
           "429": {
             "content": {
@@ -14052,7 +14052,7 @@
         "tags": [
           "instance"
         ],
-        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-auth": "instanceAdminWithoutSecondFactor",
         "x-slugbase-rate": "read"
       },
       "patch": {
@@ -14200,7 +14200,7 @@
                 }
               }
             },
-            "description": "The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"
+            "description": "The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation"
           },
           "429": {
             "content": {
@@ -14238,7 +14238,7 @@
         "tags": [
           "instance"
         ],
-        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-auth": "instanceAdminWithoutSecondFactor",
         "x-slugbase-rate": "read"
       }
     },
@@ -14284,7 +14284,7 @@
                 }
               }
             },
-            "description": "The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"
+            "description": "The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation"
           },
           "429": {
             "content": {
@@ -14322,7 +14322,7 @@
         "tags": [
           "instance"
         ],
-        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-auth": "instanceAdminWithoutSecondFactor",
         "x-slugbase-rate": "read"
       },
       "post": {
@@ -14376,7 +14376,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written"
+            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is written"
           },
           "422": {
             "content": {
@@ -14424,7 +14424,7 @@
         "tags": [
           "instance"
         ],
-        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-auth": "instanceAdminWithoutSecondFactor",
         "x-slugbase-rate": "write"
       }
     },

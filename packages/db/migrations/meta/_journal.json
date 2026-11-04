@@ -834,6 +834,13 @@
       "when": 1793705369628,
       "tag": "20261103112929_add_account_access_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1793803450974,
+      "tag": "20261104144410_add_instance_admin_without_second_factor",
+      "breakpoints": true
     }
   ]
 }

@@ -8654,7 +8654,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is queued */
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is queued */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8721,7 +8721,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            /** @description The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8868,7 +8868,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            /** @description The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8935,7 +8935,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            /** @description The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9006,7 +9006,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is written */
             403: {
                 headers: {
                     [name: string]: unknown;

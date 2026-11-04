@@ -799,20 +799,60 @@ describe("refuses everyone the instanceAdmin policy excludes, changing and readi
     expect(await jobs(DELETE_JOB)).toEqual([]);
   });
 
-  it.each(attempts)("answers 403 forbidden to %s %s from an instance admin who has no second factor enrolled", async (method, path, body) => {
+  it("answers 403 forbidden to DELETE from an instance admin who has no second factor enrolled, and deletes nothing", async () => {
     const world = harness.serve();
     const person = await harness.person(world);
     await database().owner.begin(async (tx) => {
       await tx`SELECT set_config('app.account_id', ${person.account.id}, true)`;
       await tx`UPDATE accounts SET is_instance_admin = true WHERE id = ${person.account.id}`;
     });
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
     const workspaces = await workspaceCount();
 
-    const response = await send(world, method, path, { cookie: person.cookie }, body);
+    const response = await send(world, "DELETE", `${LIST}/${workspaceId}`, { cookie: person.cookie });
 
     expect(response.status).toBe(403);
+    expect(await codeOf(response)).toBe("forbidden");
     expect(await workspaceCount()).toBe(workspaces);
     expect(await jobs(DELETE_JOB)).toEqual([]);
+  });
+
+  describe("an instance admin who has no second factor enrolled", () => {
+    async function flagged(world: World): Promise<Caller & { readonly person: Person }> {
+      const person = await harness.person(world);
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${person.account.id}, true)`;
+        await tx`UPDATE accounts SET is_instance_admin = true WHERE id = ${person.account.id}`;
+      });
+      return { accountId: person.account.id, email: person.account.email, cookie: person.cookie, person };
+    }
+
+    it("reads the list with GET, which writes the event of the read", async () => {
+      const world = harness.serve();
+      const root = await flagged(world);
+      const before = (await instanceEvents()).filter((event) => event.action === "instance.workspaces_viewed").length;
+
+      const response = await send(world, "GET", LIST, { cookie: root.cookie });
+
+      expect(response.status).toBe(200);
+      expect((await instanceEvents()).filter((event) => event.action === "instance.workspaces_viewed")).toHaveLength(before + 1);
+    });
+
+    it("creates a workspace for an owner account and for an owner invitation with POST", async () => {
+      const world = harness.serve();
+      const root = await flagged(world);
+      const owner = await harness.person(world);
+      const before = (await instanceEvents()).length;
+
+      const owned = await send(world, "POST", LIST, { cookie: root.cookie }, { name: "Family", ownerAccountId: owner.account.id });
+      const invited = await send(world, "POST", LIST, { cookie: root.cookie }, { name: "Waiting", ownerEmail: "first-owner@example.test" });
+
+      expect([owned.status, invited.status]).toEqual([201, 201]);
+      const { id } = (await owned.json()) as { id: string };
+      expect(await harness.rolesOf(id)).toEqual({ [owner.account.id]: "owner" });
+      expect((await instanceEvents()).slice(before).filter((event) => event.action === "instance.workspace_created").map((event) => event.actor_account_id)).toEqual([root.accountId, root.accountId]);
+    });
   });
 
   it.each(attempts)("answers 403 forbidden to %s %s with an API token, even of an admin with a second factor", async (method, path, body) => {

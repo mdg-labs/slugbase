@@ -216,7 +216,7 @@ describe("the walker over the committed document", () => {
     const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
     // The account and the workspace of the walker the last sign-in made a member of a workspace of its own, for the token of an operation that writes.
     const lastOwned: { current?: { readonly accountId: string; readonly workspaceId: string } } = {};
-    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true, instanceAdmin = false): Promise<string> => {
+    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true, instanceAdmin = false, secondFactor = instanceAdmin): Promise<string> => {
       const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password, instanceAdmin });
       if (!entitled) {
         unentitled.add(account.id);
@@ -251,8 +251,8 @@ describe("the walker over the committed document", () => {
       if (response.status !== 200 || cookie === undefined) {
         throw new Error(`the walker could not sign in: ${String(response.status)}`);
       }
-      if (instanceAdmin) {
-        // An instance admin needs a second factor besides the flag. The sign-in above came first, so the session is a complete one, as it is after the code is accepted.
+      if (secondFactor) {
+        // An instance admin of the instanceAdmin policy needs a second factor besides the flag. The sign-in above came first, so the session is a complete one, as it is after the code is accepted.
         await database().owner.begin(async (tx) => {
           await tx`SELECT set_config('app.account_id', ${account.id}, true)`;
           await tx`UPDATE accounts SET mfa_enabled_at = now(), mfa_secret = ${Buffer.from("sealed")}, mfa_secret_key_id = 'key-1' WHERE id = ${account.id}`;
@@ -299,12 +299,13 @@ describe("the walker over the committed document", () => {
         }
         continue;
       }
-      if (kind === "process" && policy === "instanceAdmin") {
-        // An instance admin with a second factor, and the account just below the policy: an ordinary one.
-        cookies.set(operationId, await signIn(`walker-${operationId}@example.test`.toLowerCase(), needsReauth.has(operationId), false, undefined, true, true));
+      if (kind === "process" && (policy === "instanceAdmin" || policy === "instanceAdminWithoutSecondFactor")) {
+        // An instance admin, with a second factor where the policy asks for one and without where it does not, and the account just below the policy: an ordinary one.
+        const secondFactor = policy === "instanceAdmin";
+        cookies.set(operationId, await signIn(`walker-${operationId}@example.test`.toLowerCase(), needsReauth.has(operationId), false, undefined, true, true, secondFactor));
         if (needsReauth.has(operationId)) {
           // An instance admin with a second factor that has not re-authenticated: the policy admits it, the re-authentication does not.
-          stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false, false, undefined, true, true));
+          stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false, false, undefined, true, true, secondFactor));
         }
         below.set(operationId, await signIn(`walker-${operationId}-below@example.test`.toLowerCase(), false));
         continue;

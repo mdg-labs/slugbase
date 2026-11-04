@@ -374,7 +374,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 - **Secrets at rest**: `SecretBoxPort` with key IDs; rotation re-encrypts lazily on read and in a background sweep.
 - **Tenancy**: two layers (§5).
 - **Supply chain**: pinned dependencies, lockfile-only installs, `pnpm audit` and OSV scanning in CI, Renovate with grouping, images built in CI only, SBOM and provenance attached to every image, image signing (Q17).
-- **Admin surfaces**: the CE instance admin is a flag on an account inside the app (MFA required to use it); the Cloud operator console is a separate service, origin, account system and network allowlist — the customer app has no operator endpoints at all.
+- **Admin surfaces**: the CE instance admin is a flag on an account inside the app (a second factor is required for its destructive and access-changing operations, not for reading status or creating a workspace); the Cloud operator console is a separate service, origin, account system and network allowlist — the customer app has no operator endpoints at all.
 
 ---
 
