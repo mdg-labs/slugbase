@@ -1,7 +1,7 @@
 import { BOOKMARK_SCOPES } from "@slugbase/contracts";
-import { Button, ToggleGroup, ToggleGroupItem } from "@slugbase/ui";
+import { Button, ToggleGroup, ToggleGroupItem, ToggleGroupSeparator } from "@slugbase/ui";
 import { FilterXIcon, LayoutGridIcon, MultiPick, Picker, SegmentedChoice, SelectField, TableIcon } from "@slugbase/ui/patterns";
-import type { ReactElement } from "react";
+import { Fragment, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useCachedAccount } from "../account/use-cached-account.ts";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
@@ -26,6 +26,9 @@ export interface BookmarksToolbarProps {
 }
 
 const ALL_SCOPE = "all";
+
+// A pressed "Show only" toggle is filled with the primary colour, so it reads as on in both themes beside the outlined toggles that are off.
+const PRESSED_FILTER = "data-pressed:bg-primary data-pressed:text-primary-foreground dark:data-pressed:bg-primary dark:data-pressed:hover:bg-primary/90 data-pressed:hover:bg-primary/90";
 
 function isView(value: string): value is BookmarkView {
   return value === "grid" || value === "table";
@@ -169,7 +172,7 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
   ];
   return (
     <section aria-label={t("bookmarks.list.toolbar")} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
         <SearchField
           className="sm:w-64"
           label={t("bookmarks.list.search.label")}
@@ -191,10 +194,13 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
             {t("bookmarks.list.filter.label")}
           </span>
           <ToggleGroup aria-labelledby="bookmark-filters-label" multiple onValueChange={changeFilters} size="sm" value={activeFilters} variant="outline">
-            {filters.map(({ key, label }) => (
-              <ToggleGroupItem key={key} value={key}>
-                {label}
-              </ToggleGroupItem>
+            {filters.map(({ key, label }, index) => (
+              <Fragment key={key}>
+                {index === 0 ? null : <ToggleGroupSeparator />}
+                <ToggleGroupItem className={PRESSED_FILTER} value={key}>
+                  {label}
+                </ToggleGroupItem>
+              </Fragment>
             ))}
           </ToggleGroup>
         </div>
@@ -239,7 +245,7 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
           value={search.sort ?? DEFAULT_SORT}
         />
         {hasActiveFilters(search) ? (
-          <Button onClick={controls.clearFilters} size="sm" variant="ghost">
+          <Button className="sm:mt-6" onClick={controls.clearFilters} size="sm" variant="ghost">
             <FilterXIcon aria-hidden="true" />
             {t("bookmarks.list.clearFilters")}
           </Button>

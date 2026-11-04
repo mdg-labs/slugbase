@@ -53,7 +53,7 @@ export function QuickAccessRow({ bookmarks }: { readonly bookmarks: readonly Das
         <TileGrid label={t("home.quickAccess.label")}>
           {withSlug.map(({ bookmark, slug }) => (
             <TileLink hint={bookmark.url} href={`/go/${encodeURIComponent(slug)}`} host={bookmark.host} key={bookmark.id} title={bookmark.title}>
-              <SlugChip slug={slug} />
+              <SlugChip className="self-start" slug={slug} />
             </TileLink>
           ))}
         </TileGrid>
