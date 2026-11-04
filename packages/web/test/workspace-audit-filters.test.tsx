@@ -919,6 +919,14 @@ describe("the date range of the log", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => 
     expect(screen.queryByText("These days could not be used. Choose other days.")).toBeNull();
   });
 
+  it("says that the log could not be loaded for a refusal of a list with a preset and no days", async () => {
+    world.refuse = (url) => (url.searchParams.has("from") ? problem(422, "validation_failed", "req-422") : undefined);
+    await open(`/settings/workspace/audit?actor=${ADA}&range=7d`);
+
+    expect(await screen.findByText("The audit log could not be loaded")).toBeTruthy();
+    expect(screen.queryByText("These days could not be used. Choose other days.")).toBeNull();
+  });
+
   it("still says that the log could not be loaded for another failure of a ranged list", async () => {
     world.refuse = (url) => (url.searchParams.has("from") ? problem(500, "internal", "req-500") : undefined);
     await open("/settings/workspace/audit?range=7d");

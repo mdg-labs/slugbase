@@ -130,7 +130,9 @@ function AuditContent({ workspaceId }: { workspaceId: string }): ReactElement {
     return <Slot name="entitlement.upgradeAction" />;
   }
   // A refused range is said beside the range, which can be changed, and not by the table's banner nor by a list that looks empty.
-  const rangeRefused = filtered && events.isError && events.data === undefined && events.error instanceof ApiProblemError && events.error.status === 422;
+  // Only days the viewer chose have fields to say it beside; any other refusal is the banner's, so the page never goes blank.
+  const hasDays = search.from !== undefined || search.to !== undefined;
+  const rangeRefused = hasDays && events.isError && events.data === undefined && events.error instanceof ApiProblemError && events.error.status === 422;
   // The filter bar stays through every state of the list, so that a filter that leaves nothing, or fails, can be changed or taken off.
   let body: ReactElement | null;
   if (rangeRefused) {
