@@ -7,7 +7,7 @@ import { stubAdminServer, type AdminAnswer } from "./admin-server.ts";
 import { ACCOUNT_BODY, WORKSPACES_PATH, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // /admin/settings (doc 03 section 12) and the banner for an instance admin on a deployment without mail. The failure scenarios are an
-// admin without a second factor asking for or changing anything, a failed read shown as defaults or as "not configured", a change
+// admin without a second factor shown a control the server refuses it, a failed read shown as defaults or as "not configured", a change
 // shown as saved when the server refused it, a test email reported as sent when no mail adapter exists, and the banner shown to
 // somebody who is not an instance admin or made to ask the server.
 
@@ -69,6 +69,11 @@ async function typeInto(field: HTMLElement, value: string): Promise<void> {
     fireEvent.change(field, { target: { value } });
     await Promise.resolve();
   });
+}
+
+async function violations(): Promise<string[]> {
+  const results = await axe(document.body, { rules: { region: { enabled: false } } });
+  return results.violations.map((violation) => violation.id);
 }
 
 const creationSwitch = (): HTMLElement => screen.getByRole("switch", { name: "Allow members to create workspaces" });
@@ -284,14 +289,48 @@ describe("the states of the page", () => {
     expect(server.received("GET", SETTINGS_PATH)).toHaveLength(2);
   }, SLOW_TEST_TIMEOUT_MS);
 
-  it("asks for nothing and offers no action to an admin without a second factor", async () => {
+  it("shows an admin without a second factor the settings read-only, with the prompt in place of the controls", async () => {
     const server = stubAdminServer({ mfaEnabled: false, routes: { [`GET ${SETTINGS_PATH}`]: settingsOf(SETTINGS), [`GET ${STATUS_PATH}`]: status } });
     await open();
 
-    expect(await screen.findByText("The settings are not available yet")).toBeTruthy();
+    expect(await screen.findByText("Changing the settings needs two-factor authentication")).toBeTruthy();
+    expect(screen.queryByText("Two-factor authentication required")).toBeNull();
+    const link = screen.getByRole("link", { name: "Set up two-factor authentication" });
+    expect(link.getAttribute("href")).toBe("/settings/account/security");
+    expect(screen.getByText("Acme Links")).toBeTruthy();
+    expect(screen.getByText("Use your work account.")).toBeTruthy();
+    expect(screen.getByText("Allowed")).toBeTruthy();
     expect(screen.queryByRole("switch")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Send test email" })).toBeNull();
-    expect(server.instanceCalls()).toEqual([]);
+    expect(screen.queryByRole("textbox", { name: "Instance name" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(await screen.findByText("Corp SSO")).toBeTruthy();
+    expect(server.received("GET", SETTINGS_PATH)).toHaveLength(1);
+    expect(server.received("GET", STATUS_PATH)).toHaveLength(1);
+    expect(server.instanceCalls().filter((call) => call.method !== "GET")).toEqual([]);
+    expect(await violations()).toEqual([]);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("shows settings that are not set as not set, for an admin without a second factor", async () => {
+    stubAdminServer({
+      mfaEnabled: false,
+      routes: { [`GET ${SETTINGS_PATH}`]: settingsOf({ allowWorkspaceCreation: null, displayName: null, signInNotice: null }), [`GET ${STATUS_PATH}`]: status },
+    });
+    await open();
+
+    expect((await screen.findAllByText("Not set")).length).toBe(3);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("still sends the test email for an admin without a second factor", async () => {
+    const server = stubAdminServer({
+      mfaEnabled: false,
+      mail: true,
+      routes: { [`GET ${SETTINGS_PATH}`]: settingsOf(SETTINGS), [`GET ${STATUS_PATH}`]: status, [`POST ${TEST_MAIL_PATH}`]: () => new Response(null, { status: 202 }) },
+    });
+    await open();
+    await press(await screen.findByRole("button", { name: "Send test email" }));
+
+    expect((await screen.findAllByText(`A test email to ${ACCOUNT_BODY.email} was queued.`)).length).toBeGreaterThan(0);
+    expect(server.received("POST", TEST_MAIL_PATH)).toHaveLength(1);
   }, SLOW_TEST_TIMEOUT_MS);
 });
 
@@ -315,6 +354,20 @@ describe("the mail banner", () => {
 
     expect(await screen.findByText(BANNER)).toBeTruthy();
     expect(server.instanceCalls()).toEqual([]);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it.each([false, true])("opens Settings & status, which shows the mail status, for an admin with mfaEnabled=%s", async (mfaEnabled) => {
+    const server = stubAdminServer({ mfaEnabled, routes: { [`GET ${SETTINGS_PATH}`]: settingsOf(SETTINGS), [`GET ${STATUS_PATH}`]: status } });
+    await open("/");
+
+    const banner = (await screen.findByText(BANNER)).closest("[role=status]") as HTMLElement;
+    await press(within(banner).getByRole("link", { name: "Open settings & status" }));
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Settings & status" })).toBeTruthy();
+    const table = await screen.findByRole("table", { name: "Operator configuration" });
+    expect(within(within(table).getByText("Mail").closest("tr") as HTMLElement).getByText("Not configured")).toBeTruthy();
+    expect(screen.queryByText("Two-factor authentication required")).toBeNull();
+    expect(server.received("GET", STATUS_PATH)).toHaveLength(1);
   }, SLOW_TEST_TIMEOUT_MS);
 
   it("is not shown to an account that is not an instance admin", async () => {

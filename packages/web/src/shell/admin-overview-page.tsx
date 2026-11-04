@@ -1,11 +1,11 @@
 import { Button } from "@slugbase/ui";
-import { Banner, EmptyState, Loading, MetricTile, SettingsSection, ShieldCheckIcon, StatusBadge } from "@slugbase/ui/patterns";
+import { Banner, Loading, MetricTile, SettingsSection, StatusBadge } from "@slugbase/ui/patterns";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
-import { useAdminActionsEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
+import { useAdminReadEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
 import { instanceStatusQuery, type InstanceStatus } from "./instance-status.ts";
 
 function Row({ label, children }: { label: string; children: ReactNode }): ReactElement {
@@ -104,26 +104,18 @@ function Overview({ status }: { status: InstanceStatus }): ReactElement {
 
 /**
  * `/admin`, the instance overview (doc 03 section 12): the counts, the version and migration level, the health of
- * the background jobs and what the operator has configured, from the instance status. The server refuses the status
- * to an admin without a second factor, so the page does not ask for it then; it says what is missing instead.
+ * the background jobs and what the operator has configured, from the instance status. It is open to an admin without a second
+ * factor.
  */
 export function AdminOverviewPage(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
-  const enabled = useAdminActionsEnabled();
+  const enabled = useAdminReadEnabled();
   const status = useQuery({ ...instanceStatusQuery(router.options.context.api), enabled });
   useRefreshStandingOnForbidden(status.error);
 
   let body: ReactElement;
-  if (!enabled) {
-    body = (
-      <EmptyState
-        description={t("admin.overview.mfaRequired.description")}
-        icon={<ShieldCheckIcon aria-hidden="true" />}
-        title={t("admin.overview.mfaRequired.title")}
-      />
-    );
-  } else if (status.data !== undefined) {
+  if (status.data !== undefined) {
     body = <Overview status={status.data} />;
   } else if (status.isError) {
     body = (

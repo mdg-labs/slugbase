@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } f
 import { useTranslation } from "react-i18next";
 import { ME_QUERY_KEY, type Me } from "../account/me.ts";
 import { isSessionEnded } from "../api/client.ts";
+import { useAdminActionsEnabled } from "./admin-access.ts";
 import { ADMIN_ACCOUNTS_QUERY_KEY, instanceAccountsQuery } from "./admin-accounts.ts";
 import { OwnerInvitationLink } from "./admin-owner-invitation-dialog.tsx";
 import { useRateLimitMessage } from "./admin-rate-limit.ts";
@@ -24,7 +25,8 @@ const [ACCOUNT_MODE, INVITATION_MODE] = OWNER_MODES;
  * Creates a workspace for an owner (doc 03 section 12, `form-overlay`): the name, and the owner chosen from the existing accounts with a
  * `picker` or an address that an owner invitation is sent to. The admin does not become a member. Where mail is configured the
  * invitation is mailed and a toast says so; otherwise its link is shown once. The accounts that can be chosen are read when the dialog
- * opens, and a failed read is told in place without closing off the invitation by address.
+ * opens, and a failed read is told in place without closing off the invitation by address. The server lists accounts only to an admin with a
+ * second factor, so an admin without one is not asked for the list and invites the owner by address.
  */
 export function CreateInstanceWorkspaceDialog({ onClose }: { onClose: () => void }): ReactElement {
   const { t } = useTranslation();
@@ -32,10 +34,12 @@ export function CreateInstanceWorkspaceDialog({ onClose }: { onClose: () => void
   const queryClient = useQueryClient();
   const api = router.options.context.api;
   const rateLimitMessage = useRateLimitMessage();
-  const accounts = useQuery({ ...instanceAccountsQuery(api), staleTime: 0 });
+  const canChooseAccount = useAdminActionsEnabled();
+  const accounts = useQuery({ ...instanceAccountsQuery(api), staleTime: 0, enabled: canChooseAccount });
   const controller = useRef<AbortController | null>(null);
   const [name, setName] = useState("");
-  const [mode, setMode] = useState<OwnerMode>(ACCOUNT_MODE);
+  const [chosenMode, setMode] = useState<OwnerMode>(ACCOUNT_MODE);
+  const mode = canChooseAccount ? chosenMode : INVITATION_MODE;
   const [accountId, setAccountId] = useState<string | undefined>(undefined);
   const [email, setEmail] = useState("");
   const [missing, setMissing] = useState<"name" | "owner" | undefined>(undefined);
@@ -190,21 +194,25 @@ export function CreateInstanceWorkspaceDialog({ onClose }: { onClose: () => void
               value={name}
             />
           </FormField>
-          <SegmentedChoice
-            disabled={pending}
-            label={t("admin.workspaces.create.owner.label")}
-            name="ownerMode"
-            onValueChange={(next) => {
-              setMode(OWNER_MODES.find((candidate) => candidate === next) ?? ACCOUNT_MODE);
-              setMissing(undefined);
-              setFailure(undefined);
-            }}
-            options={[
-              { value: ACCOUNT_MODE, label: t("admin.workspaces.create.owner.account.option") },
-              { value: INVITATION_MODE, label: t("admin.workspaces.create.owner.email.option") },
-            ]}
-            value={mode}
-          />
+          {canChooseAccount ? (
+            <SegmentedChoice
+              disabled={pending}
+              label={t("admin.workspaces.create.owner.label")}
+              name="ownerMode"
+              onValueChange={(next) => {
+                setMode(OWNER_MODES.find((candidate) => candidate === next) ?? ACCOUNT_MODE);
+                setMissing(undefined);
+                setFailure(undefined);
+              }}
+              options={[
+                { value: ACCOUNT_MODE, label: t("admin.workspaces.create.owner.account.option") },
+                { value: INVITATION_MODE, label: t("admin.workspaces.create.owner.email.option") },
+              ]}
+              value={mode}
+            />
+          ) : (
+            <p className="text-muted-foreground text-sm">{t("admin.workspaces.create.owner.needsSecondFactor")}</p>
+          )}
           {mode === ACCOUNT_MODE ? (
             accounts.isError ? (
               <Banner

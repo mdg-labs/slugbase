@@ -6,9 +6,9 @@ import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, ME_PATH, WORKSPACES_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // /admin (doc 03 section 12): the sidebar item and the pages are for an instance admin only, an admin without a second
-// factor gets the banner and no request for the status, and the overview shows the status the server answers. The failure
+// factor sees the overview as any admin does, with no area-wide banner, and the overview shows the status the server answers. The failure
 // scenarios are an account that is not an admin reaching the area, an area shown while the account cannot be loaded, an
-// admin without a second factor asking for the status, and a failed status request shown as zeros or "not configured".
+// admin without a second factor shown the status, and a failed status request shown as zeros or "not configured".
 
 type Transport = (request: Request) => Promise<Response>;
 type InstanceStatus = ComponentTypes["schemas"]["InstanceStatus"];
@@ -159,13 +159,13 @@ describe("the admin area for an account that acts in no workspace", () => {
     expect(screen.getByRole("button", { name: "Workspace: No workspace" })).toBeTruthy();
   });
 
-  it("shows an instance admin without a second factor the banner, not /no-workspace", async () => {
+  it("shows an instance admin without a second factor the overview, not /no-workspace", async () => {
     const server = stubServer({ noWorkspace: true, mfaEnabled: false });
     await open("/admin");
 
-    expect(await screen.findByText("Two-factor authentication required")).toBeTruthy();
+    expect(await screen.findByText("1,204")).toBeTruthy();
     expect(window.location.pathname).toBe("/admin");
-    expect(server.statusCalls()).toBe(0);
+    expect(server.statusCalls()).toBe(1);
   });
 
   it.each(["/admin", "/admin/accounts"])("shows an account that is not an instance admin the 403 page on %s", async (path) => {
@@ -266,29 +266,25 @@ describe("the admin navigation", () => {
 });
 
 describe("an admin without two-factor authentication", () => {
-  it.each(["/admin", "/admin/workspaces", "/admin/accounts", "/admin/settings"])(
-    "sees the banner on %s, with the way to the security page, and the status is not requested",
-    async (path) => {
-      const server = stubServer({ mfaEnabled: false });
-      await open(path);
-
-      expect(await screen.findByText("Two-factor authentication required")).toBeTruthy();
-      const link = screen.getByRole("link", { name: "Set up two-factor authentication" });
-      expect(link.getAttribute("href")).toBe("/settings/account/security");
-      expect(server.statusCalls()).toBe(0);
-    },
-  );
-
-  it("sees the overview unavailable instead of the status", async () => {
+  it.each(["/admin", "/admin/workspaces", "/admin/accounts", "/admin/settings"])("sees no area-wide banner on %s", async (path) => {
     stubServer({ mfaEnabled: false });
-    await open("/admin");
+    await open(path);
 
-    expect(await screen.findByRole("heading", { name: "The overview is not available yet" })).toBeTruthy();
-    expect(screen.queryByText("Accounts", { selector: "p" })).toBeNull();
-    expect(screen.queryByText("Not configured")).toBeNull();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByText("Two-factor authentication required")).toBeNull();
   });
 
-  it("does not see the banner once the account has a second factor", async () => {
+  it("sees the status of the instance, and it is requested", async () => {
+    const server = stubServer({ mfaEnabled: false });
+    await open("/admin");
+
+    expect(await screen.findByText("1.4.2")).toBeTruthy();
+    expect(await screen.findByText("1,204")).toBeTruthy();
+    expect(screen.queryByText("The overview is not available yet")).toBeNull();
+    expect(server.statusCalls()).toBe(1);
+  });
+
+  it("sees the same overview as an admin with a second factor", async () => {
     stubServer({ mfaEnabled: true });
     await open("/admin");
 
@@ -406,10 +402,10 @@ describe("the overview", () => {
     expect(await violations()).toEqual([]);
   });
 
-  it("has no axe violations while the banner and the unavailable overview show", async () => {
+  it("has no axe violations for an admin without a second factor", async () => {
     stubServer({ mfaEnabled: false });
     await open("/admin");
-    await screen.findByRole("heading", { name: "The overview is not available yet" });
+    await screen.findByText("1,204");
 
     expect(await violations()).toEqual([]);
   });

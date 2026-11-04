@@ -1040,16 +1040,13 @@
       "retry": "Try again"
     },
     "mfaRequired": {
-      "title": "Two-factor authentication required",
-      "description": "Instance administration is off until you turn on two-factor authentication for your account.",
-      "action": "Set up two-factor authentication"
+      "title": "Turn on two-factor authentication first",
+      "description": "This action changes the instance or who can reach it, so it needs two-factor authentication on your account. Set it up under Security, then come back.",
+      "action": "Set up two-factor authentication",
+      "cancel": "Not now"
     },
     "overview": {
       "title": "Overview",
-      "mfaRequired": {
-        "title": "The overview is not available yet",
-        "description": "Turn on two-factor authentication to see the status of this instance."
-      },
       "loadFailed": {
         "title": "The status of the instance could not be loaded",
         "description": "Try again. If this continues, check the server's logs.",
@@ -1095,10 +1092,6 @@
     },
     "workspaces": {
       "title": "Workspaces",
-      "mfaRequired": {
-        "title": "Workspaces are not available yet",
-        "description": "Turn on two-factor authentication to manage the workspaces of this instance."
-      },
       "loadFailed": {
         "title": "The workspaces could not be loaded",
         "description": "Try again. If this continues, check the server's logs.",
@@ -1157,7 +1150,8 @@
             "label": "Email address",
             "description": "The workspace waits for this address to accept the invitation and become its first owner.",
             "required": "Enter an email address."
-          }
+          },
+          "needsSecondFactor": "The owner is invited by email. Choosing an existing account needs two-factor authentication on your account."
         },
         "error": {
           "invalidName": "Use a name of 1 to 64 characters.",
@@ -1411,8 +1405,8 @@
       "title": "Settings & status",
       "saved": "Saved.",
       "mfaRequired": {
-        "title": "The settings are not available yet",
-        "description": "Turn on two-factor authentication to change the settings of this instance."
+        "title": "Changing the settings needs two-factor authentication",
+        "description": "You can read the settings below. Turn on two-factor authentication for your account to change them."
       },
       "loadFailed": {
         "title": "The settings could not be loaded",
@@ -1471,6 +1465,11 @@
         },
         "envOnly": "This is read-only. Credentials and connections are set through environment variables on the server only, never in this app.",
         "loadFailed": "The configuration could not be loaded"
+      },
+      "readOnly": {
+        "on": "Allowed",
+        "off": "Not allowed",
+        "notSet": "Not set"
       }
     }
   },
@@ -2839,7 +2838,9 @@
       "settings": "Workspace settings",
       "loadFailed": "Your workspaces could not be loaded.",
       "retry": "Try again",
-      "empty": "No other workspaces yet."
+      "empty": "No other workspaces yet.",
+      "emptyAdmin": "No other workspaces yet. Create one under Admin → Workspaces.",
+      "createInAdmin": "Create a workspace in Admin"
     },
     "switch": {
       "failed": {

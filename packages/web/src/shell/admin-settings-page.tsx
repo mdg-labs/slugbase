@@ -2,12 +2,10 @@ import { Button, Input } from "@slugbase/ui";
 import {
   Banner,
   DataTable,
-  EmptyState,
   FormField,
   Loading,
   SettingSwitch,
   SettingsSection,
-  ShieldCheckIcon,
   StatusBadge,
   feedbackToast,
   type DataTableColumn,
@@ -18,7 +16,8 @@ import { useState, type ReactElement, type ReactNode, type SyntheticEvent } from
 import { useTranslation } from "react-i18next";
 import { ME_QUERY_KEY } from "../account/me.ts";
 import { useCachedAccount } from "../account/use-cached-account.ts";
-import { useAdminActionsEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
+import { useAdminActionsEnabled, useAdminReadEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
+import { EnrolFirstBanner } from "./admin-enrol-prompt.tsx";
 import { useRateLimitMessage } from "./admin-rate-limit.ts";
 import {
   ADMIN_SETTINGS_QUERY_KEY,
@@ -205,6 +204,37 @@ function SignInForm({ settings, onSaved }: { settings: InstanceSettings; onSaved
   );
 }
 
+/** What an admin without a second factor sees of the stored settings: the values, with the prompt to turn one on in place of the controls. */
+function ReadOnlySettings({ settings }: { settings: InstanceSettings }): ReactElement {
+  const { t } = useTranslation();
+  const creation =
+    settings.allowWorkspaceCreation === null
+      ? t("admin.settings.readOnly.notSet")
+      : settings.allowWorkspaceCreation
+        ? t("admin.settings.readOnly.on")
+        : t("admin.settings.readOnly.off");
+  const row = (label: string, value: string): ReactElement => (
+    <div className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="wrap-anywhere text-end">{value}</dd>
+    </div>
+  );
+  return (
+    <>
+      <EnrolFirstBanner description={t("admin.settings.mfaRequired.description")} title={t("admin.settings.mfaRequired.title")} />
+      <SettingsSection description={t("admin.settings.creation.description")} title={t("admin.settings.creation.title")}>
+        <dl className="flex flex-col divide-y">{row(t("admin.settings.creation.switch.label"), creation)}</dl>
+      </SettingsSection>
+      <SettingsSection description={t("admin.settings.signIn.description")} title={t("admin.settings.signIn.title")}>
+        <dl className="flex flex-col divide-y">
+          {row(t("admin.settings.signIn.displayName.label"), settings.displayName ?? t("admin.settings.readOnly.notSet"))}
+          {row(t("admin.settings.signIn.notice.label"), settings.signInNotice ?? t("admin.settings.readOnly.notSet"))}
+        </dl>
+      </SettingsSection>
+    </>
+  );
+}
+
 function TestMailSection(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
@@ -295,40 +325,31 @@ function ConfigurationTable({ status }: { status: InstanceStatus }): ReactElemen
 
 /**
  * `/admin/settings`, the settings and status of the instance (doc 03 section 12): whether members may create workspaces, the name and
- * the notice the sign-in page shows, a test email to the admin, and what the operator has configured, read-only. The server refuses all
- * of it to an admin without a second factor, so the page asks for nothing and offers no action then; it says what is missing instead.
+ * the notice the sign-in page shows, a test email to the admin, and what the operator has configured, read-only. An admin without a
+ * second factor reads the settings and the status and sends the test email; the controls that change the settings give way to the prompt
+ * to turn one on.
  */
 export function AdminSettingsPage(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const api = router.options.context.api;
-  const enabled = useAdminActionsEnabled();
+  const enabled = useAdminReadEnabled();
+  const actionsEnabled = useAdminActionsEnabled();
   const settings = useQuery({ ...instanceSettingsQuery(api), enabled });
   const status = useQuery({ ...instanceStatusQuery(api), enabled });
   const [saved, setSaved] = useState(false);
   useRefreshStandingOnForbidden(settings.error);
   useRefreshStandingOnForbidden(status.error);
 
-  if (!enabled) {
-    return (
-      <>
-        <h1 className="font-semibold text-2xl leading-none">{t("admin.settings.title")}</h1>
-        <EmptyState
-          description={t("admin.settings.mfaRequired.description")}
-          icon={<ShieldCheckIcon aria-hidden="true" />}
-          title={t("admin.settings.mfaRequired.title")}
-        />
-      </>
-    );
-  }
-
   let stored: ReactElement;
   if (settings.data !== undefined) {
-    stored = (
+    stored = actionsEnabled ? (
       <>
         <WorkspaceCreationSection onSaved={setSaved} settings={settings.data} />
         <SignInForm onSaved={setSaved} settings={settings.data} />
       </>
+    ) : (
+      <ReadOnlySettings settings={settings.data} />
     );
   } else if (settings.isError) {
     stored = (

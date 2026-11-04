@@ -10,6 +10,7 @@ import { AccountActionConfirm, ResetLinkDialog, useAccountRefusalMessage, useRef
 import { useAdminActionsEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
 import { AccessModeDialog } from "./admin-access-mode-dialog.tsx";
 import { AdminDeleteAccountDialog } from "./admin-delete-account-dialog.tsx";
+import { EnrolLink } from "./admin-enrol-prompt.tsx";
 import { instanceAccountsQuery, issueInstanceAccountResetLink, resendInstanceAccountVerification, type InstanceAccount } from "./admin-accounts.ts";
 
 type Pending =
@@ -196,6 +197,7 @@ export function AdminAccountsPage(): ReactElement {
     body = (
       <EmptyState
         description={t("admin.accounts.mfaRequired.description")}
+        actions={<EnrolLink />}
         icon={<ShieldCheckIcon aria-hidden="true" />}
         title={t("admin.accounts.mfaRequired.title")}
       />
