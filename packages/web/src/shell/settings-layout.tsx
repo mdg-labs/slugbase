@@ -4,6 +4,7 @@ import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router"
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery } from "../account/me.ts";
+import { useIsGranted } from "../entitlements/index.ts";
 import { Slot } from "../extensions/index.ts";
 import { activeRole, canAdminister } from "./workspace.ts";
 
@@ -16,23 +17,32 @@ const GENERAL_PATH = "/settings/workspace";
 const MEMBERS_PATH = "/settings/workspace/members";
 const TEAMS_PATH = "/settings/workspace/teams";
 const AI_PATH = "/settings/workspace/ai";
+const AUDIT_PATH = "/settings/workspace/audit";
 
 /**
  * The layout of the settings pages (doc 03 section 11): the settings navigation beside the page, a
  * Select of the same pages on a narrow screen. Each page adds its own entry as it arrives. The Workspace
  * group is for an account that acts in a workspace; it lists the pages of the workspace that the account's
- * role may open: General and Teams for everyone, Members and AI suggestions for admins and owners.
+ * role may open: General and Teams for everyone, Members and AI suggestions for admins and owners, and for them the
+ * Audit log where the workspace holds `audit.log`.
  */
 export function SettingsLayout(): ReactElement {
+  const router = useRouter();
+  const me = useQuery(meQuery(router.options.context.api));
+  // An account in the export-only access mode has the export page alone (doc 02 section 2.11), without the navigation to pages the server refuses, and its entitlements are not read.
+  if (me.data?.account.accessMode === "exportOnly") {
+    return <Outlet />;
+  }
+  return <SettingsPages />;
+}
+
+function SettingsPages(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const me = useQuery(meQuery(router.options.context.api));
   const inWorkspace = me.data !== undefined && me.data.activeWorkspaceId !== null;
-  // An account in the export-only access mode has the export page alone (doc 02 section 2.11), without the navigation to pages the server refuses.
-  if (me.data?.account.accessMode === "exportOnly") {
-    return <Outlet />;
-  }
+  const auditGranted = useIsGranted("audit.log");
   const groups: SettingsNavGroup[] = [
     {
       id: "account",
@@ -56,10 +66,11 @@ export function SettingsLayout(): ReactElement {
     const members = { id: "members", label: t("settings.nav.members"), link: <Link to={MEMBERS_PATH} />, current: pathname === MEMBERS_PATH };
     const teams = { id: "teams", label: t("settings.nav.teams"), link: <Link to={TEAMS_PATH} />, current: pathname === TEAMS_PATH };
     const ai = { id: "ai", label: t("settings.nav.ai"), link: <Link to={AI_PATH} />, current: pathname === AI_PATH };
+    const audit = { id: "audit", label: t("settings.nav.audit"), link: <Link to={AUDIT_PATH} />, current: pathname === AUDIT_PATH };
     groups.push({
       id: "workspace",
       label: t("settings.nav.workspace"),
-      items: canAdminister(activeRole(me.data)) ? [general, members, teams, ai] : [general, teams],
+      items: canAdminister(activeRole(me.data)) ? [general, members, teams, ai, ...(auditGranted ? [audit] : [])] : [general, teams],
     });
   }
   return (
@@ -88,6 +99,8 @@ export function SettingsLayout(): ReactElement {
             void router.navigate({ to: TEAMS_PATH });
           } else if (id === "ai") {
             void router.navigate({ to: AI_PATH });
+          } else if (id === "audit") {
+            void router.navigate({ to: AUDIT_PATH });
           }
         }}
       />

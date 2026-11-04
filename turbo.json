@@ -78,6 +78,17 @@
       ],
       "outputs": ["coverage/**"]
     },
+    "@slugbase/web#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/docs/user/**",
+        "$TURBO_ROOT$/docs/self-hosting/**",
+        "$TURBO_ROOT$/docs/releases/**",
+        "$TURBO_ROOT$/scripts/docs-check/**"
+      ],
+      "outputs": ["coverage/**"]
+    },
     "test:integration": {
       "dependsOn": ["^build"],
       "passThroughEnv": ["SLUGBASE_TEST_PG_URL"],

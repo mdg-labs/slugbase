@@ -380,7 +380,7 @@ Available to admins and owners in **Settings → Workspace** (doc 03):
 - **General**: name (a rename is the audited `workspace.renamed` event with the old and new name, and a stale tab's rename is refused, doc 04 §2.4); delete workspace (owner).
 - **Members**: list with role, teams, joined date, last active (the member's most recent request in this workspace); invite; change role; remove (with the §3.6 content choice); transfer ownership; pending invitations with resend/revoke; seat usage (Cloud, via slot).
 - **Teams**: create, rename, describe, delete; manage team members.
-- **Audit log** (subject to `audit.log`): read-only, with filters by actor, action and date range. Recorded actions (each exactly once, from one catalog of dotted action names grouped into categories): sign-ins and token events are **not** workspace audit events (they are account security events, shown under Account → Security); workspace events are workspace creation and renaming, membership changes (added, removed, left, role changed, ownership transferred), invitations (created, resent, link created, revoked, accepted), team changes, share grants and revocations (single and bulk), bulk bookmark deletes (`bookmark.bulk_deleted`, recording only how many bookmarks were deleted; a request that deletes none records nothing), bookmarks archived or restored by a composition (`bookmark.archived` and `bookmark.restored`, recording only how many bookmarks changed state, and 0 for a repeat; the actor is the system, §5.6), imports (`import.completed`, recording only how many bookmarks were created, skipped and refused, how many slugs were dropped and how many folders and tags were created; one event for each import that writes and none for a dry run; the actor is the account or the API token that asked for it), exports (`export.created`, recording only how many bookmarks, folders, tags and shared bookmarks the document holds; the actor is the account or the API token that asked for it), settings changes (including the AI toggle), an instance admin adding themselves as a member (§11.1), workspace deletion request, billing changes (Cloud). Each event: time, actor (the label at the time; the account reference is removed when the account is deleted), action, target type and ID, a small metadata object validated per action (never secrets, email text, or URLs and titles beyond names). Newest first, with "load more" pagination (Q42). Retention is `AUDIT_RETENTION_DAYS` (default 365, `0` keeps events forever, Q53).
+- **Audit log** (subject to `audit.log`): read-only, with filters by actor, action and date range. Recorded actions (each exactly once, from one catalog of dotted action names grouped into categories): sign-ins and token events are **not** workspace audit events (they are account security events, shown under Account → Security); workspace events are workspace creation and renaming, membership changes (joined, removed, left, role changed, ownership transferred), invitations (created, resent, link created, revoked; an acceptance is recorded as the member joining, `member.joined` with the role, whether the person signs in, registers or uses a provider, and the teams the invitation names are joined as part of it and record no event of their own, so no `invitation.accepted` action exists), team changes, share grants and revocations (single and bulk), bulk bookmark deletes (`bookmark.bulk_deleted`, recording only how many bookmarks were deleted; a request that deletes none records nothing), bookmarks archived or restored by a composition (`bookmark.archived` and `bookmark.restored`, recording only how many bookmarks changed state, and 0 for a repeat; the actor is the system, §5.6), imports (`import.completed`, recording only how many bookmarks were created, skipped and refused, how many slugs were dropped and how many folders and tags were created; one event for each import that writes and none for a dry run; the actor is the account or the API token that asked for it), exports (`export.created`, recording only how many bookmarks, folders, tags and shared bookmarks the document holds; the actor is the account or the API token that asked for it), settings changes (including the AI toggle), an instance admin adding themselves as a member (§11.1), workspace deletion request, billing changes (Cloud). Each event: time, actor (the label at the time; the account reference is removed when the account is deleted), action, target type and ID, a small metadata object validated per action (never secrets, email text, or URLs and titles beyond names). Newest first, with "load more" pagination (Q42). Retention is `AUDIT_RETENTION_DAYS` (default 365, `0` keeps events forever, Q53).
 - **AI suggestions**: an enable toggle for the workspace (default on when the AI adapter is configured and `ai.suggestions` is granted); a change is an audited settings change (`workspace.settings_changed`: the setting and its old and new value). No credentials or models in the workspace UI — those are operator configuration (D22).
 - **No SMTP or OIDC panels** in the workspace UI on either edition: they are operator configuration. The CE instance admin sees their *status* in the admin area (§11).
 
@@ -466,7 +466,7 @@ Per-member export (above) plus the operator's database backup (`pg_dump` / volum
 
 ## 16. Constants
 
-Starting values. **Config** values are environment or instance settings (doc 07 lists the keys); **fixed** values are product invariants changed only through a decision.
+Starting values. **Config** values are environment or instance settings (doc 07 lists the keys) and the row names its key; **fixed** values are product invariants changed only through a decision, and the row names the constant that holds the value where one does.
 
 | Item | Value | Kind | Section |
 |---|---|---|---|
@@ -475,28 +475,28 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 | Slug uniqueness | per owner within a workspace | fixed | §6.1 |
 | Bookmark title / description / URL max | 300 / 1 000 / 2 048 chars | fixed | §5.1 |
 | Folder name / tag name / team name max | 64 / 40 / 64 chars | fixed | §7, §4 |
-| Page sizes | 24 / 48 / 96; max 100 via API | config | §5.7 |
+| Page sizes | 24 / 48 / 96 (`BOOKMARK_PAGE_SIZES` in `packages/web/src/bookmarks/list-search.ts`); max 100 via API (`BOOKMARK_LIST_MAX_LIMIT` in `@slugbase/contracts`) | fixed | §5.7 |
 | Select-all cap | 5 000 IDs (`BOOKMARK_SELECT_ALL_CAP` in `@slugbase/contracts`) | fixed | §5.7 |
-| Import max bookmarks / HTML size | 5 000 / 5 MiB | config | §13.1 |
+| Import max bookmarks / HTML size | 5 000 / 5 MiB (`IMPORT_MAX_BOOKMARKS` / `IMPORT_MAX_BYTES` in `@slugbase/contracts`; the browser-file limit `IMPORT_NETSCAPE_MAX_FILE_BYTES` is the same value) | fixed | §13.1 |
 | Import max new folders and tags together | 10 000 (`IMPORT_MAX_NEW_NAMES` in `@slugbase/contracts`) | fixed | §7, §13.1 |
 | Import max folder and tag links together | 100 000 (`IMPORT_MAX_LINKS` in `@slugbase/contracts`) | fixed | §13.1 |
-| Metadata cache / AI cache | 7 days / 30 days | config | §5.4, §14 |
-| Metadata HTML read cap / sync budget | 512 KiB / 3 s | config | §5.4 |
-| Favicon max size | 64 KiB | config | §5.4 |
-| Session TTL (sliding) / remember-me / absolute cap | 30 d / 90 d / 180 d | config | §2.4 |
+| Metadata cache / AI cache | 7 days / 30 days (`URL_METADATA_LIFETIME_DAYS` in `packages/db/src/repositories/url-metadata.ts` / `AI_SUGGESTION_LIFETIME_DAYS` in `packages/db/src/repositories/ai-suggestions.ts`) | fixed | §5.4, §14 |
+| Metadata HTML read cap / sync budget | 512 KiB / 3 s (`METADATA_HTML_MAX_BYTES` in `@slugbase/core`; `DEFAULT_METADATA_BUDGET_MS` in `packages/server/src/routes/bookmarks/index.ts`, which a composition can override in code with `metadataBudgetMs`, with no environment key) | fixed | §5.4 |
+| Favicon max size | 64 KiB (`FAVICON_MAX_BYTES` in `@slugbase/core`) | fixed | §5.4 |
+| Session TTL (sliding) / remember-me / absolute cap | 30 d / 90 d / 180 d (the intervals of `sys_session_create`, `sys_session_lookup` and `sys_session_promote` in `@slugbase/db`; `SESSION_ABSOLUTE_DAYS` in `@slugbase/core` for the cap and the cookie lifetime) | fixed | §2.4 |
 | Pending-MFA session | 5 min, 5 attempts | fixed | §2.3 |
-| Password length | 12–256 | config (min) | §2.5 |
-| Signup verification / password reset / email-change token TTL | 24 h / 1 h / 1 h | config | §2.5, §2.6 (Q48) |
-| Invitation TTL | 7 days | config | §3.4 |
+| Password length | 12–256 (`PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` in `@slugbase/core`) | fixed | §2.5 |
+| Signup verification / password reset / email-change token TTL | 24 h / 1 h / 1 h (`CREDENTIAL_TOKEN_TTL_SECONDS` in `@slugbase/core`) | fixed | §2.5, §2.6 (Q48) |
+| Invitation TTL | 7 days (`INVITATION_TTL_SECONDS` in `@slugbase/core`) | fixed | §3.4 |
 | Re-authentication window | 10 min | fixed | doc 04 §4.4 |
-| Audit retention | 365 days (`0` keeps events forever) | config | §10 |
+| Audit retention | 365 days (`0` keeps events forever) | config (`AUDIT_RETENTION_DAYS`) | §10 |
 | Idempotency key retention | 24 h | fixed | doc 04 §6.3 |
 | List total shown exactly up to | 10 000 | fixed | §5.7 |
 | MFA backup codes | 10, single-use | fixed | §2.7 |
 | API tokens per account | 10 | fixed | §2.9 |
 | API token prefix | `slb_` | fixed | §2.9 |
-| AI suggestion timeout / max tags | 5 s / 5 | config | §14 |
-| Dashboard quick access / pinned / tags | 8 / 12 / 12 | config | §9.3 |
+| AI suggestion timeout / max tags | 5 s / 5 (`AI_SUGGEST_BUDGET_MS` in `@slugbase/core`, which a composition can override in code with `aiBudgetMs`, with no environment key; `AI_SUGGESTION_TAGS_MAX` in `@slugbase/contracts`) | fixed | §14 |
+| Dashboard quick access / pinned / tags | 8 / 12 / 12 (`DASHBOARD_QUICK_ACCESS_LIMIT`, `DASHBOARD_PINNED_LIMIT`, `DASHBOARD_TOP_TAGS_LIMIT` in `@slugbase/contracts`) | fixed | §9.3 |
 | Free bookmark cap, seat minimum, grace period, archive rule | see doc 06 | — | doc 06 |
 
 ### Rate limits

@@ -921,8 +921,7 @@ export interface AuditListAsk {
     readonly actions?: readonly string[] | undefined;
     // (undocumented)
     readonly actorAccountId?: string | undefined;
-    // (undocumented)
-    readonly category?: AuditCategory | undefined;
+    readonly categories?: readonly AuditCategory[] | undefined;
     // (undocumented)
     readonly cursor: string | undefined;
     // (undocumented)

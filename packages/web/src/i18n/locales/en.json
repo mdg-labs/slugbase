@@ -1486,7 +1486,8 @@
       "general": "General",
       "members": "Members",
       "teams": "Teams",
-      "ai": "AI suggestions"
+      "ai": "AI suggestions",
+      "audit": "Audit log"
     },
     "account": {
       "title": "Profile",
@@ -3010,6 +3011,177 @@
       "cancel": "Cancel",
       "done": "Team “{name}” deleted.",
       "gone": "This team was already deleted."
+    }
+  },
+  "audit": {
+    "title": "Audit log",
+    "description": "Who changed what in this workspace, newest first.",
+    "loading": "Loading the audit log",
+    "loadFailed": "The audit log could not be loaded",
+    "loadMore": "Load more",
+    "loadMoreFailed": "More events could not be loaded",
+    "count": "{count, plural, one {Showing # event} other {Showing # events}}",
+    "empty": {
+      "title": "No events yet",
+      "description": "Changes to members, teams, sharing and settings are recorded here."
+    },
+    "filters": {
+      "label": "Filter the audit log",
+      "clear": "Clear filters",
+      "noMatch": {
+        "title": "No events match these filters",
+        "description": "Try other filters, or clear them to see the whole log."
+      },
+      "actor": {
+        "label": "Actor",
+        "placeholder": "Any actor",
+        "empty": "No member matches.",
+        "loading": "Loading members",
+        "unavailable": "The members could not be loaded, so the actor filter is not available.",
+        "former": "Former member",
+        "unknown": "Actor"
+      },
+      "range": {
+        "label": "Date range",
+        "any": "Any time",
+        "24h": "Last 24 hours",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "custom": "Custom range",
+        "first": "First day",
+        "last": "Last day",
+        "orderError": "The last day is before the first day.",
+        "boundsError": "Enter a day from year 0001 to 9999.",
+        "refused": "These days could not be used. Choose other days.",
+        "chip": {
+          "between": "{from} to {to}",
+          "from": "From {from}",
+          "to": "Until {to}"
+        }
+      },
+      "category": {
+        "label": "Action category",
+        "placeholder": "Any category",
+        "empty": "No category matches.",
+        "remove": "Remove category {name}"
+      }
+    },
+    "column": {
+      "time": "Time",
+      "actor": "Actor",
+      "action": "Action",
+      "target": "Target"
+    },
+    "actor": {
+      "deleted": "deleted account",
+      "system": "System",
+      "apiToken": "API token"
+    },
+    "target": {
+      "none": "No target",
+      "sharedWith": "with {name}"
+    },
+    "entities": {
+      "workspace": "Workspace",
+      "member": "Member",
+      "invitation": "Invitation",
+      "team": "Team",
+      "bookmark": "Bookmark",
+      "folder": "Folder"
+    },
+    "categories": {
+      "workspace": "Workspace",
+      "member": "Member",
+      "invitation": "Invitation",
+      "team": "Team",
+      "bookmark": "Bookmark",
+      "share": "Sharing",
+      "export": "Export",
+      "import": "Import",
+      "other": "Other"
+    },
+    "actions": {
+      "workspace": {
+        "created": "Workspace created",
+        "renamed": "Workspace renamed",
+        "settings_changed": "Workspace setting changed",
+        "deletion_requested": "Workspace deletion requested",
+        "ownership_transferred": "Ownership transferred"
+      },
+      "member": {
+        "role_changed": "Member role changed",
+        "removed": "Member removed",
+        "left": "Member left",
+        "joined": "Member joined",
+        "instance_admin_joined": "Instance administrator joined"
+      },
+      "invitation": {
+        "created": "Invitation sent",
+        "resent": "Invitation resent",
+        "link_created": "Invitation link created",
+        "revoked": "Invitation revoked"
+      },
+      "team": {
+        "created": "Team created",
+        "updated": "Team renamed",
+        "deleted": "Team deleted",
+        "members_changed": "Team members changed"
+      },
+      "bookmark": {
+        "archived": "Bookmarks archived",
+        "restored": "Bookmarks restored",
+        "bulk_deleted": "Bookmarks deleted"
+      },
+      "share": {
+        "granted": "Share granted",
+        "revoked": "Share revoked",
+        "bulk_granted": "Several bookmarks shared"
+      },
+      "export": {
+        "created": "Export created"
+      },
+      "import": {
+        "completed": "Import completed"
+      }
+    },
+    "panel": {
+      "description": "Everything this event recorded.",
+      "close": "Close the event details",
+      "time": "Time",
+      "actor": "Actor",
+      "action": "Action",
+      "category": "Category",
+      "target": "Target",
+      "entityId": "Identifier of the target",
+      "copyId": "Copy the identifier",
+      "copied": "Identifier copied",
+      "metadata": "Details",
+      "noMetadata": "This event recorded no further details."
+    },
+    "metadata": {
+      "name": "Name",
+      "from": "From",
+      "to": "To",
+      "setting": "Setting",
+      "demoteSelf": "Previous owner demoted",
+      "content": "Content",
+      "transferTo": "Content transferred to",
+      "role": "Role",
+      "count": "Count",
+      "targetKind": "Shared with (kind)",
+      "targetId": "Shared with (identifier)",
+      "targetName": "Shared with (name)",
+      "bookmarks": "Bookmarks",
+      "folders": "Folders",
+      "tags": "Tags",
+      "shared": "Shared",
+      "created": "Created",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "slugsDropped": "Slugs dropped",
+      "foldersCreated": "Folders created",
+      "tagsCreated": "Tags created"
     }
   },
   "sharing": {

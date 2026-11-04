@@ -24,6 +24,7 @@ export {
 } from "./command-palette.tsx";
 export { ContextActions, type ContextActionsProps } from "./context-actions.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
+export { DATE_RANGE_MAX_DAY, DATE_RANGE_MIN_DAY, DateRange, isCalendarDay, type DateRangeDays, type DateRangeProps } from "./date-range.tsx";
 export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-zone.tsx";
 export { DataTable, type DataTableCardSlot, type DataTableColumn, type DataTableProps, type DataTableSortDirection } from "./data-table.tsx";
 export { Disclosure, type DisclosureProps } from "./disclosure.tsx";

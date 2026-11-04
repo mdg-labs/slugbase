@@ -1,4 +1,4 @@
-import { generateApiToken, type AiSuggestPort, type EgressPort, type EntitlementSource, type MailPort } from "@slugbase/core";
+import { generateApiToken, type AiSuggestPort, type EgressPort, type EntitlementSource, type IdentityPort, type MailPort, type SecretBoxPort } from "@slugbase/core";
 import { apiTokenRepository, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
@@ -83,6 +83,10 @@ export interface WorkspaceHarness {
     readonly ai?: AiSuggestPort;
     /** The most the AI provider may take, in milliseconds; by default the server's. */
     readonly aiBudgetMs?: number;
+    /** The identity port of the composition, which signs people in through a provider; by default the unconfigured one. */
+    readonly identity?: IdentityPort;
+    /** The secret box of the composition, which seals what the provider handshake keeps; by default the unconfigured one. */
+    readonly secretBox?: SecretBoxPort;
     /** Configuration keys that replace the suite's defaults. */
     readonly env?: Record<string, string>;
     /** Records what the server logs; by default a logger nobody reads. */
@@ -159,6 +163,8 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
           ...(options.mail === undefined ? {} : { mail: options.mail }),
           ...(options.egress === undefined ? {} : { egress: options.egress }),
           ...(options.ai === undefined ? {} : { ai: options.ai }),
+          ...(options.identity === undefined ? {} : { identity: options.identity }),
+          ...(options.secretBox === undefined ? {} : { secretBox: options.secretBox }),
           ...(options.entitlementSource === undefined ? {} : { entitlements: options.entitlementSource }),
           tenantResolver: createAccountOnlyTenantResolver(),
         },

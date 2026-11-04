@@ -4190,7 +4190,7 @@ export interface operations {
             query?: {
                 actorAccountId?: string;
                 action?: string | string[];
-                category?: "workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import";
+                category?: ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import") | ("workspace" | "member" | "invitation" | "team" | "bookmark" | "share" | "export" | "import")[];
                 entityType?: string;
                 entityId?: string;
                 from?: string;

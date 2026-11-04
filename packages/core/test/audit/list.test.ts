@@ -1,4 +1,4 @@
-import { AUDIT_EVENT_CATEGORIES } from "@slugbase/contracts";
+import { AUDIT_EVENT_ACTIONS, AUDIT_EVENT_CATEGORIES } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import {
   AUDIT_ACTIONS,
@@ -90,7 +90,7 @@ describe("listAuditEvents", () => {
     const foreign: Partial<AuditListAsk>[] = [
       { ...same, entityType: "member" },
       { ...same, actions: ["member.removed"] },
-      { ...same, category: "member" },
+      { ...same, categories: ["member"] },
       { ...same, actorAccountId: ACCOUNT },
       { ...same, entityId: WORKSPACE },
       { ...same, from: "2026-01-01T00:00:00.000Z" },
@@ -117,13 +117,13 @@ describe("listAuditEvents", () => {
 
   it("hands the store the actions of a category, and the named ones narrowed to it", async () => {
     const store = memoryStore([]);
-    await listAuditEvents({ store, cursors }, ask({ category: "team" }));
+    await listAuditEvents({ store, cursors }, ask({ categories: ["team"] }));
     const team = AUDIT_ACTION_NAMES.filter((name) => AUDIT_ACTIONS[name].category === "team");
     expect(team.length).toBeGreaterThan(0);
     expect(store.asked.at(-1)?.actions).toEqual(team);
 
     const named = [team[0] ?? "", "member.removed", "no.such_action"];
-    await listAuditEvents({ store, cursors }, ask({ category: "team", actions: named }));
+    await listAuditEvents({ store, cursors }, ask({ categories: ["team"], actions: named }));
     expect(store.asked.at(-1)?.actions).toEqual([team[0]]);
 
     await listAuditEvents({ store, cursors }, ask({ actions: ["workspace.renamed"] }));
@@ -133,9 +133,55 @@ describe("listAuditEvents", () => {
     expect(store.asked.at(-1)).not.toHaveProperty("actions");
   });
 
+  it("hands the store the union of the actions of several categories, whatever their order and however often one is named", async () => {
+    const store = memoryStore([]);
+    const inCategories = (...categories: string[]) => AUDIT_ACTION_NAMES.filter((name) => categories.includes(AUDIT_ACTIONS[name].category));
+    await listAuditEvents({ store, cursors }, ask({ categories: ["member", "team"] }));
+    const union = inCategories("member", "team");
+    expect(union.length).toBeGreaterThan(inCategories("member").length);
+    expect(store.asked.at(-1)?.actions).toEqual(union);
+    expect(store.asked.at(-1)?.actions?.some((name) => AUDIT_ACTIONS[name as keyof typeof AUDIT_ACTIONS].category === "workspace")).toBe(false);
+
+    await listAuditEvents({ store, cursors }, ask({ categories: ["team", "member", "team"] }));
+    expect(store.asked.at(-1)?.actions).toEqual(union);
+
+    await listAuditEvents({ store, cursors }, ask({ categories: ["member", "team"], actions: ["team.created", "member.removed", "workspace.renamed"] }));
+    expect(store.asked.at(-1)?.actions).toEqual(["member.removed", "team.created"]);
+  });
+
+  it("answers an empty page without asking the store when none of the named actions is in any of the categories", async () => {
+    const store = memoryStore([event(1)]);
+    const outcome = await listAuditEvents({ store, cursors }, ask({ categories: ["member", "team"], actions: ["workspace.renamed"] }));
+    expect(outcome).toEqual({ kind: "listed", items: [], nextCursor: null });
+    expect(store.asked).toEqual([]);
+  });
+
+  it("opens a cursor of several categories for the same set in any order, and refuses it for a smaller, another or a larger set", async () => {
+    const store = memoryStore([event(1), event(2), event(3)]);
+    const first = await listAuditEvents({ store, cursors }, ask({ categories: ["member", "team"] }));
+    if (first.kind !== "listed" || first.nextCursor === null) {
+      throw new Error("the first page has a successor");
+    }
+    const reads = store.asked.length;
+    for (const categories of [["member"], ["team"], ["workspace", "member", "team"], ["member", "invitation"], []] as const) {
+      expect(await listAuditEvents({ store, cursors }, ask({ categories, cursor: first.nextCursor }))).toEqual({ kind: "bad_cursor" });
+    }
+    expect(await listAuditEvents({ store, cursors }, ask({ cursor: first.nextCursor }))).toEqual({ kind: "bad_cursor" });
+    expect(store.asked).toHaveLength(reads);
+    for (const categories of [["team", "member"], ["team", "member", "member"]] as const) {
+      expect(await listAuditEvents({ store, cursors }, ask({ categories, cursor: first.nextCursor }))).toMatchObject({ kind: "listed" });
+    }
+
+    const single = await listAuditEvents({ store, cursors }, ask({ categories: ["member"] }));
+    if (single.kind !== "listed" || single.nextCursor === null) {
+      throw new Error("the first page has a successor");
+    }
+    expect(await listAuditEvents({ store, cursors }, ask({ categories: ["member", "team"], cursor: single.nextCursor }))).toEqual({ kind: "bad_cursor" });
+  });
+
   it("answers an empty page without asking the store when the actions and the category exclude each other", async () => {
     const store = memoryStore([event(1)]);
-    const outcome = await listAuditEvents({ store, cursors }, ask({ category: "team", actions: ["workspace.renamed"] }));
+    const outcome = await listAuditEvents({ store, cursors }, ask({ categories: ["team"], actions: ["workspace.renamed"] }));
     expect(outcome).toEqual({ kind: "listed", items: [], nextCursor: null });
     expect(store.asked).toEqual([]);
   });
@@ -165,5 +211,9 @@ describe("the categories of the log", () => {
       expect(auditCategoryOf(name)).toBe(AUDIT_ACTIONS[name].category);
     }
     expect(auditCategoryOf("retired.action")).toBeNull();
+  });
+
+  it("have the actions the contract lists, in the order of the catalog", () => {
+    expect([...AUDIT_EVENT_ACTIONS]).toEqual([...AUDIT_ACTION_NAMES]);
   });
 });

@@ -22,7 +22,10 @@
 # HTTP API as E2E_MAILPIT_URL, to read the mail a journey caused. It also has a stand-in
 # for an OpenAI-compatible endpoint (e2e/compose.ai.yml), which the server is configured to
 # use for AI suggestions; the command gets the address of the stub as E2E_AI_STUB_URL, to
-# read back what the server sent it.
+# read back what the server sent it. It also gets the image the stack runs as E2E_IMAGE, which the
+# backup and restore drill (e2e/restore-drill.spec.ts) starts a stack of its own from.
+#
+# Sourced instead of run, this file defines its functions and starts nothing (restore-drill-stack.sh).
 #
 # A browser can sign in only at the origin the server is configured with: the
 # session cookie is Secure and a mutation must come from APP_ORIGIN, which production
@@ -102,9 +105,11 @@ main_e2e() {
     fail "openssl could not generate the certificate of the TLS proxy"
   E2E_BASE_URL="http://127.0.0.1:${port}" E2E_APP_ORIGIN="$SMOKE_APP_ORIGIN" \
     E2E_TLS_KEY_FILE="$work/tls.key" E2E_TLS_CERT_FILE="$work/tls.crt" E2E_SETUP_TOKEN="$setup_token" \
-    E2E_MAILPIT_URL="$mailpit_url" E2E_AI_STUB_URL="$ai_stub_url" "$@" || code=$?
+    E2E_MAILPIT_URL="$mailpit_url" E2E_AI_STUB_URL="$ai_stub_url" E2E_IMAGE="$image" "$@" || code=$?
   # The cleanup trap tears the stack down and keeps this status.
   exit "$code"
 }
 
-main_e2e "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main_e2e "$@"
+fi

@@ -1,3 +1,4 @@
+import { AUDIT_EVENT_CATEGORIES } from "@slugbase/contracts";
 import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -158,6 +159,7 @@ describe("the failure scenario", () => {
         `?actorAccountId=${accountOfInstance}`,
         "?action=workspace.renamed",
         "?action=workspace.renamed&action=member.removed&category=workspace",
+        "?category=workspace&category=member&category=bookmark",
         "?from=2026-01-01T00:00:00Z&to=2026-12-31T00:00:00Z",
         "?limit=100",
       ];
@@ -290,6 +292,16 @@ describe("a page of the log", () => {
         const response = await list(world, owner, `${query}&cursor=${cursor}`);
         expect([query, response.status]).toEqual([query, 400]);
       }
+      // A cursor of one category is not one of two, and the other way round.
+      const ofCategory = await page(await list(world, owner, "?category=workspace&limit=2"));
+      expect(ofCategory.nextCursor).not.toBeNull();
+      for (const query of ["?category=workspace&category=team&limit=2", "?category=team&limit=2"]) {
+        const response = await list(world, owner, `${query}&cursor=${ofCategory.nextCursor ?? ""}`);
+        expect([query, response.status]).toEqual([query, 400]);
+      }
+      const ofTwo = await page(await list(world, owner, "?category=workspace&category=team&limit=2"));
+      expect((await list(world, owner, `?category=workspace&limit=2&cursor=${ofTwo.nextCursor ?? ""}`)).status).toBe(400);
+      expect((await page(await list(world, owner, `?category=team&category=workspace&category=team&limit=2&cursor=${ofTwo.nextCursor ?? ""}`))).items).toHaveLength(2);
       // The page size is no part of what a cursor is bound to, and another workspace's owner cannot open it.
       expect((await page(await list(world, owner, `?action=workspace.renamed&limit=1&cursor=${cursor}`))).items).toHaveLength(1);
       expect((await list(world, stranger, `?action=workspace.renamed&limit=2&cursor=${cursor}`)).status).toBe(400);
@@ -389,6 +401,45 @@ describe("the filters", () => {
   );
 
   it(
+    "narrow by several categories at once: the events of any of them and of no other, with no loss across a page boundary, and one category as before",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED });
+      const { owner, a, b, stranger } = await setup(world);
+      const at = (day: number) => `2026-04-${String(day).padStart(2, "0")}T10:00:00Z`;
+      const entity = crypto.randomUUID();
+      const member1 = await seed({ workspaceId: a.workspaceId, createdAt: at(1), actorAccountId: owner.account.id, action: "member.joined", entity: { type: "member", id: entity } });
+      const team1 = await seed({ workspaceId: a.workspaceId, createdAt: at(2), actorAccountId: owner.account.id, action: "team.created", entity: { type: "team", id: entity } });
+      const workspace1 = await seed({ workspaceId: a.workspaceId, createdAt: at(3), actorAccountId: owner.account.id, action: "workspace.renamed", entity: { type: "workspace", id: a.workspaceId } });
+      const member2 = await seed({ workspaceId: a.workspaceId, createdAt: at(4), actorAccountId: owner.account.id, action: "member.removed", entity: { type: "member", id: entity } });
+      const team2 = await seed({ workspaceId: a.workspaceId, createdAt: at(5), actorAccountId: owner.account.id, action: "team.deleted", entity: { type: "team", id: entity } });
+      await seed({ workspaceId: b.workspaceId, createdAt: at(6), actorAccountId: stranger.account.id, action: "team.created", entity: { type: "team", id: entity } });
+      const idsFor = async (query: string): Promise<string[]> => (await page(await list(world, owner, query))).items.map((item) => item.id);
+
+      expect(await idsFor("?category=member&category=team")).toEqual([team2, member2, team1, member1]);
+      expect(await idsFor("?category=team&category=member&category=team")).toEqual([team2, member2, team1, member1]);
+      expect(await idsFor("?category=member")).toEqual([member2, member1]);
+      expect(await idsFor("?category=workspace&category=team")).toEqual([team2, workspace1, team1]);
+      expect(await idsFor("?category=member&category=team&action=member.removed&action=team.created&action=workspace.renamed")).toEqual([member2, team1]);
+      expect(await idsFor("?category=member&category=team&action=workspace.renamed")).toEqual([]);
+      expect(await idsFor("?category=member&category=team&entityType=member")).toEqual([member2, member1]);
+      expect(await idsFor(`?${AUDIT_EVENT_CATEGORIES.map((category) => `category=${category}`).join("&")}`)).toEqual([team2, member2, workspace1, team1, member1]);
+
+      const walked: string[] = [];
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const body: EventList = await page(await list(world, owner, `?category=member&category=team&limit=1${cursor === null ? "" : `&cursor=${cursor}`}`));
+        walked.push(...body.items.map((item) => item.id));
+        cursor = body.nextCursor;
+        pages += 1;
+      } while (cursor !== null && pages < 10);
+      expect(walked).toEqual([team2, member2, team1, member1]);
+      expect(pages).toBe(4);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
     "accept the earliest and the latest instant PostgreSQL stores as a time bound, and list nothing before the log's first event",
     async () => {
       const world = harness.serve({ entitlements: GRANTED });
@@ -413,6 +464,8 @@ describe("the filters", () => {
         "?action=nodot",
         `?action=${"a".repeat(65)}.b`,
         "?category=everything",
+        "?category=member&category=everything",
+        `?${Array.from({ length: AUDIT_EVENT_CATEGORIES.length + 1 }, () => "category=member").join("&")}`,
         "?entityType=Bad%20Type",
         "?from=yesterday",
         "?to=2026-13-45T00:00:00Z",

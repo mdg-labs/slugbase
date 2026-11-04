@@ -1,0 +1,49 @@
+name: Docs published
+
+# Asks the site repository to rebuild when documentation changes on main (doc 09
+# section 3.5, Q111). The target is configuration, not code: the repository
+# variables DOCS_SITE_REPOSITORY and DOCS_SITE_WORKFLOW and the secret
+# DOCS_SITE_DISPATCH_TOKEN, which the maintainer sets (D24). The workflow never
+# runs for a pull request or a fork's event, and scripts/docs-published-dispatch.sh
+# does nothing where the configuration is absent or the repository is not the
+# upstream one. The token is in the environment of the one step that sends the
+# request; that step runs after a checkout of this script alone, so no
+# documentation and no content of a pull request is present or executed while the
+# token is in scope (doc 10 T16).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/user/**"
+      - "docs/self-hosting/**"
+      - "docs/releases/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-published
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/docs-published-dispatch.sh
+          sparse-checkout-cone-mode: false
+      - name: Send the dispatch
+        env:
+          DOCS_SITE_REPOSITORY: ${{ vars.DOCS_SITE_REPOSITORY }}
+          DOCS_SITE_WORKFLOW: ${{ vars.DOCS_SITE_WORKFLOW }}
+          DOCS_SITE_DISPATCH_TOKEN: ${{ secrets.DOCS_SITE_DISPATCH_TOKEN }}
+        run: bash scripts/docs-published-dispatch.sh

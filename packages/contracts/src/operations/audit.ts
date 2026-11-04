@@ -9,6 +9,39 @@ import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } f
 /** The groups of the audit catalog an event is filtered by (`AUDIT_CATEGORIES` of `@slugbase/core`, which a test keeps equal to this list). */
 export const AUDIT_EVENT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"] as const;
 
+/**
+ * The dotted names of the actions the audit catalog holds (`AUDIT_ACTION_NAMES` of `@slugbase/core`, which a test keeps equal to this list, in order). An event's
+ * `action` stays a plain string, because an event written under an action the catalog has retired still lists; a client that labels actions iterates this list.
+ */
+export const AUDIT_EVENT_ACTIONS = [
+  "workspace.created",
+  "workspace.renamed",
+  "workspace.settings_changed",
+  "workspace.deletion_requested",
+  "workspace.ownership_transferred",
+  "member.role_changed",
+  "member.removed",
+  "member.left",
+  "member.joined",
+  "member.instance_admin_joined",
+  "invitation.created",
+  "invitation.resent",
+  "invitation.link_created",
+  "invitation.revoked",
+  "team.created",
+  "team.updated",
+  "team.deleted",
+  "team.members_changed",
+  "bookmark.archived",
+  "bookmark.restored",
+  "bookmark.bulk_deleted",
+  "share.granted",
+  "share.revoked",
+  "share.bulk_granted",
+  "export.created",
+  "import.completed",
+] as const;
+
 /** The longest action name the log stores. */
 const AUDIT_ACTION_MAX_LENGTH = 64;
 
@@ -81,8 +114,11 @@ export const AuditEventListQuerySchema = z.strictObject({
   action: z
     .union([AuditActionNameSchema, z.array(AuditActionNameSchema).max(AUDIT_ACTION_FILTER_MAX)])
     .optional()
-    .describe("Lists the events of these actions, matched exactly on the dotted name: repeat the parameter, at most 20 times, for any of several. With `category`, only the actions that belong to that category"),
-  category: z.enum(AUDIT_EVENT_CATEGORIES).optional().describe("Lists the events of the actions in this group"),
+    .describe("Lists the events of these actions, matched exactly on the dotted name: repeat the parameter, at most 20 times, for any of several. With `category`, only the actions that belong to one of those categories"),
+  category: z
+    .union([z.enum(AUDIT_EVENT_CATEGORIES), z.array(z.enum(AUDIT_EVENT_CATEGORIES)).max(AUDIT_EVENT_CATEGORIES.length)])
+    .optional()
+    .describe("Lists the events of the actions in this group: repeat the parameter, at most once per group, for the events of any of several. One named twice counts once"),
   entityType: AuditEntityTypeSchema.optional().describe("Lists the events about this kind of thing"),
   entityId: z.uuid().optional().describe("Lists the events about the thing with this identifier. One of another workspace, or an unknown one, lists nothing: an empty page, not an error"),
   from: AuditTimeBoundSchema.optional().describe("Lists the events made at or after this instant, RFC 3339 UTC, from year 0001 to 9999"),
