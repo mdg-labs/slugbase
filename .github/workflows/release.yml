@@ -1,0 +1,149 @@
+name: Release
+
+# Builds and pushes the Community Edition image when a push to main bumps the
+# version of apps/slugbase, and opens a draft GitHub Release for it (doc 08
+# section 6.2, Q12, Q17, Q92). The image carries an SPDX SBOM and provenance
+# attestations and is not signed: signing and the publish job come later.
+# scripts/release-plan.sh decides whether to release and which tags to push:
+# a pre-release version gets its own tag only, a version without a suffix also
+# gets :<major>.<minor>, and :latest is never pushed. An image tag that already
+# exists is never overwritten.
+#
+# The workflow runs on a push to main and on nothing else, so no pull request,
+# fork or comment can start it, and it reads no secret: the workflow token
+# (github.token) is the only credential, and the scopes it needs are contents
+# (the draft release and its tag) and packages (the image) (doc 10 T16).
+# Only the upstream repository builds and pushes; the plan job decides in any
+# repository, so it can be run on its own. Each action is pinned to a full commit SHA.
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE: ghcr.io/mdg-labs/slugbase
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Reading only: this job decides and pushes nothing.
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      git_tag: ${{ steps.plan.outputs.git_tag }}
+      tags: ${{ steps.plan.outputs.tags }}
+    steps:
+      # The whole history and every tag: the previous commit of the push and the
+      # tag check must be there.
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Plan the release
+        id: plan
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          RELEASE_IMAGE: ${{ env.IMAGE }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          bash scripts/release-plan.sh "$BEFORE" "$SHA"
+
+  build:
+    name: build and push
+    needs: plan
+    if: ${{ needs.plan.outputs.release == 'true' && github.repository == 'mdg-labs/slugbase' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - name: Log in to the registry
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | docker login "${IMAGE%%/*}" --username "$REGISTRY_USER" --password-stdin
+      # SBOM and provenance attestations need BuildKit's container driver.
+      - name: Create the builder
+        run: docker buildx create --name release --driver docker-container --use
+      # The tags come from the plan; the version it validated is semver, so it
+      # holds nothing a shell would read as syntax.
+      - name: Build and push
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          TAGS: ${{ needs.plan.outputs.tags }}
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag_args=()
+          IFS=',' read -r -a tag_list <<<"$TAGS"
+          for tag in "${tag_list[@]}"; do
+            tag_args+=(--tag "$tag")
+          done
+          docker buildx build \
+            --file apps/slugbase/Dockerfile \
+            --build-arg "VERSION=$VERSION" \
+            --build-arg "BUILD_COMMIT=$BUILD_COMMIT" \
+            --sbom=true \
+            --provenance=mode=max \
+            --metadata-file "$RUNNER_TEMP/build-metadata.json" \
+            --push \
+            "${tag_args[@]}" \
+            .
+          digest="$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/build-metadata.json")"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "The build reported no image digest." >&2
+            exit 1
+          fi
+          echo "DIGEST=$digest" >> "$GITHUB_ENV"
+      # The release is a draft for the tag on the pushed commit. If this step fails
+      # after the push, the image is in the registry and is never pushed again; the
+      # draft is then made by hand from the digest in the build step's log.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          GIT_TAG: ${{ needs.plan.outputs.git_tag }}
+          PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+          TAGS: ${{ needs.plan.outputs.tags }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "Image: $IMAGE@$DIGEST"
+            echo
+            echo "Tags: ${TAGS//,/, }"
+            echo
+            echo "Built from $SHA with an SPDX SBOM and provenance attestations. The image is not signed yet."
+          } > "$notes"
+          flags=(--draft --target "$SHA" --title "$VERSION" --notes-file "$notes")
+          if [[ "$PRERELEASE" == "true" ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$GIT_TAG" --repo "$GITHUB_REPOSITORY" "${flags[@]}"
