@@ -9,7 +9,11 @@ name: E2E
 # journeys run in a container, the Playwright image of e2e/Dockerfile (pinned to the
 # version of @playwright/test and to a digest) with the host's network, so the job
 # installs no browser and no system library from a package mirror (doc 08 section
-# 6.1). No job references a secret, the workflow never runs on pull_request_target,
+# 6.1). A job of its own, `restore-drill`, runs the backup and restore drill of
+# docs/self-hosting/backup-restore.md (e2e/restore-drill.spec.ts) on the same two
+# majors: it dumps, destroys and restores the database of a stack that is its own, so
+# it cannot share one with the shards, and it needs docker, which the Playwright image
+# does not have, so it runs on the runner. No job references a secret, the workflow never runs on pull_request_target,
 # and the secrets of the stack are generated per run by scripts/smoke-image.sh and
 # never printed (doc 10 T16).
 
@@ -117,13 +121,71 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The drill of docs/self-hosting/backup-restore.md on the image built from this commit, once
+  # per PostgreSQL major, so that the guide's commands (dump, recreate, roles, restore) are
+  # proven against the database of each major the images support (doc 08 section 6.2, Q3).
+  # The drill starts the stack of its own (e2e/restore-drill-stack.sh, a compose project of the
+  # same kind as the shards') and removes it however it ends. It uses the HTTP API and docker
+  # compose alone, so no browser and no Playwright image are needed here.
+  restore-drill:
+    name: restore drill (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["17", "18"]
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: e2e-restore-drill
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:e2e .
+      # The step fails when the drill does, and so does the check of the leg.
+      - name: Run the restore drill
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:e2e
+          SMOKE_POSTGRES_MAJOR: ${{ matrix.postgres }}
+        run: pnpm --filter @slugbase/e2e test:e2e restore-drill
+      - name: Remove any stack left behind
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          docker ps --all --format '{{.ID}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker volume ls --quiet --filter 'label=com.docker.compose.project' --format '{{.Name}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker volume rm --force
+      - name: Upload the artifacts of a failed run
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: restore-drill-artifacts-postgres-${{ matrix.postgres }}
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The check each leg has always reported, which the ruleset of `main` requires by
   # name ("e2e (PostgreSQL 17)", "e2e (PostgreSQL 18)"). It fails unless every shard
-  # succeeded: a failed, cancelled or skipped shard is not a pass, and `needs` waits
-  # for the shards of both legs, so one failing shard fails the check of both.
+  # and every restore drill succeeded: a failed, cancelled or skipped job is not a pass,
+  # and `needs` waits for the jobs of both legs, so one failing job fails the check of both.
   e2e:
     name: e2e (PostgreSQL ${{ matrix.postgres }})
-    needs: shards
+    needs: [shards, restore-drill]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -131,12 +193,17 @@ jobs:
       matrix:
         postgres: ["17", "18"]
     steps:
-      - name: Require every shard to have succeeded
+      - name: Require every shard and every drill to have succeeded
         env:
           SHARDS_RESULT: ${{ needs.shards.result }}
+          RESTORE_DRILL_RESULT: ${{ needs.restore-drill.result }}
         run: |
           set -euo pipefail
           if [[ "$SHARDS_RESULT" != "success" ]]; then
             echo "the e2e shards ended '$SHARDS_RESULT', not 'success'" >&2
+            exit 1
+          fi
+          if [[ "$RESTORE_DRILL_RESULT" != "success" ]]; then
+            echo "the restore drill ended '$RESTORE_DRILL_RESULT', not 'success'" >&2
             exit 1
           fi

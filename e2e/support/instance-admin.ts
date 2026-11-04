@@ -59,10 +59,10 @@ export async function ownAccountId(api: ApiClient): Promise<string> {
  * Turns on an authenticator app for the signed-in account through the API the security page uses: the password
  * is confirmed, the enrolment is started and its setup key answered with the code the key gives now. The session
  * cookie of the request context is replaced by the confirmation, so a browser context that shares it carries the
- * new session. The setup key and the backup codes are not kept: the `instanceAdmin` policy asks for an enrolled
- * second factor, not for a code.
+ * new session. The setup key is returned, for a journey that signs in with a code later, and the backup codes are
+ * not kept: the `instanceAdmin` policy asks for an enrolled second factor, not for a code.
  */
-export async function enrolSecondFactor(api: ApiClient, password: string, origin: string = appOrigin(), now: () => number = Date.now): Promise<void> {
+export async function enrolSecondFactor(api: ApiClient, password: string, origin: string = appOrigin(), now: () => number = Date.now): Promise<string> {
   const reauth = await api.post(REAUTH_PATH, mutation(origin, { password }));
   if (reauth.status() !== 204) {
     fail(`POST ${REAUTH_PATH}`, reauth);
@@ -79,6 +79,7 @@ export async function enrolSecondFactor(api: ApiClient, password: string, origin
   if (!confirmed.ok()) {
     fail(`POST ${ENROLMENT_CONFIRM_PATH}`, confirmed);
   }
+  return key;
 }
 
 /**

@@ -58,7 +58,7 @@ void describe("the enrolment of an authenticator app", () => {
 
   void it("confirms the password, starts the enrolment and answers with the code of the key it was given", async () => {
     const { api, calls } = client(answers);
-    await enrolSecondFactor(api, "a password", ORIGIN, () => NOW);
+    assert.equal(await enrolSecondFactor(api, "a password", ORIGIN, () => NOW), KEY, "the setup key is handed back");
     assert.deepEqual(
       calls.map(({ method, path }) => `${method} ${path}`),
       ["POST /api/v1/me/reauth", "POST /api/v1/me/mfa/enrollment", "POST /api/v1/me/mfa/enrollment/confirm"],

@@ -15,6 +15,9 @@
 # paths. Needs docker; the command and node_modules come from the checkout, only the
 # browsers and their libraries from the image.
 #
+# E2E_IN_IMAGE=1 tells run-tests.ts that docker is not available here, so that a run without arguments
+# leaves the restore drill (restore-drill.spec.ts) to a run on the host.
+#
 # --pull only pulls the image, so that a workflow shows the time of the pull apart
 # from the time of the journeys.
 set -euo pipefail
@@ -50,7 +53,7 @@ main() {
   (($# > 0)) || fail "usage: in-image.sh --pull | in-image.sh <command> [argument...]"
 
   args=(run --rm --init --network host --ipc=host --user "$(id -u):$(id -g)"
-    --env HOME=/tmp --env CI --volume "$root:$root" --workdir "$root/e2e")
+    --env HOME=/tmp --env CI --env E2E_IN_IMAGE=1 --volume "$root:$root" --workdir "$root/e2e")
   for name in $(compgen -e | grep '^E2E_' || true); do
     args+=(--env "$name")
   done
