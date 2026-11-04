@@ -5,6 +5,7 @@ import { enrolSecondFactor } from "./support/instance-admin.ts";
 import {
   codeAfter,
   compose,
+  DRILL_SETUP_MS,
   dumpDatabase,
   envFileWithKey,
   readyOf,
@@ -280,6 +281,7 @@ test.describe("the backup and restore drill", () => {
   let healthy = true;
 
   test.beforeAll(async () => {
+    test.setTimeout(DRILL_SETUP_MS);
     try {
       stack = await startDrillStack();
       seeded = await seed(stack);

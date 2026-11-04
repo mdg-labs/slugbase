@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { guideWaitArguments, parseEnvFile, parseSetCookie, redact, secretValues, shellWords, shippedMigrations } from "./restore-drill.ts";
+import drillConfig from "../restore-drill.config.ts";
+import { DRILL_SETUP_MS, guideWaitArguments, parseEnvFile, parseSetCookie, redact, secretValues, shellWords, shippedMigrations, STACK_START_MS } from "./restore-drill.ts";
 
 void describe("the env file of the drill's stack", () => {
   const env = parseEnvFile(
@@ -73,5 +74,12 @@ void describe("the guide's wait for the database of a new server", () => {
     assert.throws(() => guideWaitArguments("docker compose up -d postgres\n"), /0 commands/);
     const line = "docker compose exec -T postgres pg_isready -h 127.0.0.1\n";
     assert.throws(() => guideWaitArguments(line + line), /2 commands/);
+  });
+});
+
+void describe("the setup of the drill", () => {
+  void it("may run longer than the start of the stack and than the configuration's test timeout", () => {
+    assert.ok(DRILL_SETUP_MS > STACK_START_MS, "the setup's budget covers the stack's budget and the seed after it");
+    assert.ok(drillConfig.timeout !== undefined && DRILL_SETUP_MS > drillConfig.timeout, "the setup does not inherit the shorter test timeout");
   });
 });

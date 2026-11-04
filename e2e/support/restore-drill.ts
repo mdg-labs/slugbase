@@ -18,7 +18,12 @@ const GUIDE = join(REPOSITORY_ROOT, "docs", "self-hosting", "backup-restore.md")
 const JOURNAL = join(REPOSITORY_ROOT, "packages", "db", "migrations", "meta", "_journal.json");
 
 /** How long the stack may take to be ready: a build of the image from this checkout is part of it. */
-const STACK_START_MS = 20 * 60_000;
+export const STACK_START_MS = 20 * 60_000;
+/**
+ * How long the drill's setup may take: the start of the stack, then the seed and the dump. Playwright gives a hook the
+ * test timeout of the configuration unless the hook sets its own, which would end the setup before the stack's budget.
+ */
+export const DRILL_SETUP_MS = STACK_START_MS + 5 * 60_000;
 /** How long the stack's script may take to remove the stack once told it is done. */
 const STACK_STOP_MS = 3 * 60_000;
 const COMMAND_MS = 3 * 60_000;
