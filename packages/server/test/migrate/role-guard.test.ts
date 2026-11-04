@@ -23,16 +23,18 @@ beforeEach(() => {
 
 describe("assertApplicationRole", () => {
   it("accepts the unprivileged application role without a word", async () => {
-    inspected.result = { role: "slugbase_app", superuser: false, ownsDatabase: false };
+    inspected.result = { role: "slugbase_app", superuser: false, ownsDatabase: false, bypassRls: false };
     const logger = recordingLogger();
     await assertApplicationRole({ url: URL, allowOwnerConnection: false, logger });
     expect(logger.entries).toEqual([]);
   });
 
   it.each([
-    ["a superuser", { role: "postgres", superuser: true, ownsDatabase: false }, "is a superuser"],
-    ["the owner of the database", { role: "appowner", superuser: false, ownsDatabase: true }, "owns the database"],
-    ["a superuser that owns the database", { role: "postgres", superuser: true, ownsDatabase: true }, "is a superuser and owns the database"],
+    ["a superuser", { role: "postgres", superuser: true, ownsDatabase: false, bypassRls: false }, "is a superuser"],
+    ["the owner of the database", { role: "appowner", superuser: false, ownsDatabase: true, bypassRls: false }, "owns the database"],
+    ["a superuser that owns the database", { role: "postgres", superuser: true, ownsDatabase: true, bypassRls: false }, "is a superuser and owns the database"],
+    ["a role with BYPASSRLS", { role: "managed_admin", superuser: false, ownsDatabase: false, bypassRls: true }, "has BYPASSRLS"],
+    ["an owner with BYPASSRLS", { role: "appowner", superuser: false, ownsDatabase: true, bypassRls: true }, "owns the database and has BYPASSRLS"],
   ] as const)("refuses %s, explaining the two roles", async (_label, role, reason) => {
     inspected.result = role;
     const logger = recordingLogger();
@@ -51,15 +53,23 @@ describe("assertApplicationRole", () => {
   });
 
   it("warns instead of refusing when the operator allows it", async () => {
-    inspected.result = { role: "appowner", superuser: false, ownsDatabase: true };
+    inspected.result = { role: "appowner", superuser: false, ownsDatabase: true, bypassRls: false };
     const logger = recordingLogger();
     await assertApplicationRole({ url: URL, allowOwnerConnection: true, logger });
     expect(logger.entries).toHaveLength(1);
-    expect(logger.entries[0]).toMatchObject({ level: "warn", fields: { role: "appowner", ownsDatabase: true } });
+    expect(logger.entries[0]).toMatchObject({ level: "warn", fields: { role: "appowner", ownsDatabase: true, bypassRls: false } });
+  });
+
+  it("warns instead of refusing a role with BYPASSRLS when the operator allows it", async () => {
+    inspected.result = { role: "managed_admin", superuser: false, ownsDatabase: false, bypassRls: true };
+    const logger = recordingLogger();
+    await assertApplicationRole({ url: URL, allowOwnerConnection: true, logger });
+    expect(logger.entries).toHaveLength(1);
+    expect(logger.entries[0]).toMatchObject({ level: "warn", fields: { role: "managed_admin", bypassRls: true } });
   });
 
   it("does not warn when the override is set but the role is unprivileged", async () => {
-    inspected.result = { role: "slugbase_app", superuser: false, ownsDatabase: false };
+    inspected.result = { role: "slugbase_app", superuser: false, ownsDatabase: false, bypassRls: false };
     const logger = recordingLogger();
     await assertApplicationRole({ url: URL, allowOwnerConnection: true, logger });
     expect(logger.entries).toEqual([]);
