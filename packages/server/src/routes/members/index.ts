@@ -1,11 +1,12 @@
 import { listMembers, removeMember, updateMember, type MemberSchema } from "@slugbase/contracts";
-import { changeMemberRole, createAuditWriter, type AuditActor, type SessionCookieSpec } from "@slugbase/core";
+import { changeMemberRole, createAuditWriter, reauthenticatedRecently, type AuditActor, type MemberRoleStore, type SessionCookieSpec, type WorkspaceRole } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, isLastOwnerViolation, memberRepository, type WorkspaceMember } from "@slugbase/db";
 import { z } from "zod";
 import { setSessionCookie } from "../../auth/cookie.ts";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
 import { newSessionToken } from "../../auth/session-token.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
+import { reauthRequired } from "../../http/authorize.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
@@ -24,8 +25,12 @@ import { endMembershipOf } from "./departure.ts";
 // a transaction that would leave none, which is answered 409 last_owner with nothing written. The change, its
 // audit event and, when the member is the caller, the rotation of the session's token are one transaction, so a
 // refusal at the commit leaves the old token and the old role; the new token travels in Set-Cookie only when
-// the change is the caller's own (doc 04 section 4.3). The removal is an admin's as well (an owner's for an
-// owner) and ends the membership as departure.ts describes.
+// the change is the caller's own (doc 04 section 4.3). A change that grants or removes the owner role is an
+// ownership change in effect and needs a session that re-authenticated within ten minutes (`401 reauth_required`,
+// doc 10 T18); it is refused before anything is written, after the service has judged who may make it and
+// whether the role changes at all, so a request that is forbidden stays 403 and one that changes nothing stays
+// 200. The removal is an admin's as well (an owner's for an owner) and ends the membership as departure.ts
+// describes.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
@@ -37,9 +42,11 @@ export interface MemberRoutesOptions {
   /** The server secret the list cursors are signed with, through a key derived for this list alone. */
   readonly cursorSecret: string;
   readonly cookie: SessionCookieSpec;
+  /** The instant, in milliseconds, the session's last re-authentication is compared with; defaults to the system clock. */
+  readonly now?: () => number;
 }
 
-function sessionOf(context: ChainContext): { readonly sessionId: string; readonly accountId: string } {
+function sessionOf(context: ChainContext): { readonly sessionId: string; readonly accountId: string; readonly reauthAt?: Date | undefined } {
   const principal = context.get("principal");
   if (principal?.kind !== "session") {
     throw new ProblemError("unauthenticated", UNAUTHENTICATED);
@@ -70,7 +77,29 @@ export function memberBody(member: WorkspaceMember): z.input<typeof MemberSchema
   };
 }
 
-export function memberRoutes({ cursorSecret, cookie }: MemberRoutesOptions): RouteBinding[] {
+/**
+ * The store with the writes that grant or remove the owner role refused unless the session re-authenticated recently.
+ * The service calls `setRole` only for a change it has judged allowed and that alters the role, so this is the last
+ * check before the write; a target role the store did not report counts as an owner's.
+ */
+function reauthGatedOwnerChanges(store: MemberRoleStore, reauthenticated: boolean): MemberRoleStore {
+  let current: WorkspaceRole | undefined;
+  return {
+    async roles(targetAccountId) {
+      const roles = await store.roles(targetAccountId);
+      current = roles?.target;
+      return roles;
+    },
+    async setRole(targetAccountId, role) {
+      if (!reauthenticated && (current === undefined || current === "owner" || role === "owner")) {
+        throw reauthRequired();
+      }
+      return store.setRole(targetAccountId, role);
+    },
+  };
+}
+
+export function memberRoutes({ cursorSecret, cookie, now = Date.now }: MemberRoutesOptions): RouteBinding[] {
   const cursors = createPageCursorCodec(cursorSecret, "members");
   return [
     route(listMembers).handle(async ({ query }, context) => {
@@ -97,8 +126,9 @@ export function memberRoutes({ cursorSecret, cookie }: MemberRoutesOptions): Rou
     }),
 
     route(updateMember).handle(async ({ params, body }, context) => {
-      const { sessionId, accountId } = sessionOf(context);
+      const { sessionId, accountId, reauthAt } = sessionOf(context);
       const tenant = tenantOf(context);
+      const reauthenticated = reauthenticatedRecently(reauthAt, now());
       const targetAccountId = params.accountId.toLowerCase();
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
       const token = newSessionToken();
@@ -112,7 +142,7 @@ export function memberRoutes({ cursorSecret, cookie }: MemberRoutesOptions): Rou
           const repository = memberRepository(tx);
           const actor: AuditActor = { type: "account", accountId, label: profile.displayName };
           const outcome = await changeMemberRole(
-            { store: repository, audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
+            { store: reauthGatedOwnerChanges(repository, reauthenticated), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
             { workspaceId: tenant.workspaceId, actor, actorAccountId: accountId, targetAccountId, role: body.role, ipPrefix },
           );
           if (outcome.kind === "forbidden" || outcome.kind === "not_found") {

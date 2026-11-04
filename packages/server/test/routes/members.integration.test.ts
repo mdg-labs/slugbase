@@ -16,6 +16,7 @@ import { adapters, recordingLogger, serverConfig } from "../support.ts";
 // list that quotes more of an account than its display name and email address.
 
 const MEMBERS = "/api/v1/members";
+const REAUTH = "/api/v1/me/reauth";
 const SESSION_COOKIE = "__Host-slugbase_session";
 const HOOK_TIMEOUT_MS = 300_000;
 
@@ -46,7 +47,8 @@ interface World {
   readonly origin: string;
 }
 
-function serve(): World {
+/** `now`, when given, is the instant the server measures the re-authentication window against; otherwise the system clock is. */
+function serve(now?: () => number): World {
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database()),
@@ -65,6 +67,7 @@ function serve(): World {
     logger: recordingLogger(),
     database: tenantDatabase(database()),
     authStore: store,
+    ...(now === undefined ? {} : { now }),
   });
   return { server, origin: config.APP_ORIGIN };
 }
@@ -94,7 +97,21 @@ async function person(world: World): Promise<Person> {
   if (sessionId === undefined) {
     throw new Error("the account has no session");
   }
-  return { account, cookie: `${SESSION_COOKIE}=${token}`, sessionId };
+  const cookie = `${SESSION_COOKIE}=${token}`;
+  // A session that has just re-authenticated: the changes that grant or remove ownership need one (doc 10 T18).
+  const reauth = await send(world, "POST", REAUTH, { cookie }, { password: account.password });
+  if (reauth.status !== 204) {
+    throw new Error(`could not re-authenticate: ${String(reauth.status)}`);
+  }
+  return { account, cookie, sessionId };
+}
+
+/** Moves the session's last re-authentication out of the ten-minute window. */
+async function letReauthLapse(sessionId: string): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE sessions SET reauth_at = now() - interval '11 minutes' WHERE id = ${sessionId}`;
+  });
 }
 
 type Role = "owner" | "admin" | "member";
@@ -506,6 +523,98 @@ describe("PATCH /api/v1/members/{accountId}", () => {
     expect(await rolesOf(other.workspaceId)).toEqual({ [foreignOwner.account.id]: "owner", [foreignMember.account.id]: "member" });
     expect(await auditOf(other.workspaceId)).toEqual([]);
     expect(await auditOf(workspaceId)).toEqual([]);
+  });
+
+  it("answers 401 reauth_required to a role change that grants or removes ownership from a session that has not re-authenticated within ten minutes, and writes nothing", async () => {
+    const world = serve();
+    const { workspaceId, people } = await workspaceOf(world, "owner", "owner", "member");
+    const [caller, otherOwner, member] = [only(people, 0), only(people, 1), only(people, 2)];
+    await letReauthLapse(caller.sessionId);
+    const before = await rolesOf(workspaceId);
+    const tokenBefore = await tokenHashOf(caller.sessionId, caller.account.id);
+
+    const refused = await Promise.all([
+      send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: caller.cookie }, { role: "owner" }),
+      send(world, "PATCH", `${MEMBERS}/${otherOwner.account.id}`, { cookie: caller.cookie }, { role: "admin" }),
+      send(world, "PATCH", `${MEMBERS}/${caller.account.id}`, { cookie: caller.cookie }, { role: "admin" }),
+    ]);
+
+    for (const response of refused) {
+      expect(response.status).toBe(401);
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect(await problem(response)).toMatchObject({ code: "reauth_required", status: 401 });
+    }
+    expect(await rolesOf(workspaceId)).toEqual(before);
+    expect(await auditOf(workspaceId)).toEqual([]);
+    expect(await tokenHashOf(caller.sessionId, caller.account.id)).toBe(tokenBefore);
+  });
+
+  it("keeps the changes that do not touch ownership open to a session that has not re-authenticated, and a role the member already has", async () => {
+    const world = serve();
+    const { workspaceId, people } = await workspaceOf(world, "owner", "owner", "member");
+    const [caller, otherOwner, member] = [only(people, 0), only(people, 1), only(people, 2)];
+    await letReauthLapse(caller.sessionId);
+
+    const toAdmin = await send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: caller.cookie }, { role: "admin" });
+    const toMember = await send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: caller.cookie }, { role: "member" });
+    const same = await send(world, "PATCH", `${MEMBERS}/${otherOwner.account.id}`, { cookie: caller.cookie }, { role: "owner" });
+
+    expect(toAdmin.status).toBe(200);
+    expect(toMember.status).toBe(200);
+    expect(same.status).toBe(200);
+    expect(await rolesOf(workspaceId)).toEqual({ [caller.account.id]: "owner", [otherOwner.account.id]: "owner", [member.account.id]: "member" });
+    expect(await auditOf(workspaceId)).toHaveLength(2);
+  });
+
+  it("makes the ownership change succeed once the session has re-authenticated, with the same request", async () => {
+    const world = serve();
+    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const [owner, member] = [only(people, 0), only(people, 1)];
+    await letReauthLapse(owner.sessionId);
+    const request = (): Promise<Response> => send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: owner.cookie }, { role: "owner" });
+
+    const stale = await request();
+    const reauth = await send(world, "POST", REAUTH, { cookie: owner.cookie }, { password: owner.account.password });
+    const fresh = await request();
+
+    expect(stale.status).toBe(401);
+    expect(reauth.status).toBe(204);
+    expect(fresh.status).toBe(200);
+    expect(await rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [member.account.id]: "owner" });
+  });
+
+  it("measures the re-authentication window of an ownership change against the clock the server was given", async () => {
+    let skew = 0;
+    const world = serve(() => Date.now() + skew);
+    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const [owner, member] = [only(people, 0), only(people, 1)];
+    const request = (): Promise<Response> => send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: owner.cookie }, { role: "owner" });
+
+    skew = 11 * 60 * 1000;
+    const stale = await request();
+    expect(stale.status).toBe(401);
+    expect(await problem(stale)).toMatchObject({ code: "reauth_required", status: 401 });
+    expect(await rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [member.account.id]: "member" });
+
+    skew = 9 * 60 * 1000;
+    expect((await request()).status).toBe(200);
+    expect(await rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [member.account.id]: "owner" });
+  });
+
+  it("answers an admin whose session has lapsed 403 forbidden for what only an owner may do, never 401, and 200 for what an admin may do", async () => {
+    const world = serve();
+    const { workspaceId, people } = await workspaceOf(world, "owner", "admin", "member");
+    const [owner, admin, member] = [only(people, 0), only(people, 1), only(people, 2)];
+    await letReauthLapse(admin.sessionId);
+
+    const promote = await send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: admin.cookie }, { role: "owner" });
+    const touch = await send(world, "PATCH", `${MEMBERS}/${owner.account.id}`, { cookie: admin.cookie }, { role: "member" });
+    const allowed = await send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: admin.cookie }, { role: "admin" });
+
+    expect(promote.status).toBe(403);
+    expect(touch.status).toBe(403);
+    expect(allowed.status).toBe(200);
+    expect(await rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [admin.account.id]: "admin", [member.account.id]: "admin" });
   });
 
   it("refuses a token (it declares no scope), a request from another site and a request without a session, and writes nothing", async () => {

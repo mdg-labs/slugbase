@@ -36,6 +36,15 @@ export function entitlementRequired(entitlement: string, upgradeAvailable: boole
 }
 
 /**
+ * The `401 reauth_required` of a session that has not re-authenticated within the window (doc 04 section 4.4). Stage 9
+ * raises it for an operation that declares `reauth`; a handler whose operation needs the re-authentication only for some
+ * requests (a role change that grants or removes ownership) raises it the same way.
+ */
+export function reauthRequired(): ProblemError {
+  return new ProblemError("reauth_required", DETAILS.reauth_required);
+}
+
+/**
  * Whether the account has a second factor enrolled, which the `instanceAdmin` policy needs besides the flag (doc 04
  * section 10.10, Q45). It is asked on the request's own transaction and only for an operation of that policy;
  * `instanceAdminWithoutSecondFactor` never asks it.
@@ -165,7 +174,7 @@ export function createAuthorization({
     }
 
     if (reauth === true && !(principal.kind === "session" && reauthenticatedRecently(principal.reauthAt, now()))) {
-      throw new ProblemError("reauth_required", DETAILS.reauth_required);
+      throw reauthRequired();
     }
 
     if (entitlement !== undefined) {
