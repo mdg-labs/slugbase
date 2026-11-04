@@ -1,4 +1,4 @@
-import { useMutation, useMutationState, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQueryClient, type InfiniteData, type Query, type QueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { toastManager } from "@slugbase/ui";
 import { feedbackToast } from "@slugbase/ui/patterns";
@@ -34,13 +34,20 @@ interface PinRequest {
   readonly pinned: boolean;
 }
 
+/**
+ * The queries under the list key that hold pages of bookmarks. The key also holds the palette's lists and search results and
+ * the tag preview, which have other shapes; those are left as they are and read again by the invalidation that follows a change.
+ */
+const pagedLists = { queryKey: BOOKMARK_LISTS_QUERY_KEY, predicate: isPagedList };
+
+function isPagedList(query: Query): boolean {
+  const data: unknown = query.state.data;
+  return typeof data === "object" && data !== null && "pages" in data && Array.isArray(data.pages);
+}
+
 /** Changes the bookmark `id` wherever a loaded list holds it. */
 export function patchLists(queryClient: QueryClient, id: string, change: (bookmark: Bookmark) => Bookmark): void {
-  queryClient.setQueriesData<InfiniteData<BookmarkPage>>({ queryKey: BOOKMARK_LISTS_QUERY_KEY }, (data) =>
-    data === undefined
-      ? data
-      : { ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.map((item) => (item.id === id ? change(item) : item)) })) },
-  );
+  patchMany(queryClient, new Set([id]), change);
 }
 
 /** The identifiers of the bookmarks whose pin is being saved. */
@@ -192,7 +199,7 @@ function relinked(bookmark: Bookmark, action: BulkRunAction, target: BulkTarget)
 
 /** Changes the bookmarks `ids` wherever a loaded list holds them. */
 function patchMany(queryClient: QueryClient, ids: ReadonlySet<string>, change: (bookmark: Bookmark) => Bookmark): void {
-  queryClient.setQueriesData<InfiniteData<BookmarkPage>>({ queryKey: BOOKMARK_LISTS_QUERY_KEY }, (data) =>
+  queryClient.setQueriesData<InfiniteData<BookmarkPage>>(pagedLists, (data) =>
     data === undefined
       ? data
       : { ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.map((item) => (ids.has(item.id) ? change(item) : item)) })) },
@@ -202,7 +209,7 @@ function patchMany(queryClient: QueryClient, ids: ReadonlySet<string>, change: (
 /** The folders and tags that the loaded lists show on the bookmarks `ids`. */
 function linksOf(queryClient: QueryClient, ids: ReadonlySet<string>): Map<string, Links> {
   const links = new Map<string, Links>();
-  for (const [, data] of queryClient.getQueriesData<InfiniteData<BookmarkPage>>({ queryKey: BOOKMARK_LISTS_QUERY_KEY })) {
+  for (const [, data] of queryClient.getQueriesData<InfiniteData<BookmarkPage>>(pagedLists)) {
     for (const item of data?.pages.flatMap((page) => page.items) ?? []) {
       if (ids.has(item.id) && !links.has(item.id)) {
         links.set(item.id, { folders: item.folders, tags: item.tags });
