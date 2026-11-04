@@ -5981,7 +5981,7 @@
         "additionalProperties": false,
         "properties": {
           "othersUseCount": {
-            "description": "How many bookmarks of other members of the workspace, and of members who have left it, have the slug and are not plan-archived: a count only, for the collision hint. 0 for an invalid slug",
+            "description": "How many bookmarks of other members of the workspace, and of members who have left it, have the slug, are not plan-archived and are shared with the caller (a bookmark the caller cannot read is not counted): a count only, for the collision hint. 0 for an invalid slug",
             "maximum": 9007199254740991,
             "minimum": 0,
             "type": "integer"

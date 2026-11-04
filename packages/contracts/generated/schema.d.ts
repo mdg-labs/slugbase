@@ -3728,7 +3728,7 @@ export interface components {
             items: components["schemas"]["ShareTarget"][];
         };
         SlugAvailability: {
-            /** @description How many bookmarks of other members of the workspace, and of members who have left it, have the slug and are not plan-archived: a count only, for the collision hint. 0 for an invalid slug */
+            /** @description How many bookmarks of other members of the workspace, and of members who have left it, have the slug, are not plan-archived and are shared with the caller (a bookmark the caller cannot read is not counted): a count only, for the collision hint. 0 for an invalid slug */
             othersUseCount: number;
             /**
              * @description available: the caller can use the slug; taken_by_me: the caller already uses it on another bookmark of the workspace; invalid: it is outside the grammar

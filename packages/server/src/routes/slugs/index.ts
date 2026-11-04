@@ -9,7 +9,7 @@ import { route } from "../register.ts";
 // GET /api/v1/slugs/availability (doc 04 section 10.6, doc 02 section 6.1, doc 05 section 2.4, doc 10 T2). It acts in the workspace the request is
 // bound to and names none (D11): `?slug=&bookmarkId=` answers `available`, `taken_by_me` (the caller already uses the slug on another bookmark of the
 // workspace) or `invalid` (outside the grammar once trimmed and lower-cased), and `othersUseCount`, how many bookmarks of other members, and of members
-// who have left, have it: a count, never whose, for the collision hint. A slug other members use does not make it unavailable, since a slug is unique per
+// who have left, have it and are shared with the caller: a count, never whose, for the collision hint. A slug other members use does not make it unavailable, since a slug is unique per
 // owner. Passing the caller's own `bookmarkId` leaves that bookmark out of the comparison, so its current slug is `available`; a `bookmarkId` that is
 // another member's, another workspace's, plan-archived or unknown is `404 not_found`, the answer every bookmark of someone else's gets.
 

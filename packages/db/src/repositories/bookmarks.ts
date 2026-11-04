@@ -1133,7 +1133,7 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       const [row] = await tenantHandle(tx)
         .select({
           mine: sql<number>`(count(*) FILTER (WHERE ${bookmarks.ownerId} = ${ownerId}::uuid AND ${bookmarks.id} IS DISTINCT FROM ${exceptBookmarkId ?? null}::uuid))::int`,
-          others: sql<number>`(count(*) FILTER (WHERE ${bookmarks.ownerId} IS DISTINCT FROM ${ownerId}::uuid AND ${bookmarks.planArchivedAt} IS NULL))::int`,
+          others: sql<number>`(count(*) FILTER (WHERE ${bookmarks.ownerId} IS DISTINCT FROM ${ownerId}::uuid AND ${bookmarks.planArchivedAt} IS NULL AND ${bookmarkReadableBy(ownerId)}))::int`,
         })
         .from(bookmarks)
         .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.slug, slug)));
