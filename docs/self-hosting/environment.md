@@ -105,7 +105,7 @@ These values are part of SlugBase. No key changes them.
 
 | Item | Value |
 | ---- | ----- |
-| Bookmarks on a page of the list | 24, 48 or 96, as the member chooses. 48 is the default. |
+| Bookmarks on a page of the list | 24, 48 or 96, as the member chooses. Without a choice, the grid shows 24 and the table 48. |
 | Bookmarks one request can return | 100 |
 | Bookmarks that "select all matching" can reach | 5,000. An export of a longer match is refused. |
 | Bookmarks in one import | 5,000 |
