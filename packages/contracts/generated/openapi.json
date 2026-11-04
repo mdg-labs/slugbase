@@ -10908,7 +10908,7 @@
                 }
               }
             },
-            "description": "The cached icon of the host, a PNG that the server encoded itself from an image of at most 64 KiB that it fetched through the egress adapter; never SVG and never the fetched bytes. The browser may keep it for seven days",
+            "description": "The cached icon of the host, served only to a caller who can read a bookmark on the host in the active workspace: a PNG that the server encoded itself from an image of at most 64 KiB that it fetched through the egress adapter; never SVG and never the fetched bytes. The browser may keep it for seven days",
             "headers": {
               "Cache-Control": {
                 "description": "A stored icon: cacheable by the browser only (private) for 604800 seconds",
@@ -10937,7 +10937,7 @@
                 }
               }
             },
-            "description": "The host has no icon in the cache: a transparent placeholder PNG, which the browser keeps for a minute only. When the caller can read a bookmark on the host and the host is not known to have none, a fetch is queued; a host with no icon the server can use stays a placeholder until the record expires, and the web app draws a monogram for it",
+            "description": "The caller can read no bookmark on the host, or the host has no icon in the cache: a transparent placeholder PNG, which the browser keeps for a minute only, and the same answer whatever the cache holds for a host the caller cannot read. When the caller can read a bookmark on the host and the host is not known to have none, a fetch is queued; a host with no icon the server can use stays a placeholder until the record expires, and the web app draws a monogram for it",
             "headers": {
               "Cache-Control": {
                 "description": "The placeholder: cacheable by the browser only (private) for 60 seconds",

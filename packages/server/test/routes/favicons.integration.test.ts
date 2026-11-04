@@ -6,7 +6,7 @@ import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type Worl
 
 // GET /api/v1/favicons/{host} (doc 04 sections 7, 8 and 10.6, doc 02 section 5.4, doc 01 section 8.1, doc 10 T1, T6 and T14), through the whole chain over the migrated database. The
 // failure scenario: the operation used as a fetch proxy, so the server fetches a host the caller has no bookmark on (a host nobody saved, another member's, an archived bookmark's, another
-// workspace's), or a fetch started over and over for one host; and an answer that is not the PNG the server encoded (never SVG, always `image/png` with `nosniff`). Only a request that would
+// workspace's), or a fetch started over and over for one host; the shared cache used as an oracle, a cached icon answered to a caller who can read no bookmark on the host, so a 200 against a 202 tells whether another workspace saved it; and an answer that is not the PNG the server encoded (never SVG, always `image/png` with `nosniff`). Only a request that would
 // queue a fetch takes from the fetch bucket, and a request over its limit queues nothing.
 
 const TEST_TIMEOUT_MS = 60_000;
@@ -87,7 +87,8 @@ async function bytes(response: Response): Promise<Buffer> {
 describe("an icon that is in the cache", () => {
   it("is answered as image/png with nosniff and a private cache of seven days, with the bytes the server stored", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner, shared } = await setup(world);
+    await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
     await storeIcon(HOST);
 
     const response = await get(world, owner, HOST);
@@ -102,7 +103,8 @@ describe("an icon that is in the cache", () => {
 
   it("is answered at the size asked for: 64 px by default, 32 px with size=32", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner, shared } = await setup(world);
+    await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
     await storeIcon(HOST);
 
     expect((await bytes(await get(world, owner, HOST, "?size=64"))).equals(ICON_64)).toBe(true);
@@ -111,7 +113,8 @@ describe("an icon that is in the cache", () => {
 
   it("carries the security headers of every response and is never SVG", async () => {
     const world = harness.serve();
-    const { owner } = await setup(world);
+    const { owner, shared } = await setup(world);
+    await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
     await storeIcon(HOST);
 
     const response = await get(world, owner, HOST);
@@ -121,16 +124,37 @@ describe("an icon that is in the cache", () => {
     expect(response.headers.get("content-disposition")).toBeNull();
   });
 
-  it("is shared by the deployment: a member of another workspace with no bookmark on the host is served it, and nothing is queued", async () => {
+  it("is not served to a member who can read no bookmark on the host: the answer is the one for an uncached host, whether the cache holds an icon or a record of none", async () => {
     const world = harness.serve();
-    const { stranger } = await setup(world);
+    const { stranger, colleague, shared } = await setup(world);
+    await bookmarkOn(shared.workspaceId, colleague.account.id, "colleague.example.test");
     await storeIcon(HOST);
+    await storeNone("none.example.test");
 
-    const response = await get(world, stranger, HOST);
+    for (const host of [HOST, "none.example.test", "uncached.example.test"]) {
+      for (const query of ["", "?size=32"]) {
+        const response = await get(world, stranger, host, query);
 
-    expect(response.status).toBe(200);
-    expect((await bytes(response)).equals(ICON_64)).toBe(true);
+        expect(response.status, host).toBe(202);
+        expect(response.headers.get("content-type"), host).toBe("image/png");
+        expect(response.headers.get("cache-control"), host).toBe("private, max-age=60");
+        expect((await bytes(response)).equals(Buffer.from(FAVICON_PLACEHOLDER)), host).toBe(true);
+      }
+    }
     expect(await queued()).toEqual([]);
+  });
+
+  it("is not served to a member who can read only another member's bookmark on the host, or a plan-archived one", async () => {
+    const world = harness.serve();
+    const { owner, colleague, shared } = await setup(world);
+    await bookmarkOn(shared.workspaceId, colleague.account.id, HOST);
+    await bookmarkOn(shared.workspaceId, owner.account.id, "archived.example.test", true);
+    await storeIcon(HOST);
+    await storeIcon("archived.example.test");
+
+    expect((await get(world, owner, HOST)).status).toBe(202);
+    expect((await get(world, owner, "archived.example.test")).status).toBe(202);
+    expect((await get(world, colleague, HOST)).status).toBe(200);
   });
 
   it("is a miss once it has expired by the database clock", async () => {
@@ -300,6 +324,7 @@ describe("the fetch bucket", () => {
     const world = harness.serve({ env: { RATE_LIMIT_FETCH_ACCOUNT: "1/min", RATE_LIMIT_FETCH_IP: "1/min" } });
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, "none.example.test");
+    await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
     await storeIcon(HOST);
     await storeNone("none.example.test");
 
@@ -350,7 +375,8 @@ describe("the fetch bucket", () => {
 
   it("limits every request by the read bucket, cached icons included, and never takes from the write bucket", async () => {
     const world = harness.serve({ env: { RATE_LIMIT_READ_ACCOUNT: "3/min", RATE_LIMIT_READ_IP: "1000/min", RATE_LIMIT_WRITE_ACCOUNT: "1/min", RATE_LIMIT_WRITE_IP: "1/min" } });
-    const { owner } = await setup(world);
+    const { owner, shared } = await setup(world);
+    await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
     await storeIcon(HOST);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {

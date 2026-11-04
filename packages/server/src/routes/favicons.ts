@@ -7,14 +7,14 @@ import { uuidv7 } from "../auth/uuidv7.ts";
 import { queueFetchFavicon } from "../worker/jobs/fetch-favicon.ts";
 import { route } from "./register.ts";
 
-// GET /api/v1/favicons/{host} (doc 04 section 10.6, doc 02 section 5.4, doc 10 T6 and T14). The icon of a host from the deployment-wide cache, served from our own origin so a
-// list never makes the browser contact the bookmarked site. The operation needs a session and the host a hostname (the contract validates both); an API token is refused before the
+// GET /api/v1/favicons/{host} (doc 04 section 10.6, doc 02 section 5.4, doc 10 T1, T6 and T14). The icon of a host from the deployment-wide cache, served from our own origin so a
+// list never makes the browser contact the bookmarked site. The cache is shared, so nothing of it is answered before `hostReadable` holds: a caller who can read no bookmark on the
+// host in the active workspace gets the placeholder whatever the cache holds, and the cache is not read for it, so a cached icon, a record of none and an unknown host look the same. The operation needs a session and the host a hostname (the contract validates both); an API token is refused before the
 // handler, since the operation declares no token scope.
 //
 // A stored icon is answered as `image/png` with `nosniff` and a private cache of seven days: the bytes are the PNG the server encoded itself (`sys_favicon_get` returns a column
-// that `sys_favicon_put` only fills with a PNG), never the fetched ones. Anything else is the transparent placeholder, 202, cached for a minute. On a miss the handler queues
-// `favicon.fetch`, and only for a host of a bookmark the caller can read in the active workspace (`hostReadable`), so the operation cannot be used to make the server fetch an
-// arbitrary host; a host the cache knows to have no icon queues nothing until the record expires. Every request is limited by the `read` bucket (the operation declares `rateTakenByHandler`); the fetch bucket is taken besides, only for a request that would queue a fetch, and before it is queued: a request over the limit is the 429 and queues nothing.
+// that `sys_favicon_put` only fills with a PNG), never the fetched ones. Anything else is the transparent placeholder, 202, cached for a minute. On a miss for a host
+// the caller can read (`hostReadable`) the handler queues `favicon.fetch`, so the operation cannot be used to make the server fetch an arbitrary host; a host the cache knows to have no icon queues nothing until the record expires. Every request is limited by the `read` bucket (the operation declares `rateTakenByHandler`); the fetch bucket is taken besides, only for a request that would queue a fetch, and before it is queued: a request over the limit is the 429 and queues nothing.
 
 const NO_WORKSPACE = "No such resource.";
 
@@ -49,19 +49,19 @@ export function faviconRoutes(): RouteBinding[] {
       const edge = query.size === "32" ? 32 : 64;
       const found = await tenant.withTenant(async (tx) => {
         const repository = faviconRepository(tx);
-        const current = await repository.current(host, edge);
-        if (current !== undefined) {
-          return { kind: "known", current } as const;
+        if (!(await repository.hostReadable(host))) {
+          return { kind: "unreadable" } as const;
         }
-        return { kind: "missing", readable: await repository.hostReadable(host) } as const;
+        const current = await repository.current(host, edge);
+        return current === undefined ? ({ kind: "missing" } as const) : ({ kind: "known", current } as const);
       });
+      if (found.kind === "unreadable") {
+        return placeholder();
+      }
       if (found.kind === "known") {
         return found.current.status === "ok"
           ? { status: 200, body: found.current.png, headers: { "Cache-Control": STORED_CACHE, "X-Content-Type-Options": NOSNIFF } }
           : placeholder();
-      }
-      if (!found.readable) {
-        return placeholder();
       }
       const takeBucketLimit = context.get("takeBucketLimit");
       if (takeBucketLimit === undefined) {
