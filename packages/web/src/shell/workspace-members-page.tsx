@@ -3,7 +3,6 @@ import {
   AccountAvatar,
   Banner,
   DataTable,
-  EmptyState,
   Loading,
   RowActions,
   SelectField,
@@ -40,6 +39,10 @@ import {
 import { WORKSPACE_QUERY_KEY, useWorkspace, type WorkspaceRole } from "./workspace.ts";
 
 const ROLES: readonly WorkspaceRole[] = ["owner", "admin", "member"];
+
+// The settings column is about 730 px wide, which seven columns fill only with the cell padding tightened and the name and the email allowed to wrap.
+const CELL = "px-2";
+const WRAPPING_CELL = `${CELL} whitespace-normal`;
 
 function useRoleLabel(): (role: WorkspaceRole) => string {
   const { t } = useTranslation();
@@ -101,7 +104,7 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
   const items = pages?.flatMap((page) => page.items) ?? [];
   const waiting = members.isPending || (pages === undefined && !members.isError);
   const hasNextPage = pages !== undefined && members.hasNextPage;
-  const dateTime = (value: string): string => format.date(new Date(value), { dateStyle: "medium", timeStyle: "short" });
+  const date = (value: string): string => format.date(new Date(value), { dateStyle: "medium" });
 
   function refusalMessage(refusal: RoleChangeRefusal | undefined): string | undefined {
     switch (refusal) {
@@ -172,6 +175,7 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
   const columns: readonly DataTableColumn<Member>[] = [
     {
       id: "name",
+      className: WRAPPING_CELL,
       header: t("settings.members.column.name"),
       cell: (member) => (
         <span className="flex items-center gap-2">
@@ -181,9 +185,10 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
         </span>
       ),
     },
-    { id: "email", header: t("settings.members.column.email"), cell: (member) => member.email },
+    { id: "email", className: `${WRAPPING_CELL} min-w-32 wrap-anywhere`, header: t("settings.members.column.email"), cell: (member) => member.email },
     {
       id: "role",
+      className: CELL,
       header: t("settings.members.column.role"),
       cell: (member) => {
         const assignable = assignableRoles(viewerRole, member);
@@ -192,7 +197,7 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
         }
         return (
           <SelectField
-            className="w-36"
+            className="w-32"
             disabled={change.isPending}
             error={refusalMessage(refusals.get(member.accountId))}
             hideLabel
@@ -211,6 +216,7 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
     },
     {
       id: "teams",
+      className: CELL,
       header: t("settings.members.column.teams"),
       cell: (member) =>
         member.teams.length === 0 ? (
@@ -225,17 +231,18 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
           </ul>
         ),
     },
-    { id: "joined", header: t("settings.members.column.joined"), cell: (member) => dateTime(member.joinedAt) },
+    { id: "joined", className: CELL, header: t("settings.members.column.joined"), cell: (member) => date(member.joinedAt) },
     {
       id: "lastActive",
+      className: CELL,
       header: t("settings.members.column.lastActive"),
-      cell: (member) => (member.lastActiveAt === null ? t("settings.members.never") : dateTime(member.lastActiveAt)),
+      cell: (member) => (member.lastActiveAt === null ? t("settings.members.never") : date(member.lastActiveAt)),
     },
     {
       id: "actions",
       header: t("settings.members.column.actions"),
       hideHeader: true,
-      className: "text-end",
+      className: `${CELL} text-end`,
       cell: (member) => <RowActions actions={actionsOf(member)} label={t("settings.members.actionsFor", { name: member.displayName })} />,
     },
   ];
@@ -289,7 +296,7 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
         <>
           <DataTable columns={columns} label={t("settings.members.title")} rowKey={(member) => member.accountId} rows={items} />
           {items.length === 1 && !hasNextPage ? (
-            <EmptyState description={t("settings.members.single.description")} title={t("settings.members.single.title")} />
+            <p className="text-muted-foreground text-sm">{t("settings.members.single")}</p>
           ) : null}
           {hasNextPage ? (
             <div className="flex justify-center">

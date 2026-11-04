@@ -13,10 +13,12 @@ export const Default = (): React.ReactElement => {
   return (
     <FileDrop
       accept=".json,.html,.htm"
+      chooseLabel="Choose file"
       description="SlugBase JSON or a browser bookmark file, up to 5 MiB."
       dropLabel="Drop a file here, or choose one."
       fileName={file?.name}
       label="File"
+      noFileLabel="No file chosen"
       onFile={setFile}
     />
   );
@@ -29,15 +31,17 @@ export const WithError = (): React.ReactElement => (
         Try again
       </Button>
     }
+    chooseLabel="Choose file"
     description="SlugBase JSON or a browser bookmark file, up to 5 MiB."
     dropLabel="Drop a file here, or choose one."
     error="This file is larger than 5 MiB."
     fileName="bookmarks.html"
     label="File"
+    noFileLabel="No file chosen"
     onFile={() => undefined}
   />
 );
 
 export const Disabled = (): React.ReactElement => (
-  <FileDrop disabled dropLabel="Drop a file here, or choose one." fileName="bookmarks.html" label="File" onFile={() => undefined} />
+  <FileDrop chooseLabel="Choose file" disabled dropLabel="Drop a file here, or choose one." fileName="bookmarks.html" label="File" noFileLabel="No file chosen" onFile={() => undefined} />
 );

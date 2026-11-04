@@ -2103,10 +2103,7 @@
         "title": "Die Mitglieder konnten nicht geladen werden"
       },
       "loadMore": "Mehr anzeigen",
-      "single": {
-        "title": "Du bist das einzige Mitglied",
-        "description": "Personen, die diesem Workspace beitreten, erscheinen hier mit ihrer Rolle."
-      },
+      "single": "Personen, die diesem Workspace beitreten, erscheinen hier mit ihrer Rolle.",
       "remove": {
         "dialog": {
           "title": "{name} entfernen",
@@ -2307,7 +2304,9 @@
       "file": {
         "label": "Lesezeichen-Datei",
         "description": "Eine Lesezeichen-Datei deines Browsers (.html) oder ein SlugBase-JSON-Export (.json), bis zu 5 MiB.",
-        "drop": "Ziehe eine Datei hierher oder wähle eine aus."
+        "drop": "Ziehe eine Datei hierher oder wähle eine aus.",
+        "choose": "Datei auswählen",
+        "none": "Keine Datei ausgewählt"
       },
       "skipDuplicates": "Duplikate überspringen",
       "count": {

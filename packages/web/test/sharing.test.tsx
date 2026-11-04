@@ -377,6 +377,7 @@ describe("the share dialog of a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, (
 
     expect(within(dialog).getByText("Choose the members and teams who can read this bookmark.")).toBeTruthy();
     expect(await within(dialog).findByText("Not shared with anyone yet.")).toBeTruthy();
+    expect(within(dialog).getAllByText(/Not shared with anyone/)).toHaveLength(1);
     expect(calls("GET", `/api/v1/bookmarks/${REPORT}/shares`)).toHaveLength(1);
   });
 
@@ -470,7 +471,8 @@ describe("the share dialog of a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, (
     expect(await screen.findByText("Stopped sharing with Grace Hopper")).toBeTruthy();
     expect(calls("DELETE", `/api/v1/bookmarks/${REPORT}/shares/0192f3a0-eeee-7000-8000-000000000a01`)).toHaveLength(1);
     expect(await within(dialog).findByText("Not shared with anyone yet.")).toBeTruthy();
-    expect(within(dialog).getByText("Not shared with anyone")).toBeTruthy();
+    expect(within(dialog).queryByText("Not shared with anyone")).toBeNull();
+    expect(within(dialog).getAllByText(/Not shared with anyone/)).toHaveLength(1);
   });
 
   it("states that sharing is read-only", async () => {

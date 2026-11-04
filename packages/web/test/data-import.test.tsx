@@ -283,6 +283,32 @@ describe("step 1, the file", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(screen.getByRole("progressbar", { name: "Step 1 of 3" })).toBeTruthy();
   });
 
+  it("shows the app's own file button and no-file text, not the browser's, and the button opens the picker", async () => {
+    await openPage();
+
+    const button = screen.getByText("Choose file").closest("button");
+    expect(button).not.toBeNull();
+    expect(screen.getByText("No file chosen")).toBeTruthy();
+    const open = vi.spyOn(fileInput(), "click");
+    await press(button as HTMLElement);
+    expect(open).toHaveBeenCalledTimes(1);
+
+    await choose(htmlFile());
+    expect(screen.queryByText("No file chosen")).toBeNull();
+    expect(screen.getByText("bookmarks.html")).toBeTruthy();
+  });
+
+  it("says the same in German for an account whose language is German", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
+    window.history.replaceState(null, "", "/settings/account/data");
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+    await screen.findByRole("heading", { level: 2, name: "Lesezeichen importieren" });
+
+    expect(screen.getByText("Datei auswählen", { selector: "button" })).toBeTruthy();
+    expect(screen.getByText("Keine Datei ausgewählt")).toBeTruthy();
+  });
+
   it("turns away any other file and a file over 5 MiB with a message, and sends nothing", async () => {
     await openPage();
 

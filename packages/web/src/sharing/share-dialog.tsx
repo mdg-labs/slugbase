@@ -271,7 +271,8 @@ function ShareDialogContent({ subject, onClose }: { subject: ShareSubject; onClo
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm">
             {audience.length > 0 ? <AvatarStack label={t("sharing.dialog.audience.stack", { names: audience.map(({ name }) => name).join(", ") })} people={audience} /> : null}
-            {shares.data === undefined ? null : (
+            {/* A subject with no shares is said to be unshared by the list, so the footer counts readers only once there is a share. */}
+            {shares.data === undefined || granted.length === 0 ? null : (
               <span aria-live="polite" className="text-muted-foreground">
                 {count === 0 ? t("sharing.dialog.audience.none") : t("sharing.dialog.audience.some", { count })}
               </span>

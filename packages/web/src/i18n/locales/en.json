@@ -2103,10 +2103,7 @@
         "title": "The members could not be loaded"
       },
       "loadMore": "Show more",
-      "single": {
-        "title": "You are the only member",
-        "description": "People who join this workspace will appear here with their role."
-      },
+      "single": "People who join this workspace will appear here with their role.",
       "remove": {
         "dialog": {
           "title": "Remove {name}",
@@ -2307,7 +2304,9 @@
       "file": {
         "label": "Bookmark file",
         "description": "A browser bookmark file (.html) or a SlugBase JSON export (.json), up to 5 MiB.",
-        "drop": "Drop a file here, or choose one."
+        "drop": "Drop a file here, or choose one.",
+        "choose": "Choose file",
+        "none": "No file chosen"
       },
       "skipDuplicates": "Skip duplicates",
       "count": {

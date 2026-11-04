@@ -316,19 +316,20 @@ describe("the states of the members page", () => {
     expect(screen.queryByText("The members could not be loaded")).toBeNull();
   }, SLOW_TEST_TIMEOUT_MS);
 
-  it("says so when the caller is the only member", async () => {
+  it("adds a one-line hint, and no empty state, while the table lists the caller as the only member", async () => {
     stubWorkspaceSettingsServer({ members: [SELF] });
     await openList();
 
-    expect(screen.getByText("You are the only member")).toBeTruthy();
+    expect(screen.getByText("People who join this workspace will appear here with their role.")).toBeTruthy();
+    expect(screen.queryByText("You are the only member")).toBeNull();
     expect(within(rowOf("Ada Lovelace")).getAllByRole("cell")).toHaveLength(7);
   });
 
-  it("does not call a page of two members the only member, and loads the next page on request", async () => {
+  it("does not hint at joiners on a page of two members, and loads the next page on request", async () => {
     stubWorkspaceSettingsServer({ pageSize: 1 });
     await openList();
 
-    expect(screen.queryByText("You are the only member")).toBeNull();
+    expect(screen.queryByText("People who join this workspace will appear here with their role.")).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Show more" }));
       await Promise.resolve();
