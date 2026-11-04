@@ -36,6 +36,8 @@ existing line by adding its PR number.
 
 - **rule checked one node at a time** — a check of a key-and-value rule (no secret given a value) inspects each parsed node alone, so the same pair split across adjacent nodes (a key cell and a value cell of a table row) passes — PR 724
 
+- **error text read as an answer** — a fail-closed check accepts one failure as the safe answer by matching its words ("not found") anywhere in the output, so a different failure that uses the same words (the shell's `command not found` for a missing tool) is read as the safe answer and the guard fails open — PR 726
+
 - **path filter without the checker** — a job that runs a check only when its content changes omits the checker and its dependencies from the filter, so a tighter rule is first seen on the next unrelated content change — PR 685
 
 ## Design docs
