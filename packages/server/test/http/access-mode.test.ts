@@ -26,7 +26,7 @@ function operationOf(method: "get" | "post" | "patch" | "delete", path: string, 
     operationId,
     tag: "test",
     auth,
-    rate: "none",
+    rate: auth === "anonymous" ? "public" : "none",
     ...(auth === "anonymous" || auth === "partial" ? {} : { scope: method === "get" ? ("read" as const) : ("write" as const) }),
     responses: { 200: jsonResponse("ok", Echo), 404: problemResponse("not found") },
   });

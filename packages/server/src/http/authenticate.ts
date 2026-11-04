@@ -72,8 +72,10 @@ export interface AuthenticationOptions {
  * can accept the header, so the request is anonymous, still without its
  * cookies. Otherwise the `Cookie` header goes to the cookie authenticators, and
  * a cookie none accepts is an anonymous request. A route with an `audience`
- * never derives a principal, and a request that matches no operation resolves
- * no credential.
+ * never derives a principal, nor does an anonymous operation that declares rate
+ * `none` (the probes): the per-address stage takes no token for it, so a
+ * credential lookup there would be unthrottled (T9). A request that matches no
+ * operation resolves no credential.
  */
 export function createAuthentication({ authenticators }: AuthenticationOptions): RequestStage {
   const bearer = authenticators.filter((authenticator) => authenticator.credential === "bearer");
@@ -82,6 +84,9 @@ export function createAuthentication({ authenticators }: AuthenticationOptions):
   return async (context, next) => {
     const route = context.get("route");
     if (authenticators.length === 0 || route === undefined || route.operation.audience !== undefined) {
+      return next();
+    }
+    if (route.operation.rate === "none" && route.operation.auth === "anonymous") {
       return next();
     }
 

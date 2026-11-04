@@ -98,7 +98,8 @@ function operationOf(path: string, operationId: string, auth: OperationDefinitio
     operationId,
     tag: "test",
     auth,
-    rate: "none",
+    // An anonymous operation that declares rate `none` is a probe, which resolves no credential; these carry one.
+    rate: auth === "anonymous" ? "public" : "none",
     ...(options.scope === undefined ? {} : { scope: options.scope }),
     ...(options.entitlement === undefined ? {} : { entitlement: options.entitlement }),
     ...(options.audience === undefined ? {} : { audience: options.audience }),

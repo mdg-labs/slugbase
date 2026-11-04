@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { getHealth, getReady, getVersion } from "@slugbase/contracts";
 import { apiTokenRepository, type AuthStore } from "@slugbase/db";
 import { classifyOperations, isTokenCallable, loadOpenApiDocument, runTokenMatrix, type TokenMatrixReport, type TokenRequestFunction, type TokenScope } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
@@ -212,12 +213,14 @@ describe("a token that is not valid", () => {
 
     // The four credentials are tried at the same time, as are the operations within each: each answer is judged by its status and code alone.
     const credentials = [["expired", expired.value], ["revoked", revoked.value], ["of a workspace the account left", wrongWorkspace.value], ["unknown", "slb_unknown"]] as const;
+    // The probes resolve no credential at all, so they answer a bad token like no token.
+    const probes = new Set<string>([getHealth.operationId, getReady.operationId, getVersion.operationId]);
     const refusals = (
       await Promise.all(
         credentials.map(async ([label, value]) => {
           const send = sendWith(value);
           return Promise.all(
-            operations.map(async (operation) => {
+            operations.filter((operation) => !probes.has(operation.operationId)).map(async (operation) => {
               const response = await send({ operation, scope: "read" });
               const code = typeof response.body === "object" && response.body !== null && "code" in response.body ? response.body.code : undefined;
               return response.status !== 401 || code !== "unauthenticated" ? `${operation.operationId} with a token ${label}: ${String(response.status)} ${String(code)}` : undefined;

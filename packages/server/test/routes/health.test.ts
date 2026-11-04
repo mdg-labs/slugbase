@@ -137,10 +137,10 @@ describe("the probes' headers", () => {
     expect(response.headers.get("content-security-policy")).not.toBeNull();
   });
 
-  it.each(["/health", "/ready", "/version"])("answer an Authorization header that is not an API token with 401 and the same headers on %s", async (path) => {
+  it.each(["/health", "/ready", "/version"])("ignore an Authorization header and answer as they do without credentials, with the same headers, on %s", async (path) => {
     const { server } = start();
     const response = await get(server, path, { Authorization: "Bearer not-a-token" });
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(path === "/ready" ? 503 : 200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
