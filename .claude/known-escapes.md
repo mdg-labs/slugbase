@@ -34,6 +34,8 @@ existing line by adding its PR number.
 - **copied threshold list** — a runner classifies a tool's exit status against its own copy of the thresholds the tool enforces, the copy misses some, so a crossed threshold reads as a failed run instead of a regression — PR 622
 - **copied limit** — a client keeps its own literal of a limit the contracts package exports (an import cap shown in a message), beside siblings that import theirs, so a change to the server's cap leaves the client stating a stale number — PR 713
 
+- **rule checked one node at a time** — a check of a key-and-value rule (no secret given a value) inspects each parsed node alone, so the same pair split across adjacent nodes (a key cell and a value cell of a table row) passes — PR 724
+
 - **path filter without the checker** — a job that runs a check only when its content changes omits the checker and its dependencies from the filter, so a tighter rule is first seen on the next unrelated content change — PR 685
 
 ## Design docs
@@ -43,6 +45,8 @@ existing line by adding its PR number.
 - **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558, 641
 - **contract description lags behaviour** — a change widens what an operation returns (a search that now reaches shared rows) and updates the design doc, but the operation's published contract description still states the old behaviour, so API callers read the old rule — PR 648
 - **external behaviour** — a doc or comment states a third-party system's behaviour more broadly than that system documents it (a database "waits for every older transaction" where it waits only for writers and older snapshots) — PR 365
+
+- **summary narrower than the code** — an operator page's summary row states one value or one purpose for a setting (a single page-size default, a key needed only for private hosts) where the code has several (a default per view, the key also gating plain http), while the detail elsewhere is right — PR 724
 
 - **comment vs check** — a comment summarising what a check rejects states the rule more broadly than the check enforces ("a secret" where the workflow token is allowed), so the next editor misreads the guard — PR 444
 - **invariant vs feature** — a feature the spec settles (a credential returned once in an API response) contradicts the literal wording of a threat-model invariant, and the invariant is not amended with a narrow, named exception in the same change — PR 471
@@ -103,7 +107,7 @@ existing line by adding its PR number.
 - **unescaped literal in a pattern** — a test builds a `RegExp` from a literal value (an origin, a hostname) without escaping it, so each `.` matches any character and the assertion accepts look-alike values — PR 529
 - **fixed sleep as a bound** — a test sleeps a fixed delay and then asserts that something has happened, so a loaded runner that takes longer fails it; a positive outcome is awaited by polling it — PR 622
 - **timeout told by timing alone** — an error classifier treats any rejection that arrives near a deadline as that deadline's timeout without reading the error, so an unrelated late failure (`Target closed`) is reported as the timeout — PR 622
-- **hook shorter than its waits** — a test hook calls a helper whose own deadlines (a mail wait, a wait on another worker) exceed the hook's default timeout, so the hook dies first and leaves shared coordination files half-written — PR 622
+- **hook shorter than its waits** — a test hook calls a helper whose own deadlines (a mail wait, a wait on another worker) exceed the hook's default timeout, so the hook dies first and leaves shared coordination files half-written (or a setup ends before the build its helper allows for) — PR 622, 724
 - **cross-run state keyed by a reusable value** — state a test run keeps on disk is keyed by a value a later run can draw again (a random free port) instead of being cleared at the start of each run, so a later run reads a session of a stack that is gone — PR 622
 - **ready before the data** — a page check waits for an element the page renders before its data has loaded (a heading above a query's content), so the scan or assertion that follows can run on the loading state and a failed load still passes — PR 626, 639
 - **substring locator** — a Playwright role or text locator takes a catalog string without `exact: true`, so it matches any text that contains the string and passes on extra text around it — PR 626
@@ -126,3 +130,4 @@ existing line by adding its PR number.
 - **word-for-word state label** — a short toggle label ("Forwarding on") is translated word for word, and in the target language the particle reads as a direction ("Weiterleitung an", forwarding to …) rather than a state; a label naming a state uses that language's state adjective — PR 569
 - **reachability by computed style** — a helper that lists the controls Tab reaches judges them by computed `display` and `visibility` and takes document order, so a control the browser skips without either (inside a closed `<details>`) or orders differently (a positive `tabindex`) becomes the first or last stop and the trap misses the real one — PR 612
 - **secure-context API presumed** — code calls a browser API that exists only in a secure context (`navigator.clipboard`) without allowing for its absence, so on an instance served over http it throws before any feedback — PR 612
+- **error routed to a hidden message** — a page routes a failure to a message shown beside one control, under a broader condition than the one that shows that control (any filter, while the day fields show only for a custom range), so the page renders nothing for that failure: no table, banner or retry — PR 724
