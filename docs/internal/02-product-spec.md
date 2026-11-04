@@ -466,7 +466,7 @@ Per-member export (above) plus the operator's database backup (`pg_dump` / volum
 
 ## 16. Constants
 
-Starting values. **Config** values are environment or instance settings (doc 07 lists the keys); **fixed** values are product invariants changed only through a decision.
+Starting values. **Config** values are environment or instance settings (doc 07 lists the keys) and the row names its key; **fixed** values are product invariants changed only through a decision, and the row names the constant that holds the value where one does.
 
 | Item | Value | Kind | Section |
 |---|---|---|---|
@@ -475,28 +475,28 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 | Slug uniqueness | per owner within a workspace | fixed | §6.1 |
 | Bookmark title / description / URL max | 300 / 1 000 / 2 048 chars | fixed | §5.1 |
 | Folder name / tag name / team name max | 64 / 40 / 64 chars | fixed | §7, §4 |
-| Page sizes | 24 / 48 / 96; max 100 via API | config | §5.7 |
+| Page sizes | 24 / 48 / 96 (`BOOKMARK_PAGE_SIZES` in `packages/web/src/bookmarks/list-search.ts`); max 100 via API (`BOOKMARK_LIST_MAX_LIMIT` in `@slugbase/contracts`) | fixed | §5.7 |
 | Select-all cap | 5 000 IDs (`BOOKMARK_SELECT_ALL_CAP` in `@slugbase/contracts`) | fixed | §5.7 |
-| Import max bookmarks / HTML size | 5 000 / 5 MiB | config | §13.1 |
+| Import max bookmarks / HTML size | 5 000 / 5 MiB (`IMPORT_MAX_BOOKMARKS` / `IMPORT_MAX_BYTES` in `@slugbase/contracts`; the browser-file limit `IMPORT_NETSCAPE_MAX_FILE_BYTES` is the same value) | fixed | §13.1 |
 | Import max new folders and tags together | 10 000 (`IMPORT_MAX_NEW_NAMES` in `@slugbase/contracts`) | fixed | §7, §13.1 |
 | Import max folder and tag links together | 100 000 (`IMPORT_MAX_LINKS` in `@slugbase/contracts`) | fixed | §13.1 |
-| Metadata cache / AI cache | 7 days / 30 days | config | §5.4, §14 |
-| Metadata HTML read cap / sync budget | 512 KiB / 3 s | config | §5.4 |
-| Favicon max size | 64 KiB | config | §5.4 |
-| Session TTL (sliding) / remember-me / absolute cap | 30 d / 90 d / 180 d | config | §2.4 |
+| Metadata cache / AI cache | 7 days / 30 days (`URL_METADATA_LIFETIME_DAYS` in `packages/db/src/repositories/url-metadata.ts` / `AI_SUGGESTION_LIFETIME_DAYS` in `packages/db/src/repositories/ai-suggestions.ts`) | fixed | §5.4, §14 |
+| Metadata HTML read cap / sync budget | 512 KiB / 3 s (`METADATA_HTML_MAX_BYTES` in `@slugbase/core`; `DEFAULT_METADATA_BUDGET_MS` in `packages/server/src/routes/bookmarks/index.ts`, which a composition can override in code with `metadataBudgetMs`, with no environment key) | fixed | §5.4 |
+| Favicon max size | 64 KiB (`FAVICON_MAX_BYTES` in `@slugbase/core`) | fixed | §5.4 |
+| Session TTL (sliding) / remember-me / absolute cap | 30 d / 90 d / 180 d (the intervals of `sys_session_create`, `sys_session_lookup` and `sys_session_promote` in `@slugbase/db`; `SESSION_ABSOLUTE_DAYS` in `@slugbase/core` for the cap and the cookie lifetime) | fixed | §2.4 |
 | Pending-MFA session | 5 min, 5 attempts | fixed | §2.3 |
-| Password length | 12–256 | config (min) | §2.5 |
-| Signup verification / password reset / email-change token TTL | 24 h / 1 h / 1 h | config | §2.5, §2.6 (Q48) |
-| Invitation TTL | 7 days | config | §3.4 |
+| Password length | 12–256 (`PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` in `@slugbase/core`) | fixed | §2.5 |
+| Signup verification / password reset / email-change token TTL | 24 h / 1 h / 1 h (`CREDENTIAL_TOKEN_TTL_SECONDS` in `@slugbase/core`) | fixed | §2.5, §2.6 (Q48) |
+| Invitation TTL | 7 days (`INVITATION_TTL_SECONDS` in `@slugbase/core`) | fixed | §3.4 |
 | Re-authentication window | 10 min | fixed | doc 04 §4.4 |
-| Audit retention | 365 days (`0` keeps events forever) | config | §10 |
+| Audit retention | 365 days (`0` keeps events forever) | config (`AUDIT_RETENTION_DAYS`) | §10 |
 | Idempotency key retention | 24 h | fixed | doc 04 §6.3 |
 | List total shown exactly up to | 10 000 | fixed | §5.7 |
 | MFA backup codes | 10, single-use | fixed | §2.7 |
 | API tokens per account | 10 | fixed | §2.9 |
 | API token prefix | `slb_` | fixed | §2.9 |
-| AI suggestion timeout / max tags | 5 s / 5 | config | §14 |
-| Dashboard quick access / pinned / tags | 8 / 12 / 12 | config | §9.3 |
+| AI suggestion timeout / max tags | 5 s / 5 (`AI_SUGGEST_BUDGET_MS` in `@slugbase/core`, which a composition can override in code with `aiBudgetMs`, with no environment key; `AI_SUGGESTION_TAGS_MAX` in `@slugbase/contracts`) | fixed | §14 |
+| Dashboard quick access / pinned / tags | 8 / 12 / 12 (`DASHBOARD_QUICK_ACCESS_LIMIT`, `DASHBOARD_PINNED_LIMIT`, `DASHBOARD_TOP_TAGS_LIMIT` in `@slugbase/contracts`) | fixed | §9.3 |
 | Free bookmark cap, seat minimum, grace period, archive rule | see doc 06 | — | doc 06 |
 
 ### Rate limits
