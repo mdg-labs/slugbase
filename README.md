@@ -17,6 +17,10 @@ Both run the same code from this repository; Cloud adds hosting and billing, not
 
 **Status:** rebuild in planning. The design is in [`docs/internal/`](docs/internal/), starting with [00-overview.md](docs/internal/00-overview.md). Implementation follows the roadmap in [12-roadmap.md](docs/internal/12-roadmap.md). The first implementation was retired in October 2026.
 
+## Self-hosting
+
+The operator guides are in [`docs/self-hosting/`](docs/self-hosting/index.md). To back up and restore an installation, see [Back up and restore SlugBase](docs/self-hosting/backup-restore.md).
+
 ## Licence
 
 Copyright (C) 2026 Michael David Guggenbichler (MDG Labs). Licensed under AGPL-3.0-only — see [LICENSE](LICENSE).
