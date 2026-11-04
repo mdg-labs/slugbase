@@ -1,4 +1,4 @@
-import { connect } from "node:net";
+import { connect, createServer as createTcpServer, type Server as TcpServer, type Socket } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { defineOperation, jsonResponse, problemResponse, type RateBucket } from "@slugbase/contracts";
 import { z } from "zod";
@@ -17,13 +17,37 @@ interface Answer {
   readonly body: string;
 }
 
-function get(port: number, headers: Record<string, string>, path = "/api/config"): Promise<Answer> {
+// How long a request may take before the helper gives up: well under the test timeout, so a stall fails with
+// the step it stopped at instead of as a bare timeout.
+const ANSWER_BOUND_MS = 1000;
+
+function get(port: number, headers: Record<string, string>, path = "/api/config", boundMs = ANSWER_BOUND_MS): Promise<Answer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let step = "connect";
     const socket = connect({ port, host: "127.0.0.1" });
-    socket.on("data", (chunk: Buffer) => chunks.push(chunk));
-    socket.on("error", reject);
+    const fail = (reason: string): void => {
+      clearTimeout(timer);
+      socket.destroy();
+      reject(new Error(`GET ${path} on port ${String(port)}: ${reason} (last step reached: ${step})`));
+    };
+    const timer = setTimeout(() => {
+      fail(`no ${step === "connect" ? "connection" : step === "request sent" ? "response" : "close"} within ${String(boundMs)} ms`);
+    }, boundMs);
+    socket.on("connect", () => {
+      step = "request sent";
+    });
+    socket.on("data", (chunk: Buffer) => {
+      if (chunks.length === 0) {
+        step = "response head";
+      }
+      chunks.push(chunk);
+    });
+    socket.on("error", (error) => {
+      fail(error.message);
+    });
     socket.on("close", () => {
+      clearTimeout(timer);
       const text = Buffer.concat(chunks).toString("utf8");
       const [head = "", body = ""] = text.split("\r\n\r\n");
       const [statusLine = "", ...lines] = head.split("\r\n");
@@ -158,17 +182,21 @@ describe("the rate-limit stage over a socket", () => {
         }),
       };
       const config = serverConfig({ [`RATE_LIMIT_${bucket.toUpperCase()}_IP`]: "3/hour" });
+      const logger = recordingLogger();
       const server = createServer({
         config,
         adapters: adapters(config),
         modules: [guarded],
         openApiDocument: documentOf([guarded]),
         migrations: [],
-        logger: recordingLogger(),
+        logger,
         database: fakeDatabase(),
+        // Setup is closed, so start() prepares no token and opens no connection to DATABASE_URL.
+        authStore: fakeAuthStore({ setSetupToken: () => Promise.resolve(false) }),
       });
       const started = await server.start({ port: 0 });
       running.push(started);
+      expect(logger.entries.filter((entry) => entry.level === "error")).toEqual([]);
       const answers: Answer[] = [];
       for (let request = 0; request < 6; request += 1) {
         answers.push(await get(started.port, { Authorization: `Bearer slb_${crypto.randomUUID()}` }, path));
@@ -178,5 +206,40 @@ describe("the rate-limit stage over a socket", () => {
       expect(answers[3]?.headers.get("ratelimit")).toMatch(new RegExp(`^"${bucket}";r=0;t=\\d+$`));
       expect(JSON.parse(answers[3]?.body ?? "{}")).toMatchObject({ code: "rate_limited", status: 429 });
     });
+  });
+});
+
+describe("the socket helper of this file", () => {
+  let silent: TcpServer | undefined;
+  const held: Socket[] = [];
+
+  afterEach(async () => {
+    const closing = silent;
+    silent = undefined;
+    if (closing !== undefined) {
+      await new Promise<void>((resolve) => {
+        closing.close(() => {
+          resolve();
+        });
+        for (const socket of held.splice(0)) {
+          socket.destroy();
+        }
+      });
+    }
+  });
+
+  it("rejects with the path and the step it stopped at when the peer accepts and never answers", async () => {
+    const accepting = createTcpServer((socket) => {
+      held.push(socket);
+    });
+    silent = accepting;
+    await new Promise<void>((resolve) => {
+      accepting.listen(0, "127.0.0.1", resolve);
+    });
+    const address = accepting.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+    await expect(get(port, {}, "/api/stalled", 100)).rejects.toThrow(
+      `GET /api/stalled on port ${String(port)}: no response within 100 ms (last step reached: request sent)`,
+    );
   });
 });
