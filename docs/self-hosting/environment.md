@@ -33,7 +33,7 @@ SlugBase can suggest a title, a slug and tags when a member saves a bookmark. It
 | `AI_MODEL` | With `AI_BASE_URL` and `AI_PROVIDER_NAME` | The name of the model to ask, up to 200 visible characters with no space. |
 | `AI_PROVIDER_NAME` | With `AI_BASE_URL` and `AI_MODEL` | The name members see when SlugBase says who processes a request, 1 to 64 characters. |
 | `AI_API_KEY` | No | The credential for the endpoint, sent as a bearer token. Leave it unset for an endpoint that takes none. Set it only in `.env`, never in a file you share. |
-| `AI_ALLOWED_PRIVATE_HOST` | Only for an endpoint on a private address | The one host that may be private. See the rule below. |
+| `AI_ALLOWED_PRIVATE_HOST` | Only for an endpoint on a private address, or one that uses plain `http` | The one host that may be private, and the only host that may use plain `http`, public or not. See the rule below. |
 
 `AI_BASE_URL`, `AI_MODEL` and `AI_PROVIDER_NAME` are set together. If you set any AI key without them, SlugBase does not start and names the missing keys.
 
