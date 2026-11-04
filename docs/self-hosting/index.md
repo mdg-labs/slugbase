@@ -27,6 +27,7 @@ The people you invite use SlugBase as described in [Get started](../user/getting
 | Page | What it covers |
 | ---- | -------------- |
 | [Back up and restore](backup-restore.md) | Back up the database and your secrets, and restore them into an empty database. |
+| [Environment settings](environment.md) | Set up AI suggestions, audit retention and rate limits, and see which limits are fixed. |
 | [Check the bookmark counter](check-bookmark-counter.md) | Find workspaces whose bookmark counter differs from the number of their bookmarks, without changing anything. |
 
 ## Next steps
