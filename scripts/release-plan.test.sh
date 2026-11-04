@@ -182,6 +182,13 @@ for answer in "ERROR: unauthorized: authentication required" "ERROR: dial tcp: l
   expect_refused "an existence check answered '${answer:-nothing}' is not read as a free tag" "could not tell"
 done
 
+# A docker that cannot run says "not found" about itself, not about the tag.
+for case in "127|bash: line 1: docker: command not found" "126|bash: line 1: docker: Permission denied" "1|ERROR: exec: \"docker-buildx\": executable file not found in \$PATH"; do
+  extra=(STUB_INSPECT_EXIT="${case%%|*}" STUB_INSPECT_OUT="${case#*|}")
+  run_plan "$before" "$after"
+  expect_refused "an existence check that could not run ('${case#*|}') is not read as a free tag" "could not tell"
+done
+
 for answer in "ERROR: ghcr.io/mdg-labs/slugbase:1.0.0-rc.1: not found" "manifest unknown" "NAME_UNKNOWN: name unknown"; do
   extra=(STUB_INSPECT_EXIT=1 STUB_INSPECT_OUT="$answer")
   run_plan "$before" "$after"

@@ -99,12 +99,15 @@ if [[ -n "${REGISTRY_TOKEN:-}" ]]; then
     || die "the registry login failed."
 fi
 
-# Only "not found" means the version is free. Any other answer (an error, a
-# refusal, a network failure) is not known to be free.
-if answer="$(docker buildx imagetools inspect "${image}:${new_version}" 2>&1)"; then
+# Only the registry's own "not found" means the version is free. Any other answer
+# (an error, a refusal, a network failure, a docker that could not run and says
+# "command not found" about itself) is not known to be free.
+inspect_exit=0
+answer="$(docker buildx imagetools inspect "${image}:${new_version}" 2>&1)" || inspect_exit=$?
+if ((inspect_exit == 0)); then
   die "${image}:${new_version} already exists in the registry."
 fi
-if ! grep -qiE 'not found|manifest unknown|name unknown' <<<"$answer"; then
+if ((inspect_exit == 126 || inspect_exit == 127)) || ! grep -qiE ': not found$|manifest unknown|name unknown' <<<"$answer"; then
   die "could not tell whether ${image}:${new_version} exists in the registry."
 fi
 
