@@ -14,6 +14,7 @@ import { totpCode, totpStep } from "./totp.ts";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const STACK_SCRIPT = join(REPOSITORY_ROOT, "e2e", "restore-drill-stack.sh");
+const GUIDE = join(REPOSITORY_ROOT, "docs", "self-hosting", "backup-restore.md");
 const JOURNAL = join(REPOSITORY_ROOT, "packages", "db", "migrations", "meta", "_journal.json");
 
 /** How long the stack may take to be ready: a build of the image from this checkout is part of it. */
@@ -210,19 +211,62 @@ export function tableCount(stack: DrillStack): number {
   return count;
 }
 
-/** Waits until the database answers over TCP, which the server that PostgreSQL starts while it initialises a new volume does not. */
-export async function waitForDatabase(stack: DrillStack, seconds = 120): Promise<void> {
-  const deadline = Date.now() + seconds * 1000;
-  for (;;) {
-    const { status } = compose(stack, ["exec", "-T", "postgres", "pg_isready", "-h", "127.0.0.1", "-U", "slugbase", "-d", "slugbase"], { allowFailure: true });
-    if (status === 0) {
-      return;
+/** Splits a command line into words the way a POSIX shell does for plain words and single or double quotes. */
+export function shellWords(line: string): string[] {
+  const words: string[] = [];
+  let word: string | undefined;
+  let quote: string | undefined;
+  for (const char of line) {
+    if (quote !== undefined) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        word = (word ?? "") + char;
+      }
+    } else if (char === "'" || char === '"') {
+      quote = char;
+      word ??= "";
+    } else if (/\s/.test(char)) {
+      if (word !== undefined) {
+        words.push(word);
+        word = undefined;
+      }
+    } else {
+      word = (word ?? "") + char;
     }
-    if (Date.now() >= deadline) {
-      throw new Error(`the database did not answer within ${String(seconds)} seconds`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
+  if (quote !== undefined) {
+    throw new Error("a quote in the command line is not closed");
+  }
+  if (word !== undefined) {
+    words.push(word);
+  }
+  return words;
+}
+
+/**
+ * The arguments of `docker compose` in the guide's wait for the database of a new server: the one command of the
+ * guide that runs `pg_isready`. The drill runs what the guide says, so a change to the guide's wait is run here.
+ */
+export function guideWaitArguments(guide: string): string[] {
+  const commands = guide.split("\n").filter((line) => /^\s*docker compose .*\bpg_isready\b/.test(line));
+  if (commands.length !== 1) {
+    throw new Error(`the guide has ${String(commands.length)} commands that run pg_isready, and the drill needs exactly one`);
+  }
+  const [docker, subcommand, ...rest] = shellWords(commands[0]?.trim() ?? "");
+  if (docker !== "docker" || subcommand !== "compose" || rest.length === 0) {
+    throw new Error("the guide's wait for the database is not a docker compose command");
+  }
+  return rest;
+}
+
+/**
+ * Waits for the final server of a new volume with the command the guide gives. The server that PostgreSQL starts
+ * while it initialises a volume answers on its Unix socket, which `docker compose exec` reaches, and not over
+ * TCP. The command is bounded by its own timeout and fails when the server never comes up.
+ */
+export function waitForDatabase(stack: DrillStack): void {
+  compose(stack, guideWaitArguments(readFileSync(GUIDE, "utf8")));
 }
 
 /** The number of migrations the checkout ships: the level `/ready` must report. */

@@ -115,6 +115,12 @@ You restore into an empty `slugbase` database that already has the four roles of
    docker compose up -d postgres
    ```
 
+   Wait until the database answers before you restore. The first start sets up the cluster on a temporary server, which `docker compose exec` can reach, and then restarts it. A restore that runs in that time fails with a missing role or a dropped connection. The final server is the only one that answers on the network address `127.0.0.1`, so the wait asks there. It ends with an error after 120 seconds, and then you read `docker compose logs postgres` instead of restoring.
+
+   ```sh
+   docker compose exec -T postgres timeout 120 sh -c 'until pg_isready -h 127.0.0.1 -U slugbase -d slugbase; do sleep 1; done'
+   ```
+
    **The same server, with a database that has data you want to replace.** This deletes the current database. Make a dump first if you are unsure. Recreate the database, then run the script that creates the roles again. It is safe to run on a cluster that already has them, and it changes no password.
 
    ```sh

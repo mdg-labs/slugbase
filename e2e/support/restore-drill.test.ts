@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseEnvFile, parseSetCookie, redact, secretValues, shippedMigrations } from "./restore-drill.ts";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { guideWaitArguments, parseEnvFile, parseSetCookie, redact, secretValues, shellWords, shippedMigrations } from "./restore-drill.ts";
 
 void describe("the env file of the drill's stack", () => {
   const env = parseEnvFile(
@@ -43,5 +45,33 @@ void describe("a Set-Cookie header", () => {
 void describe("the level of migrations the checkout ships", () => {
   void it("is the number of entries of the journal, at least one", () => {
     assert.ok(shippedMigrations() > 0);
+  });
+});
+
+void describe("a command line split into words", () => {
+  void it("keeps a quoted script as one word and drops the quotes", () => {
+    assert.deepEqual(shellWords("exec -T postgres sh -c 'until a -h 1; do sleep 1; done'"), ["exec", "-T", "postgres", "sh", "-c", "until a -h 1; do sleep 1; done"]);
+    assert.deepEqual(shellWords('say "a  b" \'\''), ["say", "a  b", ""]);
+  });
+
+  void it("refuses a quote that is not closed", () => {
+    assert.throws(() => shellWords("sh -c 'until"), /not closed/);
+  });
+});
+
+void describe("the guide's wait for the database of a new server", () => {
+  const guide = readFileSync(fileURLToPath(new URL("../../docs/self-hosting/backup-restore.md", import.meta.url)), "utf8");
+
+  void it("is one bounded docker compose command that asks over TCP and ends with an error when the server never answers", () => {
+    const args = guideWaitArguments(guide);
+    assert.deepEqual(args.slice(0, 5), ["exec", "-T", "postgres", "timeout", "120"]);
+    assert.match(args.join(" "), /\bpg_isready -h 127\.0\.0\.1 -U slugbase -d slugbase\b/);
+    assert.match(args.join(" "), /until pg_isready/);
+  });
+
+  void it("is refused when the guide has no such command or two", () => {
+    assert.throws(() => guideWaitArguments("docker compose up -d postgres\n"), /0 commands/);
+    const line = "docker compose exec -T postgres pg_isready -h 127.0.0.1\n";
+    assert.throws(() => guideWaitArguments(line + line), /2 commands/);
   });
 });

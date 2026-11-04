@@ -341,10 +341,10 @@ test.describe("the backup and restore drill", () => {
     const wrongKey = randomBytes(32).toString("base64");
     const wrongEnv = envFileWithKey(drill, wrongKey, "wrong-key.env");
 
-    await test.step("the old installation is gone and a new one has an empty database with the roles", async () => {
+    await test.step("the old installation is gone and a new one has an empty database with the roles", () => {
       compose(drill, ["down", "--volumes", "--remove-orphans"]);
       compose(drill, ["up", "-d", "postgres"], { envFile: wrongEnv });
-      await waitForDatabase(drill);
+      waitForDatabase(drill);
       expect(tableCount(drill), "the tables of the new database").toBe(0);
     });
 
