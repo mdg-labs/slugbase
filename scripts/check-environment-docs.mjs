@@ -10,7 +10,9 @@
 //   named on the page, in a table row whose next code span after the key is its
 //   default, which equals the default of the schema;
 // - no key whose name ends in KEY, SECRET, PASS, PASSWORD, TOKEN or DSN is given a
-//   value on the page (a placeholder in angle brackets is not a value).
+//   value on the page, as `KEY=value` or, in a table row, as a cell that is one
+//   code span right after the key's cell (a placeholder in angle brackets and
+//   another key's name are not values).
 //
 // The schema is read from packages/server/src/config, so a key added or removed
 // there changes this check's verdict without an edit here. The optional argument
@@ -33,6 +35,10 @@ const RATE_LIMIT_BUCKETS_ON_THE_PAGE = ["go", "fetch", "ai", "bulk"];
 // (`RATE_LIMIT_<BUCKET>_*`), not a key.
 const KEY_PATTERN = /(?<![A-Za-z0-9_<])[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?![A-Za-z0-9_<>*])/g;
 const SECRET_ASSIGNMENT = /(?<![A-Za-z0-9_])(?:[A-Z][A-Z0-9]*_)*(?:KEY|SECRET|PASS|PASSWORD|TOKEN|DSN)\s*=\s*[^\s<`]/;
+// A secret key's name alone, and a placeholder such as `<your API token>`.
+const SECRET_KEY = /^(?:[A-Z][A-Z0-9]*_)*(?:KEY|SECRET|PASS|PASSWORD|TOKEN|DSN)$/;
+const PLACEHOLDER = /^<[^<>]+>$/;
+const KEY_NAME = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
 
 function fail(message) {
   process.stderr.write(`environment-docs: ${message}\n`);
@@ -49,6 +55,12 @@ function walk(node, visit) {
   for (const child of node.children ?? []) {
     walk(child, visit);
   }
+}
+
+// The value of a table cell that holds one code span and nothing else but white space, or undefined.
+function soleCode(cell) {
+  const parts = (cell.children ?? []).filter((child) => !(child.type === "text" && child.value.trim() === ""));
+  return parts.length === 1 && parts[0].type === "inlineCode" ? parts[0].value : undefined;
 }
 
 function keysIn(text) {
@@ -113,6 +125,14 @@ walk(tree, (node) => {
       }
     });
     rows.push(codes);
+    // A table gives a key a value in the cell after its own, written as one code span, as it gives a default; a secret key gets none.
+    const cells = (node.children ?? []).map(soleCode);
+    cells.forEach((code, index) => {
+      const next = cells[index + 1];
+      if (code !== undefined && SECRET_KEY.test(code) && next !== undefined && !PLACEHOLDER.test(next.trim()) && !KEY_NAME.test(next)) {
+        problems.push(`the page gives a secret key a value: ${code}`);
+      }
+    });
   }
 });
 

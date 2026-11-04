@@ -136,6 +136,21 @@ printf '\nFor example `AI_API_KEY=abc123`.\n' >>"$dir/$page"
 check "$dir"
 expect_problem "a value given to a secret key is reported" "the page gives a secret key a value: AI_API_KEY"
 
+dir="$(new_tree secret-table-value)"
+printf '\n| Key | Value |\n| --- | ----- |\n| `AI_API_KEY` | `abc123` |\n' >>"$dir/$page"
+check "$dir"
+expect_problem "a value given to a secret key in the next cell of a table row is reported" "the page gives a secret key a value: AI_API_KEY"
+
+dir="$(new_tree secret-table-placeholder)"
+printf '\n| Key | Value |\n| --- | ----- |\n| `AI_API_KEY` | `<your API key>` |\n' >>"$dir/$page"
+check "$dir"
+expect_pass "a placeholder for a secret key in a table row is accepted"
+
+dir="$(new_tree secret-table-prose)"
+printf '\n| Key | Value |\n| --- | ----- |\n| `AI_API_KEY` | Set it in `.env`, or use `abc123` there. |\n' >>"$dir/$page"
+check "$dir"
+expect_pass "a code span in prose after a secret key in a table row is not a value"
+
 dir="$(new_tree secret-placeholder)"
 printf '\nFor example `AI_API_KEY=<your API key>`.\n' >>"$dir/$page"
 check "$dir"
