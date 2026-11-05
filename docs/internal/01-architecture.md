@@ -390,7 +390,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   | `LOG_LEVEL` | `pino` level | `info` |
   | `DATABASE_URL` / `DATABASE_MIGRATE_URL` | `slugbase_app` / `slugbase_migrator` (Q56) | — |
   | `MIGRATE_ON_START` | Run `migrate` before serving (§2.1) | `true` |
-  | `SLUGBASE_ALLOW_OWNER_CONNECTION` | Allow the application role to own the database, with a warning (Q56) | `false` |
+  | `SLUGBASE_ALLOW_OWNER_CONNECTION` | Let a `DATABASE_URL` role that is a superuser, owns the database or has `BYPASSRLS` start in production; each case is refused without it and starts with a warning with it (Q56) | `false` |
   | `SESSION_SECRET` | Derives signing subkeys (cursors, pre-auth state) | — |
   | `ENCRYPTION_KEY` / `ENCRYPTION_KEY_ID` | Current secret-box key and its id (Q13) | — |
   | `ENCRYPTION_KEY_PREVIOUS` | Earlier keys as `id:key` pairs, used only to decrypt until the re-encryption sweep ends | empty |

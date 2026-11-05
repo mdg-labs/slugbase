@@ -476,7 +476,7 @@ A privacy-positioned, self-hostable product earns trust by default silence; adop
 ### Q56 — CE database URLs
 **Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 05 §3.1, doc 07 (CE compose), doc 01 §2.1
 
-**Decision: CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions both roles with a Postgres init script. If only `DATABASE_URL` is set and it is the database owner, the server refuses to start in production with a message explaining the two-role setup (`SLUGBASE_ALLOW_OWNER_CONNECTION=true` overrides, logged as a warning).**
+**Decision: CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions both roles with a Postgres init script. If `DATABASE_URL` connects as a role that is a superuser, the database owner or has `BYPASSRLS`, the server refuses to start in production with a message explaining the two-role setup (`SLUGBASE_ALLOW_OWNER_CONNECTION=true` overrides each of the three, logged as a warning).**
 Running the app as the table owner silently disables RLS (owners bypass non-forced policies, and `FORCE` still lets the owner `ALTER` them away), so the RLS layer of D8 would not exist on such installs. The override exists for operators with managed Postgres that makes extra roles awkward.
 
 ### Q92 — Release signing and registry timing

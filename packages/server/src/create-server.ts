@@ -266,8 +266,9 @@ export interface Server {
   fetch(request: Request): Promise<Response>;
   /**
    * Listens on `PORT`, and on `METRICS_PORT` for the internal `/metrics` listener when it is set.
-   * In production it first refuses a `DATABASE_URL` role that is a superuser or owns the database
-   * (Q56). With `MIGRATE_ON_START` it then migrates as `DATABASE_MIGRATE_URL` and resolves when that
+   * In production it first refuses a `DATABASE_URL` role that is a superuser, has `BYPASSRLS` or
+   * owns the database (Q56), unless `SLUGBASE_ALLOW_OWNER_CONNECTION` allows it with a warning.
+   * With `MIGRATE_ON_START` it then migrates as `DATABASE_MIGRATE_URL` and resolves when that
    * is done; meanwhile the probes answer, `/ready` is `503` and every other route is `503 unavailable`.
    * A failed migration stops the listeners and rejects. Once the database is migrated, a deployment that requires a setup
    * token while the instance has no account generates a new one, replacing the stored one, and prints it to the log.
