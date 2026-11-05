@@ -194,7 +194,7 @@ const NON_PUBLIC_V6: readonly (readonly [prefix: readonly number[], bits: number
   [[0x20, 0x01, 0x00, 0x00], 32], // Teredo
   [[0x20, 0x01, 0x00, 0x02, 0x00, 0x00], 48], // benchmarking
   [[0x20, 0x01, 0x0d, 0xb8], 32], // documentation
-  [[0x20, 0x01, 0x00, 0x10], 28], // ORCHID and ORCHIDv2
+  [[0x20, 0x01, 0x00, 0x10], 28], // ORCHID (deprecated); ORCHIDv2, 2001:20::/28, is globally reachable and stays public
   [[0x3f, 0xff], 20], // documentation (RFC 9637)
 ];
 
