@@ -101,6 +101,46 @@ secrets=("first-generated-value" "second/generated+value=")
 redacted="$(printf 'url=postgres://u:first-generated-value@h key=second/generated+value= tail' | redact)"
 if [[ "$redacted" == "url=postgres://u:[redacted]@h key=[redacted] tail" ]]; then pass "redact replaces every generated value"; else fail_test "redact (got '$redacted')"; fi
 
+# The probe that the runtime image holds no npm, npx or corepack, run here against a
+# directory standing in for the root of the image and with no command on PATH.
+probe_root="$tmp/image-root"
+mkdir -p "$probe_root/usr/local/bin" "$probe_root/usr/local/lib/node_modules"
+run_probe() {
+  env ROOT="$probe_root" PATH=/nonexistent /bin/sh -c "$NPM_PROBE"
+}
+run run_probe
+if ((code == 0)) && [[ -z "$out" ]]; then pass "the npm probe is silent on a root without npm"; else fail_test "the npm probe on a clean root (exit $code)"; fi
+ln -s ../lib/node_modules/npm/bin/npm-cli.js "$probe_root/usr/local/bin/npm"
+run run_probe
+if [[ "$out" == "/usr/local/bin/npm" ]]; then pass "the npm probe finds a dangling npm link"; else fail_test "the npm probe on a dangling link"; fi
+rm "$probe_root/usr/local/bin/npm"
+for leftover in usr/local/bin/npx usr/local/bin/corepack usr/local/lib/node_modules/npm usr/local/lib/node_modules/corepack; do
+  if [[ "$leftover" == */node_modules/* ]]; then mkdir -p "$probe_root/$leftover"; else : >"$probe_root/$leftover"; fi
+  run run_probe
+  if [[ "$out" == "/$leftover" ]]; then pass "the npm probe finds /$leftover"; else fail_test "the npm probe on /$leftover"; fi
+  rm -rf "${probe_root:?}/$leftover"
+done
+mkdir -p "$tmp/path-bin"
+printf '#!/bin/sh\n' >"$tmp/path-bin/npx"
+chmod +x "$tmp/path-bin/npx"
+run env ROOT="$probe_root" PATH="$tmp/path-bin" /bin/sh -c "$NPM_PROBE"
+if [[ "$out" == "npx on PATH" ]]; then pass "the npm probe finds a command on PATH"; else fail_test "the npm probe on a PATH command"; fi
+
+# check_no_npm judges what the probe printed inside the image.
+image="slugbase:test"
+fake_probe_output=""
+# The check starts docker through timeout, an external command that cannot see a function.
+# shellcheck disable=SC2317
+timeout() { shift; "$@"; }
+# shellcheck disable=SC2317
+docker() { printf '%s' "$fake_probe_output"; }
+run check_no_npm
+expect_ok "check_no_npm accepts an image whose probe prints nothing"
+fake_probe_output="/usr/local/bin/npm"
+run check_no_npm
+expect_failed "check_no_npm fails on an image that holds npm"
+unset -f docker timeout
+
 picked="$(pick_port)"
 if [[ "$picked" =~ ^[0-9]+$ ]] && ((picked >= 20000 && picked < 40000)); then pass "pick_port returns a port in 20000-39999"; else fail_test "pick_port (got '$picked')"; fi
 

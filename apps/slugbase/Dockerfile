@@ -23,7 +23,8 @@
 #
 # Stages: toolchain (pinned Node 24 slim and pnpm) -> build (frozen-lockfile
 # install, build, then the runtime dependencies only) -> runtime (the same pinned
-# base, built output and production dependencies, no sources, tests or git history).
+# base minus its bundled npm, npx and corepack, built output and production
+# dependencies, no sources, tests or git history).
 
 FROM node:24-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS toolchain
 RUN npm install --global --ignore-scripts pnpm@10.34.6
@@ -58,6 +59,15 @@ LABEL org.opencontainers.image.title="SlugBase" \
       org.opencontainers.image.revision="${BUILD_COMMIT}"
 ENV NODE_ENV=production
 WORKDIR /app
+
+# The base image bundles npm, npx and corepack, which nothing here runs: the
+# entrypoint only starts node on the copied application, and the dependencies are
+# installed in the build stage. Removing them keeps the advisories in the packages
+# they bundle (brace-expansion, undici) out of the image. The bin links go with the
+# directories, so none is left dangling. scripts/smoke-image.sh fails when any of
+# them is back.
+RUN rm -rf /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/slugbase/package.json ./apps/slugbase/package.json

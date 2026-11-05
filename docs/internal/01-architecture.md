@@ -27,7 +27,7 @@
 | Operator console (Cloud) | Hono + Vite/React SPA on `@slugbase/ui`, separate service and origin (doc 07 §6) | Never part of the customer app or the CE image |
 | Tests | Vitest (unit + integration against a real Postgres), Playwright (e2e) | Doc 08 |
 | Logs / telemetry | `pino` JSON logs; OpenTelemetry traces and metrics, Sentry-protocol error reporting behind the error port | Vendor-neutral; Cloud's backends are self-hosted and lightweight at launch (D27) |
-| Container images | Distroless/`node:24-slim` multi-stage builds, non-root, read-only root filesystem | Small attack surface; any container platform or orchestrator runs them unchanged |
+| Container images | Distroless/`node:24-slim` multi-stage builds, non-root, read-only root filesystem. The CE runtime stage removes the base image's bundled npm, npx and corepack (nothing in the image runs them; the entrypoint only starts node), and `scripts/smoke-image.sh` fails if any is present | Small attack surface; any container platform or orchestrator runs them unchanged |
 
 ### Why TypeScript and not Go
 

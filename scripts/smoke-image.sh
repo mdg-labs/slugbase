@@ -3,8 +3,8 @@
 # self-hoster relies on (doc 12 section 1, Phase 1 definition of done; doc 08
 # section 6.2): the image migrates, reports ready, serves the probes, the API
 # config and the web app, runs unprivileged on a read-only root filesystem,
-# returns to ready after a restart without applying migrations again, and refuses
-# to start with a weak session secret.
+# returns to ready after a restart without applying migrations again, holds no npm,
+# npx or corepack, and refuses to start with a weak session secret.
 #
 #   bash scripts/smoke-image.sh
 #
@@ -48,6 +48,19 @@ WEAK_SESSION_SECRET="smoke-weak-0123456789"
 # jq filters of the bodies of /version and /ready.
 VERSION_FILTER='(keys | sort) == ["builtAt", "commit", "name", "version"] and all(.[]; type == "string" and length > 0)'
 READY_FILTER='.database == "ok" and (.migrations.expected | type == "number" and . > 0) and .migrations.applied == .migrations.expected'
+
+# A /bin/sh script that prints each part of the bundled package managers (npm and
+# npx, which share a package, and corepack) the image still holds: the binaries
+# (also a link left dangling), their library directories, and any of the three
+# names that resolves on PATH. ROOT is empty in the image; the test points it at a
+# directory. Single quotes keep the variables for the shell of the image.
+# shellcheck disable=SC2016
+NPM_PROBE='for p in /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack; do
+  if [ -e "${ROOT-}$p" ] || [ -L "${ROOT-}$p" ]; then echo "$p"; fi
+done
+for c in npm npx corepack; do
+  if command -v "$c" >/dev/null 2>&1; then echo "$c on PATH"; fi
+done'
 
 # State shared with the cleanup; set by main.
 run_id=""
@@ -331,6 +344,18 @@ check_container_hardening() {
   expect_equal "the tmpfs /tmp of the server container" "$output" "writable"
 }
 
+# The runtime stage removes the npm, npx and corepack of the base image: the
+# entrypoint only starts node, and the advisories in that bundled npm would
+# otherwise ship (doc 01 section 1). The probe runs in the image itself, with no
+# network and the root filesystem read-only.
+check_no_npm() {
+  local found
+  found="$(timeout 120 docker run --rm --network none --read-only --entrypoint sh "$image" -c "$NPM_PROBE")" ||
+    fail "the probe for npm could not run in the image"
+  [[ -z "$found" ]] || fail "the image still holds the bundled package manager: ${found//$'\n'/, }"
+  log "ok: the image holds no npm, npx or corepack"
+}
+
 # A restart runs the entrypoint again, which runs migrate again; with nothing to
 # apply, migrate says so and the server is ready as before.
 check_restart() {
@@ -423,6 +448,7 @@ main() {
   start_stack
   check_probes_and_pages
   check_container_hardening
+  check_no_npm
   check_restart
   check_weak_secret_refused
 
