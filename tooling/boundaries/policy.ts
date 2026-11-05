@@ -41,6 +41,9 @@ const DB_DIR = "packages/db/";
 // reaches any module by a name the import rules cannot read) and the
 // dynamic-load and browser-socket globals follow the same rule, except for the
 // path-scoped exemptions of SOCKET_EXEMPTIONS and in test and development code.
+// So do the built-ins that run other code: a spawned process or a worker can be
+// any network client, so `child_process`, `worker_threads`, `cluster`,
+// `inspector` and `vm` are confined the same way.
 const HTTP_BUILTINS = new Set(["http", "https", "http2"]);
 const HTTP_PACKAGES = new Set([
   "undici",
@@ -67,6 +70,7 @@ const HTTP_PACKAGES = new Set([
 ]);
 const SOCKET_BUILTINS = new Set(["net", "tls", "dns", "dgram"]);
 const LOADER_BUILTINS = new Set(["module"]);
+const PROCESS_BUILTINS = new Set(["child_process", "worker_threads", "cluster", "inspector", "vm"]);
 
 /** Browser socket globals that Node also provides. */
 export const SOCKET_GLOBALS = ["WebSocket", "WebSocketStream", "WebTransport", "EventSource"] as const;
@@ -77,14 +81,14 @@ export const DYNAMIC_LOADER = "getBuiltinModule";
 export interface SocketExemption {
   /** Repository-relative path of the one file the exemption covers. */
   path: string;
-  /** What the file may reach: a built-in name (`net`, `module`) or a global name. */
+  /** What the file may reach: a built-in name (`net`, `module`, `child_process`) or a global name. */
   names: readonly string[];
   why: string;
 }
 
 /**
  * The files outside the egress folder, other than test and development code,
- * that may reach a socket, DNS or module-loader built-in. Each entry names its
+ * that may reach a socket, DNS, module-loader or process-spawning built-in. Each entry names its
  * file and the built-ins it may use; anything else in the file is still
  * reported. SMTP and the database speak their own protocols through their
  * drivers, which no source file here imports as a socket module.
@@ -99,6 +103,36 @@ export const SOCKET_EXEMPTIONS: readonly SocketExemption[] = [
     path: "packages/server/src/migrate/pgboss.ts",
     names: ["module"],
     why: "reads the pg-boss package manifest to learn its schema version; it opens no connection",
+  },
+  {
+    path: "packages/contracts/scripts/contracts-check.ts",
+    names: ["child_process"],
+    why: "build-time check that runs the contracts generator and the package report under node; it makes no request",
+  },
+  {
+    path: "packages/db/scripts/generate-migration.ts",
+    names: ["child_process"],
+    why: "developer script that runs drizzle-kit under node to generate a migration; it makes no request",
+  },
+  {
+    path: "packages/db/src/check/drift.ts",
+    names: ["child_process"],
+    why: "CI check that runs drizzle-kit under node to find schema drift; it makes no request",
+  },
+  {
+    path: "packages/db/src/check/release-history.ts",
+    names: ["child_process"],
+    why: "CI check that runs git to read the release tags and the migrations they shipped; it makes no request",
+  },
+  {
+    path: "packages/db/src/testing.ts",
+    names: ["child_process"],
+    why: "test harness that runs psql against the development database to create roles and test databases; it makes no request",
+  },
+  {
+    path: "packages/testing/src/seed/run.ts",
+    names: ["child_process"],
+    why: "development seed command that pipes its SQL to psql; it makes no request",
   },
 ];
 
@@ -274,7 +308,7 @@ export function checkImport(rel: string, specifier: string): string | undefined 
     return `${specifier} is importable only inside packages/adapters/src/egress/: every outbound request goes through the egress adapter (doc 01 section 10, T6).`;
   }
   if (confined !== undefined && !isHttpModule(confined) && !networkAccessAllowed(rel, confined)) {
-    return `${specifier} is importable only inside packages/adapters/src/egress/, in test and development code, and in the files SOCKET_EXEMPTIONS lists in tooling/boundaries/policy.ts: sockets, DNS and dynamic module loading stay behind the egress adapter (doc 01 section 10, T6).`;
+    return `${specifier} is importable only inside packages/adapters/src/egress/, in test and development code, and in the files SOCKET_EXEMPTIONS lists in tooling/boundaries/policy.ts: sockets, DNS, dynamic module loading and spawned processes or workers stay behind the egress adapter (doc 01 section 10, T6).`;
   }
   if (builtin === undefined && DB_PACKAGES.has(pkg) && !rel.startsWith(DB_DIR)) {
     return `${specifier} is importable only inside packages/db: the raw database handle never leaves it (doc 01 section 5.3, T1).`;
@@ -290,7 +324,7 @@ export function checkImport(rel: string, specifier: string): string | undefined 
 export function confinedModule(specifier: string): string | undefined {
   const builtin = builtinRoot(specifier);
   if (builtin !== undefined) {
-    return HTTP_BUILTINS.has(builtin) || SOCKET_BUILTINS.has(builtin) || LOADER_BUILTINS.has(builtin) ? builtin : undefined;
+    return HTTP_BUILTINS.has(builtin) || SOCKET_BUILTINS.has(builtin) || LOADER_BUILTINS.has(builtin) || PROCESS_BUILTINS.has(builtin) ? builtin : undefined;
   }
   const pkg = packageName(specifier);
   return HTTP_PACKAGES.has(pkg) ? pkg : undefined;
@@ -302,8 +336,9 @@ export function isHttpModule(name: string): boolean {
 }
 
 /**
- * Whether the file may reach a socket, DNS, module-loader or other
- * network-opening name: a built-in from SOCKET_BUILTINS or LOADER_BUILTINS,
+ * Whether the file may reach a socket, DNS, module-loader, process-spawning or
+ * other network-opening name: a built-in from SOCKET_BUILTINS, LOADER_BUILTINS or
+ * PROCESS_BUILTINS,
  * `getBuiltinModule`, or a browser socket global. True in the egress folder, in
  * test and development code, and in a file whose SOCKET_EXEMPTIONS entry names it.
  */

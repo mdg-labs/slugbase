@@ -68,7 +68,7 @@ function isValueReference(node: ts.Identifier): boolean {
 }
 
 // A module specifier the sweep reports in this file: an HTTP client anywhere,
-// a socket, DNS or module-loader built-in unless the file may reach it.
+// a socket, DNS, module-loader or process-spawning built-in unless the file may reach it.
 function confinedImport(node: ts.Node | undefined, fileName: string): string | undefined {
   if (node === undefined || !ts.isStringLiteralLike(node)) {
     return undefined;
@@ -85,7 +85,8 @@ function confinedImport(node: ts.Node | undefined, fileName: string): string | u
  * an HTTP or socket client package (static import, re-export, `import()`,
  * `require()`, `import x = require()`). Outside the egress folder, test and
  * development code and the exemptions of policy.ts it also reports the socket and
- * DNS built-ins, `node:module`, the dynamic loader `getBuiltinModule` and the
+ * DNS built-ins, `node:module`, the process and worker built-ins (`child_process`,
+ * `worker_threads`, `cluster`, `inspector`, `vm`), the dynamic loader `getBuiltinModule` and the
  * browser socket globals (WebSocket, EventSource and the like).
  *
  * It reads the syntax tree, so `app.fetch(request)`, a `fetch(request: Request)`

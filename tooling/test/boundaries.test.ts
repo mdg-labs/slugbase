@@ -217,6 +217,63 @@ describe("socket and DNS confinement (T6)", () => {
     await failsWith("packages/server/src/migrate/pgboss.ts", 'void process.getBuiltinModule("node:net");\n', RAW_IO);
   });
 
+  // A process or a worker can run any network client, so these built-ins are confined like the sockets (T6).
+  const SPAWN_MODULES = ["child_process", "worker_threads", "cluster", "inspector", "vm"] as const;
+
+  it.each(SPAWN_MODULES)("fails %s with and without the node: prefix", async (spec) => {
+    await failsWith(SERVER, `import * as lib from "node:${spec}";\nvoid lib;\n`, IMPORT);
+    await failsWith(SERVER, `import * as lib from "${spec}";\nvoid lib;\n`, IMPORT);
+  });
+
+  it("fails the spawn function named in the report", async () => {
+    await failsWith(SERVER, 'import { spawn } from "node:child_process";\nvoid spawn;\n', IMPORT);
+    await failsWith("packages/web/src/fixture.ts", 'import { spawn } from "child_process";\nvoid spawn;\n', IMPORT);
+  });
+
+  it.each(["inspector/promises", "node:inspector/promises"])("fails the subpath %s", async (spec) => {
+    await failsWith(SERVER, `import * as lib from "${spec}";\nvoid lib;\n`, IMPORT);
+  });
+
+  it.each(SPAWN_MODULES.flatMap((spec) => [
+    [`require of ${spec}`, `const lib = require("node:${spec}");\nvoid lib;\n`],
+    [`bare require of ${spec}`, `const lib = require("${spec}");\nvoid lib;\n`],
+    [`dynamic import of ${spec}`, `const lib = await import("node:${spec}");\nvoid lib;\n`],
+    [`re-export of ${spec}`, `export * from "node:${spec}";\n`],
+    [`import equals of ${spec}`, `import lib = require("node:${spec}");\nvoid lib;\n`],
+    [`type import of ${spec}`, `export type Lib = typeof import("node:${spec}");\n`],
+  ]))("fails %s", async (_name, code) => {
+    await failsWith(SERVER, code, IMPORT);
+  });
+
+  it.each(SPAWN_MODULES)("passes %s under the egress folder, in test and development code", async (spec) => {
+    const code = `import * as lib from "node:${spec}";\nvoid lib;\n`;
+    for (const file of [EGRESS, TEST_DIR, TEST_FILE, "apps/slugbase/test/fixture.ts", "apps/slugbase/scripts/fixture.ts"]) {
+      await passes(file, code);
+    }
+  });
+
+  it.each([
+    ["packages/contracts/scripts/contracts-check.ts"],
+    ["packages/db/scripts/generate-migration.ts"],
+    ["packages/db/src/check/drift.ts"],
+    ["packages/db/src/check/release-history.ts"],
+    ["packages/db/src/testing.ts"],
+    ["packages/testing/src/seed/run.ts"],
+  ])("exempts %s for child_process only", async (file) => {
+    await passes(file, 'import { spawnSync } from "node:child_process";\nvoid spawnSync;\n');
+    await passes(file, 'import { spawnSync } from "child_process";\nvoid spawnSync;\n');
+    await failsWith(file, 'import "node:worker_threads";\n', IMPORT);
+    await failsWith(file, 'import "node:vm";\n', IMPORT);
+    await failsWith(file, 'import "node:net";\n', IMPORT);
+  });
+
+  it("scopes the child_process exemptions to the listed files", async () => {
+    await failsWith("packages/db/src/check/other.ts", 'import { spawnSync } from "node:child_process";\nvoid spawnSync;\n', IMPORT);
+    await failsWith("packages/db/src/index.ts", 'import { spawnSync } from "node:child_process";\nvoid spawnSync;\n', IMPORT);
+    await failsWith("packages/server/src/fixture.ts", 'import { spawnSync } from "node:child_process";\nvoid spawnSync;\n', IMPORT);
+    await failsWith("packages/contracts/scripts/other.ts", 'import { spawnSync } from "node:child_process";\nvoid spawnSync;\n', IMPORT);
+  });
+
   it("still bans the HTTP builtins in test code", async () => {
     await failsWith(TEST_DIR, 'import "node:http";\n', IMPORT);
   });
@@ -771,6 +828,28 @@ describe("raw outbound matcher (T6)", () => {
     expect(
       findRawOutbound('import { connect } from "node:net";\nvoid connect;\nvoid process.getBuiltinModule("node:net");\nvoid new WebSocket("x");\n', file),
     ).toEqual([]);
+  });
+
+  it.each(["child_process", "worker_threads", "cluster", "inspector", "vm"].flatMap((spec) => [
+    [`import of node:${spec}`, `import { x } from "node:${spec}";\nvoid x;\n`],
+    [`bare import of ${spec}`, `import { x } from "${spec}";\nvoid x;\n`],
+    [`dynamic import of ${spec}`, `const lib = await import("node:${spec}");\nvoid lib;\n`],
+    [`require of ${spec}`, `const lib = require("${spec}");\nvoid lib;\n`],
+    [`re-export of ${spec}`, `export * from "node:${spec}";\n`],
+    [`import equals of ${spec}`, `import lib = require("node:${spec}");\nvoid lib;\n`],
+    [`type import of ${spec}`, `export type Lib = typeof import("node:${spec}");\n`],
+  ]))("flags %s outside egress", (_name, code) => {
+    expect(findRawOutbound(code, "packages/server/src/fixture.ts")).not.toEqual([]);
+    expect(findRawOutbound(code, "packages/adapters/src/egress/fixture.ts")).toEqual([]);
+    expect(findRawOutbound(code, "packages/server/test/fixture.ts")).toEqual([]);
+    expect(findRawOutbound(code, "packages/server/src/fixture.test.ts")).toEqual([]);
+  });
+
+  it("allows child_process in its listed files only", () => {
+    const code = 'import { execFile } from "node:child_process";\nvoid execFile;\n';
+    expect(findRawOutbound(code, "packages/db/src/check/drift.ts")).toEqual([]);
+    expect(findRawOutbound(code, "packages/db/src/check/other.ts")).not.toEqual([]);
+    expect(findRawOutbound('import "node:vm";\n', "packages/db/src/check/drift.ts")).not.toEqual([]);
   });
 
   it("allows the listed exemptions only for their module", () => {
