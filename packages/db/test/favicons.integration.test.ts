@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { faviconRepository, TenantContextError, type FaviconResult } from "../src/index.ts";
 import { enqueueInTenantTransaction } from "../src/system/queue.ts";
@@ -10,12 +11,15 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // The favicon cache and the two system operations behind it (doc 05 sections 2.7 and 3.3, doc 02 section 5.4, doc 10 T6 and T14). The failure scenario: the
 // table is deployment-wide and has no tenant policy, so the application role must reach it through `sys_favicon_get` and `sys_favicon_put` alone, and the
 // put must refuse anything that is not a PNG, a host that is not a lower-case host name and a row that breaks the pairing of status and content, so nothing but a
-// PNG of at most 64 KiB is ever served for a host. The question of which hosts a member may have fetched is tenant-scoped: a bookmark of the active workspace
+// PNG of at most 64 KiB is ever served for a host. The stored images are shared but what a workspace is answered is its own: `workspace_favicons` records the
+// fetches stored for a workspace, a member of another workspace reads nothing from a host only the first workspace fetched, and with the application's predicates left out
+// row-level security still shows a workspace nothing of another's. The question of which hosts a member may have fetched is tenant-scoped: a bookmark of the active workspace
 // that the account can read, and no other.
 
 const HOOK_TIMEOUT_MS = 300_000;
 const INSUFFICIENT_PRIVILEGE = "42501";
 const INVALID_PARAMETER = "22023";
+const ROW_LEVEL_SECURITY = "42501";
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const QUEUE = "favicon.fetch";
 
@@ -43,6 +47,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await asSystem(db, (tx) => tx`DELETE FROM favicons`);
+  await asSystem(db, (tx) => tx`DELETE FROM workspace_favicons`);
   await db.owner`TRUNCATE pgboss.job`;
 });
 
@@ -97,6 +102,19 @@ interface FaviconRow {
   readonly expires_at: Date;
 }
 
+function fetchesOf(workspaceId: string): Promise<string[]> {
+  return asSystem(db, (tx) => tx<{ host: string }[]>`SELECT host FROM workspace_favicons WHERE workspace_id = ${workspaceId} ORDER BY host`).then((found) => found.map((row) => row.host));
+}
+
+/** Runs `work` as slugbase_app with the settings of withTenant and nothing else: no repository, no application layer. */
+async function appAs<T>(workspace: Workspace, work: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
+  const result = await db.app.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${workspace.owner}, true), set_config('app.workspace_id', ${workspace.id}, true)`;
+    return { value: await work(tx) };
+  });
+  return result.value;
+}
+
 function rows(): Promise<FaviconRow[]> {
   return asSystem(db, (tx) => tx<FaviconRow[]>`SELECT * FROM favicons ORDER BY host`).then((found) => [...found]);
 }
@@ -118,12 +136,45 @@ describe("the favicon of a host", () => {
     expect(small?.status === "ok" && Buffer.from(small.png).equals(png(32, 0x32))).toBe(true);
   });
 
-  it("is shared by the whole deployment: a member of another workspace reads what a fetch for the first stored", async () => {
+  it("is answered to a workspace only after a fetch for it: a member of another workspace reads nothing of what a fetch for the first stored", async () => {
     const a = await workspaceOf();
     const b = await workspaceOf();
     await inTenant(a, (tx) => faviconRepository(tx).store("example.com", ICON));
+    await inTenant(a, (tx) => faviconRepository(tx).store("none.example.com", { status: "none" }));
+
+    expect(await inTenant(a, (tx) => faviconRepository(tx).current("example.com", 64))).toMatchObject({ status: "ok" });
+    expect(await inTenant(b, (tx) => faviconRepository(tx).current("example.com", 64))).toBeUndefined();
+    expect(await inTenant(b, (tx) => faviconRepository(tx).current("example.com", 32))).toBeUndefined();
+    expect(await inTenant(b, (tx) => faviconRepository(tx).current("none.example.com", 64))).toBeUndefined();
+
+    await inTenant(b, (tx) => faviconRepository(tx).store("example.com", ICON));
 
     expect(await inTenant(b, (tx) => faviconRepository(tx).current("example.com", 64))).toMatchObject({ status: "ok" });
+    expect(await inTenant(a, (tx) => faviconRepository(tx).current("example.com", 64))).toMatchObject({ status: "ok" });
+    expect(await fetchesOf(a.id)).toEqual(["example.com", "none.example.com"]);
+    expect(await fetchesOf(b.id)).toEqual(["example.com"]);
+  });
+
+  it("records the fetch with the dates of the database clock, seven days apart, and renews them when the workspace fetches the host again", async () => {
+    const a = await workspaceOf();
+    await inTenant(a, (tx) => faviconRepository(tx).store("example.com", ICON));
+    const [first] = await asSystem(db, (tx) => tx<{ fetched_at: Date; expires_at: Date }[]>`SELECT fetched_at, expires_at FROM workspace_favicons WHERE workspace_id = ${a.id}`);
+    expect((first?.expires_at.getTime() ?? 0) - (first?.fetched_at.getTime() ?? 0)).toBe(7 * 24 * 3600 * 1000);
+    await asSystem(db, (tx) => tx`UPDATE workspace_favicons SET fetched_at = now() - interval '8 days', expires_at = now() - interval '1 second'`);
+    expect(await inTenant(a, (tx) => faviconRepository(tx).current("example.com", 64))).toBeUndefined();
+
+    await inTenant(a, (tx) => faviconRepository(tx).store("example.com", ICON));
+
+    expect(await inTenant(a, (tx) => faviconRepository(tx).current("example.com", 64))).toMatchObject({ status: "ok" });
+    expect(await fetchesOf(a.id)).toEqual(["example.com"]);
+  });
+
+  it("records no fetch for the workspace when the stored result is refused", async () => {
+    const a = await workspaceOf();
+
+    await expect(inTenant(a, (tx) => faviconRepository(tx).store("Example.COM", ICON))).rejects.toMatchObject({ cause: { code: INVALID_PARAMETER } });
+
+    expect(await fetchesOf(a.id)).toEqual([]);
   });
 
   it("is replaced by a later fetch, which can record that the host has no icon", async () => {
@@ -250,6 +301,69 @@ describe("the table", () => {
   it("refuses a row that breaks its checks even when slugbase_system writes it", async () => {
     await expect(asSystem(db, (tx) => tx`INSERT INTO favicons (host, status, content, fetched_at, expires_at) VALUES ('example.com', 'none', ${png(8)}, now(), now())`)).rejects.toMatchObject({ code: "23514" });
     await expect(asSystem(db, (tx) => tx`INSERT INTO favicons (host, status, fetched_at, expires_at, content_type) VALUES ('example.com', 'none', now(), now(), 'image/svg+xml')`)).rejects.toMatchObject({ code: "23514" });
+  });
+});
+
+describe("the table of the fetches of a workspace", () => {
+  it("has row-level security enabled and forced with one policy", async () => {
+    const [flags] = await db.owner<{ enabled: boolean; forced: boolean; policies: number }[]>`
+      SELECT c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced, (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid)::int AS policies
+      FROM pg_class c WHERE c.oid = 'public.workspace_favicons'::regclass`;
+    expect(flags).toEqual({ enabled: true, forced: true, policies: 1 });
+  });
+
+  it("is kept apart by row-level security alone: a read shows nothing of B, a write naming B is refused, and an update touches none of B's rows", async () => {
+    const a = await workspaceOf();
+    const b = await workspaceOf();
+    await inTenant(b, (tx) => faviconRepository(tx).store("example.com", ICON));
+    const before = await asSystem(db, (tx) => tx`SELECT * FROM workspace_favicons WHERE workspace_id = ${b.id}`);
+
+    expect(await appAs(a, (tx) => tx`SELECT * FROM workspace_favicons`)).toHaveLength(0);
+    await expect(
+      appAs(a, (tx) => tx`INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${b.id}, 'planted.example.com', now(), now() + interval '7 days')`),
+    ).rejects.toMatchObject({ code: ROW_LEVEL_SECURITY });
+    expect(await appAs(a, (tx) => tx`UPDATE workspace_favicons SET expires_at = now() RETURNING workspace_id`)).toHaveLength(0);
+    await expect(
+      appAs(
+        a,
+        (tx) => tx`INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${b.id}, 'example.com', now(), now()) ON CONFLICT (workspace_id, host) DO UPDATE SET expires_at = now()`,
+      ),
+    ).rejects.toMatchObject({ code: ROW_LEVEL_SECURITY });
+
+    expect(await asSystem(db, (tx) => tx`SELECT * FROM workspace_favicons WHERE workspace_id = ${b.id}`)).toEqual(before);
+  });
+
+  it("lets slugbase_app read, insert and update the dates of a row, and delete or move nothing", async () => {
+    const a = await workspaceOf();
+    await inTenant(a, (tx) => faviconRepository(tx).store("example.com", ICON));
+
+    await expect(appAs(a, (tx) => tx`DELETE FROM workspace_favicons`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
+    await expect(appAs(a, (tx) => tx`UPDATE workspace_favicons SET host = 'moved.example.com'`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
+    await expect(appAs(a, (tx) => tx`UPDATE workspace_favicons SET workspace_id = ${freshId()}`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
+    expect(await appAs(a, (tx) => tx`UPDATE workspace_favicons SET fetched_at = now() RETURNING host`)).toHaveLength(1);
+  });
+
+  it("refuses a host that is not a lower-case host name, even when slugbase_system writes it", async () => {
+    const a = await workspaceOf();
+
+    await expect(asSystem(db, (tx) => tx`INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${a.id}, 'Example.COM', now(), now())`)).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("is deleted with its workspace", async () => {
+    const a = await workspaceOf();
+    await inTenant(a, (tx) => faviconRepository(tx).store("example.com", ICON));
+
+    await asSystem(db, (tx) => tx`DELETE FROM workspaces WHERE id = ${a.id}`);
+
+    expect(await fetchesOf(a.id)).toEqual([]);
+  });
+
+  it("needs a transaction opened with a workspace to answer or record anything", async () => {
+    const a = await workspaceOf();
+    const accountOnly = { accountId: a.owner, requestId: "favicons-test" };
+
+    await expect(db.tenant.withTenant(accountOnly, (tx) => faviconRepository(tx).current("example.com", 64))).rejects.toBeInstanceOf(TenantContextError);
+    await expect(db.tenant.withTenant(accountOnly, (tx) => faviconRepository(tx).store("example.com", ICON))).rejects.toBeInstanceOf(TenantContextError);
   });
 });
 

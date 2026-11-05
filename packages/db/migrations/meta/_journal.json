@@ -855,6 +855,13 @@
       "when": 1793869837530,
       "tag": "20261105091037_add_verification_workspace_strip",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1793902169710,
+      "tag": "20261105180929_add_workspace_favicons",
+      "breakpoints": true
     }
   ]
 }

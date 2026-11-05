@@ -33,6 +33,7 @@ export const workspacePurgeOrder: readonly string[] = [
   "tags",
   "teams",
   "url_metadata",
+  "workspace_favicons",
   "workspace_invitations",
   "workspace_settings",
   "workspace_members",

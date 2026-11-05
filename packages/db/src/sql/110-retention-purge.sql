@@ -63,6 +63,10 @@
 -- the moment it is one and the fetch job replaces it, so deleting the row later changes no answer. Rows another statement holds are skipped and found by
 -- the next call. The grants it needs are in 630-favicons.sql.
 --
+-- workspace_favicons: past expires_at, which is seven days after the host was last fetched for the workspace (doc 05 section 6). The repository
+-- answers nothing for an expired row from the moment it is one and the fetch job replaces it, so deleting the row later changes no answer. Rows another
+-- statement holds are skipped and found by the next call. The grants it needs are in 630-favicons.sql.
+--
 -- ai_suggestions: past expires_at, which is 30 days after the suggestion was cached (doc 05 section 6). A reader treats an expired row as absent and the
 -- next request for the key replaces it, so deleting the row later changes no answer. Rows another statement holds are skipped and found by the next call. The
 -- grants it needs are in 690-ai-suggestions.sql.
@@ -178,6 +182,16 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'favicons'::text, v_deleted;
+
+  DELETE FROM public.workspace_favicons
+  WHERE (workspace_id, host) IN (
+    SELECT w.workspace_id, w.host FROM public.workspace_favicons w
+    WHERE w.expires_at <= v_now
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'workspace_favicons'::text, v_deleted;
 
   DELETE FROM public.ai_suggestions
   WHERE (workspace_id, account_id, url_canonical, locale) IN (

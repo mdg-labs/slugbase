@@ -5,10 +5,11 @@ import { z } from "zod";
 import { defineJob } from "../job.ts";
 
 // `favicon.fetch` (doc 02 section 5.4, doc 01 section 8.1, doc 10 T6 and T14): fetches the icon of a host, re-encodes it to PNG at 64 and 32 pixels and stores it
-// for the whole deployment, for seven days. It is queued by `GET /api/v1/favicons/{host}` for a host of a bookmark the requesting member can read, and the job
+// as the shared image of the host and records the fetch for the requesting workspace, for seven days. It is queued by `GET /api/v1/favicons/{host}` for a host of a bookmark the requesting member can read, and the job
 // carries that member's account and workspace with the host and nothing else: when it runs it asks again whether the account can still read a bookmark on the host in
-// that workspace, so a bookmark deleted, archived or made unreadable since the job was queued fetches nothing. A host whose icon has not expired is left alone, so a
-// second job for the same host does nothing.
+// that workspace, so a bookmark deleted, archived or made unreadable since the job was queued fetches nothing. A host already fetched for that workspace, and not expired, is
+// left alone, so a second job for the same host and workspace does nothing; a host only another workspace has cached is fetched, so what the shared cache holds never changes
+// what a workspace's request does.
 //
 // The fetch (`fetchFavicon` of `@slugbase/core`) goes through the egress port and nowhere else: `/favicon.ico` and the `<link rel=icon>` targets of the home page,
 // each read to at most 64 KiB (a longer body is refused, never cut), only image content types, every body handed to the image codec, which refuses an SVG and anything
@@ -16,7 +17,8 @@ import { defineJob } from "../job.ts";
 // `none`; that is an answer, not an error of the job. An egress port or a codec that is not configured, and a database error, are errors of the job and are retried;
 // nothing is stored for them. No transaction is open while the requests run, so a slow site holds no database connection.
 //
-// The queue keeps one waiting job for each host (`dedupe`), so a host asked for by many members at once is fetched once.
+// The queue keeps one waiting job for each host and workspace (`dedupe`), so a host asked for by many members of a workspace at once is fetched once, and a waiting job of
+// one workspace never stands in for another's.
 
 export const FETCH_FAVICON_JOB = "favicon.fetch";
 
@@ -58,9 +60,9 @@ export const fetchFaviconJob = defineJob({
 
 /**
  * The job that fetches the icon of `host` for a member who can read a bookmark on it, for the transaction that finds the icon missing. Its singleton key is the
- * host, so the queue holds one waiting job for it.
+ * host and the workspace, so the queue holds one waiting job for the pair.
  */
 export function queueFetchFavicon(id: string, request: { readonly host: string; readonly workspaceId: string; readonly accountId: string }): QueuedJob {
   const payload = fetchFaviconJob.parse(request);
-  return { id, queue: FETCH_FAVICON_JOB, data: { host: payload.host, workspaceId: payload.workspaceId, accountId: payload.accountId }, singletonKey: payload.host };
+  return { id, queue: FETCH_FAVICON_JOB, data: { host: payload.host, workspaceId: payload.workspaceId, accountId: payload.accountId }, singletonKey: `${payload.host}:${payload.workspaceId}` };
 }

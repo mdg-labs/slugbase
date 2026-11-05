@@ -1,16 +1,18 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { check, index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { bytea } from "./types.ts";
+import { workspaces } from "./workspaces.ts";
 
-// `favicons` of doc 05 section 2.7. Row-level security (enabled and forced, no policy), the missing privileges of `slugbase_app` and the system
-// operations that read and write a row live in src/sql/630-favicons.sql, which Drizzle cannot express.
+// `favicons` and `workspace_favicons` of doc 05 section 2.7. Row-level security (for `favicons` enabled and forced with no policy, for
+// `workspace_favicons` the tenant policy), the privileges of `slugbase_app` and the system operations that read and write a `favicons` row live in
+// src/sql/630-favicons.sql, which Drizzle cannot express.
 
 /** What the fetch of a host ended as: its icon was stored, or the host has no icon the server can use. */
 export type FaviconStatus = "ok" | "none";
 
 /**
  * The favicon cache of doc 02 section 5.4: one row for each host, shared by the whole deployment (doc 05 section 2.7, doc 10 section 5: it holds
- * hosts, never URLs). `content` is the 64 px PNG and `content_32` the 32 px one, both produced by the server from a source it fetched and decoded;
+ * hosts, never URLs). What a workspace may be answered from it is `workspace_favicons`. `content` is the 64 px PNG and `content_32` the 32 px one, both produced by the server from a source it fetched and decoded;
  * a `none` row records a host with no usable icon and holds neither. A row is current until `expires_at`, seven days after `fetched_at`, and
  * `retention.purge` deletes it after that. The application role reaches the table only through `sys_favicon_get` and `sys_favicon_put`.
  */
@@ -35,5 +37,28 @@ export const favicons = pgTable(
         OR (${table.status} = 'none' AND ${table.content} IS NULL AND ${table.content32} IS NULL)`,
     ),
     index("favicons_expires_idx").on(table.expiresAt),
+  ],
+);
+
+/**
+ * The favicon fetches requested on behalf of a workspace (doc 05 section 2.7): one row for each workspace and host, written when a fetch for the host
+ * is stored for the workspace. The shared `favicons` row, stored image bytes included, is answered to a workspace only while it holds an unexpired row
+ * here, so what the deployment-wide cache holds tells a workspace nothing about a host no member of it has asked for (doc 10 T1 and section 2.2). A row
+ * is current until `expires_at`, seven days after `fetched_at`, and `retention.purge` deletes it after that.
+ */
+export const workspaceFavicons = pgTable(
+  "workspace_favicons",
+  {
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    host: text().notNull(),
+    fetchedAt: timestamp({ withTimezone: true }).notNull(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "workspace_favicons_pkey", columns: [table.workspaceId, table.host] }),
+    check("workspace_favicons_host_check", sql`length(${table.host}) BETWEEN 1 AND 253 AND ${table.host} ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$'`),
+    index("workspace_favicons_expires_idx").on(table.expiresAt),
   ],
 );
