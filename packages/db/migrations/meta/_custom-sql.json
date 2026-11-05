@@ -1,4 +1,4 @@
 {
-  "sha256": "752936c6b89aaa202bf7eaa26af2964a7174eb76a27078e9a3639b7509886705",
-  "migration": "20261104230305_add_invitation_link_issued"
+  "sha256": "d2d4fb5598e523e5ca2823ad4abea0ab15e8599b2da8b3b7e207a24721330dba",
+  "migration": "20261105091037_add_verification_workspace_strip"
 }

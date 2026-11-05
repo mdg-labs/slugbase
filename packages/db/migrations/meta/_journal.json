@@ -848,6 +848,13 @@
       "when": 1793833385664,
       "tag": "20261104230305_add_invitation_link_issued",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1793869837530,
+      "tag": "20261105091037_add_verification_workspace_strip",
+      "breakpoints": true
     }
   ]
 }

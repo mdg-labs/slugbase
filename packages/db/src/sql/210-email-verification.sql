@@ -6,6 +6,52 @@
 -- needs CREATE on the schema for the length of those statements.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
+-- account_strip_workspaces(account_id): what verifying an address nobody had verified does to the workspaces its
+-- registrant set up (doc 02 section 2.6), the one place the rule is written. Whoever registers an address is not
+-- necessarily its owner, and before the owner verifies, the registrant could invite members, form teams and share
+-- content, so the owner does not inherit a way in for anyone else. For every workspace the account is the only owner
+-- of, and that is not being deleted, it removes whatever lets another account in: the memberships of the other members
+-- (their accounts stay, and so do the API tokens of the account's own, since the tokens of a member go with the
+-- membership by the foreign key), the teams with their members, every pending invitation and every bookmark and
+-- folder share. The workspace itself, the account's membership and role, and all the content stay, the content of a
+-- removed member ownerless, as when an account is deleted (doc 02 section 2.10); no job is queued and nothing is announced. A
+-- workspace another account also owns, one the account only belongs to and one being deleted are not touched. The
+-- workspace rows are locked first, in identifier order, the order the account deletion, the member paths and the
+-- invitation paths take them in, and the lock is held to the end of the transaction, so no member joins, leaves or is
+-- invited between the check that the account is the only owner and the deletes. The caller (sys_email_verify) locks
+-- them before the backup-code rows and the account row and the statement here takes them again, so a workspace created
+-- in between is locked too. It is not a system operation: it is SECURITY INVOKER, owned by slugbase_system and
+-- executable by it alone, so it runs only inside sys_email_verify and slugbase_app cannot call it. It is never given an
+-- account whose address is verified.
+CREATE OR REPLACE FUNCTION public.account_strip_workspaces(p_account_id uuid) RETURNS void
+  LANGUAGE plpgsql VOLATILE SECURITY INVOKER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+DECLARE
+  v_sole uuid[];
+BEGIN
+  PERFORM 1 FROM public.workspaces w
+  WHERE w.deleting_at IS NULL
+    AND w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner')
+  ORDER BY w.id
+  FOR NO KEY UPDATE OF w;
+
+  SELECT coalesce(array_agg(m.workspace_id ORDER BY m.workspace_id), '{}') INTO v_sole
+  FROM public.workspace_members m
+  JOIN public.workspaces w ON w.id = m.workspace_id AND w.deleting_at IS NULL
+  WHERE m.account_id = p_account_id AND m.role = 'owner'
+    AND NOT EXISTS (
+      SELECT 1 FROM public.workspace_members o
+      WHERE o.workspace_id = m.workspace_id AND o.role = 'owner' AND o.account_id <> p_account_id);
+
+  DELETE FROM public.bookmark_shares WHERE workspace_id = ANY (v_sole);
+  DELETE FROM public.folder_shares WHERE workspace_id = ANY (v_sole);
+  DELETE FROM public.workspace_invitations WHERE status = 'pending' AND workspace_id = ANY (v_sole);
+  DELETE FROM public.teams WHERE workspace_id = ANY (v_sole);
+  DELETE FROM public.workspace_members WHERE workspace_id = ANY (v_sole) AND account_id <> p_account_id;
+END
+$$;
+
 -- account_mark_verified(account_id, password_hash): what marking an address verified does to the account of
 -- an address nobody had verified, the one place the rule is written. Whoever registers an address is not necessarily its
 -- owner, so verifying takes away what the registrant set up (doc 02 section 2.6): the stored password is replaced by the
@@ -18,7 +64,8 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- account that does not exist or whose address is verified already, which a caller must keep from reaching it. It is called by sys_email_verify (the owner's own password) and by
 -- sys_instance_update_account (no password: the owner gets in through a password-reset token or a provider). It is not a
 -- system operation: it is SECURITY INVOKER, owned by slugbase_system and executable by it alone, so it runs only inside
--- those two functions and slugbase_app cannot call it.
+-- those two functions and slugbase_app cannot call it. The workspaces the registrant set up are not part of it:
+-- account_strip_workspaces above removes what lets others in, and only sys_email_verify calls that.
 CREATE OR REPLACE FUNCTION public.account_mark_verified(p_account_id uuid, p_password_hash text) RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY INVOKER
   SET search_path = pg_catalog, public, pg_temp
@@ -55,7 +102,9 @@ $$;
 -- first (in id order), the order sys_mfa_lock gives every writer of them, so a
 -- redemption queues behind a sign-in with a backup code, a rewrite of the codes and
 -- the instance admin's reset of the second factor or mark of the address instead of
--- deadlocking with them; then its account row; and the token is consumed after that
+-- deadlocking with them; then its account row (when the address is not verified, the rows of the workspaces the account
+-- owns come before both, the order the account deletion documents, so the redemption and an invitation accepted into one
+-- of them queue and do not wait on each other); and the token is consumed after that
 -- (sys_credential_token_consume: once, before its expiry, purpose email_verify), the
 -- account row before the token row being the order in which
 -- sys_credential_token_issue takes those two, so a redemption and an
@@ -73,7 +122,11 @@ $$;
 -- owner verified is not the owner's, and the pending change of email with its
 -- unused confirmation and cancel tokens, since a change started before the owner
 -- verified is not the owner's either. Only then is the address marked verified. All of that is
--- account_mark_verified above, which the instance admin's marking of an address verified runs too.
+-- account_mark_verified above, which the instance admin's marking of an address verified runs too. The same
+-- transaction also removes what lets anyone else into the workspaces the visitor set up (account_strip_workspaces
+-- above): in each workspace the account is the only owner of, the other members' memberships, the teams, the pending
+-- invitations and the shares; the workspaces, the account's membership and all the content stay, and the account's
+-- membership in any other workspace is untouched. Nothing is queued and nothing is announced.
 -- An account that is already verified keeps all of it. The
 -- session is partial for an account whose second factor is on and full
 -- otherwise, and replaces the session of the token the request carried. The
@@ -110,6 +163,12 @@ BEGIN
 
   SELECT t.account_id INTO v_token_account
   FROM public.credential_tokens t WHERE t.purpose = 'email_verify' AND t.token_hash = p_token_hash;
+  PERFORM 1 FROM public.workspaces w
+  WHERE w.deleting_at IS NULL
+    AND w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = v_token_account AND m.role = 'owner')
+    AND EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = v_token_account AND a.email_verified_at IS NULL)
+  ORDER BY w.id
+  FOR NO KEY UPDATE OF w;
   PERFORM 1 FROM public.mfa_backup_codes c WHERE c.account_id = v_token_account ORDER BY c.id FOR UPDATE;
   PERFORM 1 FROM public.accounts a WHERE a.id = v_token_account FOR UPDATE;
 
@@ -128,6 +187,7 @@ BEGIN
 
   IF v_verified_at IS NULL THEN
     PERFORM public.account_mark_verified(v_account, p_password_hash);
+    PERFORM public.account_strip_workspaces(v_account);
     v_mfa := false;
   END IF;
 
@@ -158,11 +218,13 @@ CREATE OR REPLACE FUNCTION public.sys_account_email_verified(p_account_id uuid) 
       false)
   $$;
 
+ALTER FUNCTION public.account_strip_workspaces(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.account_mark_verified(uuid, text) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_account_email_verified(uuid) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
+REVOKE ALL ON FUNCTION public.account_strip_workspaces(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.account_mark_verified(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_account_email_verified(uuid) FROM PUBLIC;

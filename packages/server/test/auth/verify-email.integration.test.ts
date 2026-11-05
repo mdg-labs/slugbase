@@ -244,6 +244,56 @@ async function workspaceNames(accountId: string): Promise<{ name: string; role: 
   return [...rows];
 }
 
+async function workspaceIds(accountId: string): Promise<string[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ id: string }[]>`SELECT workspace_id AS id FROM workspace_members WHERE account_id = ${accountId} ORDER BY workspace_id`;
+  });
+  return rows.map((row) => row.id);
+}
+
+interface WorkspaceSetup {
+  readonly members: number;
+  readonly shares: number;
+  readonly invitations: number;
+  readonly teams: number;
+  readonly bookmarks: number;
+  readonly folders: number;
+}
+
+/** What a visitor can set up in a workspace: members, shares, teams and invitations, beside the content it saved there. */
+async function setupOf(workspaceId: string): Promise<WorkspaceSetup> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ members: number; shares: number; invitations: number; teams: number; bookmarks: number; folders: number }[]>`
+      SELECT (SELECT count(*)::int FROM workspace_members WHERE workspace_id = ${workspaceId}) AS members,
+             (SELECT count(*)::int FROM folder_shares WHERE workspace_id = ${workspaceId}) + (SELECT count(*)::int FROM bookmark_shares WHERE workspace_id = ${workspaceId}) AS shares,
+             (SELECT count(*)::int FROM workspace_invitations WHERE workspace_id = ${workspaceId} AND status = 'pending') AS invitations,
+             (SELECT count(*)::int FROM teams WHERE workspace_id = ${workspaceId}) AS teams,
+             (SELECT count(*)::int FROM bookmarks WHERE workspace_id = ${workspaceId}) AS bookmarks,
+             (SELECT count(*)::int FROM folders WHERE workspace_id = ${workspaceId}) AS folders`;
+  });
+  const row = rows[0];
+  if (row === undefined) {
+    throw new Error("the workspace is missing");
+  }
+  return row;
+}
+
+/** A folder of `ownerId` in the workspace, shared with `target`, a team of the workspace and a pending invitation: what a visitor can set up before the address is verified. */
+async function plantSetup(workspaceId: string, ownerId: string, target: string): Promise<void> {
+  const folderId = uuidv7();
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${folderId}, ${workspaceId}, ${ownerId}, 'Shared with a friend')`;
+    await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by) VALUES (${uuidv7()}, ${workspaceId}, ${folderId}, ${target}, ${ownerId})`;
+    await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${uuidv7()}, ${workspaceId}, 'Friends')`;
+    await tx`
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at, invited_by)
+      VALUES (${uuidv7()}, ${workspaceId}, 'accomplice@example.test', 'member', ${generateCredentialToken().hash}, now() + interval '7 days', ${ownerId})`;
+  });
+}
+
 async function workspaceEvents(): Promise<Record<string, unknown>[]> {
   const rows = await database().app<{ data: Record<string, unknown> }[]>`SELECT data FROM pgboss.job WHERE name = 'event.workspace.created' ORDER BY created_on, id`;
   return rows.map((row) => row.data);
@@ -451,6 +501,28 @@ describe("POST /api/v1/auth/verify-email", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await workspaceNames(account.id)).toEqual([{ name: "Ada Lovelace's workspace", role: "owner" }]);
     expect(await workspaceEvents()).toHaveLength(1);
     expect((await accountRow(account.id)).verified).toBe(true);
+  });
+
+  it("keeps the workspace a visitor made and the content in it, and removes the members, shares, teams and invitations the visitor set up", async () => {
+    const world = serve({ verificationRequired: false });
+    const account = await register(world);
+    const [planted] = await workspaceIds(account.id);
+    if (planted === undefined) {
+      throw new Error("the registration made no workspace");
+    }
+    const accomplice = await seedAccount(database(), { emailVerified: true });
+    await seedMembership(database(), { workspaceId: planted, accountId: accomplice.id, role: "member" });
+    await plantSetup(planted, account.id, accomplice.id);
+    expect(await setupOf(planted)).toEqual({ members: 2, shares: 1, invitations: 1, teams: 1, bookmarks: 0, folders: 1 });
+    const token = await issueToken(account.id);
+
+    const response = await verify(world, { token: token.value, password: PASSWORD_B });
+
+    expect(response.status).toBe(200);
+    expect(await setupOf(planted)).toEqual({ members: 1, shares: 0, invitations: 0, teams: 0, bookmarks: 0, folders: 1 });
+    expect(await workspaceIds(account.id)).toEqual([planted]);
+    expect(await workspaceIds(accomplice.id)).toEqual([]);
+    expect(await workspaceEvents()).toHaveLength(1);
   });
 
   it("removes the second factor with its recovery codes, the API tokens and the linked identities of an account nobody had verified, and none of them authenticates afterwards", async () => {
