@@ -3,7 +3,7 @@ import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
 import { parseSlug } from "../go/slug.ts";
-import { bookmarksOfFile, entry, isRefusal, missingNames, overLinks, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
+import { bookmarksOfFile, entry, isRefusal, missingNames, overDistinctNames, overLinks, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
 
 // The JSON import itself (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), in the one transaction the store and the audit writer are bound to. The file is judged exactly as the preview judges it
 // (`previewImport`): each bookmark's URL goes through the bookmark URL module, its text is made plain and cut, a duplicate by canonical URL is left out unless asked otherwise, and the workspace's room is spent in the order
@@ -11,6 +11,8 @@ import { bookmarksOfFile, entry, isRefusal, missingNames, overLinks, overNewName
 // bookmarks, so two imports at the limit minus one together create one bookmark. The bookmarks are inserted in batches, in the order of the file, with identifiers that ascend in that order, and each is announced as
 // `bookmark.created` in the same transaction. A plan-archived flag in the file is never read. The import is recorded as one `import.completed` audit event with counts only, written after the bookmarks, so a failure of
 // any write (the bookmarks, the counter, the jobs or the event) rejects, and the caller's transaction, which must not commit, leaves none of them. The service never starts a transaction and swallows no failure.
+//
+// A file that names more than `IMPORT_MAX_DISTINCT_NAMES` distinct folder and tag spellings together is refused first (`overDistinctNames`), before the store is asked anything, as `too_many_distinct_names`, an answer of its own because it says nothing of the names the file would create.
 //
 // One import creates at most `IMPORT_MAX_NEW_NAMES` new folders and tags together (`missingNames`). The count is made before the places are taken, with the room the workspace's counter shows as the preview reads it, so that a
 // file over the limit never takes the row lock. When the places taken then cover more bookmarks than that count assumed (the counter moved in between), the count is made again under the lock, and a file over the limit is
@@ -136,6 +138,8 @@ export type ImportOutcome =
   | { readonly kind: "imported"; readonly result: ImportResult }
   /** The file would create `newNames` new folders and tags together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
   | { readonly kind: "too_many_names"; readonly newNames: number }
+  /** The file names `names` distinct folder and tag spellings together, more than `IMPORT_MAX_DISTINCT_NAMES`, whether or not the caller has them and whether or not a bookmark that names them is created. Nothing was written: the store was not asked anything. */
+  | { readonly kind: "too_many_distinct_names"; readonly names: number }
   /** The bookmarks the import would create would make `links` folder and tag links together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
   | { readonly kind: "too_many_links"; readonly links: number };
 
@@ -181,6 +185,10 @@ function choicesToRestore(file: ImportAsk["file"], forwarding: Forwarding): { sl
 
 /** Imports the file in the transaction the dependencies are bound to; nothing is written when the workspace cannot be reached. */
 export async function importBookmarks({ store, audit, newBookmarkId, newId }: ImportDependencies, ask: ImportAsk): Promise<ImportOutcome> {
+  const distinct = overDistinctNames(ask.file);
+  if (distinct !== undefined) {
+    return { kind: "too_many_distinct_names", names: distinct };
+  }
   const reads = bookmarksOfFile(ask.file).map((bookmark, index) => readImportBookmark(bookmark, index + 1));
   const canonicals = [...new Set(reads.flatMap((read) => (isRefusal(read) ? [] : [read.canonical])))];
   const existing = ask.skipDuplicates && canonicals.length > 0 ? await store.existingCanonicalUrls(canonicals) : new Set<string>();

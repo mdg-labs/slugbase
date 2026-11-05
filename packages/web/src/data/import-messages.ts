@@ -1,4 +1,4 @@
-import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES } from "@slugbase/contracts";
+import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES } from "@slugbase/contracts";
 import { useTranslation } from "react-i18next";
 import { waitOf, type FileRefusal, type ImportFailure } from "./import-api.ts";
 
@@ -20,7 +20,7 @@ export function useImportFailureMessage(): (failure: ImportFailure) => string {
       case "newerVersion":
         return t("data.import.error.newerVersion");
       case "tooManyNewNames":
-        return t("data.import.error.tooManyNewNames", { count: IMPORT_MAX_NEW_NAMES });
+        return t("data.import.error.tooManyNewNames", { count: IMPORT_MAX_NEW_NAMES, names: IMPORT_MAX_DISTINCT_NAMES });
       case "tooManyBookmarks":
         return t("data.import.error.tooManyBookmarks", { count: IMPORT_MAX_BOOKMARKS });
       case "tooManyAssignments":

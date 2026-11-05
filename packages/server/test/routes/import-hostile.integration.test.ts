@@ -1,4 +1,4 @@
-import { IMPORT_MAX_BYTES, IMPORT_MAX_BOOKMARKS, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, ImportResultSchema } from "@slugbase/contracts";
+import { IMPORT_MAX_BYTES, IMPORT_MAX_BOOKMARKS, IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, ImportResultSchema } from "@slugbase/contracts";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HOOK_TIMEOUT_MS, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
@@ -38,6 +38,7 @@ const json = (world: World, person: Person, body: unknown, headers: Record<strin
 
 interface Problem {
   readonly code: string;
+  readonly detail?: string;
   readonly errors?: readonly { path: string; code: string }[];
 }
 
@@ -514,6 +515,32 @@ describe("POST /import/json with a hostile file", { timeout: TEST_TIMEOUT_MS }, 
     expect(over.status).toBe(422);
     expect((await problemOf(over)).errors).toEqual([{ path: "", code: "too_many_new_names" }]);
   });
+
+  it("refuses a file that names more distinct folder and tag spellings than the bound on bookmarks it refuses, as a file of too many new names, in the dry run and in the write, and writes nothing; a file that names exactly the bound is read", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a } = await setup(world);
+    const before = await written();
+    const spellings = (count: number) => Array.from({ length: count }, (_, index) => `t${String(index)}`);
+    // Bookmarks whose address is refused, so that the names are the file's alone and no bookmark is created.
+    const refused = (count: number) => Array.from({ length: Math.ceil(count / 1000) }, (_, index) => ({ url: "ftp://example.com/x", tags: spellings(count).slice(index * 1000, (index + 1) * 1000) }));
+
+    for (const path of [IMPORT, "/api/v1/import/json"]) {
+      const response = await json(world, a, refused(IMPORT_MAX_DISTINCT_NAMES + 1), { [KEY_HEADER]: crypto.randomUUID() }, path);
+      const problem = await problemOf(response);
+      expect(response.status, path).toBe(422);
+      expect(problem.code).toBe("validation_failed");
+      expect(problem.errors).toEqual([{ path: "", code: "too_many_new_names" }]);
+      // The file creates no name at all (every URL is refused), so the detail says what it names, not what it would create.
+      expect(problem.detail).toContain(`names ${String(IMPORT_MAX_DISTINCT_NAMES + 1)} distinct folder and tag spellings`);
+      expect(problem.detail).not.toContain("would create");
+    }
+    expect(await keyCount()).toBe(0);
+    expect(await written()).toEqual(before);
+
+    const exactly = await json(world, a, refused(IMPORT_MAX_DISTINCT_NAMES), {}, IMPORT);
+    expect(exactly.status).toBe(200);
+    expect(ImportResultSchema.parse(await exactly.json())).toMatchObject({ created: 0, detected: { tags: IMPORT_MAX_DISTINCT_NAMES } });
+  }, TEST_TIMEOUT_MS);
 
   it("finds no duplicate in, and touches no row of, another workspace", async () => {
     const world = harness.serve({ env: RELAXED });

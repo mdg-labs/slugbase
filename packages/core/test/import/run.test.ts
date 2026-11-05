@@ -1,4 +1,4 @@
-import { IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import { createAuditWriter, IMPORT_BATCH_SIZE, importBookmarks, type AuditRecord, type ImportAsk, type ImportFolderToResolve, type ImportLinks, type ImportNewBookmark, type ImportPlaces, type ImportStore, type ImportTagToResolve } from "../../src/index.ts";
 
@@ -15,6 +15,8 @@ interface Written {
   readonly links: ImportLinks[];
   readonly choices: { slug: string; bookmarkId: string }[];
   readonly choiceCalls: number[];
+  /** How many times the store was asked about the names of the file. */
+  nameCalls: number;
 }
 
 interface Options {
@@ -41,7 +43,7 @@ interface Options {
 }
 
 function fixture(options: Options = {}) {
-  const written: Written = { takes: [], batches: [], order: [], audit: [], slugLookups: [], folders: [], tags: [], links: [], choices: [], choiceCalls: [] };
+  const written: Written = { takes: [], batches: [], order: [], audit: [], slugLookups: [], folders: [], tags: [], links: [], choices: [], choiceCalls: [], nameCalls: 0 };
   const store: ImportStore = {
     bookmarkCount: () => {
       written.order.push("count");
@@ -56,9 +58,16 @@ function fixture(options: Options = {}) {
       written.slugLookups.push(slugs);
       return Promise.resolve(new Set(slugs.filter((slug) => (options.slugs ?? []).includes(slug))));
     },
-    existingFolderNames: (names) => Promise.resolve(new Set(names.filter((name) => (options.folders ?? []).includes(name.toLowerCase())))),
-    existingTagNames: (names) => Promise.resolve(new Set(names.filter((name) => (options.tags ?? []).includes(name.toLowerCase())))),
+    existingFolderNames: (names) => {
+      written.nameCalls += 1;
+      return Promise.resolve(new Set(names.filter((name) => (options.folders ?? []).includes(name.toLowerCase()))));
+    },
+    existingTagNames: (names) => {
+      written.nameCalls += 1;
+      return Promise.resolve(new Set(names.filter((name) => (options.tags ?? []).includes(name.toLowerCase()))));
+    },
     firstSameNames: (names) => {
+      written.nameCalls += 1;
       if (options.same === undefined) {
         const firsts = new Map<string, number>();
         return Promise.resolve(names.map((name, index) => firsts.get(name.toLowerCase()) ?? (firsts.set(name.toLowerCase(), index), index)));
@@ -804,5 +813,32 @@ describe("importBookmarks and the remembered slug choices", () => {
 
     await expect(importBookmarks(dependencies, ask(envelope([link("b1", "docs")], [{ slug: "docs", bookmarkRef: "b1" }])))).rejects.toThrow("the choices could not be stored");
     expect(written.audit).toEqual([]);
+  });
+});
+
+describe("importBookmarks and the distinct folder and tag spellings of the file", () => {
+  const refused = (all: readonly string[], perBookmark = 1000): ImportRequest =>
+    Array.from({ length: Math.ceil(all.length / perBookmark) }, (_, index) => ({ url: "ftp://example.com/x", tags: all.slice(index * perBookmark, (index + 1) * perBookmark) }));
+  const tags = (count: number) => Array.from({ length: count }, (_, index) => `t${String(index)}`);
+
+  it("refuses a file of refused bookmarks that names more spellings than one import may, before the store is asked anything, and writes nothing", async () => {
+    const { written, dependencies } = fixture();
+
+    const outcome = await importBookmarks(dependencies, ask(refused(tags(IMPORT_MAX_DISTINCT_NAMES + 1))));
+
+    expect(outcome).toEqual({ kind: "too_many_distinct_names", names: IMPORT_MAX_DISTINCT_NAMES + 1 });
+    expect(written.nameCalls).toBe(0);
+    expect(written.order).toEqual([]);
+    expect(written.takes).toEqual([]);
+    expect(written.audit).toEqual([]);
+  });
+
+  it("imports a file that names exactly that many", async () => {
+    const { written, dependencies } = fixture();
+
+    const outcome = await importBookmarks(dependencies, ask(refused(tags(IMPORT_MAX_DISTINCT_NAMES))));
+
+    expect(outcome).toMatchObject({ kind: "imported", result: { created: 0, detected: { tags: IMPORT_MAX_DISTINCT_NAMES }, tagsCreated: 0 } });
+    expect(written.audit).toHaveLength(1);
   });
 });

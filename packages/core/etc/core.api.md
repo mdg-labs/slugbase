@@ -4479,6 +4479,11 @@ export type ImportOutcome =
     readonly kind: "too_many_names";
     readonly newNames: number;
 }
+/** The file names `names` distinct folder and tag spellings together, more than `IMPORT_MAX_DISTINCT_NAMES`, whether or not the caller has them and whether or not a bookmark that names them is created. Nothing was written: the store was not asked anything. */
+| {
+    readonly kind: "too_many_distinct_names";
+    readonly names: number;
+}
 /** The bookmarks the import would create would make `links` folder and tag links together, more than one import may. Nothing was written, except that the places may have been taken: the caller's transaction must not commit. */
 | {
     readonly kind: "too_many_links";
@@ -4521,10 +4526,15 @@ export type ImportPreviewOutcome =
     readonly kind: "previewed";
     readonly result: ImportResult;
 }
-/** The file would create more than `IMPORT_MAX_NEW_NAMES` new folders and tags together: `newNames` of them. */
+/** The file would create `newNames` new folders and tags together, more than `IMPORT_MAX_NEW_NAMES` (at most as many as it names). */
 | {
     readonly kind: "too_many_names";
     readonly newNames: number;
+}
+/** The file names `names` distinct folder and tag spellings together, more than `IMPORT_MAX_DISTINCT_NAMES`, whether or not the caller has them and whether or not a bookmark that names them is created. It is refused for that before the store is asked anything. */
+| {
+    readonly kind: "too_many_distinct_names";
+    readonly names: number;
 }
 /** The bookmarks that would be created would make more than `IMPORT_MAX_LINKS` folder and tag links together: `links` of them. */
 | {

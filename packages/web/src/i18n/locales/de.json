@@ -2371,7 +2371,7 @@
         "tooLarge": "Diese Datei ist größer als 5 MiB. Teile sie in kleinere Dateien auf.",
         "unsupportedType": "Der Server akzeptiert diese Art von Datei nicht. Wähle eine SlugBase-JSON-Datei oder eine Lesezeichen-Datei deines Browsers.",
         "newerVersion": "Diese Datei stammt aus einer neueren SlugBase-Version, als diese lesen kann. Aktualisiere SlugBase oder exportiere die Datei erneut aus dieser Version.",
-        "tooManyNewNames": "Diese Datei würde mehr als {count, number} neue Ordner und Tags anlegen. Teile sie in kleinere Dateien auf.",
+        "tooManyNewNames": "Diese Datei hat zu viele Ordner und Tags für einen Import. Ein Import legt höchstens {count, number} neue Ordner und Tags an, und eine Datei nennt insgesamt höchstens {names, number} verschiedene, bereits vorhandene eingeschlossen. Teile sie in kleinere Dateien auf.",
         "tooManyBookmarks": "Diese Datei enthält mehr als {count, number} Lesezeichen. Teile sie in kleinere Dateien auf.",
         "tooManyAssignments": "Die Ordner und Tags dieser Datei kommen zusammen mehr als {count, number} Mal vor, auch wenn sie nur wenige Lesezeichen enthält. Teile sie in kleinere Dateien auf.",
         "invalid": "Das ist keine gültige SlugBase-JSON-Datei und keine gültige Lesezeichen-Datei eines Browsers.",

@@ -2371,7 +2371,7 @@
         "tooLarge": "This file is larger than 5 MiB. Split it into smaller files.",
         "unsupportedType": "The server does not accept this kind of file. Choose a SlugBase JSON file or a browser bookmark file.",
         "newerVersion": "This file was made by a newer version of SlugBase than this one can read. Update SlugBase, or export the file again from this one.",
-        "tooManyNewNames": "This file would create more than {count, number} new folders and tags. Split it into smaller files.",
+        "tooManyNewNames": "This file has too many folders and tags for one import. One import creates at most {count, number} new folders and tags, and a file names at most {names, number} different ones in total, those you already have included. Split it into smaller files.",
         "tooManyBookmarks": "This file holds more than {count, number} bookmarks. Split it into smaller files.",
         "tooManyAssignments": "The folders and tags of this file add up to more than {count, number} uses, however few bookmarks it holds. Split it into smaller files.",
         "invalid": "This is not a valid SlugBase JSON file or browser bookmark file.",
