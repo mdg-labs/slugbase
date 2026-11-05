@@ -70,6 +70,9 @@ $$;
 --     p_ttl_seconds from now by the database's clock. The accept operations give the owner role to exactly that
 --     invitation. Its mail ticket is its own identifier, which is the ticket of the invitation.send job the caller
 --     queues in the same transaction when the link is mailed.
+-- The workspace records the calling admin as its creator, and instance_created (true unless the admin made itself the
+-- owner) records that the creator is not its first owner, which the strip that verifying an address runs needs to read
+-- created_by as the founding owner (210-email-verification.sql).
 -- Answers 'created', with the invitation's expiry on the second path, or 'unknown_account' when the account does not
 -- exist or is disabled, writing nothing. A call that names both ways or neither, or an invitation without its
 -- identifier, hash and lifetime, raises invalid_parameter_value. Writes 'instance.workspace_created' for the
@@ -118,7 +121,7 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO public.workspaces (id, name, created_by) VALUES (p_workspace_id, p_name, public.app_account_id());
+  INSERT INTO public.workspaces (id, name, created_by, instance_created) VALUES (p_workspace_id, p_name, public.app_account_id(), p_owner_account_id IS DISTINCT FROM public.app_account_id());
   INSERT INTO public.workspace_settings (workspace_id, updated_by) VALUES (p_workspace_id, public.app_account_id());
   IF p_owner_account_id IS NOT NULL THEN
     INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (p_workspace_id, p_owner_account_id, 'owner');

@@ -19,6 +19,12 @@ export const workspaces = pgTable(
     id: uuid().primaryKey(),
     name: text().notNull(),
     createdBy: uuid().references(() => accounts.id, { onDelete: "set null" }),
+    /**
+     * True for a workspace an instance admin made from the instance console (sys_instance_create_workspace), where `createdBy` is the admin
+     * and the first owner is another account; false for one an account made for itself, whose creator is its first owner. The strip that
+     * verifying an address runs reads `createdBy` as the founding owner only where this is false (doc 02 section 2.6).
+     */
+    instanceCreated: boolean().notNull().default(false),
     /** Bumped on any plan or entitlement change; the key of the entitlement cache (doc 01 section 8.3). */
     entitlementVersion: integer().notNull().default(1),
     /** The workspace's bookmarks that are not plan-archived; maintained with every bookmark write (doc 05 section 2.2). */

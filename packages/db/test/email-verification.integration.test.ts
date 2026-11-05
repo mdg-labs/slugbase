@@ -13,6 +13,9 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // verification that commits without the workspace it was to create, or the other way round.
 
 const HOOK_TIMEOUT_MS = 300_000;
+const TEST_TIMEOUT_MS = 60_000;
+const BLOCKED_DEADLINE_MS = 20_000;
+const POLL_MS = 25;
 const PARALLEL_CALLS = 8;
 const DAY_SECONDS = 86_400;
 const SUFFIX = "'s workspace";
@@ -789,6 +792,66 @@ async function workspaceIdsOf(accountId: string): Promise<string[]> {
   return (await workspacesOf(accountId)).map((workspace) => workspace.id);
 }
 
+/**
+ * A workspace as the instance console makes it: `adminId` (an instance admin) creates it with the existing account `ownerId` as its first
+ * owner, which records the admin as its creator, and then adds itself to it as a member.
+ */
+async function consoleWorkspace(adminId: string, ownerId: string): Promise<string> {
+  const workspaceId = freshId();
+  await db.app.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${adminId}, true)`;
+    const created = await tx`
+      SELECT * FROM sys_instance_create_workspace(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, 'Console workspace', ${ownerId}::uuid, NULL::citext, NULL::uuid, NULL::bytea, NULL::integer)`;
+    expect(created[0]).toMatchObject({ outcome: "created" });
+  });
+  return workspaceId;
+}
+
+async function addInstanceAdminMembership(adminId: string, workspaceId: string): Promise<void> {
+  await db.app.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${adminId}, true)`;
+    const added = await tx`SELECT sys_instance_add_membership(${freshId()}::uuid, ${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid) AS outcome`;
+    expect(added[0]?.["outcome"]).toBe("added");
+  });
+}
+
+/** A member, a team, a share and a pending invitation of the workspace, as its owner set them up. */
+async function populate(workspaceId: string, ownerId: string, memberId: string): Promise<void> {
+  await seedMember(db, { workspaceId, accountId: memberId, role: "member" });
+  const bookmarkId = freshId();
+  const teamId = freshId();
+  await asSystem(db, async (tx) => {
+    await tx`
+      INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+      VALUES (${bookmarkId}, ${workspaceId}, ${ownerId}, 'https://example.com/', 'https://example.com', 'example.com', 'Owner')`;
+    await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamId}, ${workspaceId}, 'Team')`;
+    await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamId}, ${memberId})`;
+    await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${bookmarkId}, ${memberId}, ${ownerId})`;
+    await tx`
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at, invited_by)
+      VALUES (${freshId()}, ${workspaceId}, ${`invitee-${workspaceId}@example.test`}, 'member', ${freshToken().hash}, now() + interval '7 days', ${ownerId})`;
+  });
+}
+
+/** How many backends of this database wait for a lock. */
+async function backendsWaitingForLock(): Promise<number> {
+  const rows = await db.owner<{ waiting: string }[]>`
+    SELECT count(DISTINCT l.pid)::text AS waiting
+    FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
+    WHERE NOT l.granted AND s.datname = current_database()`;
+  return Number(rows[0]?.waiting ?? 0);
+}
+
+async function waitUntilBlocked(): Promise<void> {
+  const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+  while ((await backendsWaitingForLock()) === 0) {
+    if (Date.now() > deadline) {
+      throw new Error("the redemption never waited for a lock");
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+}
+
 describe("verifyEmail and what the visitor set up in workspaces", () => {
   it("leaves the account no workspace it owns alone with another member, a team, an invitation or a share, whatever was planted before the address was verified", async () => {
     const owner = await account();
@@ -855,21 +918,187 @@ describe("verifyEmail and what the visitor set up in workspaces", () => {
     expect(await workspacesOf(accomplice)).toEqual([]);
   });
 
-  it("leaves a workspace another account also owns exactly as it was", async () => {
+  it("strips a workspace the account created even when it made another account an owner of it, with the shares, teams and invitations it added", async () => {
     const owner = await account();
-    const coOwner = await account({ verified: true });
+    const accomplice = await account({ verified: true });
     const member = await account({ verified: true });
     const planted = await plantWorkspace(owner, [
-      { accountId: coOwner, role: "owner" },
+      { accountId: accomplice, role: "owner" },
       { accountId: member, role: "member" },
     ]);
-    const before = await workspaceState(planted.workspaceId);
+    expect(await workspaceState(planted.workspaceId)).toMatchObject({ members: [accomplice, member, owner].sort(), teams: 1, pendingInvitations: 1, bookmarkShares: 3, folderShares: 2 });
 
     await store.verifyEmail(verification(await issue(owner)));
 
-    expect(await workspaceState(planted.workspaceId)).toEqual(before);
+    expect(await workspaceState(planted.workspaceId)).toEqual({
+      exists: true,
+      members: [owner],
+      teams: 0,
+      teamMembers: 0,
+      bookmarkShares: 0,
+      folderShares: 0,
+      pendingInvitations: 0,
+      apiTokens: 0,
+      bookmarks: 1,
+      folders: 1,
+      ownedBookmarks: 1,
+    });
+    expect(await workspacesOf(owner)).toMatchObject([{ id: planted.workspaceId, role: "owner" }]);
+    expect(await workspacesOf(accomplice)).toEqual([]);
+    expect(await accountRow(accomplice)).toMatchObject({ verified: true });
+  });
+
+  it("strips a workspace the account created that it shares with an owner it promoted, whoever else owns it, and leaves the account its owner", async () => {
+    const owner = await account();
+    const first = await account({ verified: true });
+    const second = await account({ verified: true });
+    const planted = await plantWorkspace(owner, [
+      { accountId: first, role: "owner" },
+      { accountId: second, role: "owner" },
+    ]);
+
+    await store.verifyEmail(verification(await issue(owner)));
+
+    expect(await workspaceState(planted.workspaceId)).toMatchObject({ members: [owner], teams: 0, bookmarkShares: 0, folderShares: 0, pendingInvitations: 0 });
+    expect(await workspacesOf(owner)).toMatchObject([{ id: planted.workspaceId, role: "owner" }]);
+  });
+
+  it("strips a workspace the account created and then demoted itself in, after promoting an accomplice to owner, and leaves the account its only member and owner", async () => {
+    const owner = await account();
+    const accomplice = await account({ verified: true });
+    const member = await account({ verified: true });
+    const planted = await plantWorkspace(
+      owner,
+      [
+        { accountId: accomplice, role: "owner" },
+        { accountId: member, role: "member" },
+      ],
+      { creatorRole: "admin" },
+    );
+    expect(await workspacesOf(owner)).toMatchObject([{ id: planted.workspaceId, role: "admin" }]);
+
+    await store.verifyEmail(verification(await issue(owner)));
+
+    expect(await workspaceState(planted.workspaceId)).toMatchObject({ exists: true, members: [owner], teams: 0, bookmarkShares: 0, folderShares: 0, pendingInvitations: 0, apiTokens: 0, bookmarks: 1, folders: 1 });
+    expect(await workspacesOf(owner)).toMatchObject([{ id: planted.workspaceId, role: "owner" }]);
+    expect(await workspacesOf(accomplice)).toEqual([]);
+  });
+
+  it("leaves a workspace the instance console created for another owner as it was, though its creator is the account and a member of it", async () => {
+    const admin = await account({ mfa: true });
+    await asSystem(db, (tx) => tx`UPDATE accounts SET is_instance_admin = true WHERE id = ${admin}`);
+    const owner = await account({ verified: true });
+    const member = await account({ verified: true });
+    const workspaceId = await consoleWorkspace(admin, owner);
+    await populate(workspaceId, owner, member);
+    await addInstanceAdminMembership(admin, workspaceId);
+    const before = await workspaceState(workspaceId);
+    expect(before).toMatchObject({ members: [admin, member, owner].sort(), teams: 1, bookmarkShares: 1, pendingInvitations: 1 });
+
+    await store.verifyEmail(verification(await issue(admin)));
+
+    expect(await workspaceState(workspaceId)).toEqual(before);
+    expect(await workspacesOf(owner)).toMatchObject([{ id: workspaceId, role: "owner" }]);
+    expect(await workspacesOf(admin)).toEqual(expect.arrayContaining([expect.objectContaining({ id: workspaceId, role: "member" })]));
+  });
+
+  it("leaves a workspace the account created and then left alone, since it is no member of it to strip", async () => {
+    const owner = await account();
+    const accomplice = await account({ verified: true });
+    const workspaceId = await seedWorkspace(db, { createdBy: owner });
+    await seedMember(db, { workspaceId, accountId: accomplice, role: "owner" });
+    const before = await workspaceState(workspaceId);
+
+    await store.verifyEmail(verification(await issue(owner)));
+
+    expect(await workspaceState(workspaceId)).toEqual(before);
+    expect(before.members).toEqual([accomplice]);
+    expect((await workspacesOf(owner)).map((workspace) => workspace.id)).not.toContain(workspaceId);
+  });
+
+  it(
+    "takes the row of a workspace the account created but no longer owns before the account row, so a lock on that workspace is waited for first",
+    async () => {
+      const owner = await account();
+      const accomplice = await account({ verified: true });
+      const planted = await plantWorkspace(owner, [{ accountId: accomplice, role: "owner" }], { creatorRole: "admin" });
+      let release: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let held: () => void = () => undefined;
+      const holding = new Promise<void>((resolve) => {
+        held = resolve;
+      });
+      const holder = db.owner
+        .begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          await tx`SELECT 1 FROM workspaces WHERE id = ${planted.workspaceId} FOR NO KEY UPDATE`;
+          held();
+          await released;
+        })
+        .then(
+          () => undefined,
+          (error: unknown) => ({ error }),
+        );
+      await holding;
+      const redemption = store.verifyEmail(verification(await issue(owner))).then(
+        () => undefined,
+        (error: unknown) => ({ error }),
+      );
+      let accountRowFree = false;
+      try {
+        await waitUntilBlocked();
+        // The redemption is waiting for the workspace, so it holds no lock on the account row yet.
+        await db.owner.begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          await tx`SELECT 1 FROM accounts WHERE id = ${owner} FOR UPDATE NOWAIT`;
+          accountRowFree = true;
+        });
+      } finally {
+        release();
+      }
+
+      expect(await Promise.all([holder, redemption])).toEqual([undefined, undefined]);
+      expect(accountRowFree).toBe(true);
+      expect(await workspaceState(planted.workspaceId)).toMatchObject({ members: [owner] });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it("leaves a workspace another account created and owns, where the account is one of the owners, exactly as it was", async () => {
+    const owner = await account();
+    const founder = await account({ verified: true });
+    const member = await account({ verified: true });
+    const theirs = await plantWorkspace(founder, [
+      { accountId: owner, role: "owner" },
+      { accountId: member, role: "member" },
+    ]);
+    const before = await workspaceState(theirs.workspaceId);
+
+    await store.verifyEmail(verification(await issue(owner)));
+
+    // Only the API token the account held there goes with its credentials (account_mark_verified).
+    expect(await workspaceState(theirs.workspaceId)).toEqual({ ...before, apiTokens: before.apiTokens - 1 });
     expect(before.members).toHaveLength(3);
-    expect(await workspaceIdsOf(owner)).toContain(planted.workspaceId);
+    expect(await workspaceIdsOf(owner)).toContain(theirs.workspaceId);
+  });
+
+  it("leaves a workspace whose creator is gone and that another owner holds exactly as it was, since nothing says the account made that owner", async () => {
+    const owner = await account();
+    const coOwner = await account({ verified: true });
+    const member = await account({ verified: true });
+    const orphan = await plantWorkspace(owner, [
+      { accountId: coOwner, role: "owner" },
+      { accountId: member, role: "member" },
+    ]);
+    await asSystem(db, (tx) => tx`UPDATE workspaces SET created_by = NULL WHERE id = ${orphan.workspaceId}`);
+    const before = await workspaceState(orphan.workspaceId);
+
+    await store.verifyEmail(verification(await issue(owner)));
+
+    expect(await workspaceState(orphan.workspaceId)).toEqual(before);
+    expect(before.members).toHaveLength(3);
   });
 
   it("leaves a workspace someone else owns that the account joined, and the account stays a member of it", async () => {

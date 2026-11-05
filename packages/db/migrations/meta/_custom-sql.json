@@ -1,4 +1,4 @@
 {
-  "sha256": "da5449520b404115932a362092477bdd61f586932e9bc558d0d0d71653a093b8",
-  "migration": "20261105185116_add_instance_mark_verified_strip"
+  "sha256": "58ba4d471dbef5534a33b3bdbd01101c02634476aaa1821d41842b2601b559a0",
+  "migration": "20261105220745_add_verification_creator_strip"
 }
