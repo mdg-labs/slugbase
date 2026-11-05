@@ -1,0 +1,51 @@
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "predicateType": "https://spdx.dev/Document",
+  "subject": [
+    {
+      "name": "_",
+      "digest": {
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ],
+  "predicate": {
+    "spdxVersion": "SPDX-2.3",
+    "dataLicense": "CC0-1.0",
+    "SPDXID": "SPDXRef-DOCUMENT",
+    "name": "image-scan-canary-debian",
+    "documentNamespace": "https://example.test/spdx/image-scan-canary-debian",
+    "creationInfo": {
+      "created": "2026-01-01T00:00:00Z",
+      "creators": [
+        "Tool: fixture"
+      ]
+    },
+    "packages": [
+      {
+        "name": "libssl3",
+        "SPDXID": "SPDXRef-Package-libssl3",
+        "versionInfo": "3.0.11-1~deb12u1",
+        "downloadLocation": "NOASSERTION",
+        "filesAnalyzed": false,
+        "licenseConcluded": "NOASSERTION",
+        "licenseDeclared": "NOASSERTION",
+        "copyrightText": "NOASSERTION",
+        "externalRefs": [
+          {
+            "referenceCategory": "PACKAGE-MANAGER",
+            "referenceType": "purl",
+            "referenceLocator": "pkg:deb/debian/libssl3@3.0.11-1~deb12u1?arch=amd64&distro=debian-12.15&upstream=openssl"
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "spdxElementId": "SPDXRef-DOCUMENT",
+        "relationshipType": "DESCRIBES",
+        "relatedSpdxElement": "SPDXRef-Package-libssl3"
+      }
+    ]
+  }
+}

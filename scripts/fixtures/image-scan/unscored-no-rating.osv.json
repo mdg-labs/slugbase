@@ -1,0 +1,56 @@
+{
+  "results": [
+    {
+      "source": {
+        "path": "/fixture/sbom.spdx.json",
+        "type": "sbom"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "example-lib",
+            "version": "1.0.0",
+            "ecosystem": "npm"
+          },
+          "vulnerabilities": [
+            {
+              "id": "GHSA-mmmm-nnnn-oooo",
+              "aliases": [],
+              "summary": "fixture advisory",
+              "affected": [
+                {
+                  "package": {
+                    "ecosystem": "npm",
+                    "name": "example-lib"
+                  },
+                  "ranges": [
+                    {
+                      "type": "SEMVER",
+                      "events": [
+                        {
+                          "introduced": "0"
+                        },
+                        {
+                          "fixed": "1.0.1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "ids": [
+                "GHSA-mmmm-nnnn-oooo"
+              ],
+              "aliases": [],
+              "max_severity": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

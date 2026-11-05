@@ -1,0 +1,34 @@
+{
+  "entries": [
+    {
+      "id": "GHSA-6j4f-fj2g-mc7p",
+      "reason": "brace-expansion 5.0.9 is bundled in the npm of the pinned node base image, which is the newest node:24-slim and still ships it; the image never runs npm, its entrypoint starts node on the application directly. Gone with the bundled npm when the runtime stage drops it.",
+      "expires": "2026-12-04"
+    },
+    {
+      "id": "GHSA-qhr7-859c-m2p7",
+      "reason": "brace-expansion 5.0.9 is bundled in the npm of the pinned node base image, which is the newest node:24-slim and still ships it; the image never runs npm, its entrypoint starts node on the application directly. Gone with the bundled npm when the runtime stage drops it.",
+      "expires": "2026-12-04"
+    },
+    {
+      "id": "GHSA-2m5v-pch6-74hx",
+      "reason": "undici 6.28.0 is bundled in the npm of the pinned node base image, which is the newest node:24-slim and still ships it; the image never runs npm, its entrypoint starts node on the application directly. Gone with the bundled npm when the runtime stage drops it.",
+      "expires": "2026-12-04"
+    },
+    {
+      "id": "GHSA-qrxm-fqhp-jwvm",
+      "reason": "undici 6.28.0 is bundled in the npm of the pinned node base image, which is the newest node:24-slim and still ships it; the image never runs npm, its entrypoint starts node on the application directly. Gone with the bundled npm when the runtime stage drops it.",
+      "expires": "2026-12-04"
+    },
+    {
+      "id": "GHSA-rfgv-xxqx-mfg5",
+      "reason": "undici 6.28.0 is bundled in the npm of the pinned node base image, which is the newest node:24-slim and still ships it; the image never runs npm, its entrypoint starts node on the application directly. Gone with the bundled npm when the runtime stage drops it.",
+      "expires": "2026-12-04"
+    },
+    {
+      "id": "GHSA-xjj6-f33q-929c",
+      "reason": "undici 6.28.0 is bundled in the npm of the pinned node base image, which is the newest node:24-slim and still ships it; the image never runs npm, its entrypoint starts node on the application directly. Gone with the bundled npm when the runtime stage drops it.",
+      "expires": "2026-12-04"
+    }
+  ]
+}

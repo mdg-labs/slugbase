@@ -1,0 +1,1 @@
+{"entries": [{"id": "CVE-2099-0001", "reason": "The vulnerable function is never reached by the image.", "expires": "2099-12-31"}]}

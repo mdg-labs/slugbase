@@ -1,0 +1,1 @@
+{"entries": [{"id": "GHSA-aaaa-bbbb-cccc", "reason": "The vulnerable function is never reached by the image.", "expires": "2099-12-31"}]}

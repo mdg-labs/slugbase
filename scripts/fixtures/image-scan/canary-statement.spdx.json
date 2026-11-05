@@ -1,0 +1,51 @@
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "predicateType": "https://spdx.dev/Document",
+  "subject": [
+    {
+      "name": "_",
+      "digest": {
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ],
+  "predicate": {
+    "spdxVersion": "SPDX-2.3",
+    "dataLicense": "CC0-1.0",
+    "SPDXID": "SPDXRef-DOCUMENT",
+    "name": "image-scan-canary",
+    "documentNamespace": "https://example.test/spdx/image-scan-canary",
+    "creationInfo": {
+      "created": "2026-01-01T00:00:00Z",
+      "creators": [
+        "Tool: fixture"
+      ]
+    },
+    "packages": [
+      {
+        "name": "lodash",
+        "SPDXID": "SPDXRef-Package-lodash",
+        "versionInfo": "4.17.15",
+        "downloadLocation": "NOASSERTION",
+        "filesAnalyzed": false,
+        "licenseConcluded": "NOASSERTION",
+        "licenseDeclared": "NOASSERTION",
+        "copyrightText": "NOASSERTION",
+        "externalRefs": [
+          {
+            "referenceCategory": "PACKAGE-MANAGER",
+            "referenceType": "purl",
+            "referenceLocator": "pkg:npm/lodash@4.17.15"
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "spdxElementId": "SPDXRef-DOCUMENT",
+        "relationshipType": "DESCRIBES",
+        "relatedSpdxElement": "SPDXRef-Package-lodash"
+      }
+    ]
+  }
+}

@@ -2,7 +2,8 @@ name: CI
 
 # The jobs of doc 08 §6.2 run in parallel, each inside node:24-bookworm with
 # the same setup, so the file can move to other runners unchanged (doc 08
-# §6.1); `build` is the exception, because it needs Docker (see there). No job references a secret, and the workflow never runs on
+# §6.1); `build` and `image-scan` are the exceptions, because they need Docker
+# (see there). No job references a secret, and the workflow never runs on
 # pull_request_target, so a run for a fork pull request holds nothing but a
 # read-only token (doc 10 T16). Job names are required by branch protection;
 # rename one only together with that rule.
@@ -40,6 +41,13 @@ jobs:
           persist-credentials: false
       # Before the install: it fetches each package from where the lockfile says.
       - run: bash scripts/check-lockfile-sources.sh
+      # The test of the image scan (scripts/scan-image.test.sh, part of pnpm lint)
+      # reads JSON with jq, which node:24-bookworm does not carry.
+      - name: Install jq
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y --no-install-recommends jq
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: lint
@@ -224,8 +232,9 @@ jobs:
       - run: pnpm db:check
       - run: pnpm test:integration
 
-  # The only job that is not in the node container: it builds the image and starts
-  # it with Docker Compose (scripts/smoke-image.sh), which needs the runner's own
+  # One of the two jobs that are not in the node container (`image-scan` is the
+  # other): it builds the image and starts it with Docker Compose
+  # (scripts/smoke-image.sh), which needs the runner's own
   # Docker daemon and its published ports. Node comes from setup-node instead, at
   # the major version of .nvmrc, and the same setup action installs the workspace.
   build:
@@ -268,6 +277,49 @@ jobs:
           BUILD_COMMIT: ${{ github.sha }}
           SLUGBASE_IMAGE: slugbase:ci
         run: bash scripts/smoke-image.sh
+
+  # The image's own packages, which the lockfile audit below does not see (doc 08
+  # §6.2). The image is built with BuildKit's SPDX SBOM, which needs the container
+  # driver, so the job runs on the runner like `build`. It holds no secret.
+  image-scan:
+    name: image-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      # Before the image build: it fetches each package from where the lockfile says.
+      - name: Check the lockfile sources
+        run: bash scripts/check-lockfile-sources.sh
+      - name: Install the scanner
+        run: |
+          set -euo pipefail
+          bash scripts/scan-image.sh --install "$RUNNER_TEMP/osv-scanner"
+          echo "OSV_SCANNER=$RUNNER_TEMP/osv-scanner/osv-scanner" >> "$GITHUB_ENV"
+      # A scanner that reads nothing would pass every image: each fixture SBOM names
+      # a package version with a known advisory, one from npm and one from Debian
+      # in the form BuildKit writes it, and the scan fails without the finding.
+      - name: Check the scanner reports a known vulnerability
+        run: |
+          set -euo pipefail
+          bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary.spdx.json
+          bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary-debian.spdx.json
+      - name: Create the builder
+        run: docker buildx create --name image-scan --driver docker-container --use
+      - name: Build the image and its SBOM
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --file apps/slugbase/Dockerfile \
+            --build-arg "BUILD_COMMIT=$BUILD_COMMIT" \
+            --sbom=true \
+            --output "type=local,dest=$RUNNER_TEMP/image" \
+            .
+      - name: Scan the SBOM
+        run: bash scripts/scan-image.sh "$RUNNER_TEMP/image/sbom.spdx.json"
 
   audit:
     name: audit

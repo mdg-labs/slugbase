@@ -25,7 +25,7 @@
 # install, build, then the runtime dependencies only) -> runtime (the same pinned
 # base, built output and production dependencies, no sources, tests or git history).
 
-FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS toolchain
+FROM node:24-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS toolchain
 RUN npm install --global --ignore-scripts pnpm@10.34.6
 WORKDIR /app
 
@@ -47,7 +47,7 @@ RUN rm -rf node_modules apps/*/node_modules packages/*/node_modules tooling/node
  && CI=true pnpm install --frozen-lockfile --offline --prod --ignore-scripts \
       --filter slugbase --filter @slugbase/server... --filter @slugbase/adapters... --filter @slugbase/email...
 
-FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS runtime
+FROM node:24-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS runtime
 ARG VERSION=unreleased
 ARG BUILD_COMMIT=unknown
 LABEL org.opencontainers.image.title="SlugBase" \
