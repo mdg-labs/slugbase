@@ -841,6 +841,13 @@
       "when": 1793803450974,
       "tag": "20261104144410_add_instance_admin_without_second_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1793833385664,
+      "tag": "20261104230305_add_invitation_link_issued",
+      "breakpoints": true
     }
   ]
 }

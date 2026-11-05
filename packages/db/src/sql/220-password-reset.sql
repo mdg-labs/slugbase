@@ -20,7 +20,11 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- address first, and only the verification takes that setup away
 -- (sys_email_verify). The stored hash is replaced (sys_password_set, which also
 -- moves password_changed_at) and every session of
--- the account is deleted, the one of the token the request carried included.
+-- the account is deleted, the one of the token the request carried included,
+-- as are its API tokens, its linked identities and the pending handshakes that
+-- would link one: a credential made before the reset is not the owner's to
+-- keep, whoever made it. The second factor stays, and with it the partial
+-- session below.
 -- The new session is partial for an account whose second factor is on and full
 -- otherwise, so a mailbox that is not the account's alone cannot skip the
 -- second factor. The account row is locked before anything is changed, so two
@@ -73,6 +77,9 @@ BEGIN
     RAISE EXCEPTION 'the password of the account being reset could not be set';
   END IF;
   PERFORM public.sys_session_revoke_all(v_account, NULL);
+  DELETE FROM public.api_tokens WHERE account_id = v_account;
+  DELETE FROM public.account_identities WHERE account_id = v_account;
+  DELETE FROM public.oidc_login_states WHERE link_account_id = v_account;
 
   v_level := CASE WHEN v_mfa THEN 'partial' ELSE 'full' END;
   IF NOT public.sys_session_create(

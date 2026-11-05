@@ -134,7 +134,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q45 | Destructive and access-changing `/instance/*` operations require the calling account to have MFA enrolled; status, settings, the workspace list, workspace creation and the test mail do not | Decided (default) |
 | Q47 | Tokens can be created with an expiry (30 / 90 / 365 days) or none | Decided (default) |
 | Q48 | Password reset 1 hour, email change 1 hour, signup email verification 24 hours, invitations 7 days | Decided (default) |
-| Q31 | An invitation token proves control of the email, so an account created through it is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true` | Decided (default) |
+| Q31 | An invitation token that reached the invited mailbox proves control of the email, so an account created through it, or through a provider that asserts the address, is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true`; a password-form account made with a link an admin took is not | Decided (default) |
 | Q32 | Automatic linking to an existing account only when the provider asserts `email_verified=true` for a matching email | Decided (default) |
 | Q44 | The instance-admin routes are mounted on both editions | Decided (default) |
 | Q94 | Workspace creation by ordinary accounts is off by default, read from the composition root; the instance setting overrides it | Decided (default) |
@@ -583,11 +583,11 @@ Expiry by default limits forgotten-token risk; "none" stays available for long-l
 **Decision: password reset 1 hour, email change 1 hour, signup email verification 24 hours, invitations 7 days.**
 The old constants used 1 hour for every emailed token; signup verification often happens the next morning, and a 24-hour token on an unverified, capability-restricted account is low risk.
 
-### Q31 — Accepting an invitation creates a verified account
+### Q31 — Accepting an invitation creates a verified account (except a password sign-up with an admin-held link)
 **Status:** Decided (default) · **Due:** Phase 2 · **Affects:** doc 02 §2.2, §3.4, doc 03 §1.5
 
-**Decision: an invitation token proves control of the email, so an account created through it is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true`. An invitation is bound to its email; a signed-in account with a different email cannot accept it.**
-Asking an invited person to verify an address they have just proven is pure friction. Binding to the email prevents a forwarded link from being redeemed by someone else.
+**Decision: an invitation token that reached the invited mailbox by mail proves control of the email, so an account created through it is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true`; so is an account created through a provider that asserts exactly the invited address as verified, whichever way the token was issued. A token an admin took as a copyable link proves nothing about the mailbox, so a password-form account created with it is not verified: it joins the workspace, the verification email is queued where mail can be sent, and only the owner of the address verifying it makes the address verified. An invitation is bound to its email; a signed-in account with a different email cannot accept it.**
+Asking an invited person to verify an address they have just proven is pure friction. Binding to the email prevents a forwarded link from being redeemed by someone else. A link the admin holds is a credential the admin may have used first, which is why it cannot stand in for the mailbox (doc 10 T19).
 
 ### Q32 — OIDC account linking and auto-create
 **Status:** Decided (default) · **Due:** Phase 2 · **Affects:** doc 02 §2.8, doc 10 (account takeover), doc 07 (env keys)

@@ -119,6 +119,7 @@
     "20261101191235_index_bookmark_url": "0ce67f0c04ccfca6a8eed480f57c9fc696a2ca24f761e95b5277046c8ae147e0",
     "20261102095053_add_bookmark_import": "5444082b5a02c7ae025b08fadcb920369c60a038fdda40da4414505ad91f858d",
     "20261103112929_add_account_access_mode": "41e6cf4e31ffc43b69c8b183ed8b27da3023ff2d3b9ba665338e3e2bcfff6240",
-    "20261104144410_add_instance_admin_without_second_factor": "e7a6abcebcb99aa2f7e06f5ddfdb09e0cee23074a01c056a52d209e07dfa7276"
+    "20261104144410_add_instance_admin_without_second_factor": "e7a6abcebcb99aa2f7e06f5ddfdb09e0cee23074a01c056a52d209e07dfa7276",
+    "20261104230305_add_invitation_link_issued": "2d2388a4253ec2919ae021240f7aaa6acd290d7594501e1fa734512d58465a06"
   }
 }

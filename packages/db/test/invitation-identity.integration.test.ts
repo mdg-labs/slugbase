@@ -281,6 +281,25 @@ describe("sys_invitation_accept_with_identity", () => {
     }
   });
 
+  it("creates the account verified when the live token is a link an admin took, since the provider asserted the invited address and no copy of the link can", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const invitation = await invite(workspaceId);
+    const link = freshToken();
+    // How the invitation route issues a link: a new token hash and no mail ticket.
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET token_hash = ${link.hash}, mail_ticket = NULL WHERE id = ${invitation.id}`);
+    const flagged = await asSystem(db, (tx) => tx<{ link_issued: boolean }[]>`SELECT link_issued FROM workspace_invitations WHERE id = ${invitation.id}`);
+    expect(flagged[0]?.link_issued).toBe(true);
+    const { input } = acceptance({ hash: link.hash, email: invitation.email });
+
+    const result = await store.acceptInvitationWithIdentity(input);
+
+    expect(result).toEqual({ kind: "accepted", workspaceId, invitationId: invitation.id, role: "member", accountId: input.accountId, created: true });
+    const [account] = await accountsWithEmail(invitation.email.toLowerCase());
+    expect(account).toMatchObject({ id: input.accountId, password_hash: null });
+    expect(account?.email_verified_at).toBeInstanceOf(Date);
+    expect(await identitiesOf(input.accountId)).toHaveLength(1);
+  });
+
   it("signs in and accepts for the account the identity is linked to, creating no account and linking nothing twice", async () => {
     const workspaceId = await workspaceWithOwner();
     const invitation = await invite(workspaceId, { email: "Linked.Person@Example.test", role: "admin" });

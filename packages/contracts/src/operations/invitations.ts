@@ -274,7 +274,7 @@ export const acceptInvitation = defineOperation({
       InvitationAcceptedSchema,
     ),
     201: jsonResponse(
-      "A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists, verified whatever the deployment requires of other accounts because the token proves the mailbox, with the invited address, no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced",
+      "A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists with the invited address, verified whatever the deployment requires of other accounts when the live token is the one the invitation's email carried, and not verified when it is a link an admin asked for (the verification email is then queued where mail can be sent, and only the owner of the address verifying it makes the address verified), with no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced",
       InvitationAcceptedSchema,
       {
         headers: {

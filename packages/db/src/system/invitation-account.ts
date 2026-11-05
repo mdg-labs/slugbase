@@ -31,7 +31,7 @@ export interface NewInvitationAccount {
 
 export interface InvitationAccountStore {
   /**
-   * Creates the verified account of the invitation the token hash belongs to, with the invited address and no
+   * Creates the account of the invitation the token hash belongs to, verified unless the token is a link an admin took, with the invited address and no
    * personal workspace, adds it to the invitation's workspace with the invited role, accepts the invitation and
    * signs the account in with a full session acting in that workspace, in one transaction with the audit events
    * and jobs of `onAccepted`. A refusal changes nothing and leaves the invitation pending. A failure of any write

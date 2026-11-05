@@ -1,4 +1,4 @@
 {
-  "sha256": "57fc597b4a3dd9dac37ace6dec9d5296ff7d5455113eaa23992219e163577901",
-  "migration": "20261104144410_add_instance_admin_without_second_factor"
+  "sha256": "752936c6b89aaa202bf7eaa26af2964a7174eb76a27078e9a3639b7509886705",
+  "migration": "20261104230305_add_invitation_link_issued"
 }

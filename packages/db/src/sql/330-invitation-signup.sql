@@ -6,7 +6,9 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- sys_invitation_accept_new_account(...): for an invitation that is pending and unexpired, of a workspace that is not
 -- being deleted, creates the account the invitation is for, with the address the invitation names and never one the
--- caller names, verified because the token that arrived in the mailbox proves it; adds it to the workspace with exactly
+-- caller names, verified when the token that arrived in the mailbox proves it and not verified when the live token is
+-- one an admin took as a copyable link (workspace_invitations.link_issued), since its holder need not own the mailbox and
+-- only the owner's own verification (sys_email_verify) may then make the address verified; adds it to the workspace with exactly
 -- the invited role; marks the invitation accepted; and signs the account in with a full session whose active workspace
 -- is that one: all in the calling transaction, so a failure at any step leaves nothing. It makes no personal
 -- workspace. The password arrives hashed, or NULL for an account that signs in through a provider
@@ -53,6 +55,7 @@ DECLARE
   v_invited_email citext;
   v_role member_role;
   v_team_ids uuid[];
+  v_link_issued boolean;
 BEGIN
   IF NOT coalesce(
     p_token_hash IS NOT NULL AND octet_length(p_token_hash) = 32
@@ -87,7 +90,7 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT i.id, i.email, i.role, i.team_ids INTO v_invitation, v_invited_email, v_role, v_team_ids
+  SELECT i.id, i.email, i.role, i.team_ids, i.link_issued INTO v_invitation, v_invited_email, v_role, v_team_ids, v_link_issued
   FROM public.workspace_invitations i
   WHERE i.token_hash = p_token_hash AND i.workspace_id = v_workspace AND i.status = 'pending' AND i.expires_at > clock_timestamp()
   FOR UPDATE;
@@ -103,7 +106,7 @@ BEGIN
     RETURN;
   END IF;
 
-  IF NOT public.sys_create_account(p_account_id, v_invited_email::text, p_display_name, p_password_hash, p_locale, true) THEN
+  IF NOT public.sys_create_account(p_account_id, v_invited_email::text, p_display_name, p_password_hash, p_locale, NOT v_link_issued) THEN
     outcome := 'email_taken';
     RETURN NEXT;
     RETURN;
