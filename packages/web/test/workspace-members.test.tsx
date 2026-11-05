@@ -374,3 +374,41 @@ describe("the states of the members page", () => {
     });
   }, SLOW_TEST_TIMEOUT_MS);
 });
+
+describe("removing an owner", () => {
+  async function press(element: HTMLElement): Promise<void> {
+    await act(async () => {
+      fireEvent.click(element);
+      await Promise.resolve();
+    });
+  }
+
+  async function confirmRemovalOf(name: string): Promise<void> {
+    await press(within(rowOf(name)).getByRole("button", { name: `Actions for ${name}` }));
+    await press(await screen.findByRole("menuitem", { name: "Remove from workspace" }));
+    const dialog = await screen.findByRole("dialog", { name: `Remove ${name}` });
+    await press(within(dialog).getByRole("button", { name: "Continue" }));
+    const confirm = await screen.findByRole("alertdialog", { name: `Remove ${name}?` });
+    await press(within(confirm).getByRole("button", { name: "Remove member" }));
+  }
+
+  it("opens the re-authentication prompt on reauth_required, shows no error, and sends the removal again once the password is confirmed", async () => {
+    const server = stubWorkspaceSettingsServer({
+      members: [SELF, { ...GRACE, role: "owner" }],
+      memberDelete: (call) => (call === 1 ? problem(401, "reauth_required", "req-reauth") : json({ content: "transfer", transferTo: SELF.accountId })),
+      other: () => Promise.resolve(new Response(null, { status: 204 })),
+    });
+    await openList();
+
+    await confirmRemovalOf("Grace Hopper");
+    const prompt = await screen.findByRole("dialog", { name: "Confirm it is you" });
+    expect(screen.queryByText("Grace Hopper was removed from the workspace")).toBeNull();
+    expect(screen.queryByText("req-reauth", { exact: false })).toBeNull();
+    fireEvent.change(within(prompt).getByLabelText("Password"), { target: { value: "old password 1" } });
+    await press(within(prompt).getByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByText("Grace Hopper was removed from the workspace")).toBeTruthy();
+    expect(server.received("POST", "/api/v1/me/reauth").map(({ body }) => body)).toEqual([{ password: "old password 1" }]);
+    expect(server.received("DELETE", `${MEMBERS_PATH}/${GRACE.accountId}`)).toHaveLength(2);
+  }, SLOW_TEST_TIMEOUT_MS);
+});

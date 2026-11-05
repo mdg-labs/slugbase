@@ -11875,7 +11875,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description There is no session, or its second factor is not complete */
+            /** @description There is no session, its second factor is not complete, or the member is an owner whom the caller removes and the session has not re-authenticated within the last ten minutes (reauth_required); nothing is written */
             401: {
                 headers: {
                     [name: string]: unknown;

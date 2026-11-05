@@ -135,7 +135,9 @@ export const removeMember = defineOperation({
       MembershipEndedSchema,
     ),
     400: problemResponse("The request was malformed"),
-    401: problemResponse("There is no session, or its second factor is not complete"),
+    401: problemResponse(
+      "There is no session, its second factor is not complete, or the member is an owner whom the caller removes and the session has not re-authenticated within the last ten minutes (reauth_required); nothing is written",
+    ),
     403: problemResponse(
       "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace, or the caller is an admin and the member is an owner (forbidden)",
     ),

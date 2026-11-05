@@ -30,7 +30,8 @@ import { endMembershipOf } from "./departure.ts";
 // doc 10 T18); it is refused before anything is written, after the service has judged who may make it and
 // whether the role changes at all, so a request that is forbidden stays 403 and one that changes nothing stays
 // 200. The removal is an admin's as well (an owner's for an owner) and ends the membership as departure.ts
-// describes.
+// describes; removing another member who is an owner needs the same recent re-authentication, which departure.ts
+// checks with the answer computed here from the same clock.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
@@ -173,9 +174,17 @@ export function memberRoutes({ cursorSecret, cookie, now = Date.now }: MemberRou
       }
     }),
 
-    route(removeMember).handle(async ({ params, body }, context) => ({
-      status: 200,
-      body: await endMembershipOf(context, { targetAccountId: params.accountId.toLowerCase(), content: body.content, transferTo: body.transferTo }),
-    })),
+    route(removeMember).handle(async ({ params, body }, context) => {
+      const { reauthAt } = sessionOf(context);
+      return {
+        status: 200,
+        body: await endMembershipOf(context, {
+          targetAccountId: params.accountId.toLowerCase(),
+          content: body.content,
+          transferTo: body.transferTo,
+          reauthenticated: reauthenticatedRecently(reauthAt, now()),
+        }),
+      };
+    }),
   ];
 }
