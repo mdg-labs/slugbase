@@ -2061,7 +2061,7 @@ export interface components {
             totalAtLeast?: 10000;
         };
         BookmarkMetadata: {
-            /** @description Whether the answer is the workspace's cached result of an earlier fetch of this page, which expires seven days after it was fetched, and not a fetch made for this request */
+            /** @description Always false: the answer is a fetch made for this request and never a cached result, so that it does not depend on what other members saved or looked up. The field stays so that a client that reads it keeps working */
             cached: boolean;
             /** @description The page's own canonical link, an absolute http or https URL without credentials, as text and never fetched; null when the page gave none */
             canonicalUrl: string | null;
@@ -5482,7 +5482,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the page says about itself, from the workspace's cached result when it has not expired or from a fetch made for this request, which is then cached for the workspace for seven days. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed */
+            /** @description What the page says about itself, from a fetch made for this request, so that the answer and the time it takes never depend on what other members saved or looked up. Nothing is stored or read from the workspace's cache. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed */
             200: {
                 headers: {
                     [name: string]: unknown;

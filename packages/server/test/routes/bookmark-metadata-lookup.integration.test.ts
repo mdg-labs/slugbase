@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { EgressPort, EgressRequest, EgressResponse } from "@slugbase/core";
 import { FakeEgress } from "@slugbase/testing";
@@ -8,8 +9,9 @@ import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type Worl
 // POST /api/v1/bookmarks/metadata (doc 04 sections 3.2, 7 and 10.6, doc 02 sections 5.4 and 16, doc 10 T1, T6 and T13), through the whole chain over the
 // migrated database, with the fake of the egress port (the real adapter's refusals and cut-offs are held in packages/adapters/test/egress/metadata-fetch).
 // The failure scenario: the metadata address, and a public page that redirects to it, answer 422 url_not_allowed with no request for the address;
-// a fetch that fails, times out or returns a page of another type answers 502 upstream_failed and caches nothing; the cache of one workspace is never
-// read for another; and the request is answered within its budget.
+// a fetch that fails, times out or returns a page of another type answers 502 upstream_failed and caches nothing; the answer is always a fetch, never
+// the workspace's cache, so it is the same whatever a colleague saved or looked up (the cache is not an oracle for their bookmarks, doc 10 T2); and the
+// request is answered within its budget.
 
 const TEST_TIMEOUT_MS = 60_000;
 const METADATA = "/api/v1/bookmarks/metadata";
@@ -38,10 +40,24 @@ const html = (body: Uint8Array = PAGE) => ({ contentType: "text/html; charset=ut
 
 async function setup(world: World) {
   const owner = await harness.person(world);
+  const colleague = await harness.person(world);
   const stranger = await harness.person(world);
-  const shared = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+  const shared = await harness.workspaceOf([
+    { person: owner, role: "owner" },
+    { person: colleague, role: "member" },
+  ]);
   const other = await harness.workspaceOf([{ person: stranger, role: "owner" }]);
-  return { owner, stranger, shared, other };
+  return { owner, colleague, stranger, shared, other };
+}
+
+/** A bookmark of the page, unshared, as the account saved it; its metadata job is not run. */
+async function bookmarkOf(workspaceId: string, ownerId: string, url = PAGE_URL): Promise<string> {
+  const id = randomUUID();
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title) VALUES (${id}, ${workspaceId}, ${ownerId}, ${url}, ${url}, ${new URL(url).host}, 'As entered')`;
+  });
+  return id;
 }
 
 interface Stored {
@@ -81,7 +97,7 @@ function stallingEgress(): EgressPort & { readonly requests: EgressRequest[] } {
 
 describe("a page that can be read", () => {
   it(
-    "answers what the page says from a fetch, caches it, and answers the second request from the cache without a request",
+    "answers what the page says from a fetch, stores nothing, and fetches again for the second request",
     async () => {
       const egress = new FakeEgress({ [PAGE_URL]: html() });
       const world = harness.serve({ egress });
@@ -91,12 +107,12 @@ describe("a page that can be read", () => {
       expect(first.status).toBe(200);
       expect(await first.json()).toEqual({ ...FETCHED, cached: false });
       expect(egress.fetched).toEqual([PAGE_URL]);
-      expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Docs" }]);
+      expect(await storedFor(shared.workspaceId)).toEqual([]);
 
       const second = await lookup(world, owner, PAGE_URL);
       expect(second.status).toBe(200);
-      expect(await second.json()).toEqual({ ...FETCHED, cached: true });
-      expect(egress.requests).toHaveLength(1);
+      expect(await second.json()).toEqual({ ...FETCHED, cached: false });
+      expect(egress.requests).toHaveLength(2);
     },
     TEST_TIMEOUT_MS,
   );
@@ -118,14 +134,14 @@ describe("a page that can be read", () => {
     TEST_TIMEOUT_MS,
   );
 
-  it("answers the cached result of a page the job stored, and fetches again past expiry", async () => {
+  it("does not answer from a result the job stored, current or past expiry, and leaves it alone", async () => {
     const egress = new FakeEgress({ [PAGE_URL]: html() });
     const world = harness.serve({ egress });
     const { owner, shared } = await setup(world);
     await store(shared.workspaceId, "ok", PAGE_URL, "Stored title");
 
-    expect(await (await lookup(world, owner, PAGE_URL)).json()).toMatchObject({ title: "Stored title", cached: true });
-    expect(egress.requests).toEqual([]);
+    expect(await (await lookup(world, owner, PAGE_URL)).json()).toEqual({ ...FETCHED, cached: false });
+    expect(egress.requests).toHaveLength(1);
 
     await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
@@ -133,18 +149,18 @@ describe("a page that can be read", () => {
     });
 
     expect(await (await lookup(world, owner, PAGE_URL)).json()).toEqual({ ...FETCHED, cached: false });
-    expect(egress.requests).toHaveLength(1);
-    expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Docs" }]);
+    expect(egress.requests).toHaveLength(2);
+    expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Stored title" }]);
   });
 
-  it.each(["failed", "blocked"] as const)("does not answer from a stored %s result: the page is fetched again and the row is replaced", async (status) => {
+  it.each(["failed", "blocked"] as const)("fetches the page for a stored %s result and leaves the row alone", async (status) => {
     const egress = new FakeEgress({ [PAGE_URL]: html() });
     const world = harness.serve({ egress });
     const { owner, shared } = await setup(world);
     await store(shared.workspaceId, status, PAGE_URL);
 
     expect(await (await lookup(world, owner, PAGE_URL)).json()).toEqual({ ...FETCHED, cached: false });
-    expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Docs" }]);
+    expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status, title: null }]);
   });
 
   it("answers every field null for a page that names nothing", async () => {
@@ -159,21 +175,51 @@ describe("a page that can be read", () => {
   });
 });
 
-describe("the cache is the workspace's own", () => {
-  it("never answers one workspace from another's cached result for the same page", async () => {
+describe("the workspace's cache is not an oracle for a colleague's bookmarks", () => {
+  it("answers the same from a fetch whether or not a stored result of any workspace holds the page", async () => {
     const egress = new FakeEgress({ [PAGE_URL]: html() });
     const world = harness.serve({ egress });
     const { owner, stranger, shared, other } = await setup(world);
     await store(other.workspaceId, "ok", PAGE_URL, "Private title of B");
 
-    const mine = await lookup(world, owner, PAGE_URL);
+    expect(await (await lookup(world, owner, PAGE_URL)).json()).toEqual({ ...FETCHED, cached: false });
+    expect(await (await lookup(world, stranger, PAGE_URL)).json()).toEqual({ ...FETCHED, cached: false });
 
-    expect(await mine.json()).toEqual({ ...FETCHED, cached: false });
-    expect(egress.requests).toHaveLength(1);
-    expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Docs" }]);
+    expect(egress.requests).toHaveLength(2);
+    expect(await storedFor(shared.workspaceId)).toEqual([]);
     expect(await storedFor(other.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Private title of B" }]);
-    expect(await (await lookup(world, stranger, PAGE_URL)).json()).toMatchObject({ title: "Private title of B", cached: true });
-    expect(egress.requests).toHaveLength(1);
+  });
+
+  it("fetches for a member although a colleague's unshared bookmark of the page has its result stored", async () => {
+    const egress = new FakeEgress({ [PAGE_URL]: html() });
+    const world = harness.serve({ egress });
+    const { owner, colleague, shared } = await setup(world);
+    await bookmarkOf(shared.workspaceId, owner.account.id);
+    await store(shared.workspaceId, "ok", PAGE_URL, "Owner's stored title");
+
+    const probe = await lookup(world, colleague, PAGE_URL);
+
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toEqual({ ...FETCHED, cached: false });
+    expect(egress.fetched).toEqual([PAGE_URL]);
+    expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Owner's stored title" }]);
+  });
+
+  it("fetches for a member who has just saved a bookmark of the page, before any job has run", async () => {
+    const egress = new FakeEgress({ [PAGE_URL]: html() });
+    const world = harness.serve({ egress });
+    const { owner, colleague, shared } = await setup(world);
+    await bookmarkOf(shared.workspaceId, owner.account.id);
+    await store(shared.workspaceId, "ok", PAGE_URL, "Owner's stored title");
+
+    const saved = await send(world, "POST", "/api/v1/bookmarks", { cookie: colleague.cookie }, { url: PAGE_URL, title: "Mine" });
+    expect(saved.status).toBe(201);
+    const probe = await lookup(world, colleague, PAGE_URL);
+
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toEqual({ ...FETCHED, cached: false });
+    expect(egress.fetched).toEqual([PAGE_URL]);
+    expect(await storedFor(shared.workspaceId)).toEqual([{ url_canonical: PAGE_URL, status: "ok", title: "Owner's stored title" }]);
   });
 });
 

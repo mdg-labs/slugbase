@@ -501,7 +501,7 @@ The six `/teams` operations are implemented. A team is the workspace's and no me
 | POST | `/bookmarks/{id}/open` | Record an open from the UI; returns `{ url }` | mem† (write) | go |
 | POST | `/bookmarks/bulk` | `{ action, ids or filter, … }` with `action` one of `delete`, `pin`, `unpin`, `move_to_folder`, `add_to_folder`, `remove_from_folder`, `add_tags`, `remove_tags`, `share` → `requested`, `affected` and `skipped` counts with a reason per skipped row; `folderId` names the target of the three folder actions, `tagIds` the tags of the two tag actions and `accountId` or `teamId` the member or team `share` shares with | mem† (write) | bulk |
 | POST | `/bookmarks/bulk/preview` | Dry-run of `add_tags` / `share`: resulting tag set or audience, affected count, skipped (not owned); a POST takes the `write` token scope although it writes nothing | mem† (write) | read |
-| POST | `/bookmarks/metadata` | `{ url }` → title, description, site name, canonical URL, language, `cached` (egress, cached, 3 s budget) | mem† (write) | fetch |
+| POST | `/bookmarks/metadata` | `{ url }` → title, description, site name, canonical URL, language, `cached` (always false) (egress, always a fetch, never the workspace cache, doc 10 T2; 3 s budget) | mem† (write) | fetch |
 | GET | `/favicons/{host}` | Proxied favicon (`image/png`, long private cache); placeholder on miss | mem | fetch |
 | GET | `/slugs/availability` | `?slug=&bookmarkId=` → `available` / `taken_by_me` / `invalid`, plus `othersUseCount` (how many others in the workspace use it among the bookmarks the caller can read, count only, for the collision hint) | mem† (read) | |
 
