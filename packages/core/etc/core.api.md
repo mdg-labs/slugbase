@@ -2953,6 +2953,7 @@ export interface EgressRequestBase {
     // (undocumented)
     readonly headers?: Readonly<Record<string, string>>;
     readonly maxBytes: number;
+    readonly refuseHttpDowngrade?: boolean;
     readonly timeoutMs: number;
     readonly truncateAtMaxBytes?: boolean;
     // (undocumented)

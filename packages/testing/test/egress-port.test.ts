@@ -60,4 +60,22 @@ describe("FakeEgress against EgressPort", () => {
     expect(await rejected("https://example.test/loop")).toMatchObject({ code: plain.code, name: plain.name, message: plain.message });
     expect(await rejected("https://example.test/new", { acceptContentTypes: ["text/html"] })).toMatchObject({ code: plain.code });
   });
+
+  it("refuses an https to http redirect when the request sets refuseHttpDowngrade, as the port does, and follows the other hops", async () => {
+    const port: EgressPort = new FakeEgress({
+      "https://idp.example.test/keys": { kind: "redirect", to: "http://idp.example.test/keys" },
+      "http://idp.example.test/keys": {},
+      "https://idp.example.test/moved": { kind: "redirect", to: "https://other.example.test/keys" },
+      "https://other.example.test/keys": {},
+      "http://plain.example.test/a": { kind: "redirect", to: "http://plain.example.test/b" },
+      "http://plain.example.test/b": {},
+    });
+    const guarded = { refuseHttpDowngrade: true, timeoutMs: 1_000, maxBytes: 10 };
+    await expect(port.request({ url: "https://idp.example.test/keys", ...guarded })).rejects.toMatchObject({ code: new EgressBlocked().code });
+    await expect(port.request({ url: "https://idp.example.test/moved", ...guarded })).resolves.toMatchObject({ url: "https://other.example.test/keys" });
+    await expect(port.request({ url: "http://plain.example.test/a", ...guarded })).resolves.toMatchObject({ url: "http://plain.example.test/b" });
+    await expect(port.request({ url: "https://idp.example.test/keys", timeoutMs: 1_000, maxBytes: 10 })).resolves.toMatchObject({
+      url: "http://idp.example.test/keys",
+    });
+  });
 });

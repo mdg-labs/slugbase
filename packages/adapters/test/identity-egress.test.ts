@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { IdentityProviderConfig } from "@slugbase/core";
 import { HttpEgress, createOidcIdentity } from "../src/index.ts";
 import { respond, startLocalServer, type Handler, type LocalServer } from "./support/local-http.ts";
@@ -15,8 +19,8 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-async function serve(handler: Handler): Promise<LocalServer> {
-  const server = await startLocalServer(handler);
+async function serve(handler: Handler, tls?: Parameters<typeof startLocalServer>[1]): Promise<LocalServer> {
+  const server = await startLocalServer(handler, tls);
   servers.push(server);
   return server;
 }
@@ -114,5 +118,61 @@ describe("the OIDC identity adapter over the egress adapter", () => {
     const { identity, lines } = setup(unreachable, provider(server, "good"));
     expect((await identity.listProviders()).map((info) => info.id)).toEqual(["good"]);
     expect(lines).toEqual([{ message: "An OIDC provider is unavailable", fields: { provider: "down", reason: "discovery_failed", code: "egress_blocked" } }]);
+  });
+});
+
+describe("an https issuer over the egress adapter", () => {
+  let directory: string;
+  let certificate: { key: string; cert: string };
+
+  beforeAll(() => {
+    directory = mkdtempSync(join(tmpdir(), "oidc-tls-"));
+    const keyFile = join(directory, "idp.key");
+    const certFile = join(directory, "idp.crt");
+    execFileSync(
+      "openssl",
+      ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyFile, "-out", certFile, "-days", "1", "-subj", "/CN=idp.example.test", "-addext", "subjectAltName=DNS:idp.example.test"],
+      { stdio: "ignore" },
+    );
+    certificate = { key: readFileSync(keyFile, "utf8"), cert: readFileSync(certFile, "utf8") };
+  });
+
+  afterAll(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  const keys = JSON.stringify({ keys: [{ kty: "RSA", kid: "k1" }] });
+
+  // The https provider answers its own discovery document; `redirected` names the path it sends to the plain-http server.
+  async function httpsProvider(redirected: "/.well-known/openid-configuration" | "/keys", plain: LocalServer): Promise<{ identity: ReturnType<typeof createOidcIdentity>; lines: unknown[] }> {
+    const server = await serve((request, socket) => {
+      const origin = `https://idp.example.test:${String(socket.localPort)}`;
+      if (request.target === redirected) {
+        respond(socket, 302, { location: `http://idp.example.test:${String(plain.port)}${redirected}` });
+      } else if (request.target === "/keys") {
+        respond(socket, 200, { "content-type": "application/json" }, keys);
+      } else {
+        respond(socket, 200, { "content-type": "application/json" }, JSON.stringify(document(origin)));
+      }
+    }, certificate);
+    const egress = new HttpEgress({
+      nodeEnv: "test",
+      resolve: () => Promise.resolve(["127.0.0.1"]),
+      testOnly: { allowAddresses: ["127.0.0.1"], ca: certificate.cert },
+    });
+    const lines: unknown[] = [];
+    const config: IdentityProviderConfig = { ...provider(server, "tls"), issuerUrl: `https://idp.example.test:${String(server.port)}` };
+    return { identity: createOidcIdentity({ providers: [config], egress, logger: { warn: (message, fields) => lines.push({ message, fields }) } }), lines };
+  }
+
+  it.each([
+    ["discovery", "/.well-known/openid-configuration", "discovery_failed"],
+    ["the key set", "/keys", "keys_failed"],
+  ] as const)("leaves the provider out when %s is redirected to http, and never connects to the http server", async (_name, path, reason) => {
+    const plain = await serve(asJson((origin) => document(origin)));
+    const { identity, lines } = await httpsProvider(path, plain);
+    expect(await identity.listProviders()).toEqual([]);
+    expect(lines).toEqual([{ message: "An OIDC provider is unavailable", fields: { provider: "tls", reason, code: "egress_blocked" } }]);
+    expect(plain.connections()).toBe(0);
   });
 });

@@ -1051,6 +1051,45 @@ describe("TLS", () => {
     expect(server.requests[0]?.headers["host"]).toBe(`secure.example.test:${String(server.port)}`);
   });
 
+  describe("refuseHttpDowngrade", () => {
+    const secure = () =>
+      new HttpEgress({ nodeEnv: "test", resolve: scripted(["127.0.0.1"], ["127.0.0.1"], ["127.0.0.1"]).resolve, testOnly: { allowNonPublicAddresses: true, ca: certificate.cert } });
+    const host = (port: number, scheme = "https"): string => `${scheme}://secure.example.test:${String(port)}`;
+
+    it("refuses a redirect from https to http before any connection to the http target, and follows it without the option", async () => {
+      const plain = await serve(ok);
+      const origin = await serve(redirect(`${host(plain.port, "http")}/landing`), certificate);
+      const error = await rejection(secure(), get(`${host(origin.port)}/`, { refuseHttpDowngrade: true }));
+      expect(error).toBeInstanceOf(EgressBlocked);
+      expect(origin.requests).toHaveLength(1);
+      expect(plain.connections()).toBe(0);
+      expect(plain.requests).toHaveLength(0);
+      const followed = await secure().request(get(`${host(origin.port)}/`));
+      expect(followed).toMatchObject({ status: 200, url: `${host(plain.port, "http")}/landing` });
+    });
+
+    it("refuses an http hop that comes after an https redirect to https", async () => {
+      const plain = await serve(ok);
+      const middle = await serve(redirect(`${host(plain.port, "http")}/landing`), certificate);
+      const origin = await serve(redirect(`${host(middle.port)}/middle`), certificate);
+      const error = await rejection(secure(), get(`${host(origin.port)}/`, { refuseHttpDowngrade: true }));
+      expect(error).toBeInstanceOf(EgressBlocked);
+      expect(middle.requests).toHaveLength(1);
+      expect(plain.connections()).toBe(0);
+    });
+
+    it("still follows a redirect from https to https, from http to http and from http to https", async () => {
+      const landing = await serve(ok, certificate);
+      const plain = await serve(ok);
+      const fromHttps = await serve(redirect(`${host(landing.port)}/landing`), certificate);
+      expect(await secure().request(get(`${host(fromHttps.port)}/`, { refuseHttpDowngrade: true }))).toMatchObject({ status: 200, url: `${host(landing.port)}/landing` });
+      const fromHttp = await serve(redirect(`${host(plain.port, "http")}/landing`));
+      expect(await secure().request(get(`${host(fromHttp.port, "http")}/`, { refuseHttpDowngrade: true }))).toMatchObject({ status: 200, url: `${host(plain.port, "http")}/landing` });
+      const upgrade = await serve(redirect(`${host(landing.port)}/landing`));
+      expect(await secure().request(get(`${host(upgrade.port, "http")}/`, { refuseHttpDowngrade: true }))).toMatchObject({ status: 200, url: `${host(landing.port)}/landing` });
+    });
+  });
+
   it("refuses a certificate that is not valid for the host name", async () => {
     const server = await serve(ok, certificate);
     const egress = new HttpEgress({ nodeEnv: "test", resolve: scripted(["127.0.0.1"]).resolve, testOnly: { allowNonPublicAddresses: true, ca: certificate.cert } });

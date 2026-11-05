@@ -13,7 +13,8 @@ import { createOidcIdentity, type OidcIdentityLogger } from "../src/index.ts";
 
 // T6, T20: discovery and the signing keys come only through the egress port, within its caps, and a provider
 // whose answer is wrong or refused is left out while the others stay. The port here is scripted and answers
-// as the real one does for a size cap; the real one is exercised in identity-egress.test.ts.
+// as the real one does for a size cap and for a redirect from https to http that the request refuses; the real
+// one is exercised in identity-egress.test.ts.
 
 const SECRET = "client-secret-qx82";
 const ISSUER = "https://idp.example.test";
@@ -42,7 +43,7 @@ const document = (issuer = ISSUER, overrides: Record<string, unknown> = {}): Rec
 
 const KEYS = { keys: [{ kty: "RSA", kid: "k1", n: "AQAB", e: "AQAB" }] };
 
-type Answer = Error | { readonly body: string; readonly status?: number; readonly contentType?: string };
+type Answer = Error | { readonly redirectTo: string } | { readonly body: string; readonly status?: number; readonly contentType?: string };
 
 const json = (value: unknown, status = 200): Answer => ({ body: JSON.stringify(value), status, contentType: "application/json; charset=utf-8" });
 
@@ -64,12 +65,21 @@ class ScriptedEgress implements EgressPort {
 
   request(request: EgressRequest): Promise<EgressResponse> {
     this.requests.push(request);
-    const answer = this.#routes.get(request.url);
+    let answer = this.#routes.get(request.url);
+    if (answer !== undefined && "redirectTo" in answer) {
+      if (request.refuseHttpDowngrade === true && request.url.startsWith("https:") && answer.redirectTo.startsWith("http:")) {
+        return Promise.reject(new EgressBlocked());
+      }
+      answer = this.#routes.get(answer.redirectTo);
+    }
     if (answer === undefined) {
       return Promise.reject(new Error(`no route for ${request.url}`));
     }
     if (answer instanceof Error) {
       return Promise.reject(answer);
+    }
+    if ("redirectTo" in answer) {
+      return Promise.reject(new Error(`no route for ${request.url}`));
     }
     const body = new TextEncoder().encode(answer.body);
     if (body.length > request.maxBytes) {
@@ -144,6 +154,42 @@ describe("the OIDC identity adapter", () => {
       expect(request.acceptContentTypes?.length).toBeGreaterThan(0);
       expect(JSON.stringify(request)).not.toContain(SECRET);
     }
+  });
+
+  describe("an https issuer is never downgraded to http by a redirect", () => {
+    const PLAIN = "http://idp.example.test";
+
+    it("refuses discovery that is redirected to http", async () => {
+      const egress = new ScriptedEgress({ [discoveryUrl(ISSUER)]: { redirectTo: discoveryUrl(PLAIN) }, [discoveryUrl(PLAIN)]: json(document()), [`${ISSUER}/keys`]: json(KEYS) });
+      const logger = recordingLogger();
+      const identity = createOidcIdentity({ providers: [provider()], egress, logger });
+      expect(await identity.listProviders()).toEqual([]);
+      expect(logger.lines).toEqual([
+        { level: "warn", message: "An OIDC provider is unavailable", fields: { provider: "idp", reason: "discovery_failed", code: "egress_blocked" } },
+      ]);
+    });
+
+    it("refuses a key set that is redirected to http", async () => {
+      const egress = healthy().script(`${ISSUER}/keys`, { redirectTo: `${PLAIN}/keys` }).script(`${PLAIN}/keys`, json(KEYS));
+      const logger = recordingLogger();
+      const identity = createOidcIdentity({ providers: [provider()], egress, logger });
+      expect(await identity.listProviders()).toEqual([]);
+      expect(await identity.metadata("idp")).toBeUndefined();
+      expect(logger.lines).toEqual([
+        { level: "warn", message: "An OIDC provider is unavailable", fields: { provider: "idp", reason: "keys_failed", code: "egress_blocked" } },
+      ]);
+    });
+
+    it("asks the port to refuse the downgrade on every request of an https issuer, and on none of an http issuer", async () => {
+      const https = healthy();
+      await createOidcIdentity({ providers: [provider()], egress: https, logger: recordingLogger() }).listProviders();
+      expect(https.requests).toHaveLength(2);
+      expect(https.requests.map((request) => request.refuseHttpDowngrade)).toEqual([true, true]);
+      const plain = healthy(PLAIN);
+      await createOidcIdentity({ providers: [provider({ issuerUrl: PLAIN })], egress: plain, logger: recordingLogger() }).listProviders();
+      expect(plain.requests).toHaveLength(2);
+      expect(plain.requests.map((request) => request.refuseHttpDowngrade)).toEqual([undefined, undefined]);
+    });
   });
 
   it("builds the discovery URL from an issuer with a path or a trailing slash", async () => {

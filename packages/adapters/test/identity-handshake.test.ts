@@ -228,6 +228,7 @@ describe("complete", () => {
     );
     expect(exchange?.headers?.["content-type"]).toBe("application/x-www-form-urlencoded");
     expect(exchange?.acceptContentTypes).toEqual(["application/json"]);
+    expect(exchange?.refuseHttpDowngrade).toBe(true);
   });
 
   it("authenticates the client with HTTP Basic by default, with its credentials form-encoded", async () => {
@@ -461,7 +462,7 @@ describe("a provider that rotates its signing keys", () => {
 
     expect(await identity.complete(request())).toMatchObject({ subject: "subject-1" });
     expect(egress.keyFetches).toHaveLength(2);
-    expect(egress.keyFetches[1]).toMatchObject({ timeoutMs: 5_000, maxBytes: 262_144, acceptContentTypes: ["application/json", "application/jwk-set+json"] });
+    expect(egress.keyFetches[1]).toMatchObject({ timeoutMs: 5_000, maxBytes: 262_144, acceptContentTypes: ["application/json", "application/jwk-set+json"], refuseHttpDowngrade: true });
 
     await identity.complete(request());
     expect(egress.keyFetches).toHaveLength(2);
