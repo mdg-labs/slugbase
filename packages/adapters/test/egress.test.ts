@@ -848,6 +848,100 @@ describe("limits", () => {
     expect(await rejection(egress, get("http://slow-dns.example.test/", { timeoutMs: 100 }))).toBeInstanceOf(EgressTimeout);
   });
 
+  describe("capping concurrent host-name lookups", () => {
+    // The system resolver runs on the libuv threadpool (four threads), which argon2 shares, so one instance
+    // holds at most three lookups at a time.
+    const CAP = 3;
+
+    function stalling() {
+      const pending: ((answers: readonly string[]) => void)[] = [];
+      const rejects: ((error: Error) => void)[] = [];
+      const calls: string[] = [];
+      return {
+        calls,
+        pending,
+        rejects,
+        resolve: (hostname: string): Promise<readonly string[]> => {
+          calls.push(hostname);
+          return new Promise((resolve, reject) => {
+            pending.push(resolve);
+            rejects.push(reject);
+          });
+        },
+      };
+    }
+
+    const typed = (error: unknown): string =>
+      error instanceof EgressTimeout ? "timeout" : error instanceof EgressBlocked ? "blocked" : error instanceof EgressError ? "error" : "other";
+
+    it("starts at most the cap of lookups and refuses the rest at once with an egress error", async () => {
+      const dns = stalling();
+      const egress = new HttpEgress({ nodeEnv: "test", resolve: dns.resolve });
+      const held = Array.from({ length: CAP }, (_, index) => rejection(egress, get(`http://held${String(index)}.example.test/`, { timeoutMs: 400 })));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(dns.calls).toHaveLength(CAP);
+
+      const started = Date.now();
+      const extras = await Promise.all(
+        Array.from({ length: 6 }, (_, index) => rejection(egress, get(`http://extra${String(index)}.example.test/`, { timeoutMs: 5_000 }))),
+      );
+      expect(Date.now() - started).toBeLessThan(200);
+      expect(extras.map(typed)).toEqual(Array.from({ length: 6 }, () => "error"));
+      expect(dns.calls).toHaveLength(CAP);
+
+      expect((await Promise.all(held)).map(typed)).toEqual(Array.from({ length: CAP }, () => "timeout"));
+    });
+
+    it("keeps a slot until its lookup settles, not until the request's deadline", async () => {
+      const dns = stalling();
+      const egress = new HttpEgress({ nodeEnv: "test", resolve: dns.resolve });
+      const first = await Promise.all(
+        Array.from({ length: CAP }, (_, index) => rejection(egress, get(`http://late${String(index)}.example.test/`, { timeoutMs: 50 }))),
+      );
+      expect(first.map(typed)).toEqual(Array.from({ length: CAP }, () => "timeout"));
+
+      expect(typed(await rejection(egress, get("http://after-deadline.example.test/")))).toBe("error");
+      expect(dns.calls).toHaveLength(CAP);
+
+      dns.pending[0]?.(["8.8.8.8"]);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(typed(await rejection(egress, get("http://freed.example.test/", { timeoutMs: 50 })))).toBe("timeout");
+      expect(dns.calls).toHaveLength(CAP + 1);
+      expect(typed(await rejection(egress, get("http://full-again.example.test/")))).toBe("error");
+      expect(dns.calls).toHaveLength(CAP + 1);
+    });
+
+    it("frees the slot when the lookup rejects or throws, once each", async () => {
+      let mode = 0;
+      const egress = new HttpEgress({
+        nodeEnv: "test",
+        resolve: (): Promise<readonly string[]> => {
+          mode += 1;
+          if (mode % 2 === 0) {
+            throw new Error("resolver threw");
+          }
+          return Promise.reject(new Error("resolver failed"));
+        },
+      });
+      for (let index = 0; index < CAP * 4; index += 1) {
+        expect(typed(await rejection(egress, get(`http://broken${String(index)}.example.test/`)))).toBe("blocked");
+      }
+    });
+
+    it("keeps the count per instance and leaves literal addresses out of it", async () => {
+      const server = await serve(ok);
+      const dns = stalling();
+      const crowded = new HttpEgress({ nodeEnv: "test", resolve: dns.resolve, testOnly: { allowNonPublicAddresses: true } });
+      const held = Array.from({ length: CAP }, (_, index) => rejection(crowded, get(`http://crowd${String(index)}.example.test/`, { timeoutMs: 100 })));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect((await crowded.request(get(`http://127.0.0.1:${String(server.port)}/`))).status).toBe(200);
+      const other = open(scripted(["127.0.0.1"]).resolve);
+      expect((await other.request(get(`http://named.example.test:${String(server.port)}/`))).status).toBe(200);
+      await Promise.all(held);
+    });
+  });
+
   it("refuses a request body over the limit before resolving or connecting", async () => {
     const dns = scripted(["127.0.0.1"]);
     const error = await rejection(open(dns.resolve), {
