@@ -38,6 +38,8 @@ jobs:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
+      # Before the install: it fetches each package from where the lockfile says.
+      - run: bash scripts/check-lockfile-sources.sh
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: lint

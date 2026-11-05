@@ -81,6 +81,9 @@ jobs:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
+      # The image build fetches each package from where the lockfile says.
+      - name: Check the lockfile sources
+        run: bash scripts/check-lockfile-sources.sh
       - name: Log in to the registry
         env:
           REGISTRY_USER: ${{ github.actor }}
