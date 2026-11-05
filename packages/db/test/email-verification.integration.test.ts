@@ -948,7 +948,7 @@ describe("verifyEmail and what the visitor set up in workspaces", () => {
     expect(await workspaceState(planted.workspaceId)).toEqual({ ...stripped, members: [owner, later].sort() });
   });
 
-  it("does not strip an account whose address an instance admin marked verified, and the later link strips nothing", async () => {
+  it("does not strip in account_mark_verified itself, which the admin's mark follows with account_strip_workspaces, and the later link strips nothing", async () => {
     const owner = await account();
     const accomplice = await account({ verified: true });
     const planted = await plantWorkspace(owner, [{ accountId: accomplice, role: "member" }]);

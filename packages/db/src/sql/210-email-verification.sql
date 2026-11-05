@@ -18,10 +18,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- workspace another account also owns, one the account only belongs to and one being deleted are not touched. The
 -- workspace rows are locked first, in identifier order, the order the account deletion, the member paths and the
 -- invitation paths take them in, and the lock is held to the end of the transaction, so no member joins, leaves or is
--- invited between the check that the account is the only owner and the deletes. The caller (sys_email_verify) locks
--- them before the backup-code rows and the account row and the statement here takes them again, so a workspace created
+-- invited between the check that the account is the only owner and the deletes. The caller (sys_email_verify, or
+-- sys_instance_update_account when an instance admin marks the address) locks them before the backup-code rows and the account row and the statement here takes them again, so a workspace created
 -- in between is locked too. It is not a system operation: it is SECURITY INVOKER, owned by slugbase_system and
--- executable by it alone, so it runs only inside sys_email_verify and slugbase_app cannot call it. It is never given an
+-- executable by it alone, so it runs only inside those two functions and slugbase_app cannot call it. It is never given an
 -- account whose address is verified.
 CREATE OR REPLACE FUNCTION public.account_strip_workspaces(p_account_id uuid) RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY INVOKER
@@ -65,7 +65,7 @@ $$;
 -- sys_instance_update_account (no password: the owner gets in through a password-reset token or a provider). It is not a
 -- system operation: it is SECURITY INVOKER, owned by slugbase_system and executable by it alone, so it runs only inside
 -- those two functions and slugbase_app cannot call it. The workspaces the registrant set up are not part of it:
--- account_strip_workspaces above removes what lets others in, and only sys_email_verify calls that.
+-- account_strip_workspaces above removes what lets others in, and both callers run it after this one.
 CREATE OR REPLACE FUNCTION public.account_mark_verified(p_account_id uuid, p_password_hash text) RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY INVOKER
   SET search_path = pg_catalog, public, pg_temp
@@ -124,7 +124,7 @@ $$;
 -- verified is not the owner's either. Only then is the address marked verified. All of that is
 -- account_mark_verified above, which the instance admin's marking of an address verified runs too. The same
 -- transaction also removes what lets anyone else into the workspaces the visitor set up (account_strip_workspaces
--- above): in each workspace the account is the only owner of, the other members' memberships, the teams, the pending
+-- above, which that marking runs as well): in each workspace the account is the only owner of, the other members' memberships, the teams, the pending
 -- invitations and the shares; the workspaces, the account's membership and all the content stay, and the account's
 -- membership in any other workspace is untouched. Nothing is queued and nothing is announced.
 -- An account that is already verified keeps all of it. The

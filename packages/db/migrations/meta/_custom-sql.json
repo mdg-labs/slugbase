@@ -1,4 +1,4 @@
 {
-  "sha256": "43425e58711a72c35d62cdb8f99fb49ca2e1eed639f00cb29241bd0f952fa80c",
-  "migration": "20261105180929_add_workspace_favicons"
+  "sha256": "da5449520b404115932a362092477bdd61f586932e9bc558d0d0d71653a093b8",
+  "migration": "20261105185116_add_instance_mark_verified_strip"
 }

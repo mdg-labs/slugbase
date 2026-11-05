@@ -1306,7 +1306,7 @@
         "markVerified": {
           "label": "Mark as verified",
           "title": "Mark {email} as verified?",
-          "description": "Whoever registered this address may not own it, so marking it verified removes the account's password, sessions, two-factor authentication, API tokens and linked sign-ins. The owner then gets in through a password-reset link or a sign-in provider.",
+          "description": "Whoever registered this address may not own it, so marking it verified removes the account's password, sessions, two-factor authentication, API tokens and linked sign-ins. In every workspace the account owns alone, it also removes the other members, the teams, the pending invitations and the shares. The owner then gets in through a password-reset link or a sign-in provider.",
           "descriptionOwn": "This is your own account. Its address is marked as verified; your password, sessions and two-factor authentication stay as they are.",
           "done": "{email} is marked as verified."
         },

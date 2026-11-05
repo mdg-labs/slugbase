@@ -1306,7 +1306,7 @@
         "markVerified": {
           "label": "Als bestätigt markieren",
           "title": "{email} als bestätigt markieren?",
-          "description": "Wer diese Adresse registriert hat, besitzt sie womöglich nicht. Wird sie als bestätigt markiert, werden Passwort, Sitzungen, Zwei-Faktor-Authentifizierung, API-Tokens und verknüpfte Anmeldungen des Kontos entfernt. Der Besitzer kommt dann über einen Link zum Zurücksetzen des Passworts oder über einen Anmeldeanbieter hinein.",
+          "description": "Wer diese Adresse registriert hat, besitzt sie womöglich nicht. Wird sie als bestätigt markiert, werden Passwort, Sitzungen, Zwei-Faktor-Authentifizierung, API-Tokens und verknüpfte Anmeldungen des Kontos entfernt. In jedem Workspace, den das Konto allein besitzt, werden außerdem die übrigen Mitglieder, die Teams, die offenen Einladungen und die Freigaben entfernt. Der Besitzer kommt dann über einen Link zum Zurücksetzen des Passworts oder über einen Anmeldeanbieter hinein.",
           "descriptionOwn": "Das ist dein eigenes Konto. Seine Adresse wird als bestätigt markiert; dein Passwort, deine Sitzungen und deine Zwei-Faktor-Authentifizierung bleiben unverändert.",
           "done": "{email} ist als bestätigt markiert."
         },

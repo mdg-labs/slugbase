@@ -862,6 +862,13 @@
       "when": 1793902169710,
       "tag": "20261105180929_add_workspace_favicons",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1793904676304,
+      "tag": "20261105185116_add_instance_mark_verified_strip",
+      "breakpoints": true
     }
   ]
 }
