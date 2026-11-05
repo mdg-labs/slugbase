@@ -266,8 +266,9 @@ export interface Server {
   fetch(request: Request): Promise<Response>;
   /**
    * Listens on `PORT`, and on `METRICS_PORT` for the internal `/metrics` listener when it is set.
-   * In production it first refuses a `DATABASE_URL` role that is a superuser or owns the database
-   * (Q56). With `MIGRATE_ON_START` it then migrates as `DATABASE_MIGRATE_URL` and resolves when that
+   * In production it first refuses a `DATABASE_URL` role that is a superuser, has `BYPASSRLS` or
+   * owns the database (Q56), unless `SLUGBASE_ALLOW_OWNER_CONNECTION` allows it with a warning.
+   * With `MIGRATE_ON_START` it then migrates as `DATABASE_MIGRATE_URL` and resolves when that
    * is done; meanwhile the probes answer, `/ready` is `503` and every other route is `503 unavailable`.
    * A failed migration stops the listeners and rejects. Once the database is migrated, a deployment that requires a setup
    * token while the instance has no account generates a new one, replacing the stored one, and prints it to the log.
@@ -655,7 +656,7 @@ export function createServer(options: CreateServerOptions): Server {
   // So are the account's workspaces: listed, with the creation policy (the stored instance setting, else the composition root's default), created and switched to in an account-level transaction; the ownership transfer rotates the caller's session token and mails the new owner.
   builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationDefault: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail, ownedWorkspaces: ownedWorkspaceEntitlements }));
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
-  builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
+  builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN), ...(options.now === undefined ? {} : { now: options.now }) }));
   // So is the audit log of the active workspace: an admin or owner of a workspace that holds `audit.log` reads its events, filtered and paged by a keyset cursor.
   builtInRoutes.push(...auditRoutes({ cursorSecret: config.SESSION_SECRET }));
   // So are the teams of the active workspace: every member lists them and reads their members, and an admin or owner holding `teams.manage` creates, renames, deletes them and replaces their members.

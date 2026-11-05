@@ -3728,7 +3728,7 @@ export interface components {
             items: components["schemas"]["ShareTarget"][];
         };
         SlugAvailability: {
-            /** @description How many bookmarks of other members of the workspace, and of members who have left it, have the slug and are not plan-archived: a count only, for the collision hint. 0 for an invalid slug */
+            /** @description How many bookmarks of other members of the workspace, and of members who have left it, have the slug, are not plan-archived and are shared with the caller (a bookmark the caller cannot read is not counted): a count only, for the collision hint. 0 for an invalid slug */
             othersUseCount: number;
             /**
              * @description available: the caller can use the slug; taken_by_me: the caller already uses it on another bookmark of the workspace; invalid: it is outside the grammar
@@ -4728,7 +4728,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The token is redeemed, once. The password is the one in the request, every session the account had is gone, and a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`, so the mailbox alone does not replace the second factor */
+            /** @description The token is redeemed, once. The password is the one in the request, every session, API token and linked identity the account had is gone, and a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`, so the mailbox alone does not replace the second factor */
             200: {
                 headers: {
                     /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
@@ -6518,7 +6518,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The cached icon of the host, a PNG that the server encoded itself from an image of at most 64 KiB that it fetched through the egress adapter; never SVG and never the fetched bytes. The browser may keep it for seven days */
+            /** @description The cached icon of the host, served only to a caller who can read a bookmark on the host in the active workspace: a PNG that the server encoded itself from an image of at most 64 KiB that it fetched through the egress adapter; never SVG and never the fetched bytes. The browser may keep it for seven days */
             200: {
                 headers: {
                     /** @description A stored icon: cacheable by the browser only (private) for 604800 seconds */
@@ -6531,7 +6531,7 @@ export interface operations {
                     "image/png": string;
                 };
             };
-            /** @description The host has no icon in the cache: a transparent placeholder PNG, which the browser keeps for a minute only. When the caller can read a bookmark on the host and the host is not known to have none, a fetch is queued; a host with no icon the server can use stays a placeholder until the record expires, and the web app draws a monogram for it */
+            /** @description The caller can read no bookmark on the host, or the host has no icon in the cache: a transparent placeholder PNG, which the browser keeps for a minute only, and the same answer whatever the cache holds for a host the caller cannot read. When the caller can read a bookmark on the host and the host is not known to have none, a fetch is queued; a host with no icon the server can use stays a placeholder until the record expires, and the web app draws a monogram for it */
             202: {
                 headers: {
                     /** @description The placeholder: cacheable by the browser only (private) for 60 seconds */
@@ -7861,7 +7861,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. It is refused whole in the same way when the bookmarks it would create would make more than 100 000 folder and tag links together, a name that repeats on one bookmark being one link as the database compares names: the one error has the path empty and the code too_many_links. A bad URL or an over-long title is no reason for it: see the answer */
+            /** @description The body is not a SlugBase JSON file (validation_failed; errors holds at most 100 entries naming the path and the code of each): a value of the wrong type, a field the format does not declare, more than 5 000 bookmarks, a folder or tag name, or a folder icon, of more than 1 000 characters, a format other than slugbase-export, or a version newer than this release reads, which is an error at version. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. It is refused whole in the same way when the bookmarks it would create would make more than 100 000 folder and tag links together, a name that repeats on one bookmark being one link as the database compares names: the one error has the path empty and the code too_many_links. It is refused whole, before anything of the caller's is read, with the one error that has the path empty and the code too_many_new_names, when it names more than 110 000 distinct folder and tag spellings together, the names the caller has already included, on bookmarks that are created or not and in the lists of the document alike, a spelling being the name as plain text cut to its limit: that is the most a file within the other limits needs, and the folders and tags the caller has already do not lessen it. A bad URL or an over-long title is no reason for it: see the answer */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7989,7 +7989,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The upload is not one file (validation_failed; errors names each part): the file part is missing or is not a file, or the request carries another part. A file with more than 5 000 links is refused whole with one error, with the path empty and the code too_big. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. It is refused whole in the same way when the bookmarks it would create would make more than 100 000 folder and tag links together, a name that repeats on one bookmark being one link as the database compares names: the one error has the path empty and the code too_many_links. A bad link or an over-long title is no reason for it: see the answer */
+            /** @description The upload is not one file (validation_failed; errors names each part): the file part is missing or is not a file, or the request carries another part. A file with more than 5 000 links is refused whole with one error, with the path empty and the code too_big. The file is also refused whole, in the dry run and in the write and with nothing written, when it would create more than 10 000 new folders and tags together: the one error has the path empty and the code too_many_new_names, and the folders and tags the caller has already, matched without regard to case, do not count. It is refused whole in the same way when the bookmarks it would create would make more than 100 000 folder and tag links together, a name that repeats on one bookmark being one link as the database compares names: the one error has the path empty and the code too_many_links. It is refused whole, before anything of the caller's is read, with the one error that has the path empty and the code too_many_new_names, when it names more than 110 000 distinct folder and tag spellings together, the names the caller has already included, on bookmarks that are created or not and in the lists of the document alike, a spelling being the name as plain text cut to its limit: that is the most a file within the other limits needs, and the folders and tags the caller has already do not lessen it. A bad link or an over-long title is no reason for it: see the answer */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8654,7 +8654,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is queued */
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is queued */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8721,7 +8721,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            /** @description The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8868,7 +8868,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            /** @description The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8935,7 +8935,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            /** @description The session is not an instance admin's, or the credential is an API token. An instance admin needs no second factor for this operation */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9006,7 +9006,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, or the credential is an API token (forbidden). An instance admin needs no second factor for this operation. Nothing is written */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9529,7 +9529,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvitationAccepted"];
                 };
             };
-            /** @description A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists, verified whatever the deployment requires of other accounts because the token proves the mailbox, with the invited address, no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced */
+            /** @description A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists with the invited address, verified whatever the deployment requires of other accounts when the live token is the one the invitation's email carried, and not verified when it is a link an admin asked for (the verification email is then queued where mail can be sent, and only the owner of the address verifying it makes the address verified), with no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced */
             201: {
                 headers: {
                     /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
@@ -11875,7 +11875,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description There is no session, or its second factor is not complete */
+            /** @description There is no session, its second factor is not complete, or the member is an owner whom the caller removes and the session has not re-authenticated within the last ten minutes (reauth_required); nothing is written */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -11975,7 +11975,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description There is no session, or its second factor is not complete */
+            /** @description There is no session, its second factor is not complete, or the change grants or removes the owner role and the session has not re-authenticated within the last ten minutes (reauth_required); nothing is written */
             401: {
                 headers: {
                     [name: string]: unknown;

@@ -228,7 +228,7 @@ export const resetPassword = defineOperation({
   request: { body: ResetPasswordRequestSchema },
   responses: {
     200: jsonResponse(
-      "The token is redeemed, once. The password is the one in the request, every session the account had is gone, and a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`, so the mailbox alone does not replace the second factor",
+      "The token is redeemed, once. The password is the one in the request, every session, API token and linked identity the account had is gone, and a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`, so the mailbox alone does not replace the second factor",
       ResetPasswordResultSchema,
       {
         headers: {

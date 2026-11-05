@@ -93,7 +93,13 @@ async function person(world: World): Promise<Person> {
   if (sessionId === undefined) {
     throw new Error("the account has no session");
   }
-  return { account, cookie: `${SESSION_COOKIE}=${token}`, sessionId };
+  const cookie = `${SESSION_COOKIE}=${token}`;
+  // A session that has just re-authenticated: removing another owner needs one (doc 10 T18).
+  const reauth = await send(world, "POST", "/api/v1/me/reauth", { cookie }, { password: account.password });
+  if (reauth.status !== 204) {
+    throw new Error(`could not re-authenticate: ${String(reauth.status)}`);
+  }
+  return { account, cookie, sessionId };
 }
 
 type Role = "owner" | "admin" | "member";

@@ -3,11 +3,13 @@ import { hashCredentialToken } from "../auth/credential-tokens.ts";
 import type { DomainEvent } from "../events/catalog.ts";
 import type { WorkspaceRole } from "../ports/tenant-resolver.ts";
 
-// Accepting an invitation with registration fields: the invited address has no account, and the token that reached
-// its mailbox is the proof of the address (doc 02 section 2.2, Q31, doc 04 section 10.5, doc 10 T8 and T19). The
+// Accepting an invitation with registration fields: the invited address has no account, and a token that reached
+// its mailbox by mail is the proof of the address (doc 02 section 2.2, Q31, doc 04 section 10.5, doc 10 T8 and T19). The
 // account takes the address the invitation names, never one the request names, so a link forwarded to another
 // person creates an account for the invited address or none. The account is verified at once, whatever
-// `EMAIL_VERIFICATION_REQUIRED` says; it gets no personal workspace, since the workspace it joins is where it works.
+// `EMAIL_VERIFICATION_REQUIRED` says, when the live token is the one the invitation's mail job sent; when it is the link an
+// admin asked for, whoever holds it need not own the mailbox, so the account is created without a verified address and
+// only the owner's verification makes it one. It gets no personal workspace, since the workspace it joins is where it works.
 //
 // The database operation behind it creates the account, adds the membership with exactly the invited role, marks the
 // invitation accepted and signs the account in with a full session acting in the workspace, in one transaction with
@@ -63,7 +65,7 @@ export interface NewAccountAcceptance {
 
 export interface InvitationSignupStore {
   /**
-   * Creates the verified account of the invitation the token hash belongs to, adds it to the invitation's
+   * Creates the account of the invitation the token hash belongs to, verified unless the token is a link an admin took, adds it to the invitation's
    * workspace with the invited role, accepts the invitation and signs the account in, in one transaction with the
    * records `onAccepted` returns. A refusal writes nothing; a failure of any write rejects and leaves nothing.
    */

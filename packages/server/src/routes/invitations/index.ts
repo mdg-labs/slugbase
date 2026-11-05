@@ -60,6 +60,7 @@ import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { queueInvitationMail } from "../../worker/jobs/invitation-mail.ts";
+import { queueMailSend } from "../../worker/jobs/mail-send.ts";
 import { route } from "../register.ts";
 import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } from "./learned.ts";
 
@@ -100,10 +101,12 @@ import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } fro
 // session the stages would have required of an account operation, and takes the per-account limit of the bucket,
 // which the rate-limit stage takes for no anonymous operation. With a display name and a password it is the
 // invited person's who has no account: the registration policy is asked first with the invited address and the path
-// `invitation`, then the password policy, and `sys_invitation_accept_new_account` creates the verified account of
+// `invitation`, then the password policy, and `sys_invitation_accept_new_account` creates the account of
 // the invited address, its membership and team memberships, the accepted invitation and a full session in one transaction with the
 // `account.created` and `member.joined` events and the `member.joined` audit event; a session cookie the request
-// carried is replaced. An address that has an account is 409 email_taken and nothing is written. Both forms count
+// carried is replaced. The account is verified when the token reached the mailbox by mail and not verified when the token is a link an
+// admin took (doc 02 section 3.4, doc 10 T19); where the composition can send mail the same transaction queues the verification
+// email, which a verified account is not sent. An address that has an account is 409 email_taken and nothing is written. Both forms count
 // against the `token_redeem` bucket of the client address.
 //
 // Both forms also need the workspace of the invitation to hold `members.invite` and a free seat (doc 01 sections 7.5
@@ -336,7 +339,8 @@ export function invitationRoutes({
                     throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId }, accepted.role);
                   }
                   const { audit, events } = acceptance.onAccepted(accepted);
-                  return { audit, jobs: events.map(eventJob) };
+                  // The account is verified only when the token came by mail; for one made with a link an admin took, this email is how the address's owner learns of it and verifies it. The job sends nothing to a verified account.
+                  return { audit, jobs: [...events.map(eventJob), ...(mail.available ? [queueMailSend(uuidv7(), "verifyEmail", accountId)] : [])] };
                 },
               }),
           },

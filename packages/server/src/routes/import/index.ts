@@ -1,4 +1,4 @@
-import { IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation, importNetscape as importNetscapeOperation, type ImportQuerySchema, type ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation, importNetscape as importNetscapeOperation, type ImportQuerySchema, type ImportRequest } from "@slugbase/contracts";
 import type { z } from "zod";
 import { createAuditWriter, importBookmarks, previewImport, type AuditActor, type BookmarkEntitlements, type ImportStore } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, importRepository, type TenantTx } from "@slugbase/db";
@@ -20,7 +20,7 @@ import { uploadedBookmarks } from "./upload.ts";
 // chooses), and records one `import.completed` audit event with the account or the token as the actor. Between the places and the bookmarks it gets or creates the folders and tags of the file for the caller by name, and it
 // files and tags each bookmark by its own names; a slug the caller has already, or that an earlier bookmark of the file keeps, is dropped from its bookmark, which is still imported, and listed in the answer. The remembered slug choices of the file (`goPreferences`) are restored after the bookmarks, in the same transaction and in batches, for the bookmarks that kept the slug of the choice and forward, through the check of a member's own choice; a dry run restores none. A failure of any of these rolls back all of them, and the stage stores the answer of a request that succeeded only.
 // A file that would create more than 10 000 new folders and tags together is `422 validation_failed` with the field code `too_many_new_names`, in the dry run and in the write: the write decides it before it takes the
-// workspace's row, and the refusal that is only known under the lock throws inside the transaction, so nothing is committed. A file whose bookmarks would make more than 100 000 folder and tag links together is refused the same
+// workspace's row, and the refusal that is only known under the lock throws inside the transaction, so nothing is committed. A file that names more than 110 000 distinct folder and tag spellings together is refused before the store is asked anything, with the same field code and a detail of its own. A file whose bookmarks would make more than 100 000 folder and tag links together is refused the same
 // way, with the field code `too_many_links`. Every read and write names the workspace and the account of the request, so another member's bookmark and anything of another workspace is no duplicate of the file's and is never changed.
 
 // POST /api/v1/import/netscape (doc 04 section 10.9, doc 02 section 13.1) takes a browser's bookmark file as a multipart upload (`upload.ts`), reads it into bookmarks and hands them to the same function as the JSON import, so the
@@ -32,6 +32,15 @@ function tooManyNames(newNames: number): ProblemError {
   return new ProblemError(
     "validation_failed",
     `The file would create ${String(newNames)} new folders and tags together; one import creates at most ${String(IMPORT_MAX_NEW_NAMES)}. Names you already have do not count.`,
+    { errors: [{ path: "", code: "too_many_new_names" }] },
+  );
+}
+
+/** The same field error as too many new names, with a detail that says what is true of this refusal: the file names too many distinct spellings, whether or not they exist and whether or not a bookmark that names them is created. */
+function tooManyDistinctNames(names: number): ProblemError {
+  return new ProblemError(
+    "validation_failed",
+    `The file names ${String(names)} distinct folder and tag spellings together, on bookmarks that are imported or not; one import file names at most ${String(IMPORT_MAX_DISTINCT_NAMES)}. Names you already have count towards it.`,
     { errors: [{ path: "", code: "too_many_new_names" }] },
   );
 }
@@ -101,6 +110,9 @@ async function runImport(context: ChainContext, query: ImportQuery, file: Import
     if (previewed.kind === "too_many_names") {
       throw tooManyNames(previewed.newNames);
     }
+    if (previewed.kind === "too_many_distinct_names") {
+      throw tooManyDistinctNames(previewed.names);
+    }
     if (previewed.kind === "too_many_links") {
       throw tooManyLinks(previewed.links);
     }
@@ -118,6 +130,9 @@ async function runImport(context: ChainContext, query: ImportQuery, file: Import
     );
     if (imported.kind === "too_many_names") {
       throw tooManyNames(imported.newNames);
+    }
+    if (imported.kind === "too_many_distinct_names") {
+      throw tooManyDistinctNames(imported.names);
     }
     if (imported.kind === "too_many_links") {
       throw tooManyLinks(imported.links);

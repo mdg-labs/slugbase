@@ -20,6 +20,7 @@ const KIND_OF_POLICY: Readonly<Record<string, OperationKind>> = {
   partial: "account-level",
   anonymous: "anonymous",
   instanceAdmin: "process",
+  instanceAdminWithoutSecondFactor: "process",
   machine: "process",
 };
 

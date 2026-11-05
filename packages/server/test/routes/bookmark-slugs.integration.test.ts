@@ -1,3 +1,4 @@
+import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HOOK_TIMEOUT_MS, MEMBERS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
@@ -9,6 +10,7 @@ import { HOOK_TIMEOUT_MS, MEMBERS, send, workspaceHarness, type Person, type Wor
 
 const BOOKMARKS = "/api/v1/bookmarks";
 const AVAILABILITY = "/api/v1/slugs/availability";
+const GRANTED: EntitlementCheck = (entitlement) => entitlement === "sharing.members";
 const UNKNOWN = "0192f3a0-aaaa-7000-8000-00000000dead";
 
 const database = useTestDatabase();
@@ -369,15 +371,23 @@ describe("GET /slugs/availability", () => {
     expect(await availability(world, owner, `slug=free&bookmarkId=${mail.id}`)).toEqual({ status: "available", othersUseCount: 0 });
   });
 
-  it("counts the other members' bookmarks that use the slug, and never lets them make it unavailable", async () => {
-    const world = harness.serve();
+  it("counts only the other members' bookmarks the caller can read, and never lets any of them make the slug unavailable", async () => {
+    const world = harness.serve({ entitlements: GRANTED });
     const { owner, member, stranger } = await setup(world);
-    await created(world, member, { slug: "mail" });
+    const theirs = await created(world, member, { slug: "mail" });
+    await created(world, member, { slug: "kept", forwarding: false });
     await created(world, stranger, { slug: "mail" });
 
-    expect(await availability(world, owner, "slug=mail")).toEqual({ status: "available", othersUseCount: 1 });
+    expect(await availability(world, owner, "slug=mail")).toEqual({ status: "available", othersUseCount: 0 });
+    expect(await availability(world, owner, "slug=kept")).toEqual({ status: "available", othersUseCount: 0 });
     expect(await availability(world, member, "slug=mail")).toEqual({ status: "taken_by_me", othersUseCount: 0 });
     expect(await availability(world, stranger, "slug=mail")).toEqual({ status: "taken_by_me", othersUseCount: 0 });
+
+    const shared = await send(world, "POST", `${BOOKMARKS}/${theirs.id}/shares`, { cookie: member.cookie }, { accountId: owner.account.id });
+    expect(shared.status).toBe(201);
+
+    expect(await availability(world, owner, "slug=mail")).toEqual({ status: "available", othersUseCount: 1 });
+    expect(await availability(world, owner, "slug=kept")).toEqual({ status: "available", othersUseCount: 0 });
   });
 
   it("answers 404 for a bookmarkId that is another member's, another workspace's or unknown, alike", async () => {

@@ -1021,6 +1021,7 @@
       "thisWorkspace": "this workspace",
       "description": "Check the spelling, or create a bookmark with this slug yourself.",
       "create": "Create a bookmark with this slug",
+      "home": "Go to Home",
       "switch": "Found in: {workspace} — switch and continue"
     }
   },
@@ -1039,16 +1040,13 @@
       "retry": "Try again"
     },
     "mfaRequired": {
-      "title": "Two-factor authentication required",
-      "description": "Instance administration is off until you turn on two-factor authentication for your account.",
-      "action": "Set up two-factor authentication"
+      "title": "Turn on two-factor authentication first",
+      "description": "This action changes the instance or who can reach it, so it needs two-factor authentication on your account. Set it up under Security, then come back.",
+      "action": "Set up two-factor authentication",
+      "cancel": "Not now"
     },
     "overview": {
       "title": "Overview",
-      "mfaRequired": {
-        "title": "The overview is not available yet",
-        "description": "Turn on two-factor authentication to see the status of this instance."
-      },
       "loadFailed": {
         "title": "The status of the instance could not be loaded",
         "description": "Try again. If this continues, check the server's logs.",
@@ -1094,10 +1092,6 @@
     },
     "workspaces": {
       "title": "Workspaces",
-      "mfaRequired": {
-        "title": "Workspaces are not available yet",
-        "description": "Turn on two-factor authentication to manage the workspaces of this instance."
-      },
       "loadFailed": {
         "title": "The workspaces could not be loaded",
         "description": "Try again. If this continues, check the server's logs.",
@@ -1156,7 +1150,8 @@
             "label": "Email address",
             "description": "The workspace waits for this address to accept the invitation and become its first owner.",
             "required": "Enter an email address."
-          }
+          },
+          "needsSecondFactor": "The owner is invited by email. Choosing an existing account needs two-factor authentication on your account."
         },
         "error": {
           "invalidName": "Use a name of 1 to 64 characters.",
@@ -1410,8 +1405,8 @@
       "title": "Settings & status",
       "saved": "Saved.",
       "mfaRequired": {
-        "title": "The settings are not available yet",
-        "description": "Turn on two-factor authentication to change the settings of this instance."
+        "title": "Changing the settings needs two-factor authentication",
+        "description": "You can read the settings below. Turn on two-factor authentication for your account to change them."
       },
       "loadFailed": {
         "title": "The settings could not be loaded",
@@ -1470,6 +1465,11 @@
         },
         "envOnly": "This is read-only. Credentials and connections are set through environment variables on the server only, never in this app.",
         "loadFailed": "The configuration could not be loaded"
+      },
+      "readOnly": {
+        "on": "Allowed",
+        "off": "Not allowed",
+        "notSet": "Not set"
       }
     }
   },
@@ -1511,6 +1511,7 @@
         "description": "The address you sign in with.",
         "change": "Change email",
         "noMail": "Changing your email needs a confirmation link, and this server cannot send email. Ask your instance admin to set up email.",
+        "noMailAdmin": "Changing your email needs a confirmation link, and this server cannot send email. Set up email in the server's configuration (the SMTP settings) to change it.",
         "pending": {
           "badge": "Pending verification",
           "description": "A confirmation link was requested for {email}. Your address stays as it is until it is confirmed.",
@@ -1846,6 +1847,7 @@
           "label": "Email me when a new device signs in",
           "description": "The email shows the time, the browser and the network of the sign-in, never a full address."
         },
+        "noMail": "This server sends no email, so no alert is sent until email is set up. Your choice is kept, and alerts start once it is.",
         "error": {
           "saveFailed": "This change was not saved."
         }
@@ -2103,10 +2105,7 @@
         "title": "The members could not be loaded"
       },
       "loadMore": "Show more",
-      "single": {
-        "title": "You are the only member",
-        "description": "People who join this workspace will appear here with their role."
-      },
+      "single": "People who join this workspace will appear here with their role.",
       "remove": {
         "dialog": {
           "title": "Remove {name}",
@@ -2307,7 +2306,9 @@
       "file": {
         "label": "Bookmark file",
         "description": "A browser bookmark file (.html) or a SlugBase JSON export (.json), up to 5 MiB.",
-        "drop": "Drop a file here, or choose one."
+        "drop": "Drop a file here, or choose one.",
+        "choose": "Choose file",
+        "none": "No file chosen"
       },
       "skipDuplicates": "Skip duplicates",
       "count": {
@@ -2370,7 +2371,7 @@
         "tooLarge": "This file is larger than 5 MiB. Split it into smaller files.",
         "unsupportedType": "The server does not accept this kind of file. Choose a SlugBase JSON file or a browser bookmark file.",
         "newerVersion": "This file was made by a newer version of SlugBase than this one can read. Update SlugBase, or export the file again from this one.",
-        "tooManyNewNames": "This file would create more than {count, number} new folders and tags. Split it into smaller files.",
+        "tooManyNewNames": "This file has too many folders and tags for one import. One import creates at most {count, number} new folders and tags, and a file names at most {names, number} different ones in total, those you already have included. Split it into smaller files.",
         "tooManyBookmarks": "This file holds more than {count, number} bookmarks. Split it into smaller files.",
         "tooManyAssignments": "The folders and tags of this file add up to more than {count, number} uses, however few bookmarks it holds. Split it into smaller files.",
         "invalid": "This is not a valid SlugBase JSON file or browser bookmark file.",
@@ -2837,7 +2838,9 @@
       "settings": "Workspace settings",
       "loadFailed": "Your workspaces could not be loaded.",
       "retry": "Try again",
-      "empty": "No other workspaces yet."
+      "empty": "No other workspaces yet.",
+      "emptyAdmin": "No other workspaces yet. Create one under Admin → Workspaces.",
+      "createInAdmin": "Create a workspace in Admin"
     },
     "switch": {
       "failed": {

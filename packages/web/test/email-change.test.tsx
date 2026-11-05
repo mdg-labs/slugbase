@@ -36,6 +36,8 @@ interface ServerOptions {
   readonly pending?: string | null;
   /** Whether the server can send email (`features.mail`); on unless a test says otherwise. */
   readonly mail?: boolean;
+  /** Whether the account holds the instance-admin flag. */
+  readonly admin?: boolean;
   readonly request?: (call: number) => Response | Promise<Response>;
   readonly cancelPending?: Transport;
   readonly confirm?: (call: number) => Response | Promise<Response>;
@@ -60,7 +62,7 @@ function rateLimited(seconds: number): Response {
 }
 
 /** A server with a signed-in account that holds the pending address it was asked for; the "this wasn't me" link ends the session. */
-function stubServer({ pending = null, mail = true, request, cancelPending, confirm, cancel }: ServerOptions = {}): Server {
+function stubServer({ pending = null, mail = true, admin = false, request, cancelPending, confirm, cancel }: ServerOptions = {}): Server {
   let held = pending;
   let signedOut = false;
   let gate: Promise<void> | undefined;
@@ -84,7 +86,7 @@ function stubServer({ pending = null, mail = true, request, cancelPending, confi
         await gate;
         return signedOut
           ? problem(401, "unauthenticated", "req-me")
-          : json(meOf({ ...ACCOUNT_BODY, locale, pendingEmail: held }));
+          : json(meOf({ ...ACCOUNT_BODY, locale, pendingEmail: held, isInstanceAdmin: admin }));
       case REAUTH_PATH:
         return noContent();
       case REQUEST_PATH: {
@@ -312,14 +314,37 @@ describe("the email row of the profile", { timeout: HEAVY_TEST_TIMEOUT_MS }, () 
     expect(document.body.textContent).not.toMatch(/taken|in use|already (has|exists)|exists/i);
   });
 
-  it("offers no change, and tells the member to ask the instance admin, when the server cannot send email", async () => {
+  it("offers no change, shows the address as a field that cannot be edited, and tells the member to ask the instance admin, when the server cannot send email", async () => {
     const server = stubServer({ mail: false });
     await openProfile();
 
-    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Email" }).value).toBe("ada@example.org");
+    const field = screen.getByRole<HTMLInputElement>("textbox", { name: "Email" });
+    expect(field.value).toBe("ada@example.org");
+    expect(field.disabled).toBe(true);
+    expect(field.readOnly).toBe(true);
     expect(screen.getByText("Changing your email needs a confirmation link, and this server cannot send email. Ask your instance admin to set up email.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Change email" })).toBeNull();
     expect(server.to("POST", REQUEST_PATH)).toEqual([]);
+  });
+
+  it("points an instance admin to the server's email configuration instead of to the instance admin, when the server cannot send email", async () => {
+    const server = stubServer({ mail: false, admin: true });
+    await openProfile();
+
+    expect(screen.getByText("Changing your email needs a confirmation link, and this server cannot send email. Set up email in the server's configuration (the SMTP settings) to change it.")).toBeTruthy();
+    expect(screen.queryByText(/Ask your instance admin/)).toBeNull();
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Email" }).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Change email" })).toBeNull();
+    expect(server.to("POST", REQUEST_PATH)).toEqual([]);
+  });
+
+  it("leaves the field and the change button as they were when the server can send email", async () => {
+    stubServer({ mail: true, admin: true });
+    await openProfile();
+
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Email" }).disabled).toBe(false);
+    expect(screen.getByRole("button", { name: "Change email" })).toBeTruthy();
+    expect(screen.queryByText(/this server cannot send email/)).toBeNull();
   });
 
   it("works at phone width", async () => {

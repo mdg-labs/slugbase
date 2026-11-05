@@ -11,8 +11,8 @@ import { HOOK_TIMEOUT_MS, SESSION_COOKIE, send, workspaceHarness, type Person, t
 // T19). The failure scenarios: two accepts of one token that create two accounts or two memberships; a weak or breached
 // password that uses up the invitation; an account made for an address other than the invited one; an address that
 // has an account and is answered with one made over it; a refusal of the registration policy that writes anything or
-// tells an address that has an account from one that has none; a half-created account (no session, no membership, an
-// unverified address, a personal workspace).
+// tells an address that has an account from one that has none; a half-created account (no session, no membership, a
+// personal workspace).
 
 const INVITATIONS = "/api/v1/invitations";
 const ACCEPT = `${INVITATIONS}/accept`;
@@ -150,7 +150,7 @@ async function joinedAudit(workspaceId: string): Promise<{ actor_account_id: str
 }
 
 describe("POST /api/v1/invitations/accept with a display name and a password", { timeout: TEST_TIMEOUT_MS }, () => {
-  it("creates the verified account of the invited address even where verification is required, makes it a member with the invited role, signs it in with the workspace active, and makes no personal workspace", async () => {
+  it("creates the account of the invited address, unverified for the link an admin took, makes it a member with the invited role, signs it in with the workspace active, and makes no personal workspace", async () => {
     const world = serve({ env: { EMAIL_VERIFICATION_REQUIRED: "true" } });
     const { workspaceId, o, a } = await workspace(world);
     const { id, token } = await invite(world, a, "New.Person@Example.test", "admin");
@@ -166,7 +166,7 @@ describe("POST /api/v1/invitations/accept with a display name and a password", {
     expect(accounts).toHaveLength(1);
     const account = accounts[0];
     expect(account).toMatchObject({ email: "New.Person@Example.test", display_name: "Grace Hopper" });
-    expect(account?.email_verified_at).toBeInstanceOf(Date);
+    expect(account?.email_verified_at).toBeNull();
     expect(account?.password_hash).toMatch(/^\$argon2id\$/);
     expect(await invitationStatus(id)).toEqual({ status: "accepted", accepted_by: account?.id });
     expect(await harness.rolesOf(workspaceId)).toEqual({ [o.account.id]: "owner", [a.account.id]: "admin", [account?.id ?? ""]: "admin" });
@@ -175,7 +175,7 @@ describe("POST /api/v1/invitations/accept with a display name and a password", {
     const me = await send(world, "GET", "/api/v1/me", { cookie });
     expect(me.status).toBe(200);
     expect(await me.json()).toMatchObject({
-      account: { id: account?.id, email: "New.Person@Example.test", emailVerified: true, hasPassword: true },
+      account: { id: account?.id, email: "New.Person@Example.test", emailVerified: false, hasPassword: true },
       activeWorkspaceId: workspaceId,
       memberships: [{ workspaceId, role: "admin" }],
     });
@@ -184,8 +184,10 @@ describe("POST /api/v1/invitations/accept with a display name and a password", {
     expect(await current.json()).toMatchObject({ id: workspaceId, role: "admin" });
     const workspaces = await send(world, "GET", "/api/v1/workspaces", { cookie });
     expect(((await workspaces.json()) as { items: unknown[] }).items).toHaveLength(1);
+    // Where verification is required, the account signs in again only after its owner verified the address.
     const login = await send(world, "POST", "/api/v1/auth/login", {}, { email: "new.person@example.test", password: PASSWORD, remember: false });
-    expect(login.status).toBe(200);
+    expect(login.status).toBe(403);
+    expect(await login.json()).toMatchObject({ code: "email_unverified" });
 
     expect(await joinedAudit(workspaceId)).toEqual([
       { actor_account_id: account?.id, actor_label: "Grace Hopper", metadata: { role: "admin" } },

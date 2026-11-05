@@ -2,8 +2,8 @@ import { connectionRole } from "@slugbase/db";
 import type { Logger } from "../create-server.ts";
 
 // Q56 and doc 05 section 3.1: the application role owns nothing and has no
-// BYPASSRLS. A connection as a superuser or as the owner of the database is
-// not held by row-level security the way that role is, so a server running as
+// BYPASSRLS. A connection as a superuser, as a role with BYPASSRLS or as the
+// owner of the database is not held by row-level security the way that role is, so a server running as
 // one silently serves without the isolation between workspaces (D8, T1).
 
 export interface ApplicationRoleCheck {
@@ -14,7 +14,7 @@ export interface ApplicationRoleCheck {
   readonly logger: Logger;
 }
 
-/** The server's role is a superuser or owns the database, and the operator did not allow it. */
+/** The server's role is a superuser, has BYPASSRLS or owns the database, and the operator did not allow it. */
 export class OwnerConnectionError extends Error {
   constructor(message: string) {
     super(message);
@@ -23,22 +23,27 @@ export class OwnerConnectionError extends Error {
 }
 
 /**
- * Refuses a `DATABASE_URL` whose role is a superuser or owns the database, unless
+ * Refuses a `DATABASE_URL` whose role is a superuser, has BYPASSRLS or owns the database, unless
  * `SLUGBASE_ALLOW_OWNER_CONNECTION` allows it, which logs a warning instead. A
  * role that cannot be read is refused too: a check that fails is never "fine".
  */
 export async function assertApplicationRole(check: ApplicationRoleCheck): Promise<void> {
   const role = await connectionRole({ url: check.url });
-  if (!role.superuser && !role.ownsDatabase) {
+  if (!role.superuser && !role.ownsDatabase && !role.bypassRls) {
     return;
   }
-  const privilege = [role.superuser ? "is a superuser" : undefined, role.ownsDatabase ? "owns the database" : undefined]
+  // A superuser bypasses row-level security by definition, so it is not named twice.
+  const privilege = [
+    role.superuser ? "is a superuser" : undefined,
+    role.ownsDatabase ? "owns the database" : undefined,
+    role.bypassRls && !role.superuser ? "has BYPASSRLS" : undefined,
+  ]
     .filter((part) => part !== undefined)
     .join(" and ");
   if (check.allowOwnerConnection) {
     check.logger.warn(
       "SLUGBASE_ALLOW_OWNER_CONNECTION is set: the application role is not held by row-level security, so nothing in the database separates one workspace from another",
-      { role: role.role, superuser: role.superuser, ownsDatabase: role.ownsDatabase },
+      { role: role.role, superuser: role.superuser, ownsDatabase: role.ownsDatabase, bypassRls: role.bypassRls },
     );
     return;
   }

@@ -8,8 +8,8 @@ import { asSystem, freshId, freshToken, seedAccount } from "./support/auth-fixtu
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The deployment-level audit stream and the first system operations of the instance admin (doc 05 sections 2.9
-// and 3.3, doc 10 T3 and T15). The failure scenarios: an account that is not an instance admin with a second
-// factor (a member, an admin without one, a disabled admin) that reaches a sys_instance_* function directly, a
+// and 3.3, doc 10 T3 and T15). The failure scenarios: an account that is not an instance admin (a member, a
+// disabled admin) that reaches a sys_instance_* function directly, a
 // workspace member or the application role that reads or writes an event with no workspace, and a first-run
 // setup that leaves no event.
 
@@ -177,7 +177,6 @@ describe("sys_instance_status", () => {
 
   it.each([
     ["a member who holds no flag", { mfa: true }],
-    ["an admin who has no second factor enrolled", { admin: true }],
     ["a disabled admin", { admin: true, mfa: true, disabled: true }],
     ["an account with neither", {}],
   ] satisfies [string, Options][])("raises for %s, and writes no event", async (_name, options) => {

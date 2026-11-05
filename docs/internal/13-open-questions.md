@@ -131,10 +131,10 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q15 | Check new passwords against a locally stored k-anonymity range dataset of breached-password hashes (no outbound request), refreshed per release | Decided (default) |
 | Q16 | Two scopes at v1, `read` and `read-write` | Decided (default) |
 | Q40 | A token is bound to the one workspace it was created in | Decided (default) |
-| Q45 | `/instance/*` requires the calling account to have MFA enrolled | Decided (default) |
+| Q45 | Destructive and access-changing `/instance/*` operations require the calling account to have MFA enrolled; status, settings, the workspace list, workspace creation and the test mail do not | Decided (default) |
 | Q47 | Tokens can be created with an expiry (30 / 90 / 365 days) or none | Decided (default) |
 | Q48 | Password reset 1 hour, email change 1 hour, signup email verification 24 hours, invitations 7 days | Decided (default) |
-| Q31 | An invitation token proves control of the email, so an account created through it is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true` | Decided (default) |
+| Q31 | An invitation token that reached the invited mailbox proves control of the email, so an account created through it, or through a provider that asserts the address, is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true`; a password-form account made with a link an admin took is not | Decided (default) |
 | Q32 | Automatic linking to an existing account only when the provider asserts `email_verified=true` for a matching email | Decided (default) |
 | Q44 | The instance-admin routes are mounted on both editions | Decided (default) |
 | Q94 | Workspace creation by ordinary accounts is off by default, read from the composition root; the instance setting overrides it | Decided (default) |
@@ -476,7 +476,7 @@ A privacy-positioned, self-hostable product earns trust by default silence; adop
 ### Q56 — CE database URLs
 **Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 05 §3.1, doc 07 (CE compose), doc 01 §2.1
 
-**Decision: CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions both roles with a Postgres init script. If only `DATABASE_URL` is set and it is the database owner, the server refuses to start in production with a message explaining the two-role setup (`SLUGBASE_ALLOW_OWNER_CONNECTION=true` overrides, logged as a warning).**
+**Decision: CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions both roles with a Postgres init script. If `DATABASE_URL` connects as a role that is a superuser, the database owner or has `BYPASSRLS`, the server refuses to start in production with a message explaining the two-role setup (`SLUGBASE_ALLOW_OWNER_CONNECTION=true` overrides each of the three, logged as a warning).**
 Running the app as the table owner silently disables RLS (owners bypass non-forced policies, and `FORCE` still lets the owner `ALTER` them away), so the RLS layer of D8 would not exist on such installs. The override exists for operators with managed Postgres that makes extra roles awkward.
 
 ### Q92 — Release signing and registry timing
@@ -566,10 +566,10 @@ Covers scripting and a future browser extension without a permission system to d
 A bound token has the smallest blast radius when it leaks, and membership loss revokes it by foreign-key cascade. Doc 01 §4 step 7 mentions an optional header; adopting it later is additive (an account-wide token type with the header required), dropping it after launch would be breaking.
 
 ### Q45 — MFA required for instance admins
-**Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 04 §10.10, doc 02 §2
+**Status:** Decided (default), narrowed 2026-11-04 · **Due:** Phase 1 · **Affects:** doc 04 §10.10, doc 02 §2 and §11, doc 05 §3.3, doc 10
 
-**Decision: `/instance/*` requires the calling account to have MFA enrolled; the setup flow prompts the first admin to enrol, and the instance pages show an enrol-first gate otherwise.**
-The instance admin can delete every workspace. Requiring MFA for all accounts is too much for a family CE install; requiring it for the trust ceiling is cheap.
+**Decision: the destructive and access-changing `/instance/*` operations require the calling account to have MFA enrolled (the `instanceAdmin` policy), with re-authentication where doc 04 §4.4 marks it; the read-only status and settings, the workspace list, workspace creation and the test mail (the `instanceAdminWithoutSecondFactor` policy) require the instance-admin flag and a full session only. The setup flow prompts the first admin to enrol, and the instance pages that need MFA show an enrol-first gate otherwise.**
+The instance admin can delete every workspace. Requiring MFA for all accounts is too much for a family CE install; requiring it for the trust ceiling is cheap. Requiring it for every instance page was more than the ceiling needs: an operator who has not enrolled a second factor could not read the status, see why email is not set up or create a second workspace, which on CE is only possible through these operations while workspace creation by members is off. So an admin without a second factor can see the status and settings and create workspaces, while changing the settings, adding themselves to a workspace, issuing an owner invitation, deleting a workspace and everything on accounts (including their list, which holds names and addresses) keep the second factor. An API token reaches neither policy, and a session still waiting for its second factor is answered `401 mfa_required` under both.
 
 ### Q47 — API token expiry
 **Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 05 §2.1, doc 04 §10.3, doc 03 (token dialog)
@@ -583,11 +583,11 @@ Expiry by default limits forgotten-token risk; "none" stays available for long-l
 **Decision: password reset 1 hour, email change 1 hour, signup email verification 24 hours, invitations 7 days.**
 The old constants used 1 hour for every emailed token; signup verification often happens the next morning, and a 24-hour token on an unverified, capability-restricted account is low risk.
 
-### Q31 — Accepting an invitation creates a verified account
+### Q31 — Accepting an invitation creates a verified account (except a password sign-up with an admin-held link)
 **Status:** Decided (default) · **Due:** Phase 2 · **Affects:** doc 02 §2.2, §3.4, doc 03 §1.5
 
-**Decision: an invitation token proves control of the email, so an account created through it is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true`. An invitation is bound to its email; a signed-in account with a different email cannot accept it.**
-Asking an invited person to verify an address they have just proven is pure friction. Binding to the email prevents a forwarded link from being redeemed by someone else.
+**Decision: an invitation token that reached the invited mailbox by mail proves control of the email, so an account created through it is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true`; so is an account created through a provider that asserts exactly the invited address as verified, whichever way the token was issued. A token an admin took as a copyable link proves nothing about the mailbox, so a password-form account created with it is not verified: it joins the workspace, the verification email is queued where mail can be sent, and only the owner of the address verifying it makes the address verified. An invitation is bound to its email; a signed-in account with a different email cannot accept it.**
+Asking an invited person to verify an address they have just proven is pure friction. Binding to the email prevents a forwarded link from being redeemed by someone else. A link the admin holds is a credential the admin may have used first, which is why it cannot stand in for the mailbox (doc 10 T19).
 
 ### Q32 — OIDC account linking and auto-create
 **Status:** Decided (default) · **Due:** Phase 2 · **Affects:** doc 02 §2.8, doc 10 (account takeover), doc 07 (env keys)

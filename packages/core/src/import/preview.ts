@@ -8,6 +8,7 @@ import {
   FOLDER_DEFAULT_ICON,
   FOLDER_ICONS,
   FOLDER_NAME_MAX_LENGTH,
+  IMPORT_MAX_DISTINCT_NAMES,
   IMPORT_MAX_LINKS,
   IMPORT_MAX_NEW_NAMES,
   TAG_NAME_MAX_LENGTH,
@@ -36,6 +37,10 @@ import { cleanDescription, cleanText } from "./text.ts";
 //
 // One import creates at most `IMPORT_MAX_NEW_NAMES` folders and tags together (doc 02 section 7, doc 04 section 10.9), so that a request cannot hold the workspace's row lock for the time it takes to write a
 // great many rows. Only the names the caller does not have count, as the database compares them (`missingNames`); a file that would create more is refused whole, by the preview and by the import alike.
+//
+// The file's names are bounded before the database is asked about any of them (`overDistinctNames`): one import file names at most `IMPORT_MAX_DISTINCT_NAMES` distinct folder and tag spellings together, wherever it names them, on a bookmark that is
+// created or on one that is left out or refused, or in the document's lists, because the database sorts every spelling it is sent to tell the names apart. The bound is what a file the other caps admit can need (the new names plus a name for each
+// link), so a file whose names exist still imports at any size within it; a file over it is refused whole, by the preview and by the import alike, before the counter, the URLs and the names are read, with the answer of a file of too many distinct names (`too_many_distinct_names`), which says nothing of what the file would create.
 //
 // One import also makes at most `IMPORT_MAX_LINKS` folder and tag links together (`overLinks`), for the same reason: names the caller has already are free, but each bookmark that is created is linked once to each folder and each tag
 // it names, so a file of a few names that repeat can still make a great many rows. Only the bookmarks that are created count, and the spellings of one name on one bookmark, as the database compares them, are one link.
@@ -75,8 +80,10 @@ export type ImportPreviewOutcome =
   /** The workspace cannot be read: it is being deleted, or the caller is no member of it. */
   | { readonly kind: "unavailable" }
   | { readonly kind: "previewed"; readonly result: ImportResult }
-  /** The file would create more than `IMPORT_MAX_NEW_NAMES` new folders and tags together: `newNames` of them. */
+  /** The file would create `newNames` new folders and tags together, more than `IMPORT_MAX_NEW_NAMES` (at most as many as it names). */
   | { readonly kind: "too_many_names"; readonly newNames: number }
+  /** The file names `names` distinct folder and tag spellings together, more than `IMPORT_MAX_DISTINCT_NAMES`, whether or not the caller has them and whether or not a bookmark that names them is created. It is refused for that before the store is asked anything. */
+  | { readonly kind: "too_many_distinct_names"; readonly names: number }
   /** The bookmarks that would be created would make more than `IMPORT_MAX_LINKS` folder and tag links together: `links` of them. */
   | { readonly kind: "too_many_links"; readonly links: number };
 
@@ -226,6 +233,35 @@ async function nameSet(store: ImportPreviewStore, listed: readonly string[], use
   return { wanted, spelledAs, distinct: first.filter((place, index) => place === index).length };
 }
 
+/**
+ * How many distinct folder and tag spellings together the file names when that is more than `IMPORT_MAX_DISTINCT_NAMES`, and undefined otherwise: the spellings `planNames` would send to the store, once each, as plain text cut to the name's limit,
+ * whichever bookmark or list names them. It reads nothing of the database.
+ */
+export function overDistinctNames(file: ImportRequest): number | undefined {
+  const folders = new Set<string>();
+  const tags = new Set<string>();
+  if (!Array.isArray(file)) {
+    for (const folder of file.folders ?? []) {
+      folders.add(cleanText(folder.name, FOLDER_NAME_MAX_LENGTH));
+    }
+    for (const tag of file.tags ?? []) {
+      tags.add(cleanText(tag, TAG_NAME_MAX_LENGTH));
+    }
+  }
+  for (const bookmark of bookmarksOfFile(file)) {
+    for (const name of bookmark.folders ?? []) {
+      folders.add(cleanText(name, FOLDER_NAME_MAX_LENGTH));
+    }
+    for (const name of bookmark.tags ?? []) {
+      tags.add(cleanText(name, TAG_NAME_MAX_LENGTH));
+    }
+  }
+  folders.delete("");
+  tags.delete("");
+  const total = folders.size + tags.size;
+  return total > IMPORT_MAX_DISTINCT_NAMES ? total : undefined;
+}
+
 /** The places left under the workspace's ceiling when `used` bookmarks count. */
 export function roomUnder(ceiling: EntitlementLimit, used: number): number {
   return ceiling === "unlimited" ? Number.POSITIVE_INFINITY : Math.max(0, ceiling - used);
@@ -347,6 +383,10 @@ export function planSlugs(created: readonly ImportBookmark[], existing: Readonly
  * transaction; a ceiling of `unlimited` leaves no limit.
  */
 export async function previewImport({ store }: ImportPreviewDependencies, ask: ImportPreviewAsk): Promise<ImportPreviewOutcome> {
+  const distinct = overDistinctNames(ask.file);
+  if (distinct !== undefined) {
+    return { kind: "too_many_distinct_names", names: distinct };
+  }
   const used = await store.bookmarkCount();
   if (used === undefined) {
     return { kind: "unavailable" };

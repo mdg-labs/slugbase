@@ -185,6 +185,16 @@ describe("a slug with nothing behind it", { timeout: HEAVY_TEST_TIMEOUT_MS }, ()
     expect(server.to("POST", RESOLVE).map((call) => call.body)).toEqual([{ slug: "mail" }]);
   });
 
+  it("links back to Home beside Create a bookmark with this slug, on a page without the app shell", async () => {
+    stubServer();
+    await openApp("/go/mail");
+
+    const home = await screen.findByRole("link", { name: "Go to Home" });
+    expect(home.getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Create a bookmark with this slug" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Main navigation" })).toBeNull();
+  });
+
   it("opens the bookmark modal with the slug filled in from Create a bookmark with this slug", async () => {
     stubServer();
     await openApp("/go/mail");

@@ -19,6 +19,9 @@ const TEAMS_PATH = "/settings/workspace/teams";
 const AI_PATH = "/settings/workspace/ai";
 const AUDIT_PATH = "/settings/workspace/audit";
 
+// The Profile and General pages are the parents of the other pages of their group, so a link is the current page only for its own path: the navigation says `current` itself.
+const EXACT = { exact: true } as const;
+
 /**
  * The layout of the settings pages (doc 03 section 11): the settings navigation beside the page, a
  * Select of the same pages on a narrow screen. Each page adds its own entry as it arrives. The Workspace
@@ -48,25 +51,25 @@ function SettingsPages(): ReactElement {
       id: "account",
       label: t("settings.nav.account"),
       items: [
-        { id: "profile", label: t("settings.nav.profile"), link: <Link to={PROFILE_PATH} />, current: pathname === PROFILE_PATH },
+        { id: "profile", label: t("settings.nav.profile"), link: <Link activeOptions={EXACT} to={PROFILE_PATH} />, current: pathname === PROFILE_PATH },
         {
           id: "preferences",
           label: t("settings.nav.preferences"),
-          link: <Link to={PREFERENCES_PATH} />,
+          link: <Link activeOptions={EXACT} to={PREFERENCES_PATH} />,
           current: pathname === PREFERENCES_PATH,
         },
-        { id: "security", label: t("settings.nav.security"), link: <Link to={SECURITY_PATH} />, current: pathname === SECURITY_PATH },
-        { id: "tokens", label: t("settings.nav.tokens"), link: <Link to={TOKENS_PATH} />, current: pathname === TOKENS_PATH },
-        { id: "data", label: t("settings.nav.data"), link: <Link to={DATA_PATH} />, current: pathname === DATA_PATH },
+        { id: "security", label: t("settings.nav.security"), link: <Link activeOptions={EXACT} to={SECURITY_PATH} />, current: pathname === SECURITY_PATH },
+        { id: "tokens", label: t("settings.nav.tokens"), link: <Link activeOptions={EXACT} to={TOKENS_PATH} />, current: pathname === TOKENS_PATH },
+        { id: "data", label: t("settings.nav.data"), link: <Link activeOptions={EXACT} to={DATA_PATH} />, current: pathname === DATA_PATH },
       ],
     },
   ];
   if (inWorkspace) {
-    const general = { id: "general", label: t("settings.nav.general"), link: <Link to={GENERAL_PATH} />, current: pathname === GENERAL_PATH };
-    const members = { id: "members", label: t("settings.nav.members"), link: <Link to={MEMBERS_PATH} />, current: pathname === MEMBERS_PATH };
-    const teams = { id: "teams", label: t("settings.nav.teams"), link: <Link to={TEAMS_PATH} />, current: pathname === TEAMS_PATH };
-    const ai = { id: "ai", label: t("settings.nav.ai"), link: <Link to={AI_PATH} />, current: pathname === AI_PATH };
-    const audit = { id: "audit", label: t("settings.nav.audit"), link: <Link to={AUDIT_PATH} />, current: pathname === AUDIT_PATH };
+    const general = { id: "general", label: t("settings.nav.general"), link: <Link activeOptions={EXACT} to={GENERAL_PATH} />, current: pathname === GENERAL_PATH };
+    const members = { id: "members", label: t("settings.nav.members"), link: <Link activeOptions={EXACT} to={MEMBERS_PATH} />, current: pathname === MEMBERS_PATH };
+    const teams = { id: "teams", label: t("settings.nav.teams"), link: <Link activeOptions={EXACT} to={TEAMS_PATH} />, current: pathname === TEAMS_PATH };
+    const ai = { id: "ai", label: t("settings.nav.ai"), link: <Link activeOptions={EXACT} to={AI_PATH} />, current: pathname === AI_PATH };
+    const audit = { id: "audit", label: t("settings.nav.audit"), link: <Link activeOptions={EXACT} to={AUDIT_PATH} />, current: pathname === AUDIT_PATH };
     groups.push({
       id: "workspace",
       label: t("settings.nav.workspace"),

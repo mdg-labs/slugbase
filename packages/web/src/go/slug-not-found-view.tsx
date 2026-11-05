@@ -19,7 +19,8 @@ export interface SlugNotFoundViewProps {
 /**
  * Nothing the member can read has the slug in the workspace (doc 03 section 10): the page offers to create the bookmark, with the
  * slug filled in, and to switch to a workspace of the member where the slug exists. Switching is the member's own request:
- * the answer of a workspace is read again for the new one, and the slug goes on from there.
+ * the answer of a workspace is read again for the new one, and the slug goes on from there. The page has no app shell, so it
+ * links back to Home.
  */
 export function SlugNotFoundView({ slug, workspaceName, otherWorkspaces, onRefresh }: SlugNotFoundViewProps): ReactElement {
   const { t } = useTranslation();
@@ -47,6 +48,9 @@ export function SlugNotFoundView({ slug, workspaceName, otherWorkspaces, onRefre
           <Button render={<Link search={{ new: 1, slug }} to="/bookmarks" />}>
             <PlusIcon aria-hidden="true" />
             {t("go.notFound.create")}
+          </Button>
+          <Button render={<Link to="/" />} variant="outline">
+            {t("go.notFound.home")}
           </Button>
           {otherWorkspaces.map((workspace) => (
             <Button

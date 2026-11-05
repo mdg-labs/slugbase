@@ -1,6 +1,6 @@
 import { File as NodeFile } from "node:buffer";
 import type { ComponentTypes } from "@slugbase/contracts";
-import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_BYTES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES } from "@slugbase/contracts";
+import { IMPORT_MAX_BOOKMARKS, IMPORT_MAX_BYTES, IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES } from "@slugbase/contracts";
 import { createHandlers, createResolverHandlers } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -281,6 +281,32 @@ describe("step 1, the file", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(screen.getByText(/up to 5 MiB/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("progressbar", { name: "Step 1 of 3" })).toBeTruthy();
+  });
+
+  it("shows the app's own file button and no-file text, not the browser's, and the button opens the picker", async () => {
+    await openPage();
+
+    const button = screen.getByText("Choose file").closest("button");
+    expect(button).not.toBeNull();
+    expect(screen.getByText("No file chosen")).toBeTruthy();
+    const open = vi.spyOn(fileInput(), "click");
+    await press(button as HTMLElement);
+    expect(open).toHaveBeenCalledTimes(1);
+
+    await choose(htmlFile());
+    expect(screen.queryByText("No file chosen")).toBeNull();
+    expect(screen.getByText("bookmarks.html")).toBeTruthy();
+  });
+
+  it("says the same in German for an account whose language is German", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
+    window.history.replaceState(null, "", "/settings/account/data");
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+    await screen.findByRole("heading", { level: 2, name: "Lesezeichen importieren" });
+
+    expect(screen.getByText("Datei auswählen", { selector: "button" })).toBeTruthy();
+    expect(screen.getByText("Keine Datei ausgewählt")).toBeTruthy();
   });
 
   it("turns away any other file and a file over 5 MiB with a message, and sends nothing", async () => {
@@ -639,9 +665,9 @@ describe("a refusal at the file field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
       "This is not a valid SlugBase JSON file or browser bookmark file.",
     ],
     [
-      "422 for too many new folders and tags",
+      "422 for too many new folders and tags, or too many distinct ones in the file (both are too_many_new_names)",
       () => problemOf(422, "validation_failed", [{ path: "", code: "too_many_new_names" }]),
-      "This file would create more than 10,000 new folders and tags. Split it into smaller files.",
+      "This file has too many folders and tags for one import. One import creates at most 10,000 new folders and tags, and a file names at most 110,000 different ones in total, those you already have included. Split it into smaller files.",
     ],
     [
       "422 for folders and tags used more often than one import takes (too_many_links)",
@@ -699,11 +725,15 @@ describe("a refusal at the file field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
     }
     expect(new Set(shown).size).toBe(3);
     expect(shown[0]).toMatch(/5,000 bookmarks/);
-    expect(shown[1]).toMatch(/10,000 new folders and tags/);
+    expect(shown[1]).toMatch(/at most 10,000 new folders and tags/);
+    expect(shown[1]).toMatch(/at most 110,000 different ones in total/);
+    // The sentence holds for a file that creates nothing and for one whose names all exist, so it never says what the file "would create".
+    expect(shown[1]).not.toMatch(/would create/);
     expect(shown[2]).toMatch(/100,000 uses/);
     // Each count is the server's own cap from the contracts, so the sentence cannot drift from the limit the API enforces.
     expect(shown[0]).toContain(`${IMPORT_MAX_BOOKMARKS.toLocaleString("en")} bookmarks`);
     expect(shown[1]).toContain(`${IMPORT_MAX_NEW_NAMES.toLocaleString("en")} new folders and tags`);
+    expect(shown[1]).toContain(`${IMPORT_MAX_DISTINCT_NAMES.toLocaleString("en")} different ones`);
     expect(shown[2]).toContain(`${IMPORT_MAX_LINKS.toLocaleString("en")} uses`);
   });
 
@@ -714,7 +744,7 @@ describe("a refusal at the file field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
 
     await press(screen.getByRole("button", { name: "Import" }));
 
-    expect(await screen.findByText("This file would create more than 10,000 new folders and tags. Split it into smaller files.")).toBeTruthy();
+    expect(await screen.findByText("This file has too many folders and tags for one import. One import creates at most 10,000 new folders and tags, and a file names at most 110,000 different ones in total, those you already have included. Split it into smaller files.")).toBeTruthy();
     expect(screen.getByText("bookmarks.html")).toBeTruthy();
   });
 
@@ -732,7 +762,7 @@ describe("a refusal at the file field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
 
     await press(screen.getByRole("button", { name: "Vorschau" }));
 
-    expect(await screen.findByText("Diese Datei würde mehr als 10.000 neue Ordner und Tags anlegen. Teile sie in kleinere Dateien auf.")).toBeTruthy();
+    expect(await screen.findByText("Diese Datei hat zu viele Ordner und Tags für einen Import. Ein Import legt höchstens 10.000 neue Ordner und Tags an, und eine Datei nennt insgesamt höchstens 110.000 verschiedene, bereits vorhandene eingeschlossen. Teile sie in kleinere Dateien auf.")).toBeTruthy();
   });
 });
 

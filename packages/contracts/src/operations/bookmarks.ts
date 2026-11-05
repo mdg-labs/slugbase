@@ -511,7 +511,7 @@ export const SlugAvailabilitySchema = z
       .number()
       .int()
       .min(0)
-      .describe("How many bookmarks of other members of the workspace, and of members who have left it, have the slug and are not plan-archived: a count only, for the collision hint. 0 for an invalid slug"),
+      .describe("How many bookmarks of other members of the workspace, and of members who have left it, have the slug, are not plan-archived and are shared with the caller (a bookmark the caller cannot read is not counted): a count only, for the collision hint. 0 for an invalid slug"),
   })
   .meta({ id: "SlugAvailability" });
 

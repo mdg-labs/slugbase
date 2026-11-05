@@ -79,7 +79,7 @@ function ActionsCell(props: BookmarkActionHandlers): ReactElement {
 /**
  * The bookmarks as a table (doc 03 section 3.3): the title, slug, host, usage and date columns, which order the list
  * from their headers, and the actions of the card. The address holds the order; below `md` each row is a card. The
- * folders column shows a dot for each folder and the tags column the first three tags.
+ * folders column shows a dot and the name of each folder and the tags column the first three tags.
  */
 export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected, selectionActive, tabStopId, onSelectedChange, onSort, onEdit, onPin, onShare, onDelete }: BookmarksTableProps): ReactElement {
   const { t } = useTranslation();
@@ -127,7 +127,7 @@ export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected
         </span>
       ),
     },
-    { id: "folders", header: t("bookmarks.list.table.folders"), cell: (bookmark) => <FolderDots folders={bookmark.folders} /> },
+    { id: "folders", header: t("bookmarks.list.table.folders"), cell: (bookmark) => <FolderDots folders={bookmark.folders} named /> },
     { id: "tags", header: t("bookmarks.list.table.tags"), cell: (bookmark) => <TagBadges tags={bookmark.tags} /> },
     {
       id: "opens",

@@ -59,6 +59,30 @@ GRANT SELECT ON TABLE public.workspace_invitations TO slugbase_app;
 GRANT INSERT (id, workspace_id, email, role, team_ids, token_hash, mail_ticket, invited_by, expires_at) ON TABLE public.workspace_invitations TO slugbase_app;
 GRANT UPDATE (role, team_ids, token_hash, mail_ticket, invited_by, expires_at, status, closed_at) ON TABLE public.workspace_invitations TO slugbase_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.workspace_invitations TO slugbase_system;
+-- workspace_invitations_track_link_issued(): records, whenever an update replaces the token hash, how the token behind the new
+-- hash reaches a person: a replacement written with no mail ticket is a link returned to an admin (the one place a token is
+-- handed to a request, doc 02 section 3.4), and any other (a resend, a new invite, the mail job's own token) reaches the
+-- mailbox of the invited address or is held by nobody yet. An update that keeps the hash keeps the flag, so a re-invite where
+-- no mail can be sent does not turn a link an admin holds into a mailed one. slugbase_app has no privilege on the column, so
+-- the trigger is the only writer of it.
+CREATE OR REPLACE FUNCTION public.workspace_invitations_track_link_issued() RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+BEGIN
+  IF NEW.token_hash IS DISTINCT FROM OLD.token_hash THEN
+    NEW.link_issued := NEW.mail_ticket IS NULL;
+  ELSE
+    NEW.link_issued := OLD.link_issued;
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+CREATE OR REPLACE TRIGGER workspace_invitations_track_link_issued
+  BEFORE UPDATE ON public.workspace_invitations
+  FOR EACH ROW EXECUTE FUNCTION public.workspace_invitations_track_link_issued();
+
 CREATE OR REPLACE TRIGGER workspace_invitations_set_updated_at
   BEFORE UPDATE ON public.workspace_invitations
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

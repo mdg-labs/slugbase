@@ -209,7 +209,7 @@ Every capability that leaves the process or the database is a port (D22). The co
 | `AnalyticsPort` | Consent-gated product events | No-op (CE never phones home, Q18) | — | A self-hosted analytics service (server-side events only for conversions) |
 | `ErrorReportPort` | Capture exceptions with PII scrubbing | No-op (logs only) | Sentry-protocol DSN | The Sentry-protocol adapter, pointed at a self-hosted error tracker (D27) |
 | `ChallengePort` | Verify a bot-protection solution | Disabled | Altcha (on-server HMAC) | Altcha |
-| `EgressPort` | All server-initiated HTTP, apart from the operator-configured destinations named below the table: DNS-resolve-then-validate (no private, loopback, link-local, CGNAT, metadata ranges; IPv4 and IPv6), pinned resolved IP, redirects re-validated, timeouts, size caps, content-type allowlist. The one exception is the AI endpoint: a loopback, private, CGNAT or unique-local address is refused unless the operator names the exact host of `AI_BASE_URL` in `AI_ALLOWED_PRIVATE_HOST`; the allowance covers that one origin and sits only on the instance the AI adapter holds, so the shared instance cannot use it (Q90); all other checks stay | Built-in (always on) | `AI_ALLOWED_PRIVATE_HOST` (the AI endpoint's host) | Built-in (Q10: no outbound proxy at launch) |
+| `EgressPort` | All server-initiated HTTP, apart from the operator-configured destinations named below the table: DNS-resolve-then-validate (no private, loopback, link-local, CGNAT, metadata ranges; IPv4 and IPv6), pinned resolved IP, redirects re-validated, timeouts, at most three host-name lookups in flight per instance (a lookup that outlives its request's deadline keeps its slot until it settles, so a stalled name server cannot hold the threadpool that password hashing shares; a further lookup is refused at once), size caps, content-type allowlist. The one exception is the AI endpoint: a loopback, private, CGNAT or unique-local address is refused unless the operator names the exact host of `AI_BASE_URL` in `AI_ALLOWED_PRIVATE_HOST`; the allowance covers that one origin and sits only on the instance the AI adapter holds, so the shared instance cannot use it (Q90); all other checks stay | Built-in (always on) | `AI_ALLOWED_PRIVATE_HOST` (the AI endpoint's host) | Built-in (Q10: no outbound proxy at launch) |
 | `SecretBoxPort` | Envelope encryption of secrets at rest (MFA secrets) with key ID for rotation | AES-256-GCM, key from `ENCRYPTION_KEY` | — | Same; key in the deployment platform's environment (Cloud doc 07 §7), yearly rotation (D24, Q13) |
 | `RateLimitPort` | Token buckets keyed by IP/principal/route | Postgres (unlogged table) | — | Postgres; Valkey adapter when measured (§8.2) |
 | `ImageCodecPort` | `reencodeIcon(bytes)` → the 32 px and 64 px PNGs of a fetched icon: identify the format from the bytes (PNG, JPEG, GIF, WebP, ICO), refuse SVG and anything unrecognised, refuse an image above the pixel cap before it is decoded, re-encode afresh to PNG (doc 10 T14) | `SharpImageCodec` (built in, always on) | — | The same CE adapter, unless Cloud supplies its own |
@@ -374,7 +374,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 - **Secrets at rest**: `SecretBoxPort` with key IDs; rotation re-encrypts lazily on read and in a background sweep.
 - **Tenancy**: two layers (§5).
 - **Supply chain**: pinned dependencies, lockfile-only installs, `pnpm audit` and OSV scanning in CI, Renovate with grouping, images built in CI only, SBOM and provenance attached to every image, image signing (Q17).
-- **Admin surfaces**: the CE instance admin is a flag on an account inside the app (MFA required to use it); the Cloud operator console is a separate service, origin, account system and network allowlist — the customer app has no operator endpoints at all.
+- **Admin surfaces**: the CE instance admin is a flag on an account inside the app (a second factor is required for its destructive and access-changing operations, not for reading status or creating a workspace); the Cloud operator console is a separate service, origin, account system and network allowlist — the customer app has no operator endpoints at all.
 
 ---
 
@@ -390,7 +390,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   | `LOG_LEVEL` | `pino` level | `info` |
   | `DATABASE_URL` / `DATABASE_MIGRATE_URL` | `slugbase_app` / `slugbase_migrator` (Q56) | — |
   | `MIGRATE_ON_START` | Run `migrate` before serving (§2.1) | `true` |
-  | `SLUGBASE_ALLOW_OWNER_CONNECTION` | Allow the application role to own the database, with a warning (Q56) | `false` |
+  | `SLUGBASE_ALLOW_OWNER_CONNECTION` | Let a `DATABASE_URL` role that is a superuser, owns the database or has `BYPASSRLS` start in production; each case is refused without it and starts with a warning with it (Q56) | `false` |
   | `SESSION_SECRET` | Derives signing subkeys (cursors, pre-auth state) | — |
   | `ENCRYPTION_KEY` / `ENCRYPTION_KEY_ID` | Current secret-box key and its id (Q13) | — |
   | `ENCRYPTION_KEY_PREVIOUS` | Earlier keys as `id:key` pairs, used only to decrypt until the re-encryption sweep ends | empty |

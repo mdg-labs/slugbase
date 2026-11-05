@@ -660,6 +660,7 @@ export function FileDrop(input: FileDropProps): ReactElement;
 export interface FileDropProps {
     accept?: string;
     action?: ReactNode;
+    chooseLabel: ReactNode;
     // (undocumented)
     className?: string;
     description?: ReactNode;
@@ -672,6 +673,7 @@ export interface FileDropProps {
     // (undocumented)
     label: ReactNode;
     name?: string;
+    noFileLabel: ReactNode;
     onFile: (file: File) => void;
 }
 

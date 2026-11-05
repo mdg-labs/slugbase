@@ -44,13 +44,15 @@ describe("classifyOperations", () => {
         { operationId: "e", path: "/e", auth: "anonymous" },
         { operationId: "f", path: "/f", auth: "instanceAdmin" },
         { operationId: "g", path: "/g", auth: "machine" },
+        { operationId: "h", path: "/h", auth: "instanceAdminWithoutSecondFactor" },
       ]),
     );
     expect(result.problems).toEqual([]);
     expect(result.summary).toEqual({
-      total: 7,
-      byKind: { "tenant-scoped": 3, "account-level": 1, anonymous: 1, process: 2 },
+      total: 8,
+      byKind: { "tenant-scoped": 3, "account-level": 1, anonymous: 1, process: 3 },
     });
+    expect(result.operations.find((operation) => operation.operationId === "h")?.kind).toBe("process");
     expect(result.operations.find((operation) => operation.operationId === "a")?.pathParameters).toEqual(["id"]);
   });
 

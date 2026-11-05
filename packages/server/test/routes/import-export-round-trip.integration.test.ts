@@ -19,6 +19,8 @@ import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from
 
 const SEEDS = [265, 20_261_103];
 const CASES_PER_SEED = 50;
+// A seed's cases run in several tests of this many, each over its own world, so that one test stays a fraction of its time bound however loaded the host is (#753).
+const CASES_PER_TEST = 5;
 const EXPORT = "/api/v1/export/json";
 const IMPORT = "/api/v1/import/json";
 const BOOKMARKS = "/api/v1/bookmarks";
@@ -221,50 +223,60 @@ function tally(coverage: Coverage, document: ExportDocument): void {
   coverage.linked += document.bookmarks.filter((bookmark) => bookmark.folders.length > 0 && bookmark.tags.length > 0).length;
 }
 
+function emptyCoverage(): Coverage {
+  return { workspaces: 0, bookmarks: 0, folders: 0, tags: 0, pinned: 0, slugs: 0, notForwarding: 0, choices: 0, duplicates: 0, linked: 0 };
+}
+
 describe("export, then import into an empty workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   for (const seed of SEEDS) {
-    it(`gives back the document it was made from, for ${String(CASES_PER_SEED)} generated workspaces (seed ${String(seed)})`, async () => {
-      const world = harness.serve({ env: RELAXED });
-      const member = await harness.person(world);
-      const coverage: Coverage = { workspaces: 0, bookmarks: 0, folders: 0, tags: 0, pinned: 0, slugs: 0, notForwarding: 0, choices: 0, duplicates: 0, linked: 0 };
+    // What the tests of the seed found, added up for the last of them to judge: the generated workspaces of a seed are the same fifty however they are divided.
+    const coverage = emptyCoverage();
 
-      for (let caseNumber = 1; caseNumber <= CASES_PER_SEED; caseNumber += 1) {
-        const content = plan(seed, caseNumber);
-        try {
-          await harness.workspaceOf([{ person: member, role: "owner" }]);
-          await build(world, member, content);
-          const first = await exportOf(world, member);
-          expect(first.version).toBe(EXPORT_VERSION);
-          expect(first.bookmarks).toHaveLength(content.bookmarks.length);
+    for (let from = 1; from <= CASES_PER_SEED; from += CASES_PER_TEST) {
+      const to = Math.min(from + CASES_PER_TEST - 1, CASES_PER_SEED);
+      it(`gives back the document it was made from, for generated workspaces ${String(from)} to ${String(to)} (seed ${String(seed)})`, async () => {
+        const world = harness.serve({ env: RELAXED });
+        const member = await harness.person(world);
 
-          const target = await harness.workspaceOf([{ person: member, role: "owner" }]);
-          expect((await exportOf(world, member)).bookmarks).toEqual([]);
-          const result = await importInto(world, member, first);
-          expect(result.created).toBe(first.bookmarks.length);
-          expect(result.skipped).toEqual([]);
-          expect(result.failed).toEqual([]);
-          expect(result.slugsDropped).toBe(0);
-          expect(result.foldersCreated).toBe(first.folders.length);
-          expect(result.tagsCreated).toBe(first.tags.length);
+        for (let caseNumber = from; caseNumber <= to; caseNumber += 1) {
+          const content = plan(seed, caseNumber);
+          try {
+            await harness.workspaceOf([{ person: member, role: "owner" }]);
+            await build(world, member, content);
+            const first = await exportOf(world, member);
+            expect(first.version).toBe(EXPORT_VERSION);
+            expect(first.bookmarks).toHaveLength(content.bookmarks.length);
 
-          const second = await exportOf(world, member);
-          expect(withoutVolatile(second)).toEqual(withoutVolatile(first));
-          expect(JSON.stringify(withoutVolatile(second))).toBe(JSON.stringify(withoutVolatile(first)));
-          expect(await counterOf(target.workspaceId)).toBe(first.bookmarks.length);
-          tally(coverage, first);
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : String(error);
-          throw new Error(`seed ${String(seed)}, case ${String(caseNumber)} failed: ${reason}`, { cause: error });
+            const target = await harness.workspaceOf([{ person: member, role: "owner" }]);
+            expect((await exportOf(world, member)).bookmarks).toEqual([]);
+            const result = await importInto(world, member, first);
+            expect(result.created).toBe(first.bookmarks.length);
+            expect(result.skipped).toEqual([]);
+            expect(result.failed).toEqual([]);
+            expect(result.slugsDropped).toBe(0);
+            expect(result.foldersCreated).toBe(first.folders.length);
+            expect(result.tagsCreated).toBe(first.tags.length);
+
+            const second = await exportOf(world, member);
+            expect(withoutVolatile(second)).toEqual(withoutVolatile(first));
+            expect(JSON.stringify(withoutVolatile(second))).toBe(JSON.stringify(withoutVolatile(first)));
+            expect(await counterOf(target.workspaceId)).toBe(first.bookmarks.length);
+            tally(coverage, first);
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            throw new Error(`seed ${String(seed)}, case ${String(caseNumber)} failed: ${reason}`, { cause: error });
+          }
         }
-      }
+      });
+    }
 
-      expect(coverage.workspaces, "each run covers at least 50 workspaces").toBeGreaterThanOrEqual(50);
+    it(`covers every kind of content over the ${String(CASES_PER_SEED)} generated workspaces (seed ${String(seed)})`, () => {
+      expect(coverage.workspaces, `each seed covers ${String(CASES_PER_SEED)} workspaces`).toBe(CASES_PER_SEED);
       for (const [name, value] of Object.entries(coverage)) {
         expect(value, `the generated workspaces of seed ${String(seed)} hold some ${name}`).toBeGreaterThan(0);
       }
     });
   }
-
 });
 
 describe("what an import does not take from an export", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {

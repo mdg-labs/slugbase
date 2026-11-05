@@ -25,6 +25,10 @@ import {
 import { useFileRefusalMessage, useImportFailureMessage } from "./import-messages.ts";
 import { ImportResultView } from "./import-result.tsx";
 
+// The wizard's frame holds its step in a second card, which sits over the frame's own border with a second radius. The page's cards are single, so the frame is the one card and the step's card lies flat in it.
+const FLAT_STEP_CARD =
+  "before:hidden *:data-[slot=card]:m-0 *:data-[slot=card]:rounded-none *:data-[slot=card]:border-0 *:data-[slot=card]:bg-transparent *:data-[slot=card]:[clip-path:none]";
+
 const STEP_COUNT = 3;
 const FILE_STEP = 1;
 const PREVIEW_STEP = 2;
@@ -280,6 +284,7 @@ export function ImportWizard(): ReactElement {
       </p>
       <Wizard
         backLabel={t("data.import.back")}
+        className={FLAT_STEP_CARD}
         description={t("data.import.description")}
         headingLevel={2}
         nextDisabled={(step === FILE_STEP && file === null) || running}
@@ -310,6 +315,7 @@ export function ImportWizard(): ReactElement {
                 </Button>
               )
             }
+            chooseLabel={t("data.import.file.choose")}
             description={t("data.import.file.description")}
             disabled={busy !== null}
             dropLabel={t("data.import.file.drop")}
@@ -317,6 +323,7 @@ export function ImportWizard(): ReactElement {
             fileName={file?.name}
             inputRef={fileInput}
             label={t("data.import.file.label")}
+            noFileLabel={t("data.import.file.none")}
             onFile={choose}
           />
         ) : null}

@@ -9,7 +9,8 @@ import { bookmarkReadableBy } from "./bookmark-access.ts";
 // application role reaches the table only through the system operations `sys_favicon_get` and `sys_favicon_put` (src/sql/630-favicons.sql), which this
 // repository calls. What is tenant-scoped is the question of whether a fetch may be started for a host: only for a host of a bookmark the account of the
 // transaction can read in the workspace of the transaction (`hostReadable`), so the favicon operation cannot be used to make the server fetch a host the
-// caller has no bookmark on.
+// caller has no bookmark on. The same question gates what the cache answers: the route reads `current` only for a host that is readable, so the shared cache tells a caller nothing
+// about a host it cannot read.
 
 /** The sizes of the stored PNG, in pixels. */
 export type FaviconSize = 32 | 64;

@@ -37,6 +37,13 @@ export const workspaceInvitations = pgTable(
      * link replaced it. Only that job may issue the invitation's token; it is no secret.
      */
     mailTicket: uuid(),
+    /**
+     * Whether the token the row holds was returned to an admin as a copyable link, so a person other than the owner
+     * of the mailbox may hold it. The row's trigger sets it whenever the token hash is replaced (true when the
+     * replacement came with no mail ticket, which is how a link is made, false otherwise) and leaves it alone when the hash
+     * is kept. Accepting with registration fields verifies the new account only while it is false.
+     */
+    linkIssued: boolean().notNull().default(false),
     invitedBy: uuid().references(() => accounts.id, { onDelete: "set null" }),
     status: text().notNull().default("pending"),
     expiresAt: timestamp({ withTimezone: true }).notNull(),

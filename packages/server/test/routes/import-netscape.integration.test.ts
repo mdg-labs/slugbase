@@ -1,4 +1,4 @@
-import { ImportResultSchema } from "@slugbase/contracts";
+import { IMPORT_MAX_DISTINCT_NAMES, ImportResultSchema } from "@slugbase/contracts";
 import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
@@ -208,6 +208,23 @@ describe("POST /import/netscape", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await response.json()).toMatchObject({ errors: [{ path: "", code: "too_many_new_names" }] });
     expect(await stored(shared.workspaceId)).toMatchObject({ bookmarks: 0, tags: 0, completed: 0 });
   });
+
+  it("refuses a file that names more distinct tags than the bound on links it refuses, as a file of too many new names, in the dry run and in the write, and writes nothing", async () => {
+    const world = harness.serve({ env: RELAXED });
+    const { a, shared } = await setup(world);
+    const html = bookmarkFile(Array.from({ length: Math.ceil((IMPORT_MAX_DISTINCT_NAMES + 1) / 1000) }, (_, link) => ({ url: "javascript:void(0)", tags: Array.from({ length: 1000 }, (_, index) => `t${String(link * 1000 + index)}`) })));
+
+    for (const path of [NETSCAPE, `${NETSCAPE}?dryRun=true`]) {
+      const response = await upload(world, a, html, { path });
+      expect(response.status, path).toBe(422);
+      const problem = (await response.json()) as { detail: string };
+      expect(problem).toMatchObject({ code: "validation_failed", errors: [{ path: "", code: "too_many_new_names" }] });
+      // The file holds 111 links of 1 000 tags each.
+      expect(problem.detail).toContain("names 111000 distinct folder and tag spellings");
+      expect(problem.detail).not.toContain("would create");
+    }
+    expect(await stored(shared.workspaceId)).toMatchObject({ bookmarks: 0, tags: 0, completed: 0 });
+  }, TEST_TIMEOUT_MS);
 
   it("is an operation of the application's own page: a cookie request with another content type is 403 cross_site_request, one from another origin is too, and JSON is 415", async () => {
     const world = harness.serve({ env: RELAXED });

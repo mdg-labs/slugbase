@@ -610,4 +610,51 @@ describe("the folders and tags of a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS 
     expect(cells.getByRole("img", { name: "1 more tag" })).toBeDefined();
     expect((row as HTMLElement).querySelector("img:not([src^='/api/v1/favicons/'])")).toBeNull();
   });
+
+  it("writes the name of each folder beside its dot in the table and not on a card", async () => {
+    serve({ bookmarks: bookmarks([filed]) });
+    await openApp("/bookmarks?view=table");
+
+    const row = (await screen.findByRole("link", { name: "Bookmark 1" })).closest("tr");
+    expect(row).not.toBeNull();
+    const dot = within(row as HTMLElement).getByRole("img", { name: "Work" });
+    expect(dot.nextElementSibling?.textContent).toBe("Work");
+    expect(within(row as HTMLElement).getByText("Reading")).toBeDefined();
+  });
+
+  it("names the folder in a tooltip when its dot is focused, and keeps the card free of the written name", async () => {
+    serve({ bookmarks: bookmarks([filed]) });
+    await openApp("/bookmarks");
+
+    const first = await card("Bookmark 1");
+    expect(within(first).queryByText("Work")).toBeNull();
+    const dot = within(first).getByRole("img", { name: "Work" });
+    expect(dot.getAttribute("title")).toBeNull();
+    expect(dot.tabIndex).toBe(0);
+    await act(async () => {
+      fireEvent.pointerEnter(dot);
+      fireEvent.mouseEnter(dot);
+      fireEvent.focus(dot);
+      await Promise.resolve();
+    });
+
+    const tooltip = await screen.findByText("Work", { selector: "[data-slot='tooltip-popup'] *" }, { timeout: 5000 });
+    expect(tooltip.closest("[data-slot='tooltip-popup']")).not.toBeNull();
+  });
+});
+
+describe("the Show only toggles", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  it("are separated from each other and show a filled pressed state while their filter is on", async () => {
+    serve();
+    await openApp("/bookmarks?pinned=true");
+    await card("Bookmark 1");
+
+    const group = screen.getByRole("group", { name: "Show only" });
+    expect(group.querySelectorAll("[data-slot='separator']")).toHaveLength(2);
+    const pinned = within(group).getByRole("button", { name: "Pinned" });
+    const hasSlug = within(group).getByRole("button", { name: "Has slug" });
+    expect(pinned.getAttribute("aria-pressed")).toBe("true");
+    expect(pinned.className).toContain("data-pressed:bg-primary");
+    expect(hasSlug.getAttribute("aria-pressed")).toBe("false");
+  });
 });

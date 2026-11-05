@@ -95,6 +95,20 @@ describe("the descriptions of the two imports", () => {
   });
 });
 
+describe("the 422 descriptions of the two imports", () => {
+  const refusalOf = (path: string): string => String((((document.paths[path]?.["post"] as Obj)["responses"] as Obj)["422"] as Obj)["description"]);
+
+  it.each(["/api/v1/import/json", "/api/v1/import/netscape"])("name the code of the distinct-name refusal of %s: too_many_new_names, not the code of the link refusal", (path) => {
+    const sentence = refusalOf(path)
+      .split(/(?<=\.) /)
+      .find((candidate) => candidate.includes("110 000 distinct folder and tag spellings"));
+    expect(sentence).toBeDefined();
+    expect(sentence).toContain("the code too_many_new_names");
+    expect(sentence).not.toContain("too_many_links");
+    expect(sentence).not.toContain("with the same error");
+  });
+});
+
 describe("the remembered slug choices of an import file", () => {
   const choice = { slug: "docs", bookmarkRef: "b1" };
 

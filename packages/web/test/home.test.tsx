@@ -250,6 +250,8 @@ describe("quick access", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(link.getAttribute("title")).toBe("https://site3.example.com/page");
     const chip = within(list).getByText("/go/slug3");
     expect(chip.className).toContain("font-mono");
+    // The tile is a column that stretches its children, so the chip must opt out to stay as wide as its text.
+    expect(chip.closest("[data-slot='slug-chip']")?.className).toContain("self-start");
     expect(link.closest("li")?.querySelector("[translate='no']")?.textContent).toBe("s");
   });
 

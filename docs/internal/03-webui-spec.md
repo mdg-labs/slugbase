@@ -53,7 +53,7 @@ Errors                           /403, /404 (catch-all), /500 (error boundary), 
 
 ### App shell
 
-- **Workspace switcher** (sidebar header): workspace monogram and name, plan label (Cloud, via slot `sidebar.workspacePlan`), menu with the account's workspaces (check on the active one), "New workspace" (where allowed, doc 02 §3.2) and "Workspace settings". A write names no workspace and the server applies it to the session's, so a switch is refused with a toast ("A change is still being saved") while a save is out, and the pages of a workspace show a skeleton, not the previous workspace's document, until the new workspace's own arrives. A save that has not answered for 30 seconds no longer holds the switch back.
+- **Workspace switcher** (sidebar header): workspace monogram and name, plan label (Cloud, via slot `sidebar.workspacePlan`), menu with the account's workspaces (check on the active one), "New workspace" (where allowed, doc 02 §3.2) and "Workspace settings"; for an instance admin whose only workspace is the active one, the empty message and a menu item "Create a workspace in Admin" lead to Admin → Workspaces. A write names no workspace and the server applies it to the session's, so a switch is refused with a toast ("A change is still being saved") while a save is out, and the pages of a workspace show a skeleton, not the previous workspace's document, until the new workspace's own arrives. A save that has not answered for 30 seconds no longer holds the switch back.
 - **Top bar**: breadcrumb (section → current filter, e.g. "Bookmarks › Dev Tools"), the **command trigger** (search-looking button "Search or run a command…" with `⌘K` hint), the **New bookmark** primary button with its `C` hint, theme toggle, and the account menu (avatar → Account, Preferences, Shortcuts `?`, Sign out; Cloud adds "Plan & billing" through slot `accountMenu.items`).
 - **Sidebar footer**: entitlement usage meter and archived-bookmarks notice through slot `sidebar.footer` (Cloud: the bookmark count against the plan limit and a notice about archived bookmarks with the way to restore them; CE renders nothing), and "Help & docs" linking to the documentation. Help links use the stable `/docs/<route>` structure (doc 09 §3.5) under a configurable docs base URL, default `https://slugbase.app/docs` (`docsBaseUrl` in `/api/config`, doc 01 §11).
 
@@ -64,10 +64,10 @@ Errors                           /403, /404 (catch-all), /500 (error boundary), 
 Shown above page content; dismissible only when the condition clears:
 
 - **Email not verified** (when verification is optional on CE): resend action.
-- **MFA required for admin** (instance admins without MFA, on `/admin/*`): link to enrol.
+- **Two-factor prompt for admin** (instance admins without MFA): not a banner over `/admin/*`. The prompt sits on the actions that need MFA (Q45), with a link to enrol under Security → Two-factor authentication; the pages that need none are open (§12 Admin).
 - **At or near the bookmark limit** (Cloud, via slot `banner.entitlement`): upgrade action.
 - **Archived bookmarks exist** (Cloud, via slot): link to `/bookmarks/archived`.
-- **Mail not configured** (CE instance admins only): explains which flows are degraded, links to the status page.
+- **Mail not configured** (CE instance admins only): explains which flows are degraded, links to Settings & status, which shows the mail status to an admin with or without MFA.
 - **Export only** (an account in the export-only access mode, doc 02 §2.11): "Your account can only export its data" with the end date and a link to `/settings/account/data`; it stays until an instance admin clears the mode. An account in that mode gets the **export-only layout** in place of the app shell: the product name, a sign-out button, this banner, a workspace `select-field` (only with several workspaces) that chooses the workspace the export is made from, and `/settings/account/data` as the one page. Every other route, a deep link included, is replaced by it, the Import section is not shown, the include-shared checkbox is offered without reading the entitlements, and no navigation, search, creation or settings control is rendered, so the app sends none of the requests the server refuses with `403 account_export_only`. An app that is refused with that code (an admin set the mode while a page was open) reads the account again and switches to this layout.
 - **Read-only token / impersonation** — not applicable in v1 (no impersonation exists).
 
@@ -461,7 +461,7 @@ Team list (name, description, member `avatar-stack`, count) with Create, Edit (n
 
 ## 12. `/admin` — Instance admin (CE)
 
-Same shell; Admin replaces the sidebar folder section with its own `settings-nav` (Overview, Workspaces, Accounts, Settings & status). Every page shows the `banner` "MFA required" until the admin has enrolled; all actions are disabled until then.
+Same shell; Admin replaces the sidebar folder section with its own `settings-nav` (Overview, Workspaces, Accounts, Settings & status). An admin without MFA sees Overview, Settings & status (settings and mail status read-only, the test email works) and Workspaces (the list and creating one) as an admin with MFA does; no page shows an area-wide "MFA required" banner. Changing the settings, adding oneself to a workspace, issuing an owner invitation and deleting a workspace show a prompt that links to enrol in place of acting (a `banner` on Settings & status, a `confirm` on the workspace row actions), and Accounts shows its enrol-first empty state with the same link. These are the operations the server refuses without MFA (Q45).
 
 - **Overview**: `metric-tile`s (accounts, workspaces, bookmarks, active sessions), version and migration level, job health (`status-badge`), operator configuration summary (registration, verification, mail, AI, OIDC providers, error reporting) each as `status-badge`.
 - **Workspaces**: `data-table` (name, owners, members, bookmarks, created); Create workspace `form-overlay` (name, owner: existing account `picker` or invite email); `row-actions`: Add me as member (`confirm` — visible to owners), Delete (`typed-confirm`).

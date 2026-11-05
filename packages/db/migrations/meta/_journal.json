@@ -834,6 +834,27 @@
       "when": 1793705369628,
       "tag": "20261103112929_add_account_access_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1793803450974,
+      "tag": "20261104144410_add_instance_admin_without_second_factor",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1793833385664,
+      "tag": "20261104230305_add_invitation_link_issued",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1793869837530,
+      "tag": "20261105091037_add_verification_workspace_strip",
+      "breakpoints": true
     }
   ]
 }

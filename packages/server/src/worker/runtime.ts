@@ -62,8 +62,8 @@ export interface Worker {
   readonly jobs: readonly JobDefinition[];
   readonly schedules: readonly ScheduleDefinition[];
   /**
-   * In production it first refuses a `DATABASE_URL` role that is a superuser or owns the database
-   * (Q56), unless `SLUGBASE_ALLOW_OWNER_CONNECTION` allows it with a warning. It then starts
+   * In production it first refuses a `DATABASE_URL` role that is a superuser, has `BYPASSRLS` or
+   * owns the database (Q56), unless `SLUGBASE_ALLOW_OWNER_CONNECTION` allows it with a warning. It then starts
    * pg-boss, registers every job's queue and consumer and every schedule, and opens the
    * internal `/metrics` listener when `METRICS_PORT` is set.
    */

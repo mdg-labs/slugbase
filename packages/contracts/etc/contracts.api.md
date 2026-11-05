@@ -455,7 +455,7 @@ export const AuditEventSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public
-export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "machine"];
+export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "instanceAdminWithoutSecondFactor", "machine"];
 
 // @public (undocumented)
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
@@ -2830,7 +2830,7 @@ export const createInstanceWorkspace: {
     readonly operationId: "createInstanceWorkspace";
     readonly tag: "instance";
     readonly summary: "Create a workspace for an owner account or an owner invitation";
-    readonly auth: "instanceAdmin";
+    readonly auth: "instanceAdminWithoutSecondFactor";
     readonly rate: "write";
     readonly request: {
         readonly body: z.ZodObject<{
@@ -4453,7 +4453,7 @@ export const getInstanceSettings: {
     readonly operationId: "getInstanceSettings";
     readonly tag: "instance";
     readonly summary: "Read the instance settings";
-    readonly auth: "instanceAdmin";
+    readonly auth: "instanceAdminWithoutSecondFactor";
     readonly rate: "read";
     readonly responses: {
         readonly 200: JsonResponse<z.ZodObject<{
@@ -4476,7 +4476,7 @@ export const getInstanceStatus: {
     readonly operationId: "getInstanceStatus";
     readonly tag: "instance";
     readonly summary: "Read the status of the instance";
-    readonly auth: "instanceAdmin";
+    readonly auth: "instanceAdminWithoutSecondFactor";
     readonly rate: "read";
     readonly responses: {
         readonly 200: JsonResponse<z.ZodObject<{
@@ -5075,6 +5075,9 @@ export const IMPORT_MAX_BOOKMARKS = 5000;
 
 // @public
 export const IMPORT_MAX_BYTES: number;
+
+// @public
+export const IMPORT_MAX_DISTINCT_NAMES: number;
 
 // @public
 export const IMPORT_MAX_LINKS = 100000;
@@ -6594,7 +6597,7 @@ export const listInstanceWorkspaces: {
     readonly operationId: "listInstanceWorkspaces";
     readonly tag: "instance";
     readonly summary: "List every workspace of the instance";
-    readonly auth: "instanceAdmin";
+    readonly auth: "instanceAdminWithoutSecondFactor";
     readonly rate: "read";
     readonly responses: {
         readonly 200: JsonResponse<z.ZodObject<{
@@ -19694,7 +19697,7 @@ export const sendInstanceTestMail: {
     readonly operationId: "sendInstanceTestMail";
     readonly tag: "instance";
     readonly summary: "Send a test email to the caller";
-    readonly auth: "instanceAdmin";
+    readonly auth: "instanceAdminWithoutSecondFactor";
     readonly rate: "write";
     readonly responses: {
         readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;

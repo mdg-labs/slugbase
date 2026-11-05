@@ -19,8 +19,8 @@ import { asSystem, freshId, freshToken, seedAccount } from "./support/auth-fixtu
 import { seedMember, seedWorkspace, type Role } from "./support/workspace-fixture.ts";
 
 // The workspace operations of the instance admin (doc 05 sections 2.2, 2.9 and 3.3, doc 02 section 11.1, doc 10 T1
-// and T18). The failure scenarios: an account that is not an instance admin with a second factor that reaches a
-// sys_instance_*_workspace function, which must raise and write, create, hide or queue nothing; a list that carries
+// and T18). The failure scenarios: an account that is not an instance admin (with a second factor, for the owner invitation
+// and the deletion) that reaches a sys_instance_*_workspace function, which must raise and write, create, hide or queue nothing; a list that carries
 // anything of a workspace beyond its name, owners, member count and creation time, or that lets the admin read or act
 // in a workspace they are not a member of; an owner invitation that the public invitation path can write; a creation
 // or a deletion that leaves a half-made state or an event behind when a later step of its transaction fails; and a
@@ -289,7 +289,6 @@ describe("sys_instance_list_workspaces", () => {
 
   it.each([
     ["a member who holds no flag", { mfa: true }],
-    ["an admin who has no second factor enrolled", { admin: true }],
     ["a disabled admin", { admin: true, mfa: true, disabled: true }],
     ["an account with neither", {}],
   ] satisfies [string, Options][])("raises for %s and writes no event", async (_name, options) => {
@@ -370,7 +369,6 @@ describe("sys_instance_create_workspace for an owner account", () => {
 
   it.each([
     ["a member who holds no flag", { mfa: true }],
-    ["an admin who has no second factor enrolled", { admin: true }],
     ["a disabled admin", { admin: true, mfa: true, disabled: true }],
     ["an account with neither", {}],
   ] satisfies [string, Options][])("is refused to %s, which writes and queues nothing", async (_name, options) => {

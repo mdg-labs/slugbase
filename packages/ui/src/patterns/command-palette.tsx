@@ -347,12 +347,12 @@ export interface CommandTriggerProps {
   ref?: Ref<HTMLButtonElement>;
 }
 
-/** The top bar's command trigger (doc 03 "App shell"): a search-looking button with the shortcut that opens the palette. */
+/** The top bar's command trigger (doc 03 "App shell"): a search-looking button with the shortcut that opens the palette. From `md` up it is at least 14rem wide and grows to hold the whole shortcut, whatever the language's key names. */
 export function CommandTrigger({ label, shortcut, onClick, ref }: CommandTriggerProps): ReactElement {
   return (
     <Button
       aria-label={label}
-      className="justify-start text-muted-foreground md:w-56 max-md:size-9 max-md:px-0"
+      className="justify-start text-muted-foreground md:min-w-56 max-md:size-9 max-md:px-0"
       onClick={onClick}
       ref={ref}
       variant="outline"
@@ -361,7 +361,7 @@ export function CommandTrigger({ label, shortcut, onClick, ref }: CommandTrigger
       <span aria-hidden="true" className="max-md:hidden">
         {label}
       </span>
-      <span aria-hidden="true" className="ms-auto flex items-center gap-0.5 max-md:hidden">
+      <span aria-hidden="true" className="ms-auto flex shrink-0 items-center gap-0.5 ps-2 max-md:hidden">
         {shortcut.map((key) => (
           <Kbd key={key}>{key}</Kbd>
         ))}

@@ -10,6 +10,7 @@ import { CreateWorkspaceDialog } from "./create-workspace-dialog.tsx";
 import { useSwitchFailureMessage, useWorkspaceSwitch, workspacesQuery } from "./workspaces.ts";
 
 const WORKSPACE_SETTINGS_PATH = "/settings/workspace";
+const ADMIN_WORKSPACES_PATH = "/admin/workspaces";
 
 /**
  * What the sidebar header's workspace switcher shows and does (doc 03 "App shell"), and the create-workspace
@@ -34,6 +35,11 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
   const activeName =
     me.data?.memberships.find(({ workspaceId }) => workspaceId === activeId)?.name ?? list.data?.items.find(({ id }) => id === activeId)?.name;
 
+  // The switcher's menu says "no other workspaces" when the active one is the only one; an instance admin is told where to create one.
+  const isInstanceAdmin = me.data?.account.isInstanceAdmin === true;
+  const alone = list.data?.items.every(({ id }) => id === activeId) === true;
+  const pointToAdmin = isInstanceAdmin && alone;
+
   const actions: WorkspaceSwitcherAction[] = [];
   // At the account's limit the action stays, and opens the upgrade path in place of the form.
   if (list.data?.canCreate === true || limitReached) {
@@ -42,6 +48,15 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
       label: t("workspaces.switcher.new"),
       onSelect: () => {
         setCreating(limitReached ? "limit" : "form");
+      },
+    });
+  }
+  if (pointToAdmin) {
+    actions.push({
+      id: "admin-workspaces",
+      label: t("workspaces.switcher.createInAdmin"),
+      onSelect: () => {
+        void router.navigate({ to: ADMIN_WORKSPACES_PATH });
       },
     });
   }
@@ -80,7 +95,7 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
         void me.refetch();
       }
     },
-    emptyMessage: t("workspaces.switcher.empty"),
+    emptyMessage: pointToAdmin ? t("workspaces.switcher.emptyAdmin") : t("workspaces.switcher.empty"),
     onSelect: (workspaceId) => {
       void switchTo(workspaceId).then((outcome) => {
         if (outcome.status === "failed" && outcome.failure !== undefined) {

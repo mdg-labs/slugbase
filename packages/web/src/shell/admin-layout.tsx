@@ -12,27 +12,11 @@ const WORKSPACES_PATH = "/admin/workspaces";
 const ACCOUNTS_PATH = "/admin/accounts";
 const SETTINGS_PATH = "/admin/settings";
 
-function MfaRequiredBanner(): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <Banner
-      action={
-        <Button render={<Link to="/settings/account/security" />} size="sm" variant="outline">
-          {t("admin.mfaRequired.action")}
-        </Button>
-      }
-      description={t("admin.mfaRequired.description")}
-      title={t("admin.mfaRequired.title")}
-      variant="warning"
-    />
-  );
-}
-
 /**
  * The layout of the instance admin pages (doc 03 section 12): their navigation beside the page. The pages are
  * only for an instance admin, so an account that is not one sees the 403 page, and an account that cannot be
- * loaded is not shown the area either. While the admin has no second factor every page carries the banner that
- * says so; the pages offer no action until then.
+ * loaded is not shown the area either. An admin without a second factor sees every page that can be shown to
+ * them; the actions that need one carry the prompt to turn it on.
  */
 export function AdminLayout(): ReactElement {
   const { t } = useTranslation();
@@ -98,7 +82,6 @@ export function AdminLayout(): ReactElement {
         }}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-6">
-        {me.data.account.mfaEnabled ? null : <MfaRequiredBanner />}
         <Outlet />
       </div>
     </div>

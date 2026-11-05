@@ -4,7 +4,7 @@ import { axe } from "vitest-axe";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import type { WebExtension } from "../src/index.ts";
-import { ACTIVE_WORKSPACE_PATH, WORKSPACES_PATH, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, ACTIVE_WORKSPACE_PATH, WORKSPACES_PATH, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 import { HOME, NEW_ID, TEAM, stubWorkspaceServer } from "./workspace-server.ts";
 
 beforeEach(() => {
@@ -116,6 +116,52 @@ describe("the workspace switcher in the sidebar header", () => {
 
     expect(await within(menu).findByText("No other workspaces yet.")).toBeTruthy();
     expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(1);
+  });
+
+  describe("for an instance admin whose workspace is the only one", () => {
+    const adminMe = (): Promise<Response> =>
+      Promise.resolve(
+        json({
+          account: { ...ACCOUNT_BODY, isInstanceAdmin: true },
+          memberships: [{ workspaceId: HOME.id, name: HOME.name, role: "owner" }],
+          activeWorkspaceId: HOME.id,
+        }),
+      );
+
+    it("says where a workspace is created and links to Admin → Workspaces", async () => {
+      stubWorkspaceServer({ workspaces: [HOME], me: adminMe });
+      await mountApp();
+
+      const menu = await openMenu();
+
+      expect(await within(menu).findByText("No other workspaces yet. Create one under Admin → Workspaces.")).toBeTruthy();
+      expect(within(menu).queryByText("No other workspaces yet.")).toBeNull();
+      await choose("menuitem", "Create a workspace in Admin");
+      await waitFor(() => {
+        expect(window.location.pathname).toBe("/admin/workspaces");
+      });
+    });
+
+    it("offers no such link once there is another workspace", async () => {
+      stubWorkspaceServer({ workspaces: [HOME, TEAM], me: adminMe });
+      await mountApp();
+
+      const menu = await openMenu();
+
+      await within(menu).findByRole("menuitemradio", { name: "Team" });
+      expect(within(menu).queryByRole("menuitem", { name: "Create a workspace in Admin" })).toBeNull();
+      expect(within(menu).queryByText(/Admin → Workspaces/)).toBeNull();
+    });
+  });
+
+  it("says nothing about Admin to an account that is not an instance admin", async () => {
+    stubWorkspaceServer({ workspaces: [HOME] });
+    await mountApp();
+
+    const menu = await openMenu();
+
+    expect(await within(menu).findByText("No other workspaces yet.")).toBeTruthy();
+    expect(within(menu).queryByRole("menuitem", { name: "Create a workspace in Admin" })).toBeNull();
   });
 
   it("renders the slot sidebar.workspacePlan under the name, and nothing without an extension", async () => {

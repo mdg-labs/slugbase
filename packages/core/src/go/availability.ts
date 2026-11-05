@@ -3,13 +3,13 @@ import { parseSlug } from "./slug.ts";
 
 // Whether a slug is free for the caller (doc 04 section 10.6, doc 02 section 6.1, doc 10 T2). A slug is unique per owner within a workspace, so
 // it is taken when another bookmark of the caller's has it; other members' bookmarks never make it unavailable, and are only counted, for the
-// collision hint, without saying whose they are. The bookmark the caller is editing is left out of the comparison, so its own slug is available.
+// collision hint, without saying whose they are, and only the ones the caller can read (shared with it): a bookmark that is not shared is not counted. The bookmark the caller is editing is left out of the comparison, so its own slug is available.
 
 /** What the store counts for a slug in the workspace of the transaction. */
 export interface SlugUse {
   /** True when a bookmark of `ownerId` other than `exceptBookmarkId` has the slug, a plan-archived one included (the key of the table counts it). */
   readonly takenByOwner: boolean;
-  /** How many bookmarks that `ownerId` does not own, ownerless ones included, have the slug and are not plan-archived. */
+  /** How many bookmarks that `ownerId` does not own, ownerless ones included, have the slug, are not plan-archived and are readable by `ownerId` (shared with it). */
   readonly othersUseCount: number;
 }
 

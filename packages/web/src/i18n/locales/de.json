@@ -1021,6 +1021,7 @@
       "thisWorkspace": "diesem Workspace",
       "description": "Prüfe die Schreibweise oder lege selbst ein Lesezeichen mit diesem Slug an.",
       "create": "Lesezeichen mit diesem Slug anlegen",
+      "home": "Zur Startseite",
       "switch": "Gefunden in: {workspace} — wechseln und fortfahren"
     }
   },
@@ -1039,16 +1040,13 @@
       "retry": "Erneut versuchen"
     },
     "mfaRequired": {
-      "title": "Zwei-Faktor-Authentifizierung erforderlich",
-      "description": "Die Administration der Instanz bleibt ausgeschaltet, bis du die Zwei-Faktor-Authentifizierung für dein Konto einschaltest.",
-      "action": "Zwei-Faktor-Authentifizierung einrichten"
+      "title": "Schalte zuerst die Zwei-Faktor-Authentifizierung ein",
+      "description": "Diese Aktion ändert die Instanz oder den Zugang zu ihr und braucht deshalb die Zwei-Faktor-Authentifizierung für dein Konto. Richte sie unter Sicherheit ein und komm dann zurück.",
+      "action": "Zwei-Faktor-Authentifizierung einrichten",
+      "cancel": "Jetzt nicht"
     },
     "overview": {
       "title": "Übersicht",
-      "mfaRequired": {
-        "title": "Die Übersicht ist noch nicht verfügbar",
-        "description": "Schalte die Zwei-Faktor-Authentifizierung ein, um den Status dieser Instanz zu sehen."
-      },
       "loadFailed": {
         "title": "Der Status der Instanz konnte nicht geladen werden",
         "description": "Versuche es erneut. Wenn das so bleibt, prüfe die Logs des Servers.",
@@ -1094,10 +1092,6 @@
     },
     "workspaces": {
       "title": "Workspaces",
-      "mfaRequired": {
-        "title": "Die Workspaces sind noch nicht verfügbar",
-        "description": "Aktiviere die Zwei-Faktor-Authentifizierung, um die Workspaces dieser Instanz zu verwalten."
-      },
       "loadFailed": {
         "title": "Die Workspaces konnten nicht geladen werden",
         "description": "Versuche es noch einmal. Besteht das Problem weiter, prüfe die Logs des Servers.",
@@ -1156,7 +1150,8 @@
             "label": "E-Mail-Adresse",
             "description": "Der Workspace wartet darauf, dass diese Adresse die Einladung annimmt und erster Eigentümer wird.",
             "required": "Gib eine E-Mail-Adresse ein."
-          }
+          },
+          "needsSecondFactor": "Der Eigentümer wird per E-Mail eingeladen. Ein vorhandenes Konto auszuwählen braucht die Zwei-Faktor-Authentifizierung für dein Konto."
         },
         "error": {
           "invalidName": "Verwende einen Namen mit 1 bis 64 Zeichen.",
@@ -1410,8 +1405,8 @@
       "title": "Einstellungen & Status",
       "saved": "Gespeichert.",
       "mfaRequired": {
-        "title": "Die Einstellungen sind noch nicht verfügbar",
-        "description": "Aktiviere die Zwei-Faktor-Authentifizierung, um die Einstellungen dieser Instanz zu ändern."
+        "title": "Das Ändern der Einstellungen braucht die Zwei-Faktor-Authentifizierung",
+        "description": "Du kannst die Einstellungen unten lesen. Aktiviere die Zwei-Faktor-Authentifizierung für dein Konto, um sie zu ändern."
       },
       "loadFailed": {
         "title": "Die Einstellungen konnten nicht geladen werden",
@@ -1470,6 +1465,11 @@
         },
         "envOnly": "Das ist nur lesbar. Zugangsdaten und Verbindungen werden ausschließlich über Umgebungsvariablen auf dem Server gesetzt, nie in dieser App.",
         "loadFailed": "Die Konfiguration konnte nicht geladen werden"
+      },
+      "readOnly": {
+        "on": "Erlaubt",
+        "off": "Nicht erlaubt",
+        "notSet": "Nicht festgelegt"
       }
     }
   },
@@ -1511,6 +1511,7 @@
         "description": "Die Adresse, mit der du dich anmeldest.",
         "change": "E-Mail ändern",
         "noMail": "Zum Ändern deiner E-Mail-Adresse ist ein Bestätigungslink nötig, und dieser Server kann keine E-Mails versenden. Bitte deine Instanz-Administration, den E-Mail-Versand einzurichten.",
+        "noMailAdmin": "Zum Ändern deiner E-Mail-Adresse ist ein Bestätigungslink nötig, und dieser Server kann keine E-Mails versenden. Richte den E-Mail-Versand in der Konfiguration des Servers ein (die SMTP-Einstellungen), um sie zu ändern.",
         "pending": {
           "badge": "Bestätigung ausstehend",
           "description": "Für {email} wurde ein Bestätigungslink angefordert. Deine Adresse bleibt unverändert, bis sie bestätigt ist.",
@@ -1846,6 +1847,7 @@
           "label": "Per E-Mail benachrichtigen, wenn sich ein neues Gerät anmeldet",
           "description": "Die E-Mail nennt Zeit, Browser und Netzwerk der Anmeldung, nie eine vollständige Adresse."
         },
+        "noMail": "Dieser Server versendet keine E-Mails, daher wird keine Warnung gesendet, bis der E-Mail-Versand eingerichtet ist. Deine Auswahl bleibt erhalten, und die Warnungen beginnen, sobald er eingerichtet ist.",
         "error": {
           "saveFailed": "Diese Änderung wurde nicht gespeichert."
         }
@@ -2103,10 +2105,7 @@
         "title": "Die Mitglieder konnten nicht geladen werden"
       },
       "loadMore": "Mehr anzeigen",
-      "single": {
-        "title": "Du bist das einzige Mitglied",
-        "description": "Personen, die diesem Workspace beitreten, erscheinen hier mit ihrer Rolle."
-      },
+      "single": "Personen, die diesem Workspace beitreten, erscheinen hier mit ihrer Rolle.",
       "remove": {
         "dialog": {
           "title": "{name} entfernen",
@@ -2307,7 +2306,9 @@
       "file": {
         "label": "Lesezeichen-Datei",
         "description": "Eine Lesezeichen-Datei deines Browsers (.html) oder ein SlugBase-JSON-Export (.json), bis zu 5 MiB.",
-        "drop": "Ziehe eine Datei hierher oder wähle eine aus."
+        "drop": "Ziehe eine Datei hierher oder wähle eine aus.",
+        "choose": "Datei auswählen",
+        "none": "Keine Datei ausgewählt"
       },
       "skipDuplicates": "Duplikate überspringen",
       "count": {
@@ -2370,7 +2371,7 @@
         "tooLarge": "Diese Datei ist größer als 5 MiB. Teile sie in kleinere Dateien auf.",
         "unsupportedType": "Der Server akzeptiert diese Art von Datei nicht. Wähle eine SlugBase-JSON-Datei oder eine Lesezeichen-Datei deines Browsers.",
         "newerVersion": "Diese Datei stammt aus einer neueren SlugBase-Version, als diese lesen kann. Aktualisiere SlugBase oder exportiere die Datei erneut aus dieser Version.",
-        "tooManyNewNames": "Diese Datei würde mehr als {count, number} neue Ordner und Tags anlegen. Teile sie in kleinere Dateien auf.",
+        "tooManyNewNames": "Diese Datei hat zu viele Ordner und Tags für einen Import. Ein Import legt höchstens {count, number} neue Ordner und Tags an, und eine Datei nennt insgesamt höchstens {names, number} verschiedene, bereits vorhandene eingeschlossen. Teile sie in kleinere Dateien auf.",
         "tooManyBookmarks": "Diese Datei enthält mehr als {count, number} Lesezeichen. Teile sie in kleinere Dateien auf.",
         "tooManyAssignments": "Die Ordner und Tags dieser Datei kommen zusammen mehr als {count, number} Mal vor, auch wenn sie nur wenige Lesezeichen enthält. Teile sie in kleinere Dateien auf.",
         "invalid": "Das ist keine gültige SlugBase-JSON-Datei und keine gültige Lesezeichen-Datei eines Browsers.",
@@ -2837,7 +2838,9 @@
       "settings": "Workspace-Einstellungen",
       "loadFailed": "Deine Workspaces konnten nicht geladen werden.",
       "retry": "Erneut versuchen",
-      "empty": "Noch keine weiteren Workspaces."
+      "empty": "Noch keine weiteren Workspaces.",
+      "emptyAdmin": "Noch keine weiteren Workspaces. Lege unter Admin → Workspaces einen an.",
+      "createInAdmin": "Workspace in der Administration anlegen"
     },
     "switch": {
       "failed": {

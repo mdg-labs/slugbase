@@ -5,9 +5,19 @@ import { ME_QUERY_KEY, meQuery } from "../account/me.ts";
 import { ApiProblemError } from "../api/client.ts";
 
 /**
- * Whether the admin pages may act: the account is an instance admin and has a second factor. The server refuses
- * an admin without one, so a page asks for nothing and offers no action while this is false; an account that is
- * not loaded is not an admin.
+ * Whether the admin pages may read what an admin without a second factor may read (the status, the settings, the workspace list
+ * and workspace creation, the test email): the account is an instance admin. An account that is not loaded is not an admin.
+ */
+export function useAdminReadEnabled(): boolean {
+  const router = useRouter();
+  const me = useQuery(meQuery(router.options.context.api));
+  return me.data?.account.isInstanceAdmin === true;
+}
+
+/**
+ * Whether the admin pages may do what the server refuses an admin without a second factor (changing the settings, adding
+ * oneself to a workspace, inviting an owner, deleting a workspace, and everything about accounts): the account is an instance
+ * admin and has a second factor. A page asks for nothing and offers no such action while this is false.
  */
 export function useAdminActionsEnabled(): boolean {
   const router = useRouter();

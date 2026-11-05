@@ -338,20 +338,24 @@ describe("update", () => {
 });
 
 describe("slugUse", () => {
-  it("tells whether the owner has the slug on another bookmark and counts the others' bookmarks that are not plan-archived, ownerless ones included", async () => {
-    const workspace = await workspaceOf(3);
-    const [me, one, two] = [memberOf(workspace, 0), memberOf(workspace, 1), memberOf(workspace, 2)];
+  it("tells whether the owner has the slug on another bookmark and counts the others' bookmarks that are shared with the owner and not plan-archived, ownerless ones included", async () => {
+    const workspace = await workspaceOf(4);
+    const [me, one, two, three] = [memberOf(workspace, 0), memberOf(workspace, 1), memberOf(workspace, 2), memberOf(workspace, 3)];
     const mine = await seedBookmark(workspace.id, me, "mail", true);
-    await seedBookmark(workspace.id, one, "mail", true);
+    const shared = await seedBookmark(workspace.id, one, "mail", true);
+    await seedBookmark(workspace.id, three, "mail", true);
     const gone = await seedBookmark(workspace.id, two, "mail", true);
     await asSystem(db, (tx) => tx`UPDATE bookmarks SET plan_archived_at = now() WHERE id = ${gone}`);
-    await seedBookmark(workspace.id, null, "mail", true);
+    const ownerless = await seedBookmark(workspace.id, null, "mail", true);
     await seedBookmark(workspace.id, one, "other", true);
+    for (const bookmark of [shared, gone, ownerless]) {
+      await asSystem(db, (tx) => tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspace.id}, ${bookmark}, ${me}, ${me})`);
+    }
     const use = (slug: string, exceptBookmarkId?: string) => inTenant(workspace, me, (tx) => bookmarkRepository(tx).slugUse({ slug, ownerId: me, exceptBookmarkId }));
 
     expect(await use("mail")).toEqual({ takenByOwner: true, othersUseCount: 2 });
     expect(await use("mail", mine)).toEqual({ takenByOwner: false, othersUseCount: 2 });
-    expect(await use("other")).toEqual({ takenByOwner: false, othersUseCount: 1 });
+    expect(await use("other")).toEqual({ takenByOwner: false, othersUseCount: 0 });
     expect(await use("nobody")).toEqual({ takenByOwner: false, othersUseCount: 0 });
   });
 

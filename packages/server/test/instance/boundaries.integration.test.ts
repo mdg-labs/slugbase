@@ -1,3 +1,4 @@
+import { InMemoryMail } from "@slugbase/testing";
 import { classifyOperations, loadOpenApiDocument, type ClassifiedOperation } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -9,7 +10,8 @@ import { callOperation, clearInstanceEvents, codeOf, enrolSecondFactor, instance
 // The boundaries of the instance-admin role across every /instance operation (doc 08 section 3.3 and 3.5, doc 10 T1,
 // T3, T15 and T18, Q44 and Q45). The operations are read from the committed openapi.json when the suite runs, so an
 // operation added under /instance is walked with no edit here; its refusals need no fixture, and the walk of the full
-// admin falls back to an empty request for one no fixture names.
+// admin falls back to an empty request for one no fixture names. An operation not named below as one that needs no
+// second factor is walked as one that needs it, so a new one fails closed.
 
 const database = useTestDatabase();
 const harness = workspaceHarness(database);
@@ -21,6 +23,13 @@ beforeEach(() => clearInstanceEvents(database()));
 const document = loadOpenApiDocument() as { paths: Record<string, Record<string, { responses: Record<string, unknown> }>> };
 const HTTP_METHODS = new Set(["get", "put", "post", "delete", "patch"]);
 const INSTANCE_PREFIX = "/api/v1/instance";
+
+/** The operations of the instanceAdminWithoutSecondFactor policy (Q45): the flag and a complete session are all they ask for. */
+const WITHOUT_SECOND_FACTOR = ["createInstanceWorkspace", "getInstanceSettings", "getInstanceStatus", "listInstanceWorkspaces", "sendInstanceTestMail"] as const;
+
+function needsSecondFactor(operation: Pick<ClassifiedOperation, "operationId">): boolean {
+  return !(WITHOUT_SECOND_FACTOR as readonly string[]).includes(operation.operationId);
+}
 
 /** The operations under /instance counted straight from the paths of the document, apart from the classifier the walk uses. */
 function documentedInstanceOperations(): number {
@@ -40,16 +49,18 @@ function declares(operation: ClassifiedOperation, status: number): boolean {
 }
 
 describe("the walk covers every /instance operation of openapi.json", () => {
-  it("walks as many operations as the document declares under /instance, every one with the instanceAdmin policy", () => {
+  it("walks as many operations as the document declares under /instance, each with an instance policy and only the five named with the one that needs no second factor", () => {
     expect(instanceOperations.length).toBe(documentedInstanceOperations());
     // A floor that stops an emptied document or a broken path filter from passing an empty walk; a larger count is fine.
     expect(instanceOperations.length).toBeGreaterThanOrEqual(14);
-    expect(instanceOperations.filter((operation) => operation.policy !== "instanceAdmin").map((operation) => operation.operationId)).toEqual([]);
+    expect(instanceOperations.filter((operation) => operation.policy !== "instanceAdmin" && operation.policy !== "instanceAdminWithoutSecondFactor").map((operation) => operation.operationId)).toEqual([]);
+    expect(instanceOperations.filter((operation) => operation.policy === "instanceAdminWithoutSecondFactor").map((operation) => operation.operationId).toSorted()).toEqual([...WITHOUT_SECOND_FACTOR]);
+    expect(instanceOperations.filter((operation) => needsSecondFactor(operation) !== (operation.policy === "instanceAdmin")).map((operation) => operation.operationId)).toEqual([]);
     expect(instanceOperations.filter((operation) => operation.kind !== "process")).toEqual([]);
   });
 });
 
-describe("everyone the instanceAdmin policy excludes, on every /instance operation", () => {
+describe("everyone the instance policies exclude, on every /instance operation", () => {
   let world: World;
   let ordinary: Principal;
   let withoutFactor: Principal;
@@ -85,7 +96,6 @@ describe("everyone the instanceAdmin policy excludes, on every /instance operati
     { name: "an ordinary account", status: 403, code: "forbidden", credential: () => ({ cookie: ordinary.cookie }) },
     { name: "an API token of an admin", status: 403, code: "forbidden", credential: () => ({ headers: bearer(tokenValue) }) },
     { name: "a session waiting for its second factor", status: 401, code: "mfa_required", credential: () => ({ cookie: pending.cookie }) },
-    { name: "an instance admin without a second factor", status: 403, code: "forbidden", credential: () => ({ cookie: withoutFactor.cookie }) },
   ];
 
   it.each(scenarios)("answers $name with $status $code, declared by the operation, and writes no event", async ({ status, code, credential }) => {
@@ -97,6 +107,35 @@ describe("everyone the instanceAdmin policy excludes, on every /instance operati
     }
     expect(await instanceEvents(database())).toEqual([]);
   });
+
+  it("answers an instance admin without a second factor 403 forbidden on each operation that needs one, as declared, and writes no event", async () => {
+    const needing = instanceOperations.filter(needsSecondFactor);
+    expect(needing.length).toBe(instanceOperations.length - WITHOUT_SECOND_FACTOR.length);
+    for (const operation of needing) {
+      const response = await callOperation(world, operation, withoutFactor.cookie);
+      expect([response.status, await codeOf(response)], operation.operationId).toEqual([403, "forbidden"]);
+      expect(declares(operation, 403), operation.operationId).toBe(true);
+    }
+    expect(await instanceEvents(database())).toEqual([]);
+  });
+
+  it("admits an instance admin without a second factor to each of the five operations that need none, which write their instance event", async () => {
+    // A mail adapter is configured, so the test email is queued rather than answered 503 mail_unavailable.
+    const mailWorld = harness.serve({ mail: new InMemoryMail() });
+    for (const operationId of WITHOUT_SECOND_FACTOR) {
+      const operation = instanceOperations.find((candidate) => candidate.operationId === operationId);
+      expect(operation, operationId).toBeDefined();
+      if (operation === undefined) {
+        continue;
+      }
+      const admin = await signIn(database(), mailWorld, { flag: true, mfa: false, reauth: false });
+      const before = (await instanceEvents(database())).length;
+      const response = await callOperation(mailWorld, operation, admin.cookie);
+      expect(response.ok, `${operationId} answered ${String(response.status)} ${(await codeOf(response)) ?? ""}`).toBe(true);
+      expect(declares(operation, response.status), operationId).toBe(true);
+      expect((await instanceEvents(database())).length - before, operationId).toBeGreaterThan(0);
+    }
+  }, HOOK_TIMEOUT_MS);
 
   it("answers an ordinary account and an admin without a factor 403 on a re-authenticating operation whether or not the session re-authenticated", async () => {
     const stale = await signIn(database(), world, { flag: false, mfa: true, reauth: false });

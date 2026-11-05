@@ -200,6 +200,8 @@ describe("the accounts table", () => {
     await open();
 
     expect(await screen.findByText("Accounts are not available yet")).toBeTruthy();
+    expect(screen.queryByText("Two-factor authentication required")).toBeNull();
+    expect(screen.getByRole("link", { name: "Set up two-factor authentication" }).getAttribute("href")).toBe("/settings/account/security");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("searchbox")).toBeNull();
     expect(server.instanceCalls()).toEqual([]);

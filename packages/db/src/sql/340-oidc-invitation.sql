@@ -83,7 +83,8 @@ CREATE OR REPLACE FUNCTION public.sys_oidc_state_take(p_state_hash bytea, p_prov
 -- addresses (citext), and writes nothing otherwise. Which account accepts is decided in this order:
 --   1. the account the identity (provider, subject) is linked to;
 --   2. the enabled account that holds the invited address verified, to which the identity is then linked;
---   3. a new account for the invited address, verified because the provider asserted it, without a password, only
+--   3. a new account for the invited address, verified because the provider asserted it (also when the live token is a
+--      link an admin took, which sys_invitation_accept_new_account alone would leave unverified), without a password, only
 --      when p_may_create says the registration policy allowed it (the invitation authorises creating it whatever the
 --      provider's auto-create setting says, Q31).
 -- The first two are accepted through sys_invitation_accept and the third through sys_invitation_accept_new_account, so
@@ -244,6 +245,9 @@ BEGIN
       RETURN;
     END IF;
 
+    -- The provider asserted exactly the invited address as verified, which no copy of the link can stand in for, so the
+    -- account is verified here whether the live token was mailed or taken by an admin as a link.
+    UPDATE public.accounts SET email_verified_at = clock_timestamp() WHERE id = p_account_id AND email_verified_at IS NULL;
     IF public.sys_identity_link(p_account_id, p_identity_id, p_provider, p_subject, p_email) <> 'linked' THEN
       RAISE EXCEPTION 'the identity is linked to another account' USING ERRCODE = 'SB001';
     END IF;

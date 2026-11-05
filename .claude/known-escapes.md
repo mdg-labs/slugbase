@@ -46,6 +46,7 @@ existing line by adding its PR number.
 - **dedupe key the job does not carry** — a queued job is deduplicated on a value (a page address) it does not carry and re-reads from a mutable row (the bookmark) when it runs, so a waiting job can stand for a row that has since moved away and a later job for that value is dropped as a duplicate — PR 629
 - **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558, 641
 - **contract description lags behaviour** — a change widens what an operation returns (a search that now reaches shared rows) and updates the design doc, but the operation's published contract description still states the old behaviour, so API callers read the old rule — PR 648
+- **error code by reference** — a contract description names a refusal's code only as "the same error" right after a sentence giving a different code, so a client branching on the code reads the wrong one — PR 762
 - **external behaviour** — a doc or comment states a third-party system's behaviour more broadly than that system documents it (a database "waits for every older transaction" where it waits only for writers and older snapshots) — PR 365
 
 - **summary narrower than the code** — an operator page's summary row states one value or one purpose for a setting (a single page-size default, a key needed only for private hosts) where the code has several (a default per view, the key also gating plain http), while the detail elsewhere is right — PR 724

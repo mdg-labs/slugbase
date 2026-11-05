@@ -6,9 +6,12 @@ export type HttpMethod = (typeof HTTP_METHODS)[number];
 /**
  * x-slugbase-auth: who may call the operation (doc 04 section 1.2). Every
  * policy but `partial` needs a session whose second factor is complete (doc 04
- * section 4.3); `partial` also admits a session still waiting for it.
+ * section 4.3); `partial` also admits a session still waiting for it. The two
+ * instance policies admit an instance admin's session and no token; `instanceAdmin`
+ * also needs a second factor enrolled on the account, which
+ * `instanceAdminWithoutSecondFactor` does not (doc 04 section 10.10, Q45).
  */
-export const AUTH_POLICIES = ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "machine"] as const;
+export const AUTH_POLICIES = ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "instanceAdminWithoutSecondFactor", "machine"] as const;
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 
 /** x-slugbase-rate: the bucket of doc 04 section 7, or `none` for probes and machine routes. */

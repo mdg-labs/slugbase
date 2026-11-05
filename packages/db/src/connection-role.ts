@@ -2,8 +2,9 @@ import postgres from "postgres";
 
 // What the role of a connection can do to the tenant boundary (doc 05 section
 // 3.1, Q56). The application role owns nothing and has no BYPASSRLS; a
-// superuser, or the role that owns the database, is not held by row-level
-// security the way that role is, so a server connected as one runs without it.
+// superuser, a role with BYPASSRLS, or the role that owns the database, is not
+// held by row-level security the way that role is, so a server connected as one
+// runs without it.
 // Read-only: it changes nothing in the database.
 
 export interface ConnectionRoleOptions {
@@ -18,6 +19,8 @@ export interface ConnectionRole {
   superuser: boolean;
   /** Whether it owns the database it is connected to. */
   ownsDatabase: boolean;
+  /** Whether it has the BYPASSRLS attribute, which skips every row-level security policy. */
+  bypassRls: boolean;
 }
 
 /**
@@ -60,8 +63,9 @@ function redact(text: string, secrets: readonly string[]): string {
 }
 
 /**
- * Reads whether the role of `DATABASE_URL` is a superuser (`pg_roles.rolsuper`)
- * and whether it owns the current database (`pg_database.datdba`). A failure to
+ * Reads whether the role of `DATABASE_URL` is a superuser (`pg_roles.rolsuper`),
+ * whether it has BYPASSRLS (`pg_roles.rolbypassrls`) and whether it owns the
+ * current database (`pg_database.datdba`). A failure to
  * read it rejects: it never means the role is safe.
  */
 export async function connectionRole(options: ConnectionRoleOptions): Promise<ConnectionRole> {
@@ -83,15 +87,21 @@ export async function connectionRole(options: ConnectionRoleOptions): Promise<Co
     connection: { application_name: "slugbase-connection-role" },
   });
   try {
-    const rows = await sql<{ role: string; superuser: boolean; owns_database: boolean }[]>`
-      SELECT r.rolname AS role, r.rolsuper AS superuser, d.datdba = r.oid AS owns_database
+    const rows = await sql<{ role: string; superuser: boolean; bypass_rls: boolean; owns_database: boolean }[]>`
+      SELECT r.rolname AS role, r.rolsuper AS superuser, r.rolbypassrls AS bypass_rls,
+             d.datdba = r.oid AS owns_database
         FROM pg_roles r, pg_database d
        WHERE r.rolname = current_user AND d.datname = current_database()`;
     const row = rows[0];
     if (row === undefined) {
       throw new ConnectionRoleError("the database did not report the role of the connection");
     }
-    return { role: row.role, superuser: row.superuser, ownsDatabase: row.owns_database };
+    return {
+      role: row.role,
+      superuser: row.superuser,
+      ownsDatabase: row.owns_database,
+      bypassRls: row.bypass_rls,
+    };
   } catch (error) {
     if (error instanceof ConnectionRoleError) {
       throw error;

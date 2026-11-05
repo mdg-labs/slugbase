@@ -42,6 +42,7 @@ const NON_PUBLIC: readonly (readonly [string, string])[] = [
   ["2001::1", "Teredo"],
   ["2001:2::1", "IPv6 benchmarking"],
   ["2001:10::1", "ORCHID"],
+  ["2001:1f:ffff::1", "ORCHID end"],
   ["64:ff9b::7f00:1", "NAT64 to loopback"],
   ["100::1", "IPv6 discard"],
   ["::127.0.0.1", "IPv4-compatible loopback"],
@@ -94,6 +95,10 @@ const PUBLIC: readonly (readonly [string, string])[] = [
   ["2606:4700:4700::1111", "public IPv6"],
   ["2a00:1450:4001:81b::200e", "public IPv6"],
   ["2001:db9::1", "just above the documentation block"],
+  // Policy choice: ORCHIDv2 (2001:20::/28) is classified public. Only the deprecated ORCHID block
+  // (2001:10::/28) is refused; the IANA special-purpose registry lists ORCHIDv2 as globally reachable.
+  ["2001:20::1", "ORCHIDv2, deliberately public"],
+  ["2001:2f:ffff::1", "ORCHIDv2 end, deliberately public"],
   ["::ffff:8.8.8.8", "IPv4-mapped public address"],
   ["::ffff:808:808", "IPv4-mapped public address, hex form"],
   ["2002:808:808::1", "6to4 of a public address"],

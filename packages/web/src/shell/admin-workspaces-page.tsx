@@ -1,14 +1,15 @@
 import { Button } from "@slugbase/ui";
-import { Banner, Confirm, DataTable, EmptyState, Loading, RowActions, ShieldCheckIcon, StatusBadge, feedbackToast, type DataTableColumn, type RowAction } from "@slugbase/ui/patterns";
+import { Banner, Confirm, DataTable, EmptyState, Loading, RowActions, StatusBadge, feedbackToast, type DataTableColumn, type RowAction } from "@slugbase/ui/patterns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ME_QUERY_KEY } from "../account/me.ts";
 import { useFormat } from "../i18n/use-format.ts";
-import { useAdminActionsEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
+import { useAdminActionsEnabled, useAdminReadEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
 import { CreateInstanceWorkspaceDialog } from "./admin-create-workspace-dialog.tsx";
 import { DeleteInstanceWorkspaceDialog } from "./admin-delete-workspace-dialog.tsx";
+import { EnrolFirstDialog } from "./admin-enrol-prompt.tsx";
 import { OwnerInvitationDialog } from "./admin-owner-invitation-dialog.tsx";
 import { ADMIN_WORKSPACES_QUERY_KEY, addMeAsMember, instanceWorkspacesQuery, type InstanceWorkspace, type MembershipRefusal } from "./admin-workspaces.ts";
 import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
@@ -132,32 +133,34 @@ function WorkspacesTable({ workspaces, onAction }: { workspaces: readonly Instan
 /**
  * `/admin/workspaces`, the workspaces of the instance (doc 03 section 12): each with its owners, member count and creation date, and
  * never its content. An admin creates a workspace for an owner, adds themselves to one as a member, re-issues the owner invitation of
- * one that waits for its first owner, or deletes one. The server refuses all of it to an admin without a second factor, so the page
- * asks for nothing and offers no action then; it says what is missing instead.
+ * one that waits for its first owner, or deletes one. The list and the creation are open to an admin without a second factor; the
+ * other three actions show the prompt to turn one on instead of acting.
  */
 export function AdminWorkspacesPage(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
-  const enabled = useAdminActionsEnabled();
+  const enabled = useAdminReadEnabled();
+  const actionsEnabled = useAdminActionsEnabled();
   const list = useQuery({ ...instanceWorkspacesQuery(router.options.context.api), enabled });
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState<Pending | undefined>(undefined);
+  const [enrolling, setEnrolling] = useState(false);
   useRefreshStandingOnForbidden(list.error);
 
   function close(): void {
     setPending(undefined);
   }
 
+  function act(action: Pending): void {
+    if (actionsEnabled) {
+      setPending(action);
+    } else {
+      setEnrolling(true);
+    }
+  }
+
   let body: ReactElement;
-  if (!enabled) {
-    body = (
-      <EmptyState
-        description={t("admin.workspaces.mfaRequired.description")}
-        icon={<ShieldCheckIcon aria-hidden="true" />}
-        title={t("admin.workspaces.mfaRequired.title")}
-      />
-    );
-  } else if (list.data !== undefined) {
+  if (list.data !== undefined) {
     body =
       list.data.length === 0 ? (
         <EmptyState
@@ -174,7 +177,7 @@ export function AdminWorkspacesPage(): ReactElement {
           title={t("admin.workspaces.empty.title")}
         />
       ) : (
-        <WorkspacesTable onAction={setPending} workspaces={list.data} />
+        <WorkspacesTable onAction={act} workspaces={list.data} />
       );
   } else if (list.isError) {
     body = (
@@ -217,6 +220,13 @@ export function AdminWorkspacesPage(): ReactElement {
         <CreateInstanceWorkspaceDialog
           onClose={() => {
             setCreating(false);
+          }}
+        />
+      ) : null}
+      {enrolling ? (
+        <EnrolFirstDialog
+          onClose={() => {
+            setEnrolling(false);
           }}
         />
       ) : null}

@@ -8,7 +8,7 @@ import { ACCOUNT_BODY, json, problem, renderApp, stubBrowserApis, stubMatchMedia
 
 // /admin/workspaces (doc 03 section 12): the workspaces with their owners and member counts, creation for an owner, joining as a
 // member, re-issuing the invitation of a workspace without an owner, and deletion. The failure scenarios are an admin without a
-// second factor asking for or acting on anything, a failed list shown as an empty one, an action sent before its confirmation or
+// second factor acting on what the server refuses it, or asked for the accounts, a failed list shown as an empty one, an action sent before its confirmation or
 // without the fresh re-authentication the server asks for, a link that is shown although mail carried it, and a refusal shown as done.
 
 type InstanceWorkspace = ComponentTypes["schemas"]["InstanceWorkspace"];
@@ -163,14 +163,49 @@ describe("the workspaces table", () => {
     expect(screen.queryByRole("table")).toBeNull();
   }, SLOW_TEST_TIMEOUT_MS);
 
-  it("asks for nothing and offers no action to an admin without a second factor", async () => {
-    const server = stubAdminServer({ mfaEnabled: false, routes: { [`GET ${LIST_PATH}`]: list(OWNED) } });
+  it("lists the workspaces for an admin without a second factor, with no area-wide banner", async () => {
+    const server = stubAdminServer({ mfaEnabled: false, routes: { [`GET ${LIST_PATH}`]: list(OWNED, PENDING) } });
     await open();
 
-    expect(await screen.findByText("Workspaces are not available yet")).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create workspace" }).disabled).toBe(true);
-    expect(screen.queryByRole("table")).toBeNull();
-    expect(server.instanceCalls()).toEqual([]);
+    expect(await rowOf("Analytical Engines")).toBeTruthy();
+    expect(await rowOf("Waiting Room")).toBeTruthy();
+    expect(screen.queryByText("Two-factor authentication required")).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create workspace" }).disabled).toBe(false);
+    expect(server.received("GET", LIST_PATH)).toHaveLength(1);
+    expect(await violations()).toEqual([]);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it.each([
+    ["Add me as member", OWNED],
+    ["Re-issue owner invitation", PENDING],
+    ["Delete workspace", OWNED],
+  ])("shows an admin without a second factor the prompt to turn it on instead of %s, and sends nothing", async (action, workspace) => {
+    const server = stubAdminServer({ mfaEnabled: false, routes: { [`GET ${LIST_PATH}`]: list(OWNED, PENDING) } });
+    await open();
+
+    await chooseAction(workspace.name, action);
+
+    const prompt = await screen.findByRole("alertdialog", { name: "Turn on two-factor authentication first" });
+    expect(within(prompt).getByRole("button", { name: "Set up two-factor authentication" })).toBeTruthy();
+    await press(within(prompt).getByRole("button", { name: "Not now" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(server.instanceCalls().filter((call) => call.method !== "GET")).toEqual([]);
+    expect(server.received("GET", ACCOUNTS_PATH)).toHaveLength(0);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("takes an admin without a second factor to Security from the prompt", async () => {
+    stubAdminServer({ mfaEnabled: false, routes: { [`GET ${LIST_PATH}`]: list(OWNED) } });
+    await open();
+
+    await chooseAction("Analytical Engines", "Delete workspace");
+    const prompt = await screen.findByRole("alertdialog", { name: "Turn on two-factor authentication first" });
+    await press(within(prompt).getByRole("button", { name: "Set up two-factor authentication" }));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/settings/account/security");
+    });
   }, SLOW_TEST_TIMEOUT_MS);
 
   it("shows the 403 page when the list is refused because the account is no longer an admin", async () => {
@@ -384,6 +419,57 @@ describe("creating a workspace", () => {
     await press(within(dialog).getByRole("button", { name: "Create workspace" }));
 
     expect(await within(dialog).findByText("The workspace could not be created. Try again in a moment.")).toBeTruthy();
+    expect(screen.queryByText(/was created/)).toBeNull();
+  }, SLOW_TEST_TIMEOUT_MS);
+});
+
+describe("creating a workspace without a second factor", () => {
+  it("invites the owner by email, never asks for the accounts, and creates the workspace", async () => {
+    const server = stubAdminServer({
+      mfaEnabled: false,
+      routes: {
+        [`GET ${LIST_PATH}`]: [list(OWNED), list(OWNED)],
+        [`POST ${LIST_PATH}`]: () =>
+          json(
+            {
+              id: "0192f3a0-dddd-7000-8000-000000000009",
+              name: "Lab",
+              ownerInvitation: { id: "0192f3a0-eeee-7000-8000-000000000001", email: "new@example.org", expiresAt: "2026-12-01T00:00:00Z", link: null },
+            },
+            { status: 201 },
+          ),
+      },
+    });
+    await open();
+    await press(await screen.findByRole("button", { name: "Create workspace" }));
+    const dialog = await screen.findByRole("dialog", { name: "Create a workspace" });
+
+    expect(within(dialog).queryByRole("radio", { name: "Existing account" })).toBeNull();
+    expect(within(dialog).queryByRole("combobox", { name: "Account" })).toBeNull();
+    expect(within(dialog).getByText(/Choosing an existing account needs two-factor authentication/)).toBeTruthy();
+    await typeInto(within(dialog).getByRole("textbox", { name: "Name" }), "Lab");
+    await typeInto(within(dialog).getByRole("textbox", { name: "Email address" }), "new@example.org");
+    await press(within(dialog).getByRole("button", { name: "Create workspace" }));
+
+    expect((await screen.findAllByText("“Lab” was created. The owner invitation was mailed to new@example.org.")).length).toBeGreaterThan(0);
+    expect(server.received("POST", LIST_PATH)[0]?.body).toEqual({ name: "Lab", ownerEmail: "new@example.org" });
+    expect(server.received("GET", ACCOUNTS_PATH)).toHaveLength(0);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("tells a refusal of the creation as an error, never as created", async () => {
+    stubAdminServer({
+      mfaEnabled: false,
+      routes: { [`GET ${LIST_PATH}`]: list(OWNED), [`POST ${LIST_PATH}`]: () => problem(403, "forbidden", "req-403") },
+    });
+    await open();
+    await press(await screen.findByRole("button", { name: "Create workspace" }));
+    const dialog = await screen.findByRole("dialog", { name: "Create a workspace" });
+
+    await typeInto(within(dialog).getByRole("textbox", { name: "Name" }), "Lab");
+    await typeInto(within(dialog).getByRole("textbox", { name: "Email address" }), "new@example.org");
+    await press(within(dialog).getByRole("button", { name: "Create workspace" }));
+
+    expect(await within(dialog).findByText("You can no longer manage this instance. The page has been reloaded.")).toBeTruthy();
     expect(screen.queryByText(/was created/)).toBeNull();
   }, SLOW_TEST_TIMEOUT_MS);
 });

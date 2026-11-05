@@ -3,8 +3,9 @@ import { binaryResponse, defineOperation, problemResponse, rateLimitedResponse }
 
 // The favicons tag of doc 04 section 10.6 (doc 02 section 5.4, doc 10 T6 and T14): the icon of a host, served from the app's own origin so that the browser never
 // contacts the bookmarked site to draw a list. The host is the host of a bookmark (lower case, in punycode). The icon is the PNG the server re-encoded from
-// what it fetched, never the fetched bytes, and it is always `image/png` with `X-Content-Type-Options: nosniff`; an SVG source is refused and never served. An icon
-// that is not in the cache yet is answered with a transparent placeholder, and a fetch is queued when the caller can read a bookmark on the host.
+// what it fetched, never the fetched bytes, and it is always `image/png` with `X-Content-Type-Options: nosniff`; an SVG source is refused and never served. The cache is shared by the
+// deployment, so an icon is served only to a caller who can read a bookmark on the host; any other caller, and any host not in the cache yet, is answered with a transparent
+// placeholder, and a fetch is queued when the caller can read a bookmark on the host.
 
 /** The longest host name, in characters. */
 export const FAVICON_HOST_MAX_LENGTH = 253;
@@ -50,12 +51,12 @@ export const getFavicon = defineOperation({
   request: { params: FaviconParamsSchema, query: FaviconQuerySchema },
   responses: {
     200: binaryResponse(
-      "The cached icon of the host, a PNG that the server encoded itself from an image of at most 64 KiB that it fetched through the egress adapter; never SVG and never the fetched bytes. The browser may keep it for seven days",
+      "The cached icon of the host, served only to a caller who can read a bookmark on the host in the active workspace: a PNG that the server encoded itself from an image of at most 64 KiB that it fetched through the egress adapter; never SVG and never the fetched bytes. The browser may keep it for seven days",
       "image/png",
       { headers: imageHeaders(FAVICON_CACHE_MAX_AGE_SECONDS, "A stored icon") },
     ),
     202: binaryResponse(
-      "The host has no icon in the cache: a transparent placeholder PNG, which the browser keeps for a minute only. When the caller can read a bookmark on the host and the host is not known to have none, a fetch is queued; a host with no icon the server can use stays a placeholder until the record expires, and the web app draws a monogram for it",
+      "The caller can read no bookmark on the host, or the host has no icon in the cache: a transparent placeholder PNG, which the browser keeps for a minute only, and the same answer whatever the cache holds for a host the caller cannot read. When the caller can read a bookmark on the host and the host is not known to have none, a fetch is queued; a host with no icon the server can use stays a placeholder until the record expires, and the web app draws a monogram for it",
       "image/png",
       { headers: imageHeaders(FAVICON_PLACEHOLDER_MAX_AGE_SECONDS, "The placeholder") },
     ),

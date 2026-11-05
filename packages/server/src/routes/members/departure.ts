@@ -1,9 +1,10 @@
 import type { MembershipEndedSchema } from "@slugbase/contracts";
-import { createAuditWriter, endMembership, type AuditActor, type MemberContentChoice, type MembershipEndStore } from "@slugbase/core";
+import { createAuditWriter, endMembership, type AuditActor, type MemberContentChoice, type MembershipEndStore, type WorkspaceRole } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, isLastOwnerViolation, memberRepository } from "@slugbase/db";
 import type { z } from "zod";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
+import { reauthRequired } from "../../http/authorize.ts";
 import type { ChainContext } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
@@ -16,7 +17,13 @@ import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 // refuses the commit of a transaction that leaves the workspace without an owner, which is answered 409
 // `last_owner` with nothing written (the membership, the event job, the audit event and the tokens bound
 // to the membership all stay). Access ends with the commit: the member's sessions are re-derived to another
-// workspace by the tenant stage on their next request, and the tokens are gone with the membership.
+// workspace by the tenant stage on their next request, and the tokens are gone with the membership. Removing
+// another member who is an owner is an ownership change in effect and needs a session that re-authenticated
+// recently (`401 reauth_required`, doc 10 T18); the request says whether it did, and a request that does not say
+// counts as one that did not. The check is the last step before the first write, after the member service has
+// judged who may remove whom and the recipient has been found, so a forbidden request stays 403, an unknown member
+// 404, and a refused removal writes no membership, event job or audit event. A member who names themselves leaves
+// instead of being removed and is never asked, as on `POST /workspace/leave`.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
@@ -30,6 +37,8 @@ export interface MembershipEndRequest {
   readonly targetAccountId: string;
   readonly content: MemberContentChoice;
   readonly transferTo: string | undefined;
+  /** Whether the session re-authenticated within the window; left out, the removal of another owner is refused. */
+  readonly reauthenticated?: boolean;
 }
 
 /** Ends the membership and answers the body of the `200`; every refusal is a `ProblemError`. */
@@ -51,11 +60,25 @@ export async function endMembershipOf(context: ChainContext, request: Membership
         return { kind: "not_found" } as const;
       }
       const repository = memberRepository(tx);
+      const removesAnotherMember = principal.accountId.toLowerCase() !== request.targetAccountId.toLowerCase();
+      let targetRole: WorkspaceRole | undefined;
       const store: MembershipEndStore = {
-        roles: (targetAccountId) => repository.roles(targetAccountId),
+        roles: async (targetAccountId) => {
+          const roles = await repository.roles(targetAccountId);
+          if (targetAccountId.toLowerCase() === request.targetAccountId.toLowerCase()) {
+            targetRole = roles?.target;
+          }
+          return roles;
+        },
         setRole: (targetAccountId, role) => repository.setRole(targetAccountId, role),
         longestStandingOwner: (excludingAccountId) => repository.longestStandingOwner(excludingAccountId),
-        end: ({ accountId, events }) => repository.remove(accountId, events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload))),
+        end: ({ accountId, events }) => {
+          // A target role the store did not report counts as an owner's.
+          if (removesAnotherMember && request.reauthenticated !== true && (targetRole === undefined || targetRole === "owner")) {
+            throw reauthRequired();
+          }
+          return repository.remove(accountId, events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)));
+        },
       };
       const actor: AuditActor = { type: "account", accountId: principal.accountId, label: profile.displayName };
       return endMembership(

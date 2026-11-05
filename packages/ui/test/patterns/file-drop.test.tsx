@@ -4,11 +4,20 @@ import { FileDrop, type FileDropProps } from "../../src/patterns/index.ts";
 import { expectNoViolations } from "../support.tsx";
 
 function Drop(props: Partial<FileDropProps>): React.ReactElement {
-  return <FileDrop description="Up to 5 MiB." dropLabel="Drop a file here, or choose one." label="File" onFile={() => undefined} {...props} />;
+  return <FileDrop chooseLabel="Choose file" description="Up to 5 MiB." dropLabel="Drop a file here, or choose one." label="File" noFileLabel="No file chosen" onFile={() => undefined} {...props} />;
 }
 
 function fileNamed(name: string): File {
   return new File(["<html></html>"], name, { type: "text/html" });
+}
+
+/** The visible button, which is hidden from assistive technology because the file input beside it is the control that is named and reached. */
+function chooseButton(): HTMLElement {
+  const found = screen.getByText("Choose file").closest("button");
+  if (found === null) {
+    throw new Error("no choose button");
+  }
+  return found;
 }
 
 function zone(): HTMLElement {
@@ -28,6 +37,49 @@ describe("FileDrop", () => {
     expect(input.getAttribute("accept")).toBe(".json,.html");
     expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(screen.getByText("Up to 5 MiB.").id);
     expect(screen.getByText("Drop a file here, or choose one.")).toBeTruthy();
+  });
+
+  it("shows its own button and its own no-file text instead of the browser's, and the file's name once there is one", () => {
+    const { rerender } = render(<Drop />);
+
+    expect(chooseButton()).toBeTruthy();
+    expect(screen.getByText("No file chosen")).toBeTruthy();
+
+    rerender(<Drop fileName="bookmarks.html" />);
+
+    expect(screen.queryByText("No file chosen")).toBeNull();
+    expect(screen.getByText("bookmarks.html")).toBeTruthy();
+  });
+
+  it("opens the file picker from its button, and keeps the input as the one control that is reached by keyboard and named", () => {
+    render(<Drop />);
+    const input = screen.getByLabelText<HTMLInputElement>("File");
+    const open = vi.spyOn(input, "click");
+
+    fireEvent.click(chooseButton());
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(input.tabIndex).toBe(0);
+    expect(chooseButton().getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("does not open the picker from its button while it is disabled", () => {
+    render(<Drop disabled />);
+    const open = vi.spyOn(screen.getByLabelText<HTMLInputElement>("File"), "click");
+
+    fireEvent.click(chooseButton());
+
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("gives the input to the page's ref, whether it is a function or an object", () => {
+    const seen: (HTMLInputElement | null)[] = [];
+    const object = { current: null as HTMLInputElement | null };
+    const { unmount } = render(<Drop inputRef={(node) => void seen.push(node)} />);
+    expect(seen[0]).toBe(screen.getByLabelText("File"));
+    unmount();
+    render(<Drop inputRef={object} />);
+    expect(object.current).toBe(screen.getByLabelText("File"));
   });
 
   it("reports a file that is chosen, and lets the same file be chosen again", () => {

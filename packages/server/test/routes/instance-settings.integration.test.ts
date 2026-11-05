@@ -96,6 +96,18 @@ describe("GET and PATCH /instance/settings", () => {
     expect(await response.json()).toEqual({ allowWorkspaceCreation: null, displayName: null, signInNotice: null });
   });
 
+  it("answers GET to an instance admin who has no second factor enrolled, and writes the instance audit event of the read", async () => {
+    const world = harness.serve();
+    const admin = await caller(world, { flag: true, mfa: false });
+    await database().owner`INSERT INTO instance_settings (id, display_name) VALUES (1, 'Acme Links')`;
+
+    const response = await send(world, "GET", SETTINGS, { cookie: admin.cookie });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ allowWorkspaceCreation: null, displayName: "Acme Links", signInNotice: null });
+    expect(await instanceEvents()).toEqual([{ actor_account_id: admin.accountId, action: "instance.settings_viewed", metadata: {} }]);
+  });
+
   it("writes one instance audit event for each read, naming the admin and no setting", async () => {
     const world = harness.serve();
     const admin = await caller(world, { flag: true, mfa: true });
@@ -194,10 +206,10 @@ describe("GET and PATCH /instance/settings", () => {
       expect((await instanceEvents()).filter((event) => event.action === "instance.settings_viewed")).toEqual([]);
     });
 
-    it.each(attempts)("answers 403 forbidden to %s from an instance admin who has no second factor enrolled", async (method, body) => {
+    it("answers 403 forbidden to PATCH from an instance admin who has no second factor enrolled, which changes nothing", async () => {
       const world = harness.serve();
       const admin = await caller(world, { flag: true, mfa: false });
-      const response = await send(world, method, SETTINGS, { cookie: admin.cookie }, body);
+      const response = await send(world, "PATCH", SETTINGS, { cookie: admin.cookie }, { displayName: "Hijacked", allowWorkspaceCreation: true });
       expect(response.status).toBe(403);
       expect(await storedSettings()).toEqual([]);
     });
@@ -323,6 +335,17 @@ describe("POST /instance/mail/test", () => {
     expect(mail.sent).toEqual([]);
   });
 
+  it("queues the test message for an instance admin who has no second factor enrolled", async () => {
+    const world = harness.serve({ mail: new InMemoryMail() });
+    const admin = await caller(world, { flag: true, mfa: false });
+
+    const response = await send(world, "POST", TEST_MAIL, { cookie: admin.cookie });
+
+    expect(response.status).toBe(202);
+    expect(await mailJobs()).toEqual([{ data: { template: "testMail", accountId: admin.accountId } }]);
+    expect(await instanceEvents()).toEqual([{ actor_account_id: admin.accountId, action: "instance.test_mail_queued", metadata: {} }]);
+  });
+
   it("is sent by the mail.send job to the address of the account that asked, in its language, and to nobody else", async () => {
     const mail = new InMemoryMail();
     const world = harness.serve({ mail });
@@ -364,13 +387,6 @@ describe("POST /instance/mail/test", () => {
       expect(response.status).toBe(403);
       expect(await mailJobs()).toEqual([]);
       expect(await instanceEvents()).toEqual([]);
-    });
-
-    it("answers 403 to an instance admin who has no second factor enrolled", async () => {
-      const world = harness.serve({ mail: new InMemoryMail() });
-      const admin = await caller(world, { flag: true, mfa: false });
-      expect((await send(world, "POST", TEST_MAIL, { cookie: admin.cookie })).status).toBe(403);
-      expect(await mailJobs()).toEqual([]);
     });
 
     it("answers 403 to a request from another origin", async () => {

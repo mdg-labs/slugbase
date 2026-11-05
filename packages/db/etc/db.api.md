@@ -538,6 +538,7 @@ export interface CompleteSetup {
 
 // @public (undocumented)
 export interface ConnectionRole {
+    bypassRls: boolean;
     ownsDatabase: boolean;
     role: string;
     superuser: boolean;

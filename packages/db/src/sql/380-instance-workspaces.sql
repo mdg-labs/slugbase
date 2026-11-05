@@ -7,9 +7,11 @@
 -- slugbase_app cannot insert (300-workspace-invitations.sql), so sys_instance_create_workspace and
 -- sys_instance_reissue_owner_invitation are the only writers of an owner invitation.
 --
--- Like every sys_instance_* function each repeats the check of the instanceAdmin policy inside its own body: the
--- account of the transaction (app_account_id(), never an argument) must hold the instance-admin flag, have a second
--- factor enrolled and not be disabled, otherwise it raises insufficient_privilege and writes nothing. Each writes its
+-- Like every sys_instance_* function each repeats the check of its own policy inside its body: the account of the
+-- transaction (app_account_id(), never an argument) must hold the instance-admin flag and not be disabled, and, for
+-- sys_instance_reissue_owner_invitation and sys_instance_delete_workspace (the instanceAdmin policy), have a second factor
+-- enrolled; sys_instance_list_workspaces and sys_instance_create_workspace (instanceAdminWithoutSecondFactor) do not
+-- need one. Otherwise the function raises insufficient_privilege and writes nothing. Each writes its
 -- instance audit event in the same call, under the identifier the application generated (Q91).
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
@@ -31,9 +33,9 @@ BEGIN
 
   SELECT a.display_name INTO v_label
   FROM public.accounts a
-  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.mfa_enabled_at IS NOT NULL AND a.disabled_at IS NULL;
+  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.disabled_at IS NULL;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'the instance operations are for instance admins with a second factor' USING ERRCODE = 'insufficient_privilege';
+    RAISE EXCEPTION 'the instance operations are for instance admins' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   INSERT INTO public.audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, metadata, ip_prefix)
@@ -103,9 +105,9 @@ BEGIN
 
   SELECT a.display_name INTO v_label
   FROM public.accounts a
-  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.mfa_enabled_at IS NOT NULL AND a.disabled_at IS NULL;
+  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.disabled_at IS NULL;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'the instance operations are for instance admins with a second factor' USING ERRCODE = 'insufficient_privilege';
+    RAISE EXCEPTION 'the instance operations are for instance admins' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   IF p_owner_account_id IS NOT NULL THEN

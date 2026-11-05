@@ -1,4 +1,4 @@
-import { IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import { previewImport, readImportBookmark, type ImportPreviewAsk, type ImportPreviewStore } from "../../src/index.ts";
 
@@ -9,6 +9,8 @@ interface Calls {
   lookups: (readonly string[])[];
   slugs: (readonly string[])[];
   sameNames: (readonly string[])[];
+  /** How many times the store was asked which folders or tags the caller has. */
+  nameLookups: number;
 }
 
 /** The names the fake store tells apart: the same name whatever the case by default; `same` replaces the rule. */
@@ -16,7 +18,7 @@ type Same = (a: string, b: string) => boolean;
 const caseless: Same = (a, b) => a.toLowerCase() === b.toLowerCase();
 
 function store(options: { count?: number | undefined; existing?: readonly string[]; slugs?: readonly string[]; folders?: readonly string[]; tags?: readonly string[]; same?: Same } = {}): { store: ImportPreviewStore; calls: Calls } {
-  const calls: Calls = { count: 0, lookups: [], slugs: [], sameNames: [] };
+  const calls: Calls = { count: 0, lookups: [], slugs: [], sameNames: [], nameLookups: 0 };
   const same = options.same ?? caseless;
   const existing = new Set(options.existing ?? []);
   const named = (have: readonly string[] | undefined, names: readonly string[]) => {
@@ -41,8 +43,14 @@ function store(options: { count?: number | undefined; existing?: readonly string
         calls.slugs.push(slugs);
         return Promise.resolve(new Set(slugs.filter((slug) => (options.slugs ?? []).includes(slug))));
       },
-      existingFolderNames: (names) => Promise.resolve(named(options.folders, names)),
-      existingTagNames: (names) => Promise.resolve(named(options.tags, names)),
+      existingFolderNames: (names) => {
+        calls.nameLookups += 1;
+        return Promise.resolve(named(options.folders, names));
+      },
+      existingTagNames: (names) => {
+        calls.nameLookups += 1;
+        return Promise.resolve(named(options.tags, names));
+      },
       firstSameNames: (names) => {
         calls.sameNames.push(names);
         if (options.same === undefined) {
@@ -379,6 +387,54 @@ describe("previewImport", () => {
       await expect(outcomeOf(file, { ceiling: 1 })).resolves.toMatchObject({ kind: "previewed", result: { created: 1, tagsCreated: 10_000 } });
       await expect(outcomeOf(file, { ceiling: 2 })).resolves.toEqual({ kind: "too_many_names", newNames: 10_100 });
       await expect(outcomeOf({ ...file, bookmarks: [{ url: "https://example.com/1", tags: [...names("a", 6000), ...names("a", 6000).map((name) => name.toUpperCase())] }] })).resolves.toMatchObject({ kind: "previewed", result: { tagsCreated: 10_000 } });
+    });
+  });
+
+  describe("the most distinct folder and tag spellings one file may name", () => {
+    const names = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => `${prefix}${String(index)}`);
+    // Bookmarks whose URL is refused, so that none is created and the names are the file's alone; `perBookmark` names on each.
+    const refused = (kind: "tags" | "folders", all: readonly string[], perBookmark = 1000) =>
+      Array.from({ length: Math.ceil(all.length / perBookmark) }, (_, index) => ({ url: "ftp://example.com/x", [kind]: all.slice(index * perBookmark, (index + 1) * perBookmark) }));
+
+    it("refuses a file of refused bookmarks that names more tags than that without asking the store about a name, a URL or the counter", async () => {
+      const { store: fake, calls } = store();
+
+      const outcome = await previewImport({ store: fake }, ask(refused("tags", names("t", IMPORT_MAX_DISTINCT_NAMES + 1))));
+
+      expect(outcome).toEqual({ kind: "too_many_distinct_names", names: IMPORT_MAX_DISTINCT_NAMES + 1 });
+      expect(calls.sameNames).toEqual([]);
+      expect(calls.nameLookups).toBe(0);
+      expect(calls.lookups).toEqual([]);
+      expect(calls.count).toBe(0);
+    });
+
+    it("counts folders and tags together, and the lists of a document with the bookmarks', whether the bookmark is created or not", async () => {
+      const bound = IMPORT_MAX_DISTINCT_NAMES;
+      const document = (folders: number, tags: number, listed: number): ImportRequest => ({
+        format: "slugbase-export",
+        version: 1,
+        tags: names("listed", listed),
+        bookmarks: [...refused("folders", names("f", folders)), ...refused("tags", names("t", tags)), { url: "https://example.com/a" }],
+      });
+
+      await expect(previewImport({ store: store().store }, ask(document(bound / 2, bound / 2 + 1, 0)))).resolves.toEqual({ kind: "too_many_distinct_names", names: IMPORT_MAX_DISTINCT_NAMES + 1 });
+      await expect(previewImport({ store: store().store }, ask(document(bound / 2, bound / 2, 1)))).resolves.toEqual({ kind: "too_many_distinct_names", names: IMPORT_MAX_DISTINCT_NAMES + 1 });
+      await expect(previewImport({ store: store().store }, ask(document(bound / 2, bound / 2, 0)))).resolves.toMatchObject({ kind: "previewed", result: { detected: { folders: bound / 2, tags: bound / 2 } } });
+    });
+
+    it("counts a spelling once however many bookmarks repeat it, and a spelling once it is plain text and cut", async () => {
+      const repeated = Array.from({ length: 1000 }, () => ({ url: "ftp://example.com/x", tags: names("t", 1000) }));
+      const plain = names("t", IMPORT_MAX_DISTINCT_NAMES);
+      const cut = refused("tags", [...plain, ...plain.map((name) => `${name}\u0000`)]);
+
+      await expect(previewImport({ store: store().store }, ask(repeated))).resolves.toMatchObject({ kind: "previewed", result: { detected: { tags: 1000 } } });
+      await expect(previewImport({ store: store().store }, ask(cut))).resolves.toMatchObject({ kind: "previewed", result: { detected: { tags: IMPORT_MAX_DISTINCT_NAMES } } });
+    });
+
+    it("answers a file within the bound that names more than 10 000 names the caller has as before", async () => {
+      const known = names("t", 3 * IMPORT_MAX_NEW_NAMES);
+
+      await expect(previewImport({ store: store({ tags: known }).store }, ask(refused("tags", known)))).resolves.toMatchObject({ kind: "previewed", result: { tagsCreated: 0 } });
     });
   });
 
