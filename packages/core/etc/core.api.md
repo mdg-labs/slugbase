@@ -5573,6 +5573,7 @@ export interface InvitationSignupAsk {
     readonly accountId?: string;
     // (undocumented)
     readonly displayName: string;
+    readonly emailVerificationRequired: boolean;
     // (undocumented)
     readonly locale: string;
     readonly passwordHash: string;
@@ -5607,6 +5608,7 @@ export type InvitationSignupResult = {
     readonly workspaceId: string;
     readonly invitationId: string;
     readonly role: WorkspaceRole;
+    readonly sessionCreated: boolean;
 }
 /** An unknown, used, revoked, replaced or expired token, or a workspace being deleted. */
 | {
@@ -5953,6 +5955,7 @@ export interface NewAccountAcceptance {
     readonly accountId: string;
     // (undocumented)
     readonly displayName: string;
+    readonly emailVerificationRequired: boolean;
     // (undocumented)
     readonly locale: string;
     readonly onAccepted: (accepted: {

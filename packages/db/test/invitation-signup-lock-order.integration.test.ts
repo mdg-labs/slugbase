@@ -132,6 +132,7 @@ describe("signing up through an invitation against the deletion of the account t
           passwordHash: PASSWORD_HASH,
           locale: "en",
           seatLimit: null,
+          emailVerificationRequired: false,
           session: { id: freshId(), tokenHash: session.hash, replacedTokenHash: null, ipPrefix: "203.0.0.0/16", userAgent: "tests" },
           onAccepted: () => ({ audit: [], jobs: [] }),
         }),

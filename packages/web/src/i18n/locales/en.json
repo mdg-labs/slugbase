@@ -3318,6 +3318,12 @@
         "invalid": "Check your entries and try again.",
         "unavailable": "Creating the account is not possible right now. Try again in a moment."
       }
+    },
+    "verifyEmail": {
+      "title": "Verify your address to sign in",
+      "description": "The account for {email} exists and has joined {workspace}. Verify the address before you sign in.",
+      "hint": "Open the link in the email sent to that address. If none arrives, ask an administrator of this instance to verify it for you.",
+      "action": "Go to sign in"
     }
   },
   "palette": {

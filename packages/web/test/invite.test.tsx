@@ -128,7 +128,8 @@ function stubServer({ viewer: initial = "none", accountExists = true, providers,
       case ACCEPT_PATH: {
         const parsed = JSON.parse(body) as Record<string, unknown>;
         const response = accept === undefined ? json({ workspaceId: "0192f3a0-cccc-7000-8000-000000000001", role: "admin" }, { status: "displayName" in parsed ? 201 : 200 }) : await accept(count, parsed);
-        if (response.ok) {
+        // A 202 made the account without a session: the visitor is no one yet.
+        if (response.ok && response.status !== 202) {
           viewer = "invitee";
         }
         return response;
@@ -355,6 +356,54 @@ describe("an invitation for an address without an account", () => {
       { token: TOKEN, displayName: "Grace Hopper", password: "a long and unusual password" },
     ]);
     expect(window.location.pathname).toBe("/");
+  });
+
+  it("says the address has to be verified, and does not enter the app, when the server made the account without a session", async () => {
+    const server = stubServer({ accountExists: false, accept: () => new Response(null, { status: 202 }) });
+    await openInvite();
+    await screen.findByRole("button", { name: "Create account and join" });
+    typeInto("Name", "Grace Hopper");
+    typeInto("Password", "a long and unusual password");
+
+    await press("Create account and join");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Verify your address to sign in" })).toBeTruthy();
+    expect(screen.getByText(`The account for ${INVITEE} exists and has joined ${WORKSPACE}. Verify the address before you sign in.`)).toBeTruthy();
+    expect(screen.getByText(/ask an administrator of this instance to verify it for you/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Go to sign in" }).getAttribute("href")).toBe("/login");
+    expect(screen.queryByRole("heading", { level: 1, name: HOME })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create account and join" })).toBeNull();
+    expect(window.location.pathname).toBe(INVITE_URL);
+    expect(server.to("POST", ACCEPT_PATH)).toHaveLength(1);
+    expect(server.viewer()).toBe("none");
+    expect((await axe(document.body, { rules: { region: { enabled: false } } })).violations.map(({ id }) => id)).toEqual([]);
+  });
+
+  it("says it in German", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
+    stubServer({ accountExists: false, accept: () => new Response(null, { status: 202 }) });
+    await openInvite();
+    await screen.findByRole("button", { name: "Konto erstellen und beitreten" });
+    typeInto("Name", "Grace Hopper");
+    typeInto("Passwort", "ein langes und ungewöhnliches Passwort");
+
+    await press("Konto erstellen und beitreten");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Bestätige deine Adresse, um dich anzumelden" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Zur Anmeldung" })).toBeTruthy();
+  });
+
+  it("keeps the dead-link explanation where the server refused the token and made no account", async () => {
+    stubServer({ accountExists: false, accept: () => problem(410, "token_expired", "req-410") });
+    await openInvite();
+    await screen.findByRole("button", { name: "Create account and join" });
+    typeInto("Name", "Grace Hopper");
+    typeInto("Password", "a long and unusual password");
+
+    await press("Create account and join");
+
+    expect(await screen.findByText("This invitation link does not work")).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1, name: "Verify your address to sign in" })).toBeNull();
   });
 
   it("asks for a name and a password before it asks the server", async () => {

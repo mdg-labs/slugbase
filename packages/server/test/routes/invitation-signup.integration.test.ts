@@ -151,7 +151,8 @@ async function joinedAudit(workspaceId: string): Promise<{ actor_account_id: str
 
 describe("POST /api/v1/invitations/accept with a display name and a password", { timeout: TEST_TIMEOUT_MS }, () => {
   it("creates the account of the invited address, unverified for the link an admin took, makes it a member with the invited role, signs it in with the workspace active, and makes no personal workspace", async () => {
-    const world = serve({ env: { EMAIL_VERIFICATION_REQUIRED: "true" } });
+    // Where verification is required the same redemption answers 202 with no session (invitation-link-verification.integration.test.ts).
+    const world = serve({ env: { EMAIL_VERIFICATION_REQUIRED: "false" } });
     const { workspaceId, o, a } = await workspace(world);
     const { id, token } = await invite(world, a, "New.Person@Example.test", "admin");
 
@@ -184,10 +185,6 @@ describe("POST /api/v1/invitations/accept with a display name and a password", {
     expect(await current.json()).toMatchObject({ id: workspaceId, role: "admin" });
     const workspaces = await send(world, "GET", "/api/v1/workspaces", { cookie });
     expect(((await workspaces.json()) as { items: unknown[] }).items).toHaveLength(1);
-    // Where verification is required, the account signs in again only after its owner verified the address.
-    const login = await send(world, "POST", "/api/v1/auth/login", {}, { email: "new.person@example.test", password: PASSWORD, remember: false });
-    expect(login.status).toBe(403);
-    expect(await login.json()).toMatchObject({ code: "email_unverified" });
 
     expect(await joinedAudit(workspaceId)).toEqual([
       { actor_account_id: account?.id, actor_label: "Grace Hopper", metadata: { role: "admin" } },

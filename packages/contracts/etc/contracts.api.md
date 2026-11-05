@@ -47,6 +47,7 @@ export const acceptInvitation: {
         schema: z.ZodString;
         };
         }>;
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -7338,6 +7339,12 @@ export interface OperationTypes {
                 content: {
                     "application/json": ComponentTypes["schemas"]["InvitationAccepted"];
                 };
+            };
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: {
                 headers: {

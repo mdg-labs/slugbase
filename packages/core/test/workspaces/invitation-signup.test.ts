@@ -42,6 +42,7 @@ function ask(token: string): InvitationSignupAsk {
     passwordHash: "$argon2id$stub",
     locale: "de",
     seatLimit: 3,
+    emailVerificationRequired: false,
     session: { id: "0192f3a0-dddd-7000-8000-000000000001", tokenHash: Buffer.alloc(32, 1), replacedTokenHash: null, ipPrefix: "203.0.0.0/16", userAgent: "tests" },
   };
 }
@@ -49,14 +50,14 @@ function ask(token: string): InvitationSignupAsk {
 describe("accepting an invitation with registration fields", () => {
   it("hands the store the token's hash, a generated account identifier and the fields, and prepares the records of the transaction from the workspace and role it answers", async () => {
     const token = generateCredentialToken();
-    const w = world({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "admin" });
+    const w = world({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "admin", sessionCreated: true });
 
     const outcome = await acceptInvitationWithAccount(w.dependencies, ask(token.value));
 
-    expect(outcome).toEqual({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "admin" });
+    expect(outcome).toEqual({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "admin", sessionCreated: true });
     expect(w.asked).toHaveLength(1);
     const accepted = w.asked[0];
-    expect(accepted).toMatchObject({ tokenHash: token.hash, displayName: "Grace Hopper", passwordHash: "$argon2id$stub", locale: "de", seatLimit: 3 });
+    expect(accepted).toMatchObject({ tokenHash: token.hash, displayName: "Grace Hopper", passwordHash: "$argon2id$stub", locale: "de", seatLimit: 3, emailVerificationRequired: false });
     const accountId = accepted?.accountId ?? "";
     expect(accountId).toMatch(/^0192f3a0-aaaa-7000-8000-/);
     const records = w.written[0];
@@ -80,7 +81,7 @@ describe("accepting an invitation with registration fields", () => {
 
   it("hands the store the account identifier the caller named, so a seat check and the acceptance that follows it name one account", async () => {
     const token = generateCredentialToken();
-    const w = world({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "member" });
+    const w = world({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "member", sessionCreated: true });
     const accountId = "0192f3a0-eeee-7000-8000-000000000009";
 
     await acceptInvitationWithAccount(w.dependencies, { ...ask(token.value), accountId });

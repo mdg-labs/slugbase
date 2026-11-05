@@ -124,6 +124,7 @@
     "20261105091037_add_verification_workspace_strip": "6ff142368f1c43078daaac07cce7b2e5f8dcc8f73949a0540e6667c5c2c0782a",
     "20261105180929_add_workspace_favicons": "523b5c214e7bccb5628d8e465653f8d8126eb208163a811a49a5167a426d1b60",
     "20261105185116_add_instance_mark_verified_strip": "2186e43c197b0eba76ae061260ee21dbcacb99c114e2aafedd843165f594a698",
-    "20261105220745_add_verification_creator_strip": "fba969945080fe02e33da747bdeed16c9c9b23bb56cb1ea56a621b7f922c95f3"
+    "20261105220745_add_verification_creator_strip": "fba969945080fe02e33da747bdeed16c9c9b23bb56cb1ea56a621b7f922c95f3",
+    "20261105230009_add_invitation_accept_verification": "61f2948fb7d484af8a4e579af0ab77f415b3e2d247d264f9bf33a30d614ff1dd"
   }
 }

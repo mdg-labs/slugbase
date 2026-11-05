@@ -11,7 +11,7 @@ import { productionEnv } from "../config/support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { adapters, recordingLogger } from "../support.ts";
 import { HOOK_TIMEOUT_MS, send, workspaceHarness, type World } from "../workspaces/support.ts";
-import { createInvitation, GRANTED, freshAddress, invite, linkOf, signup, workspaceWithAdmin } from "./support.ts";
+import { createInvitation, GRANTED, SIGNUP_PASSWORD, freshAddress, invite, linkOf, signup, workspaceWithAdmin } from "./support.ts";
 
 // Who proves the invited address when an invitation is accepted with registration fields (doc 02 sections 2.2 and
 // 3.4, doc 10 T19). A token the invitation's mail job made reached the mailbox, so the account it creates is
@@ -39,13 +39,15 @@ beforeEach(async () => {
 
 afterAll(() => harness.stop());
 
-function serve(withMail: MailPort = mail): World {
+function serve(withMail: MailPort = mail, env: Record<string, string> = {}): World {
   return harness.serve({
     entitlements: GRANTED,
     mail: withMail,
-    env: { RATE_LIMIT_TOKEN_REDEEM_IP: "10000/hour", RATE_LIMIT_TOKEN_REDEEM_ACCOUNT: "10000/hour", RATE_LIMIT_RESET_IP: "10000/hour", RATE_LIMIT_RESET_EMAIL: "10000/hour" },
+    env: { RATE_LIMIT_TOKEN_REDEEM_IP: "10000/hour", RATE_LIMIT_TOKEN_REDEEM_ACCOUNT: "10000/hour", RATE_LIMIT_RESET_IP: "10000/hour", RATE_LIMIT_RESET_EMAIL: "10000/hour", ...env },
   });
 }
+
+const VERIFICATION_REQUIRED = { EMAIL_VERIFICATION_REQUIRED: "true" };
 
 function jobContext(): ModuleContext {
   const config = loadConfig("worker", { ...productionEnv(), NODE_ENV: "test", DATABASE_URL: appUrl(database()) }).config;
@@ -80,6 +82,26 @@ async function accountOf(email: string): Promise<AccountRow | undefined> {
     return tx<AccountRow[]>`SELECT id, email_verified_at IS NOT NULL AS verified FROM accounts WHERE lower(email) = lower(${email})`;
   });
   return rows[0];
+}
+
+async function sessionCountOf(accountId: string): Promise<number> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ count: number }[]>`SELECT count(*)::int AS count FROM sessions WHERE account_id = ${accountId}`;
+  });
+  return rows[0]?.count ?? -1;
+}
+
+async function invitationStatusOf(id: string): Promise<{ status: string; accepted_by: string | null }> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ status: string; accepted_by: string | null }[]>`SELECT status, accepted_by FROM workspace_invitations WHERE id = ${id}`;
+  });
+  const row = rows[0];
+  if (row === undefined) {
+    throw new Error("no such invitation");
+  }
+  return row;
 }
 
 async function countOf(table: "api_tokens" | "account_identities", accountId: string): Promise<number> {
@@ -167,6 +189,98 @@ describe("the account an invitation with registration fields creates", { timeout
     expect((await signup(world, link)).status).toBe(201);
 
     expect((await accountOf(email))?.verified).toBe(false);
+  });
+});
+
+describe("redeeming an invitation with registration fields where the deployment requires a verified address", { timeout: TEST_TIMEOUT_MS }, () => {
+  it("answers 202 with no body and no cookie for the link an admin took, creating the unverified account, its membership with the invited role and the accepted invitation, but no session, and queues the verification email", async () => {
+    const world = serve(mail, VERIFICATION_REQUIRED);
+    const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
+    const email = freshAddress("held");
+    const { id, token } = await invite(world, admin, email, "admin");
+
+    const response = await signup(world, token);
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(await response.text()).toBe("");
+    const account = await accountOf(email);
+    expect(account?.verified).toBe(false);
+    expect(await harness.rolesOf(workspaceId)).toMatchObject({ [account?.id ?? ""]: "admin" });
+    expect(await invitationStatusOf(id)).toEqual({ status: "accepted", accepted_by: account?.id });
+    expect(await sessionCountOf(account?.id ?? "")).toBe(0);
+    const jobs = await database().app<{ data: Record<string, unknown> }[]>`SELECT data FROM pgboss.job WHERE name = 'mail.send'`;
+    expect(jobs.map((job) => job.data)).toEqual([expect.objectContaining({ template: "verifyEmail", accountId: account?.id })]);
+    const login = await send(world, "POST", "/api/v1/auth/login", {}, { email, password: SIGNUP_PASSWORD, remember: false });
+    expect(login.status).toBe(403);
+    expect(await login.json()).toMatchObject({ code: "email_unverified" });
+  });
+
+  it("queues no verification email where the deployment cannot send mail, and still creates no session", async () => {
+    const world = serve(noMail, VERIFICATION_REQUIRED);
+    const { admin } = await workspaceWithAdmin(harness, world);
+    const email = freshAddress("held");
+    const { token } = await invite(world, admin, email);
+
+    expect((await signup(world, token)).status).toBe(202);
+
+    const jobs = await database().app<{ count: number }[]>`SELECT count(*)::int AS count FROM pgboss.job WHERE name = 'mail.send'`;
+    expect(jobs[0]?.count).toBe(0);
+    expect(await sessionCountOf((await accountOf(email))?.id ?? "")).toBe(0);
+  });
+
+  it("leaves the session cookie the request carried alone", async () => {
+    const world = serve(mail, VERIFICATION_REQUIRED);
+    const { admin } = await workspaceWithAdmin(harness, world);
+    const bystander = await harness.person(world);
+    const { token } = await invite(world, admin, freshAddress("held"));
+
+    const response = await signup(world, token, undefined, { cookie: bystander.cookie });
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect((await send(world, "GET", "/api/v1/me", { cookie: bystander.cookie })).status).toBe(200);
+  });
+
+  it("counts the redemption against the token_redeem bucket of the client address", async () => {
+    const world = serve(mail, { ...VERIFICATION_REQUIRED, RATE_LIMIT_TOKEN_REDEEM_IP: "2/hour" });
+    const { admin } = await workspaceWithAdmin(harness, world);
+    const { token } = await invite(world, admin, freshAddress("held"));
+    const unknown = Buffer.alloc(32, 9).toString("base64url");
+
+    expect((await signup(world, token)).status).toBe(202);
+    expect((await signup(world, unknown)).status).toBe(410);
+    expect((await signup(world, unknown)).status).toBe(429);
+  });
+
+  it("answers 201 with the session cookie for the token the invitation's mail job sent, whose account is verified", async () => {
+    const world = serve(mail, VERIFICATION_REQUIRED);
+    const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
+    const email = freshAddress("mailed");
+    await createInvitation(world, admin, email);
+
+    const response = await signup(world, await mailedToken(workspaceId));
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("set-cookie")).toMatch(/HttpOnly/);
+    const account = await accountOf(email);
+    expect(account?.verified).toBe(true);
+    expect(await sessionCountOf(account?.id ?? "")).toBe(1);
+  });
+
+  it("answers 201 with the session cookie for the link an admin took where verification is not required, as before", async () => {
+    const world = serve(mail, { EMAIL_VERIFICATION_REQUIRED: "false" });
+    const { admin } = await workspaceWithAdmin(harness, world);
+    const email = freshAddress("held");
+    const { token } = await invite(world, admin, email);
+
+    const response = await signup(world, token);
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("set-cookie")).toMatch(/HttpOnly/);
+    const account = await accountOf(email);
+    expect(account?.verified).toBe(false);
+    expect(await sessionCountOf(account?.id ?? "")).toBe(1);
   });
 });
 

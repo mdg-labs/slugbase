@@ -31,6 +31,7 @@ import {
   type InvitationSignupEvent,
   type MailPort,
   type PasswordPolicy,
+  type RegistrationSettings,
   type SessionCookieSpec,
   normalizeEmail,
   registrationLocale,
@@ -109,7 +110,10 @@ import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } fro
 // `account.created` and `member.joined` events and the `member.joined` audit event; a session cookie the request
 // carried is replaced. The account is verified when the token reached the mailbox by mail and not verified when the token is a link an
 // admin took (doc 02 section 3.4, doc 10 T19); where the composition can send mail the same transaction queues the verification
-// email, which a verified account is not sent. An address that has an account is 409 email_taken and nothing is written. Both forms count
+// email, which a verified account is not sent. Where `EMAIL_VERIFICATION_REQUIRED` holds, the unverified account of a link an
+// admin took could not sign in again, so the database makes no session for it and the answer is 202 with no body and no
+// `Set-Cookie`, leaving a cookie the request carried as it was; the person verifies the address, or asks an administrator to,
+// and signs in. The mailed token and the setting off keep the 201 and the session. An address that has an account is 409 email_taken and nothing is written. Both forms count
 // against the `token_redeem` bucket of the client address.
 //
 // Both forms also need the workspace of the invitation to hold `members.invite` and a free seat (doc 01 sections 7.5
@@ -162,6 +166,8 @@ export interface InvitationRoutesOptions {
   readonly cookie: SessionCookieSpec;
   /** The password policy every password-setting flow goes through. */
   readonly passwordPolicy: PasswordPolicy;
+  /** The registration settings in force: where an address must be verified to sign in, redeeming a link an admin took gives the account it creates no session. */
+  readonly registration: Pick<RegistrationSettings, "emailVerificationRequired">;
   /** Hashes the password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
   /** Decides `members.invite` for the workspace of an invitation, which accepting it needs unless it is the owner invitation an instance admin issues, and `teams.manage` for an invitation that names teams. */
@@ -266,6 +272,7 @@ export function invitationRoutes({
   ttlSeconds = INVITATION_TTL_SECONDS,
   cookie,
   passwordPolicy,
+  registration,
   hashPassword,
   entitlements,
   upgradeAvailable,
@@ -350,7 +357,7 @@ export function invitationRoutes({
           },
           newId: uuidv7,
         },
-        { ...ask, seatLimit },
+        { ...ask, seatLimit, emailVerificationRequired: registration.emailVerificationRequired },
       );
     let outcome: Awaited<ReturnType<typeof acceptAs>>;
     try {
@@ -365,6 +372,10 @@ export function invitationRoutes({
     }
     switch (outcome.kind) {
       case "accepted":
+        // The database made no session for a link an admin took where the address must be verified to sign in: the answer carries no cookie, and a cookie the request carried is left as it was.
+        if (!outcome.sessionCreated) {
+          return { status: 202 } as const;
+        }
         return { status: 201, headers: { "Set-Cookie": setSessionCookie(cookie, token.value) }, body: { workspaceId: outcome.workspaceId, role: outcome.role } } as const;
       case "gone":
         throw new ProblemError("token_expired", TOKEN_REFUSED);

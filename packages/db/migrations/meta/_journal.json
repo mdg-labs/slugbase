@@ -876,6 +876,13 @@
       "when": 1793916465259,
       "tag": "20261105220745_add_verification_creator_strip",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1793919609336,
+      "tag": "20261105230009_add_invitation_accept_verification",
+      "breakpoints": true
     }
   ]
 }

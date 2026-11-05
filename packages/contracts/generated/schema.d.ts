@@ -9529,7 +9529,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvitationAccepted"];
                 };
             };
-            /** @description A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists with the invited address, verified whatever the deployment requires of other accounts when the live token is the one the invitation's email carried, and not verified when it is a link an admin asked for (the verification email is then queued where mail can be sent, and only the owner of the address verifying it makes the address verified), with no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced */
+            /** @description A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists with the invited address, verified whatever the deployment requires of other accounts when the live token is the one the invitation's email carried, and not verified when it is a link an admin asked for (the verification email is then queued where mail can be sent, and only the owner of the address verifying it makes the address verified), with no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced. Where the deployment requires a verified address and the token is a link an admin asked for, the answer is 202 and creates no session */
             201: {
                 headers: {
                     /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
@@ -9539,6 +9539,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InvitationAccepted"];
                 };
+            };
+            /** @description A request with the token, a display name and a password, for an invited address that has no account, where the deployment requires a verified address to sign in (EMAIL_VERIFICATION_REQUIRED) and the live token is a link an admin asked for: the token is redeemed, once, and in one transaction the unverified account exists with the invited address, it is a member of the invitation's workspace with exactly the invited role and the invitation is accepted, but no session is created, since the account could not sign in again before its address is verified (the verification email is queued where mail can be sent, and only the owner of the address verifying it makes the address verified; otherwise an administrator of the instance can). The answer has no body and no Set-Cookie, and a session cookie the request carried is left as it was. A token the invitation's email carried never gets this answer: its account is verified and is answered 201 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request was malformed */
             400: {

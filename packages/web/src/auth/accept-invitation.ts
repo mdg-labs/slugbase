@@ -89,7 +89,12 @@ export type AcceptRefusal =
   | { readonly status: "sessionEnded" }
   | { readonly status: "unavailable" };
 
-export type AcceptOutcome = { readonly status: "joined" } | AcceptRefusal;
+/**
+ * The account is a member of the workspace. `signedIn` is false when the server made the account without a session
+ * (`202`): the link was one an admin took and the deployment requires a verified address to sign in, so the person
+ * verifies the address first and the app is not entered.
+ */
+export type AcceptOutcome = { readonly status: "joined"; readonly signedIn: boolean } | AcceptRefusal;
 
 /** The field code of the `403` that says the account does not hold the invited address, verified. */
 const MISMATCH_FIELD_CODE = "invitation_email_mismatch";
@@ -136,7 +141,7 @@ export async function acceptAsAccount(api: ApiClient, token: string): Promise<Ac
     if (!response.ok) {
       throw new Error("The acceptance did not answer with a problem document", { cause: error });
     }
-    return { status: "joined" };
+    return { status: "joined", signedIn: true };
   } catch (caught) {
     return refusalOf(caught);
   }
@@ -144,7 +149,8 @@ export async function acceptAsAccount(api: ApiClient, token: string): Promise<Ac
 
 /**
  * Accepts by creating the account of the invited address, which the server fixes: the token with a name and a
- * password. The answer carries the new session.
+ * password. The answer carries the new session (`201`), or none (`202`) where the address has to be verified before
+ * the account can sign in; the outcome says which.
  */
 export async function acceptWithNewAccount(api: ApiClient, token: string, displayName: string, password: string, signal: AbortSignal): Promise<AcceptOutcome> {
   try {
@@ -152,7 +158,7 @@ export async function acceptWithNewAccount(api: ApiClient, token: string, displa
     if (!response.ok) {
       throw new Error("The sign-up did not answer with a problem document", { cause: error });
     }
-    return { status: "joined" };
+    return { status: "joined", signedIn: response.status !== 202 };
   } catch (caught) {
     return refusalOf(caught);
   }

@@ -107,6 +107,7 @@ function acceptance(hash: Buffer, overrides: Partial<NewInvitationAccount> = {})
       passwordHash: PASSWORD_HASH,
       locale: "de",
       seatLimit: null,
+      emailVerificationRequired: false,
       session: { id: freshId(), tokenHash: session.hash, replacedTokenHash: null, ipPrefix: "203.0.0.0/16", userAgent: "tests" },
       onAccepted: ({ workspaceId, role }) => ({
         audit: [
@@ -206,7 +207,7 @@ describe("sys_invitation_accept_new_account", () => {
 
       const result = await store.acceptInvitationWithNewAccount(input);
 
-      expect(result).toEqual({ kind: "accepted", workspaceId, invitationId: invitation.id, role });
+      expect(result).toEqual({ kind: "accepted", workspaceId, invitationId: invitation.id, role, sessionCreated: true });
       const [account, ...rest] = await accountsWithEmail(invitation.email.toLowerCase());
       expect(rest).toEqual([]);
       expect(account).toMatchObject({
@@ -230,6 +231,91 @@ describe("sys_invitation_accept_new_account", () => {
       ]);
       expect((await jobs()).filter((job) => job.data.accountId === input.accountId)).toHaveLength(1);
     }
+  });
+
+  it("makes no session for the account of a link an admin took where verification is required, and answers sessionCreated false with everything else written", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const invitation = await invite(workspaceId, { role: "admin" });
+    const link = freshToken();
+    // How the invitation route issues a link: a new token hash and no mail ticket.
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET token_hash = ${link.hash}, mail_ticket = NULL WHERE id = ${invitation.id}`);
+    const { input } = acceptance(link.hash, { emailVerificationRequired: true });
+    const carried = freshToken();
+    const bystander = freshId();
+    await seedAccount(db, { id: bystander, email: `bystander${String(emailNumber)}@example.test`, passwordHash: "$argon2id$stub", emailVerified: true });
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO sessions (id, token_hash, account_id, level, remember, expires_at, absolute_expires_at)
+        VALUES (${freshId()}, ${carried.hash}, ${bystander}, 'full', false, now() + interval '1 day', now() + interval '1 day')`,
+    );
+
+    const result = await store.acceptInvitationWithNewAccount({ ...input, session: { ...input.session, replacedTokenHash: carried.hash } });
+
+    expect(result).toEqual({ kind: "accepted", workspaceId, invitationId: invitation.id, role: "admin", sessionCreated: false });
+    const [account] = await accountsWithEmail(invitation.email);
+    expect(account?.email_verified_at).toBeNull();
+    expect((await members(workspaceId))[input.accountId]).toBe("admin");
+    expect(await invitationRow(invitation.id)).toMatchObject({ status: "accepted", accepted_by: input.accountId });
+    expect(await sessionsOf(input.accountId)).toEqual([]);
+    expect(await sessionsOf(bystander)).toHaveLength(1);
+    expect((await jobs()).filter((job) => job.data.accountId === input.accountId)).toHaveLength(1);
+  });
+
+  it("signs the account of a link an admin took in where verification is not required, and the account of a mailed token under either setting", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const held = await invite(workspaceId);
+    const link = freshToken();
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET token_hash = ${link.hash}, mail_ticket = NULL WHERE id = ${held.id}`);
+    const notRequired = acceptance(link.hash, { emailVerificationRequired: false }).input;
+    expect(await store.acceptInvitationWithNewAccount(notRequired)).toMatchObject({ kind: "accepted", sessionCreated: true });
+    expect(await sessionsOf(notRequired.accountId)).toHaveLength(1);
+
+    for (const emailVerificationRequired of [true, false]) {
+      const mailed = await invite(workspaceId);
+      const input = acceptance(mailed.hash, { emailVerificationRequired }).input;
+      expect(await store.acceptInvitationWithNewAccount(input)).toMatchObject({ kind: "accepted", sessionCreated: true });
+      expect(await sessionsOf(input.accountId)).toHaveLength(1);
+      expect((await accountsWithEmail(mailed.email))[0]?.email_verified_at).toBeInstanceOf(Date);
+    }
+  });
+
+  it("keeps the eleven-argument form, which the provider form and replicas of the previous release call, signing in the account of a link an admin took", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const invitation = await invite(workspaceId);
+    const link = freshToken();
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET token_hash = ${link.hash}, mail_ticket = NULL WHERE id = ${invitation.id}`);
+    const accountId = freshId();
+    const session = freshToken();
+    const sessionId = freshId();
+
+    const rows = await db.app.begin(
+      (tx) => tx<{ outcome: string }[]>`
+        SELECT * FROM sys_invitation_accept_new_account(
+          ${link.hash}::bytea, ${accountId}::uuid, 'Grace Hopper', ${PASSWORD_HASH}, 'en', NULL::integer,
+          ${sessionId}::uuid, ${session.hash}::bytea, NULL::bytea, '203.0.0.0/16'::cidr, 'tests')`,
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ outcome: "accepted" });
+    expect(Object.keys(rows[0] ?? {})).toEqual(["outcome", "accepted_workspace_id", "accepted_invitation_id", "accepted_role"]);
+    expect(await sessionsOf(accountId)).toEqual([expect.objectContaining({ id: sessionId, level: "full", active_workspace_id: workspaceId })]);
+  });
+
+  it("refuses to decide without knowing whether verification is required", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const invitation = await invite(workspaceId);
+    const session = freshToken();
+
+    await expect(
+      db.app.begin(
+        (tx) => tx`
+          SELECT * FROM sys_invitation_accept_new_account(
+            ${invitation.hash}::bytea, ${freshId()}::uuid, 'Grace Hopper', ${PASSWORD_HASH}, 'en', NULL::integer,
+            ${freshId()}::uuid, ${session.hash}::bytea, NULL::bytea, '203.0.0.0/16'::cidr, 'tests', NULL::boolean)`,
+      ),
+    ).rejects.toThrow();
+    expect(await invitationRow(invitation.id)).toMatchObject({ status: "pending" });
   });
 
   it("makes the account of the address the invitation names and no other: the request carries no address", async () => {

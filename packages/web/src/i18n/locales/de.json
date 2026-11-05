@@ -3318,6 +3318,12 @@
         "invalid": "Prüfe deine Eingaben und versuche es erneut.",
         "unavailable": "Das Konto kann gerade nicht erstellt werden. Versuche es gleich noch einmal."
       }
+    },
+    "verifyEmail": {
+      "title": "Bestätige deine Adresse, um dich anzumelden",
+      "description": "Das Konto für {email} ist angelegt und gehört jetzt zum Workspace {workspace}. Bestätige die Adresse, bevor du dich anmeldest.",
+      "hint": "Öffne den Link in der E-Mail, die an diese Adresse gegangen ist. Kommt keine an, bitte einen Administrator dieser Instanz, die Adresse für dich zu bestätigen.",
+      "action": "Zur Anmeldung"
     }
   },
   "palette": {
