@@ -24,6 +24,9 @@ import {
 // Compose itself: the database image and the mounts it resolves to are what the
 // e2e workflow runs.
 
+const POSTGRES_18_IMAGE = "postgres:18@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583";
+const POSTGRES_17_IMAGE = "postgres:17@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3";
+
 let directory: string;
 
 function writeEnv(entries: ReadonlyMap<string, string>): string {
@@ -137,7 +140,7 @@ describe.skipIf(!hasDockerCompose)("compose.yml under Docker Compose (skipped: t
 
   it("runs PostgreSQL 18 with the data volume under /var/lib/postgresql when no override is given", () => {
     const postgres = postgresOf([]);
-    expect(postgres.image).toBe("postgres:18");
+    expect(postgres.image).toBe(POSTGRES_18_IMAGE);
     expect(mounts(postgres.volumes)).toEqual([
       ["volume", "postgres-data", "/var/lib/postgresql"],
       ["bind", "<root>/packages/db/provision/roles.sql", "/docker-entrypoint-initdb.d/10-roles.sql"],
@@ -146,7 +149,7 @@ describe.skipIf(!hasDockerCompose)("compose.yml under Docker Compose (skipped: t
 
   it("runs PostgreSQL 17 with the data volume at /var/lib/postgresql/data, and nothing at the PostgreSQL 18 path, under compose.pg17.yml", () => {
     const postgres = postgresOf([COMPOSE_PG17_FILE]);
-    expect(postgres.image).toBe("postgres:17");
+    expect(postgres.image).toBe(POSTGRES_17_IMAGE);
     expect(mounts(postgres.volumes)).toEqual([
       ["volume", "postgres-data", "/var/lib/postgresql/data"],
       ["bind", "<root>/packages/db/provision/roles.sql", "/docker-entrypoint-initdb.d/10-roles.sql"],
