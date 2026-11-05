@@ -432,7 +432,7 @@ Name (admins), workspace monogram preview, plan summary through slot. Members se
 ### 11.7 `/settings/workspace/members`
 
 - **Members** `data-table`: avatar, name, email, role (inline Select for admins; owners can promote to owner), teams (badges), joined, last active, `row-actions` (Change role, Manage teams, Transfer ownership — owners, Remove).
-- **Invite** `form-overlay`: emails (several, comma or Enter), role (`choice-cards`: Admin / Member with descriptions), teams (`multi-pick`). Gated by `members.invite`; seat summary via slot `settings.workspace.members.seats` ("4 of 5 seats used — Manage seats →").
+- **Invite** `form-overlay`: emails (several, comma or Enter), role (`choice-cards`: Admin / Member with descriptions), teams (`multi-pick`, offered only where the workspace holds `teams.manage`; without it no team is sent). Gated by `members.invite`; seat summary via slot `settings.workspace.members.seats` ("4 of 5 seats used — Manage seats →").
 - **Pending invitations**: email, role, invited by, expires (expired ones are marked and can be resent), Resend / Revoke; a "Copy invitation link" action (which issues a new link and ends the old one) is offered when mail is not configured. Inviting an email that is already pending resends it; inviting a current member says so.
 - **Remove member**: `choice-cards` (transfer content to … / delete content) with recipient `picker`, then `confirm` (doc 02 §3.6).
 - **Transfer ownership**: `typed-confirm` on the recipient's name, option "Stay as admin".

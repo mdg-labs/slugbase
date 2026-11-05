@@ -521,3 +521,44 @@ describe("the invite dialog", () => {
     expect(await screen.findByRole("button", { name: "Invite people" })).toBeTruthy();
   }, SLOW_TEST_TIMEOUT_MS);
 });
+
+describe("the team picker of the invite dialog", () => {
+  const TEAMS_HINT = "The people you invite join these teams when they accept. Optional.";
+
+  it("is offered where the workspace holds teams.manage", async () => {
+    server({ teamsManage: true });
+    await openMembers();
+    const dialog = await openInvite();
+
+    expect(within(dialog).getByText(TEAMS_HINT)).toBeTruthy();
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("is not offered, and no team is sent, where the workspace lacks teams.manage", async () => {
+    const stub = server({ teamsManage: false });
+    await openMembers();
+    const dialog = await openInvite();
+
+    await waitFor(() => {
+      expect(within(dialog).queryByText(TEAMS_HINT)).toBeNull();
+    });
+    await typeAddresses(dialog, "new@example.org");
+    await press(within(dialog).getByRole("button", { name: "Send invitations" }));
+
+    expect(await screen.findByText("1 of 1 invited.")).toBeTruthy();
+    expect(stub.received("POST", INVITATIONS_PATH).map(({ body }) => body)).toEqual([{ email: "new@example.org", role: "member", teamIds: [] }]);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("names a refusal for a missing entitlement instead of a generic failure", async () => {
+    server({ teamsManage: true, invitationPost: () => problem(403, "entitlement_required", "req-403") });
+    await openMembers();
+    const dialog = await openInvite();
+    await typeAddresses(dialog, "new@example.org");
+    await press(within(dialog).getByRole("button", { name: "Send invitations" }));
+
+    const results = await screen.findByRole("list", { name: "Result for each address" });
+    const [item] = within(results).getAllByRole("listitem");
+    expect(item?.textContent).toContain("This workspace's plan does not include teams, so people cannot be invited into one.");
+    expect(item?.textContent).toContain("Request ID: req-403");
+    expect(item?.textContent).not.toContain("The invitation could not be created.");
+  }, SLOW_TEST_TIMEOUT_MS);
+});
