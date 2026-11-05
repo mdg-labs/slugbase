@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { ConfigIssue, EnvSchema, EnvironmentVariables, RefineContext } from "./fragment.ts";
+import { DEVELOPMENT_DEFAULT_REFUSAL } from "./fields.ts";
 import { declaredKeys, envSchemas, type ConfigByProcess, type ProcessType } from "./schemas.ts";
 
 export type { EnvironmentVariables };
@@ -68,8 +69,9 @@ export function validateEnvironment<Shape extends z.ZodRawShape, Collected exten
 
   if (production) {
     for (const [key, developmentValue] of Object.entries(schema.developmentDefaults)) {
-      if (env[key] === developmentValue) {
-        issues.push({ key, message: "is a development default from .env.example, which production refuses" });
+      const reported = issues.some((issue) => issue.key === key && issue.message === DEVELOPMENT_DEFAULT_REFUSAL);
+      if (env[key] === developmentValue && !reported) {
+        issues.push({ key, message: DEVELOPMENT_DEFAULT_REFUSAL });
       }
     }
   }
