@@ -3,7 +3,7 @@ import { AiSuggestError, EgressBlocked, type AiSuggestRequest, type EgressPort }
 import type { Database } from "@slugbase/db";
 import { createServer, createWorker, loadConfig, type Logger, type ServerModule } from "@slugbase/server";
 import { afterEach, describe, expect, it } from "vitest";
-import { composeAdapters } from "../src/main.ts";
+import { composeAdapters, composeIdentity } from "../src/main.ts";
 import { startHttpSink, type HttpSink } from "./http-sink.ts";
 
 // The composition root builds the egress adapter and hands it to the server and the worker as
@@ -135,5 +135,28 @@ describe("the egress instance of the AI adapter", () => {
     }).config;
     const error = await failureOf(composeAdapters(config, logger).ai.suggest(request));
     expect((error as AiSuggestError).cause).toBeInstanceOf(EgressBlocked);
+  });
+});
+
+// The process's own `NODE_ENV` decides whether the test allowances are refused (T6). `EgressTestOptions` does not name `nodeEnv`,
+// but an object of a wider type is accepted where it is expected, so a caller can hand one over that carries it; the
+// composition sets its own value after the spread, and the instance still refuses `testOnly` under production.
+describe("the composition's NODE_ENV and the egress options", () => {
+  const widerOptions = { testOnly: { allowNonPublicAddresses: true }, nodeEnv: "test" };
+  const refusedInProduction = "The egress test allowances cannot be used when NODE_ENV is production";
+
+  it("refuses testOnly under production on the shared instance although the options carry another nodeEnv", () => {
+    const config = loadConfig("server", environment).config;
+    expect(() => composeAdapters(config, logger, widerOptions)).toThrow(refusedInProduction);
+  });
+
+  it("refuses testOnly under production on the identity instance although the options carry another nodeEnv", () => {
+    const config = loadConfig("server", {
+      ...environment,
+      OIDC_IDP_CLIENT_ID: "client-id-qx90",
+      OIDC_IDP_CLIENT_SECRET: "client-secret-qx91",
+      OIDC_IDP_ISSUER_URL: "https://idp.example.com",
+    }).config;
+    expect(() => composeIdentity(config, logger, widerOptions)).toThrow(refusedInProduction);
   });
 });

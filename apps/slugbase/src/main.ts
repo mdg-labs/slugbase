@@ -192,7 +192,8 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
 }
 
 // What a test may change about the egress instances the composition builds: the resolver, and the allowances that
-// the adapter itself refuses when `NODE_ENV` is `production`.
+// the adapter itself refuses when `NODE_ENV` is `production`. `nodeEnv` is always set after the options are spread, so
+// no options object can replace the process's own value, whatever it carries.
 export type EgressTestOptions = Pick<CreateEgressOptions, "resolve" | "testOnly">;
 
 // Identity is the OIDC adapter when the operator configured a provider, and the unconfigured default when not.
@@ -202,13 +203,13 @@ export type EgressTestOptions = Pick<CreateEgressOptions, "resolve" | "testOnly"
 // most three host-name lookups at a time, and the shared one can be held full by the fetches a member starts,
 // which would refuse every discovery and code exchange of a sign-in. The instance carries no allowance, as the
 // shared one does not.
-function composeIdentity(config: ServerConfig | WorkerConfig, logger: Logger, egressOptions: EgressTestOptions): IdentityPort {
+export function composeIdentity(config: ServerConfig | WorkerConfig, logger: Logger, egressOptions: EgressTestOptions): IdentityPort {
   const providers = "OIDC_PROVIDERS" in config ? config.OIDC_PROVIDERS : [];
   if (providers.length === 0) {
     return unconfigured().identity;
   }
   logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug) });
-  const egress = new HttpEgress({ nodeEnv: config.NODE_ENV, ...egressOptions });
+  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV });
   return createOidcIdentity({ providers, egress, logger });
 }
 
@@ -272,7 +273,7 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
   const mail = composeMail(config, logger);
   logger.info(mail.available ? "Mail ready" : "Mail is off; messages are only logged");
-  const egress = new HttpEgress({ nodeEnv: config.NODE_ENV, ...egressOptions });
+  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV });
   return {
     ...defaults,
     mail,
