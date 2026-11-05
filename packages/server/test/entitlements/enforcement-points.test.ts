@@ -39,20 +39,26 @@ describe("the enforcement-point inventory", () => {
     }
   });
 
-  it("records the one exemption of members.invite, the owner invitation an instance admin issues, at both places a token is accepted, and no other", () => {
+  it("records the one exemption of members.invite, the owner invitation an instance admin issues, at both places a token is accepted, and the one of teams.manage, an invitation that names no team, and no other", () => {
     const exempt = ENFORCEMENT_POINTS.filter((point) => point.exemption !== undefined).map((point) => [point.operationId, point.entitlement, point.exemption]);
     expect(exempt.sort()).toEqual([
       ["acceptInvitation", "members.invite", "the owner invitation an instance admin issues"],
       ["completeOidcSignIn", "members.invite", "the owner invitation an instance admin issues"],
+      ["createInvitation", "teams.manage", "an invitation that names no team (no teamIds, or an empty list)"],
     ]);
     for (const point of ENFORCEMENT_POINTS.filter((entry) => entry.exemption !== undefined)) {
-      expect(readFileSync(join(HERE, point.test), "utf8"), `${point.test} for ${point.operationId}`).toContain("owner invitation");
+      expect(readFileSync(join(HERE, point.test), "utf8"), `${point.test} for ${point.operationId}`).toContain(point.operationId === "createInvitation" ? "names teams" : "owner invitation");
     }
   });
 
-  it("holds the handler-decided points to operations that declare no entitlement to stage 9: an anonymous operation whose token names the workspace, an account operation whose key is account-scoped, or a member operation whose limit is a count taken under the workspace's lock or whose entitlement follows the kind of target in the request", () => {
+  it("holds the handler-decided points to operations that declare no entitlement to stage 9: an anonymous operation whose token names the workspace, an account operation whose key is account-scoped, or a member operation whose limit is a count taken under the workspace's lock or whose entitlement follows the kind of target in the request; the one exception is createInvitation, an admin operation that declares members.invite and asks teams.manage in the handler when the request names teams", () => {
     const document = readOperations(loadOpenApiDocument()).operations;
-    for (const point of ENFORCEMENT_POINTS.filter((entry) => entry.decidedBy === "handler")) {
+    const invitationTeams = ENFORCEMENT_POINTS.find((point) => point.operationId === "createInvitation" && point.decidedBy === "handler");
+    const invitation = document.find((candidate) => candidate.operationId === "createInvitation");
+    expect(invitation?.auth).toBe("admin");
+    expect(invitation?.entitlement).toBe("members.invite");
+    expect(invitationTeams?.entitlement).toBe("teams.manage");
+    for (const point of ENFORCEMENT_POINTS.filter((entry) => entry.decidedBy === "handler" && entry !== invitationTeams)) {
       const operation = document.find((candidate) => candidate.operationId === point.operationId);
       const accountScoped = isEntitlementKey(point.entitlement) && ENTITLEMENT_CATALOG[point.entitlement].scope === "account";
       const memberDecided = point.entitlement === "bookmarks.max" || point.entitlement.startsWith("sharing.");

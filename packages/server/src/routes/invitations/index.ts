@@ -76,7 +76,10 @@ import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } fro
 // `teamIds` (code `unknown_team`) and names no identifier.
 // The operations declare `members.invite` (revoking does not); the authorization stage refuses it while no
 // entitlement source of the composition holds that entitlement, and they declare no token scope, so an API
-// token never reaches them.
+// token never reaches them. Creating an invitation that names teams also needs `teams.manage`, since the invited
+// person joins those teams on accepting; the handler decides it (403 entitlement_required) before the teams are
+// looked up, so a refusal writes no invitation, audit event or mail job, and an invitation without `teamIds`
+// or with an empty list needs `members.invite` alone.
 //
 // An admin or owner also lists the pending invitations, resends one, gets the link of one and revokes one. Each
 // names an invitation by identifier and acts in the workspace of the request only: the identifier of another
@@ -161,13 +164,14 @@ export interface InvitationRoutesOptions {
   readonly passwordPolicy: PasswordPolicy;
   /** Hashes the password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
-  /** Decides `members.invite` for the workspace of an invitation, which accepting it needs unless it is the owner invitation an instance admin issues. */
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it needs unless it is the owner invitation an instance admin issues, and `teams.manage` for an invitation that names teams. */
   readonly entitlements: EntitlementCheck;
   /** Says whether a workspace without it has a better plan to offer. */
   readonly upgradeAvailable: EntitlementUpgradeCheck;
 }
 
 const MEMBERS_INVITE = "members.invite";
+const TEAMS_MANAGE = "teams.manage";
 
 /** The problem the signed-in form answers a refused acceptance with. */
 function acceptanceRefusal(kind: "gone" | "email_mismatch" | "already_member" | "seat_limit_reached"): ProblemError {
@@ -451,6 +455,14 @@ export function invitationRoutes({
     route(createInvitation).handle(async ({ body }, context) => {
       const { accountId } = sessionOf(context);
       const tenant = tenantOf(context);
+      // Naming teams decides who joins them on accepting, which is team administration: `teams.manage` is asked, besides the `members.invite` that
+      // stage 9 asked, before anything is written or any team is looked up. An entitlement source that cannot answer ends the request with an error.
+      if (body.teamIds !== undefined && body.teamIds.length > 0) {
+        const subject = { accountId, workspaceId: tenant.workspaceId };
+        if (!(await entitlements(TEAMS_MANAGE, subject, context.req.raw))) {
+          throw entitlementRequired(TEAMS_MANAGE, await upgradeAvailable(TEAMS_MANAGE, subject, context.req.raw));
+        }
+      }
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
       const outcome = await tenant.withTenant(async (tx) => {
         const profile = await accountProfileRepository(tx).profile();

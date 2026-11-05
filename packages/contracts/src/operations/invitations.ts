@@ -21,7 +21,7 @@ export const CreateInvitationRequestSchema = z
       .array(z.uuid())
       .max(100)
       .optional()
-      .describe("The teams the invited person joins on accepting; each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped"),
+      .describe("The teams the invited person joins on accepting; naming any needs the teams.manage entitlement besides members.invite, or the request is refused with 403 entitlement_required before the teams are looked up. Each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped"),
   })
   .meta({ id: "CreateInvitationRequest" });
 
@@ -57,7 +57,7 @@ export const createInvitation = defineOperation({
     400: problemResponse("The request was malformed, or the Idempotency-Key header is not a UUID"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required)",
+      "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), the workspace does not hold the members.invite entitlement, or holds it and not teams.manage while the request names teams in teamIds (entitlement_required; nothing is written)",
     ),
     404: problemResponse("The request acts in no workspace"),
     409: problemResponse(

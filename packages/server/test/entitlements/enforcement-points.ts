@@ -5,7 +5,8 @@
 // account's own rows that must be taken under a lock in the transaction that writes (`workspaces.ownMax`), or a count of
 // the workspace's members that the acceptance counts under the workspace's lock (`seats.max`), or a count of the workspace's bookmarks
 // that the creation or the import takes under the workspace's lock (`bookmarks.max`), or because which of two entitlements a request needs follows the kind of
-// target in it (`sharing.members` for a member, `sharing.teams` for a team). A point that
+// target in it (`sharing.members` for a member, `sharing.teams` for a team), or because the entitlement applies only when the request carries a field
+// (`teams.manage` for an invitation that names `teamIds`). A point that
 // leaves one kind of request out of its entitlement records that in `exemption`. A point enters this list in the commit that
 // implements it, with its test; `enforcement-points.test.ts` fails for a declared entitlement that is missing here and
 // for a point whose test file does not name its operation.
@@ -32,11 +33,15 @@ const AI_SUGGESTIONS = "../routes/ai-suggestions.integration.test.ts";
 // Seating the first owner of a workspace is not the feature `members.invite` names (doc 01 section 7.5). The seat limit still applies.
 const OWNER_INVITATION = "the owner invitation an instance admin issues";
 
+// An invitation that names no team changes no team's membership (doc 01 section 7.5).
+const NO_TEAMS = "an invitation that names no team (no teamIds, or an empty list)";
+
 export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "createInvitation", entitlement: "members.invite", decidedBy: "stage-9", test: DECLARED },
   { operationId: "listInvitations", entitlement: "members.invite", decidedBy: "stage-9", test: DECLARED },
   { operationId: "resendInvitation", entitlement: "members.invite", decidedBy: "stage-9", test: DECLARED },
   { operationId: "createInvitationLink", entitlement: "members.invite", decidedBy: "stage-9", test: DECLARED },
+  { operationId: "createInvitation", entitlement: "teams.manage", decidedBy: "handler", test: INVITATIONS, exemption: NO_TEAMS },
   { operationId: "createTeam", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },
   { operationId: "updateTeam", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },
   { operationId: "deleteTeam", entitlement: "teams.manage", decidedBy: "stage-9", test: DECLARED },

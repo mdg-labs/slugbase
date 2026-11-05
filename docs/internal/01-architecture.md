@@ -282,7 +282,7 @@ Entitlement keys are a closed, typed catalog in `@slugbase/core` (`entitlements/
 | `sharing.members` | workspace | boolean | `true` | Sharing a bookmark or folder with an individual member |
 | `sharing.teams` | workspace | boolean | `true` | Sharing with teams; teams as sharing targets |
 | `members.invite` | workspace | boolean | `true` | Creating, listing, resending and linking invitations, and accepting them, except the owner invitation an instance admin issues; revoking one is not gated |
-| `teams.manage` | workspace | boolean | `true` | Teams administration (create, edit, membership) |
+| `teams.manage` | workspace | boolean | `true` | Teams administration (create, edit, membership), including naming teams in an invitation (`teamIds`), whose invitee joins them on accepting |
 | `audit.log` | workspace | boolean | `true` | Reading the audit log (audit events are always written; only reading is gated) |
 | `seats.max` | workspace | number or `unlimited` | `unlimited` | The member ceiling (accepted invitations count, pending ones do not) |
 | `workspaces.ownMax` | **account** | number or `unlimited` | `unlimited` | Creating a workspace (counts the workspaces the account owns) |
@@ -300,7 +300,7 @@ These are not entitlements on any edition: personal API tokens, folders, tags, s
 | AI suggestion | `ai.suggestions`, a configured port, the workspace toggle and the member not opted out | `403 entitlement_required`, or `503 ai_unavailable` |
 | Share with a member or a team | `sharing.members` or `sharing.teams` | `403 entitlement_required` |
 | Create, list, resend or link an invitation, or accept one | `members.invite` on each, except that accepting the owner invitation an instance admin issues does not need it (it seats the first owner of a workspace and invites nobody); `seats.used < seats.max` on every acceptance, with the limit decided before the accepting transaction through the seat check and the members counted in it under the workspace row lock (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
-| Teams administration | `teams.manage` | `403 entitlement_required` |
+| Teams administration, or creating an invitation that names teams (`teamIds`) | `teams.manage` (for an invitation, in addition to `members.invite`, decided by the handler; an invitation that names no team does not need it) | `403 entitlement_required` |
 | Read the audit log | `audit.log` | `403 entitlement_required` |
 
 **The archive rule.** A composition may archive bookmarks above `bookmarks.max` through the archive operation of §13.3 and restore them later. Which bookmarks it archives is the composition's rule. Archived bookmarks do not count in `bookmarks.used`. The restore service compares nothing with `bookmarks.max`; the composition that restores chooses how many bookmarks to restore (§13.3).

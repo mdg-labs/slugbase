@@ -25,7 +25,7 @@ const database = useTestDatabase();
 const harness = workspaceHarness(database);
 const inbox = new InMemoryMail();
 const mail: MailPort = { available: true, send: (message) => inbox.send(message) };
-const GRANTED: EntitlementCheck = (entitlement) => entitlement === "members.invite";
+const GRANTED: EntitlementCheck = (entitlement) => entitlement === "members.invite" || entitlement === "teams.manage";
 
 beforeAll(() => harness.start(), HOOK_TIMEOUT_MS);
 

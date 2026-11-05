@@ -2359,7 +2359,7 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "member";
-            /** @description The teams the invited person joins on accepting; each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped */
+            /** @description The teams the invited person joins on accepting; naming any needs the teams.manage entitlement besides members.invite, or the request is refused with 403 entitlement_required before the teams are looked up. Each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped */
             teamIds?: string[];
         };
         CreateTagRequest: {
@@ -9449,7 +9449,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required) */
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), the workspace does not hold the members.invite entitlement, or holds it and not teams.manage while the request names teams in teamIds (entitlement_required; nothing is written) */
             403: {
                 headers: {
                     [name: string]: unknown;

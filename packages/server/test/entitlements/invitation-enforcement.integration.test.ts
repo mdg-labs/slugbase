@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { LimitedEntitlementSource } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { WorkspaceEntitlementGrant } from "@slugbase/core";
@@ -131,6 +132,105 @@ describe("the operations that create, list, resend and link invitations", () => 
 
     expect((await revoke(world, admin, id)).status).toBe(204);
     expect((await invitationRow(database(), id)).status).toBe("revoked");
+  }, TEST_TIMEOUT_MS);
+});
+
+describe("the teams an invitation names (createInvitation)", () => {
+  async function seedTeam(workspaceId: string): Promise<string> {
+    const id = randomUUID();
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${id}, ${workspaceId}, ${`Team ${id}`})`;
+    });
+    return id;
+  }
+
+  async function teamIdsOf(invitationId: string): Promise<string[]> {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ team_ids: string[] }[]>`SELECT team_ids FROM workspace_invitations WHERE id = ${invitationId}`;
+    });
+    return rows[0]?.team_ids ?? [];
+  }
+
+  async function auditCount(workspaceId: string): Promise<number> {
+    return (await harness.auditActions(workspaceId)).length;
+  }
+
+  it(
+    "answers 403 entitlement_required for teams.manage when a teamIds entry is named while the source withholds it, and writes nothing",
+    async () => {
+      const source = new LimitedEntitlementSource().deny("teams.manage");
+      const world = serve(source);
+      const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
+      const team = await seedTeam(workspaceId);
+      const audits = await auditCount(workspaceId);
+
+      const refused = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email: freshAddress(), role: "member", teamIds: [team] });
+
+      expect(refused.status).toBe(403);
+      expect(await problemOf(refused)).toMatchObject({ code: "entitlement_required", status: 403, entitlement: "teams.manage", upgradeAvailable: false });
+      expect(await invitationCount(workspaceId)).toBe(0);
+      expect(await queuedJobCount(database(), MAIL_JOB)).toBe(0);
+      expect(await auditCount(workspaceId)).toBe(audits);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it("refuses before it judges the teams: a team of no workspace is the entitlement's 403 and not the 422", async () => {
+    const world = serve(new LimitedEntitlementSource().deny("teams.manage"));
+    const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
+
+    const refused = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email: freshAddress(), role: "member", teamIds: [randomUUID()] });
+
+    expect(refused.status).toBe(403);
+    expect((await problemOf(refused)).code).toBe("entitlement_required");
+    expect(await invitationCount(workspaceId)).toBe(0);
+  }, TEST_TIMEOUT_MS);
+
+  it("refuses a resend that names teams while teams.manage is withheld, and leaves the pending invitation as it was", async () => {
+    const source = new LimitedEntitlementSource();
+    const world = serve(source);
+    const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
+    const team = await seedTeam(workspaceId);
+    const email = freshAddress();
+    const id = await createInvitation(world, admin, email);
+    const before = await invitationRow(database(), id);
+    source.deny("teams.manage");
+    await bumpVersion(workspaceId);
+
+    const refused = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email, role: "member", teamIds: [team] });
+
+    expect(refused.status).toBe(403);
+    expect((await problemOf(refused)).code).toBe("entitlement_required");
+    const after = await invitationRow(database(), id);
+    expect(after.token_hash.equals(before.token_hash)).toBe(true);
+    expect(await teamIdsOf(id)).toEqual([]);
+    expect(await invitationCount(workspaceId)).toBe(1);
+  }, TEST_TIMEOUT_MS);
+
+  it("still creates an invitation without teamIds, or with an empty list, while the source withholds teams.manage", async () => {
+    const world = serve(new LimitedEntitlementSource().deny("teams.manage"));
+    const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
+
+    const plain = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email: freshAddress(), role: "member" });
+    const empty = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email: freshAddress(), role: "member", teamIds: [] });
+
+    expect(plain.status).toBe(201);
+    expect(empty.status).toBe(201);
+    expect(await invitationCount(workspaceId)).toBe(2);
+  }, TEST_TIMEOUT_MS);
+
+  it("creates the invitation with its teams under the Community Edition source", async () => {
+    const world = serve(new LimitedEntitlementSource());
+    const { workspaceId, admin } = await workspaceWithAdmin(harness, world);
+    const team = await seedTeam(workspaceId);
+
+    const created = await send(world, "POST", INVITATIONS, { cookie: admin.cookie }, { email: freshAddress(), role: "member", teamIds: [team] });
+
+    expect(created.status).toBe(201);
+    expect(((await created.json()) as { teamIds: string[] }).teamIds).toEqual([team]);
+    expect(await invitationCount(workspaceId)).toBe(1);
   }, TEST_TIMEOUT_MS);
 });
 
