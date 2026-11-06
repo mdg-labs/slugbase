@@ -327,10 +327,16 @@ export function setupClosedViolations(answer: Answer): string[] {
   return violations;
 }
 
-/** Doc 10 section 2.1: the refused setup created no account; the counts are those of the instance before and after. */
-export function leakedAccounts(before: number, after: number): string[] {
-  if (!Number.isInteger(before) || !Number.isInteger(after)) {
-    return ["the number of accounts could not be read"];
+/**
+ * Doc 10 section 2.1: the refused setup created no account. `listed` is the `items` of `GET /api/v1/instance/accounts` after the refusal
+ * (undefined when the answer was not a list) and `email` the address the refused setup sent. The instance's other accounts come and go
+ * while other journeys run, so only the address of the refused setup is looked for, compared without regard to case.
+ */
+export function leakedAccounts(listed: readonly unknown[] | undefined, email: string): string[] {
+  if (listed === undefined) {
+    return ["the accounts of the instance could not be read"];
   }
-  return after === before ? [] : [`the instance had ${String(before)} accounts and has ${String(after)} after the refused setup`];
+  const wanted = email.toLowerCase();
+  const found = listed.some((account) => typeof account === "object" && account !== null && String((account as { email?: unknown }).email).toLowerCase() === wanted);
+  return found ? [`the instance lists an account with the address of the refused setup (${email})`] : [];
 }

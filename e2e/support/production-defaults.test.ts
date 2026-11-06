@@ -440,10 +440,19 @@ void describe("the closed setup endpoint (doc 10 section 2.1)", () => {
     assert.match(setupClosedViolations(answer(403, closed, [SESSION_COOKIE])).join("\n"), /Set-Cookie/);
   });
 
-  void it("reports a new account in the instance", () => {
-    assert.deepEqual(leakedAccounts(2, 2), []);
-    assert.equal(leakedAccounts(2, 3).length, 1);
-    assert.ok(leakedAccounts(2, 1).length > 0);
-    assert.ok(leakedAccounts(Number.NaN, 2).length > 0);
+  void it("reports the account of the refused setup, however its address is cased", () => {
+    const email = "setup-ab12@example.test";
+    assert.deepEqual(leakedAccounts([{ email: "owner@example.test" }], email), []);
+    assert.deepEqual(leakedAccounts([], email), []);
+    assert.equal(leakedAccounts([{ email: "owner@example.test" }, { email }], email).length, 1);
+    assert.equal(leakedAccounts([{ email: "SETUP-AB12@Example.test" }], email).length, 1);
+  });
+
+  void it("does not report other accounts that appear while the journey runs", () => {
+    assert.deepEqual(leakedAccounts([{ email: "owner@example.test" }, { email: "late-comer@example.test" }, { email: "setup-ab123@example.test" }], "setup-ab12@example.test"), []);
+  });
+
+  void it("reports a list that could not be read", () => {
+    assert.ok(leakedAccounts(undefined, "setup-ab12@example.test").length > 0);
   });
 });

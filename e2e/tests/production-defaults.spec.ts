@@ -137,11 +137,12 @@ async function bookmarkUrls(member: Member): Promise<string[]> {
   return (listed.items ?? []).map((item) => String(item.url));
 }
 
-async function accountCount(owner: APIRequestContext): Promise<number> {
+/** Every account of the instance (the list is unpaged), or undefined where the answer holds no list. */
+async function listedAccounts(owner: APIRequestContext): Promise<unknown[] | undefined> {
   const response = await owner.get("/api/v1/instance/accounts");
   expectStatus(response, 200, "GET /api/v1/instance/accounts");
-  const listed = (await response.json()) as { items?: unknown[] };
-  return Array.isArray(listed.items) ? listed.items.length : Number.NaN;
+  const listed = (await response.json()) as { items?: unknown };
+  return Array.isArray(listed.items) ? listed.items : undefined;
 }
 
 // One member for the whole file, so that the journey redeems one token and signs in once.
@@ -280,19 +281,19 @@ test.describe.serial("production defaults", () => {
     const owner = await playwright.request.newContext({ ...options(), storageState: STORAGE_STATE });
     const visitor = await playwright.request.newContext({ ...options(), storageState: NO_SESSION });
     try {
-      const before = await accountCount(owner);
+      const email = `setup-${token}@example.test`;
       const refused = await visitor.post(
         "/api/v1/setup",
         json({
           displayName: `Setup ${token}`,
-          email: `setup-${token}@example.test`,
+          email,
           password: randomBytes(24).toString("base64url"),
           workspaceName: `Setup ${token}`,
           setupToken: process.env.E2E_SETUP_TOKEN ?? randomBytes(24).toString("base64url"),
         }),
       );
       expect(setupClosedViolations(await answerOf(refused))).toEqual([]);
-      expect(leakedAccounts(before, await accountCount(owner))).toEqual([]);
+      expect(leakedAccounts(await listedAccounts(owner), email)).toEqual([]);
     } finally {
       await owner.dispose();
       await visitor.dispose();
