@@ -548,17 +548,97 @@ describe("the team picker of the invite dialog", () => {
     expect(stub.received("POST", INVITATIONS_PATH).map(({ body }) => body)).toEqual([{ email: "new@example.org", role: "member", teamIds: [] }]);
   }, SLOW_TEST_TIMEOUT_MS);
 
-  it("names a refusal for a missing entitlement instead of a generic failure", async () => {
-    server({ teamsManage: true, invitationPost: () => problem(403, "entitlement_required", "req-403") });
-    await openMembers();
-    const dialog = await openInvite();
+  const TEAMS_REFUSAL = "This workspace's plan does not include teams, so people cannot be invited into one.";
+  const INVITES_REFUSAL = "This workspace's plan does not include invitations, so people cannot be invited.";
+  const TEAM_ID = "0192f3a0-ffff-7000-8000-000000000001";
+
+  function refusedFor(entitlement: string | undefined): Response {
+    return json(
+      { type: "https://slugbase.app/problems/entitlement_required", title: "entitlement_required", status: 403, code: "entitlement_required", detail: "internal detail", requestId: "req-403", ...(entitlement === undefined ? {} : { entitlement }), upgradeAvailable: false },
+      { status: 403, contentType: "application/problem+json" },
+    );
+  }
+
+  async function sendOneAddress(dialog: HTMLElement): Promise<HTMLElement> {
     await typeAddresses(dialog, "new@example.org");
     await press(within(dialog).getByRole("button", { name: "Send invitations" }));
-
     const results = await screen.findByRole("list", { name: "Result for each address" });
-    const [item] = within(results).getAllByRole("listitem");
-    expect(item?.textContent).toContain("This workspace's plan does not include teams, so people cannot be invited into one.");
-    expect(item?.textContent).toContain("Request ID: req-403");
-    expect(item?.textContent).not.toContain("The invitation could not be created.");
+    return within(results).getAllByRole("listitem")[0] as HTMLElement;
+  }
+
+  it("names a refused teams.manage as the missing teams and reads the entitlements again", async () => {
+    const stub = server({ teamsManage: true, invitationPost: () => refusedFor("teams.manage") });
+    await openMembers();
+    const dialog = await openInvite();
+    await waitFor(() => {
+      expect(stub.received("GET", "/api/v1/entitlements")).toHaveLength(1);
+    });
+    const item = await sendOneAddress(dialog);
+
+    expect(item.textContent).toContain(TEAMS_REFUSAL);
+    expect(item.textContent).toContain("Request ID: req-403");
+    expect(item.textContent).not.toContain(INVITES_REFUSAL);
+    expect(item.textContent).not.toContain("The invitation could not be created.");
+    await waitFor(() => {
+      expect(stub.received("GET", "/api/v1/entitlements").length).toBeGreaterThan(1);
+    });
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("names a refused members.invite as the missing invitations, with no team sent, and reads the entitlements again", async () => {
+    const stub = server({ teamsManage: false, invitationPost: () => refusedFor("members.invite") });
+    await openMembers();
+    const dialog = await openInvite();
+    await waitFor(() => {
+      expect(stub.received("GET", "/api/v1/entitlements")).toHaveLength(1);
+    });
+    const item = await sendOneAddress(dialog);
+
+    expect(stub.received("POST", INVITATIONS_PATH).map(({ body }) => body)).toEqual([{ email: "new@example.org", role: "member", teamIds: [] }]);
+    expect(item.textContent).toContain(INVITES_REFUSAL);
+    expect(item.textContent).not.toContain(TEAMS_REFUSAL);
+    expect(item.textContent).toContain("Request ID: req-403");
+    await waitFor(() => {
+      expect(stub.received("GET", "/api/v1/entitlements").length).toBeGreaterThan(1);
+    });
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("names a refused members.invite as the missing invitations although a team was chosen", async () => {
+    const stub = server({
+      teamsManage: true,
+      teamsGet: () => json({ items: [{ id: TEAM_ID, name: "Platform", memberCount: 0, createdAt: "2026-10-10T08:00:00.000Z" }], nextCursor: null }),
+      invitationPost: () => refusedFor("members.invite"),
+    });
+    await openMembers();
+    const dialog = await openInvite();
+    const picker = await within(dialog).findByRole("combobox", { name: "Teams" });
+    await act(async () => {
+      fireEvent.pointerDown(picker);
+      fireEvent.mouseDown(picker);
+      fireEvent.click(picker);
+      await Promise.resolve();
+    });
+    await press(await screen.findByRole("option", { name: "Platform", hidden: true }));
+    await act(async () => {
+      fireEvent.keyDown(picker, { key: "Escape" });
+      await Promise.resolve();
+    });
+    const item = await sendOneAddress(dialog);
+
+    expect(stub.received("POST", INVITATIONS_PATH).map(({ body }) => body)).toEqual([{ email: "new@example.org", role: "member", teamIds: [TEAM_ID] }]);
+    expect(item.textContent).toContain(INVITES_REFUSAL);
+    expect(item.textContent).not.toContain(TEAMS_REFUSAL);
+    await waitFor(() => {
+      expect(stub.received("GET", "/api/v1/entitlements").length).toBeGreaterThan(1);
+    });
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("names a refusal that names no entitlement as the missing invitations", async () => {
+    server({ teamsManage: true, invitationPost: () => refusedFor(undefined) });
+    await openMembers();
+    const dialog = await openInvite();
+    const item = await sendOneAddress(dialog);
+
+    expect(item.textContent).toContain(INVITES_REFUSAL);
+    expect(item.textContent).not.toContain("The invitation could not be created.");
   }, SLOW_TEST_TIMEOUT_MS);
 });

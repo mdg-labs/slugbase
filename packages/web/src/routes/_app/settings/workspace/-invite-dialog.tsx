@@ -89,7 +89,7 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
     },
     onSuccess: (collected) => {
       setResults(collected);
-      if (collected.some(({ outcome }) => outcome.status === "refused" && outcome.refusal === "teamsNotIncluded")) {
+      if (collected.some(({ outcome }) => outcome.status === "refused" && (outcome.refusal === "teamsNotIncluded" || outcome.refusal === "invitesNotIncluded"))) {
         // The refusal shows the grant is not what this page assumed: read the entitlements again so the picker follows.
         void queryClient.invalidateQueries({ queryKey: ENTITLEMENTS_QUERY_KEY });
       }
@@ -146,6 +146,8 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
         return t("settings.members.invite.result.unknownTeam");
       case "teamsNotIncluded":
         return t("settings.members.invite.result.teamsNotIncluded");
+      case "invitesNotIncluded":
+        return t("settings.members.invite.result.invitesNotIncluded");
       case "rateLimited":
         return t("settings.members.invite.result.rateLimited");
       case "unavailable":

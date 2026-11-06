@@ -2230,6 +2230,7 @@
           "invalid": "Not a valid email address.",
           "unknownTeam": "A team you chose no longer exists. Go back, remove it and try again.",
           "teamsNotIncluded": "This workspace's plan does not include teams, so people cannot be invited into one.",
+          "invitesNotIncluded": "This workspace's plan does not include invitations, so people cannot be invited.",
           "rateLimited": "Too many requests. Try again in a while.",
           "unavailable": "The server is busy. Try again.",
           "failed": "The invitation could not be created.",

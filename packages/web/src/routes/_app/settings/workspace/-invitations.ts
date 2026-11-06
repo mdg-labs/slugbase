@@ -39,7 +39,7 @@ export function invitationsQuery(api: ApiClient, workspaceId: string) {
 }
 
 /** Why one address was not invited, as far as the member is told. */
-export type InviteRefusal = "alreadyMember" | "invalid" | "unknownTeam" | "teamsNotIncluded" | "rateLimited" | "unavailable" | "failed";
+export type InviteRefusal = "alreadyMember" | "invalid" | "unknownTeam" | "teamsNotIncluded" | "invitesNotIncluded" | "rateLimited" | "unavailable" | "failed";
 
 export type InviteOutcome =
   | { readonly status: "invited"; readonly invitation: Invitation }
@@ -69,7 +69,8 @@ export async function inviteByEmail(api: ApiClient, email: string, role: Invitat
         return { status: "refused", refusal: "alreadyMember", requestId: caught.requestId };
       }
       if (isEntitlementRequired(caught)) {
-        return { status: "refused", refusal: "teamsNotIncluded", requestId: caught.requestId };
+        // `teams.manage` is the entitlement of the teams; a refusal that names `members.invite`, or none, is the invitation itself.
+        return { status: "refused", refusal: caught.entitlement === "teams.manage" ? "teamsNotIncluded" : "invitesNotIncluded", requestId: caught.requestId };
       }
       if (caught.status === 422) {
         const team = caught.errors.some(({ path }) => path.startsWith("teamIds"));

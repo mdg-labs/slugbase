@@ -2230,6 +2230,7 @@
           "invalid": "Keine gültige E-Mail-Adresse.",
           "unknownTeam": "Ein Team, das du gewählt hast, gibt es nicht mehr. Gehe zurück, entferne es und versuche es erneut.",
           "teamsNotIncluded": "Der Tarif dieses Workspace enthält keine Teams, daher können Personen nicht in ein Team eingeladen werden.",
+          "invitesNotIncluded": "Der Tarif dieses Workspace enthält keine Einladungen, daher können keine Personen eingeladen werden.",
           "rateLimited": "Zu viele Anfragen. Versuche es in einer Weile erneut.",
           "unavailable": "Der Server ist ausgelastet. Versuche es erneut.",
           "failed": "Die Einladung konnte nicht erstellt werden.",
