@@ -904,6 +904,13 @@
       "when": 1793984744957,
       "tag": "20261106170544_index_workspace_created_by",
       "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1793985430313,
+      "tag": "20261106171710_add_verification_lock_indexes",
+      "breakpoints": true
     }
   ]
 }

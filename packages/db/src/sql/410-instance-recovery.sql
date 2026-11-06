@@ -78,8 +78,10 @@ BEGIN
   IF p_mark_verified IS NOT NULL THEN
     PERFORM 1 FROM public.workspaces w
     WHERE w.deleting_at IS NULL AND p_account_id <> public.app_account_id()
-      AND (w.created_by = p_account_id
-        OR w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner'))
+      AND w.id IN (
+        SELECT c.id FROM public.workspaces c WHERE c.created_by = p_account_id
+        UNION
+        SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner')
       AND EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = p_account_id AND a.email_verified_at IS NULL)
     ORDER BY w.id
     FOR NO KEY UPDATE OF w;

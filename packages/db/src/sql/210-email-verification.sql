@@ -36,7 +36,8 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- sys_instance_update_account when an instance admin marks the address) locks them before the backup-code rows and the
 -- account row, and the statement here takes them again, so a workspace created in between is locked too. The rows
 -- locked are every workspace the account created and every one it owns, a superset of those stripped, in both callers
--- and here. It is not a system operation: it is SECURITY INVOKER, owned by slugbase_system and executable by it
+-- and here; each half is read through an index (workspaces_created_by_idx, workspace_members_account_id_idx) and the
+-- two are joined by identifier, so the statement reads neither whole table. It is not a system operation: it is SECURITY INVOKER, owned by slugbase_system and executable by it
 -- alone, so it runs only inside those two functions and slugbase_app cannot call it. It is never given an account
 -- whose address is verified.
 CREATE OR REPLACE FUNCTION public.account_strip_workspaces(p_account_id uuid) RETURNS void
@@ -48,8 +49,10 @@ DECLARE
 BEGIN
   PERFORM 1 FROM public.workspaces w
   WHERE w.deleting_at IS NULL
-    AND (w.created_by = p_account_id
-      OR w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner'))
+    AND w.id IN (
+      SELECT c.id FROM public.workspaces c WHERE c.created_by = p_account_id
+      UNION
+      SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner')
   ORDER BY w.id
   FOR NO KEY UPDATE OF w;
 
@@ -187,8 +190,10 @@ BEGIN
   FROM public.credential_tokens t WHERE t.purpose = 'email_verify' AND t.token_hash = p_token_hash;
   PERFORM 1 FROM public.workspaces w
   WHERE w.deleting_at IS NULL
-    AND (w.created_by = v_token_account
-      OR w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = v_token_account AND m.role = 'owner'))
+    AND w.id IN (
+      SELECT c.id FROM public.workspaces c WHERE c.created_by = v_token_account
+      UNION
+      SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = v_token_account AND m.role = 'owner')
     AND EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = v_token_account AND a.email_verified_at IS NULL)
   ORDER BY w.id
   FOR NO KEY UPDATE OF w;
