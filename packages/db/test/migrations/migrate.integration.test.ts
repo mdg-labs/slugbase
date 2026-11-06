@@ -1165,6 +1165,38 @@ describe("an upgrade from the level before the bookmark URL index", () => {
   }, 120_000);
 });
 
+describe("an upgrade from the level before the workspace creator index", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000051";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000052";
+
+  it("builds the index concurrently on a table that holds workspaces, in a step of its own, and it is valid and partial", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const creatorIndex = journal.entries.filter((entry) => entry.tag.includes("index_workspace_created_by"));
+    expect(creatorIndex).toHaveLength(1);
+    for (const entry of creatorIndex) {
+      expect(readFileSync(join(CE_CHAIN.folder, `${entry.tag}.sql`), "utf8").startsWith("-- slugbase:non-transactional\n")).toBe(true);
+    }
+    await owner.unsafe("DROP INDEX public.workspaces_created_by_idx");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${creatorIndex.map((entry) => String(entry.when)).join(", ")})`);
+    await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SELECT set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${ACCOUNT}, 'creator-index@example.test', 'Creator index')`;
+      await tx`INSERT INTO workspaces (id, name, created_by) VALUES (${WORKSPACE}, 'Creator index', ${ACCOUNT})`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${WORKSPACE}, ${ACCOUNT}, 'owner')`;
+    });
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(creatorIndex.map((entry) => entry.tag));
+    expect((await indexes(owner, ["workspaces_created_by_idx"])).map((index) => [index.name, index.valid])).toEqual([["workspaces_created_by_idx", true]]);
+    const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.workspaces_created_by_idx'::regclass) AS definition`;
+    expect(definition?.definition).toContain("(created_by) WHERE (created_by IS NOT NULL)");
+  }, 120_000);
+});
+
 describe("an upgrade from the level before the bookmark match migration", () => {
   const WORKSPACE = "0190a000-0000-7000-8000-000000000031";
   const ACCOUNT = "0190a000-0000-7000-8000-000000000032";

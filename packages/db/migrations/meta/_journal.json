@@ -897,6 +897,13 @@
       "when": 1793984147577,
       "tag": "20261106165547_add_workspace_self_created",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1793984744957,
+      "tag": "20261106170544_index_workspace_created_by",
+      "breakpoints": true
     }
   ]
 }

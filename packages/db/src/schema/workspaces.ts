@@ -46,6 +46,10 @@ export const workspaces = pgTable(
   (table) => [
     check("workspaces_name_check", sql`length(${table.name}) BETWEEN 1 AND 64`),
     check("workspaces_bookmark_count_check", sql`${table.bookmarkCount} >= 0`),
+    // The workspaces an account created: read by the foreign-key action of `created_by` (ON DELETE SET NULL) when the account is deleted,
+    // and by any lookup by creator. Partial like the other indexes of a nullable foreign key, since an account's deletion clears the column
+    // and no lookup asks for a missing creator (doc 05 section 2.2).
+    index("workspaces_created_by_idx").on(table.createdBy).where(sql`${table.createdBy} IS NOT NULL`),
   ],
 );
 
