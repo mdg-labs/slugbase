@@ -78,6 +78,25 @@ describe("the OIDC identity adapter over the egress adapter", () => {
     expect(server.requests.map((request) => request.target)).toEqual(["/.well-known/openid-configuration", "/keys"]);
   });
 
+  it("lists every provider of a long list whose host name takes a moment to resolve, instead of refusing those past three lookups", async () => {
+    const server = await serve(asJson((origin) => document(origin)));
+    const providers = ["a", "b", "c", "d", "e"].map((slug) => provider(server, slug));
+    const egress = new HttpEgress({
+      nodeEnv: "test",
+      resolve: () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve(["127.0.0.1"]);
+          }, 25);
+        }),
+      testOnly: { allowAddresses: ["127.0.0.1"] },
+    });
+    const lines: unknown[] = [];
+    const identity = createOidcIdentity({ providers, egress, logger: { warn: (message, fields) => lines.push({ message, fields }) } });
+    expect((await identity.listProviders()).map((info) => info.id)).toEqual(["a", "b", "c", "d", "e"]);
+    expect(lines).toEqual([]);
+  });
+
   it("refuses a document whose key endpoint resolves to a private address, and the other provider stays", async () => {
     const good = await serve(asJson((origin) => document(origin)));
     const hostile = await serve(asJson((origin) => document(origin, { jwks_uri: `http://internal.example.test:${String(good.port)}/keys` })));

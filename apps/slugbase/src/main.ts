@@ -200,9 +200,12 @@ export type EgressTestOptions = Pick<CreateEgressOptions, "resolve" | "testOnly"
 // Only the server serves sign-in, so only its configuration has providers. The adapter reaches the providers
 // through the egress port and discovers them when they are first listed, so a provider that is down at start-up
 // is logged then and never stops the process. The adapter gets an egress instance of its own: an instance runs at
-// most three host-name lookups at a time, and the shared one can be held full by the fetches a member starts,
-// which would refuse every discovery and code exchange of a sign-in. The instance carries no allowance, as the
-// shared one does not.
+// most three host-name lookups at a time and refuses a request past that, and the shared one can be held full by
+// the fetches a member starts, which would refuse every discovery and code exchange of a sign-in. The adapter in
+// turn keeps itself to three requests at once and queues the rest in order, so a long provider list or a burst
+// of sign-ins does not make its own requests refuse one another on this instance. The instance keeps a lookup's
+// slot until the lookup finishes, even after the request that started it timed out, so while a resolver hangs a
+// later request can still be refused. The instance carries no allowance, as the shared one does not.
 export function composeIdentity(config: ServerConfig | WorkerConfig, logger: Logger, egressOptions: EgressTestOptions): IdentityPort {
   const providers = "OIDC_PROVIDERS" in config ? config.OIDC_PROVIDERS : [];
   if (providers.length === 0) {
