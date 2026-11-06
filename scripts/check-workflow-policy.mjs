@@ -1047,7 +1047,7 @@ function checkUses(step, isRelease, report) {
     if (lower(name) === "push" && !(input === false || (typeof input === "string" && input.toLowerCase() === "false"))) {
       report("image-push", `${show(uses)} with push: ${show(input)}`);
     }
-    if (typeof input === "string" && /(^|[^A-Za-z0-9_-])(push=(?!false|0)|type=registry)/i.test(input)) {
+    if (typeof input === "string" && /(^|[^A-Za-z0-9_-])(push=(?!false(?![A-Za-z0-9_])|0(?![A-Za-z0-9_]))|type=registry)/i.test(input)) {
       report("image-push", `${show(uses)} with ${name}: ${show(input)} pushes an image`);
     }
   }
