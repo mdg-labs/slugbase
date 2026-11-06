@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig, type ProcessType } from "../../src/config/index.ts";
+import { decodeBase64Key } from "../../src/config/fields.ts";
 import {
   DEVELOPMENT_APP_ORIGIN,
   DEVELOPMENT_DATABASE_MIGRATE_URL,
@@ -104,6 +105,34 @@ describe("production refusals (doc 01 section 11)", () => {
       } catch (error) {
         expect((error as ConfigError).issues.filter((issue) => issue.key === "ENCRYPTION_KEY")).toHaveLength(1);
       }
+    });
+
+    describe("a key whose standard spelling holds both + and /", () => {
+      // 0xfb bytes spell as "+/v7" groups, so the url-safe spelling ("-_v7") differs from the standard one in both characters.
+      const key = Buffer.alloc(32, 251);
+      const standard = key.toString("base64");
+      const alphabet: readonly (readonly [string, string])[] = [
+        ["standard", standard],
+        ["standard without padding", standard.replace(/=+$/, "")],
+        ["url-safe", key.toString("base64url")],
+        ["url-safe with padding", key.toString("base64url").padEnd(44, "=")],
+      ];
+
+      it("is a key the standard alphabet spells with both characters", () => {
+        expect(standard).toContain("+");
+        expect(standard).toContain("/");
+        expect(key.toString("base64url")).toContain("-");
+        expect(key.toString("base64url")).toContain("_");
+      });
+
+      it.each(alphabet)("decodes the %s spelling to the key bytes", (_name, spelling) => {
+        expect(decodeBase64Key(spelling, 32)?.equals(key)).toBe(true);
+      });
+
+      it.each(alphabet)("accepts the %s spelling as ENCRYPTION_KEY and as a previous key in production", (_name, spelling) => {
+        expect(refusedKeys("server", productionEnv({ ENCRYPTION_KEY: spelling }))).toEqual([]);
+        expect(refusedKeys("server", productionEnv({ ENCRYPTION_KEY_PREVIOUS: `old-1:${spelling}` }))).toEqual([]);
+      });
     });
 
     it("accepts other keys, current and previous, in production", () => {
