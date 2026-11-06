@@ -158,8 +158,18 @@ void describe("the content security policy (T5, T14)", () => {
   void it("reports 'unsafe-eval', 'unsafe-hashes', 'wasm-unsafe-eval', data: and * in any directive that governs scripts", () => {
     for (const directive of ["script-src", "script-src-elem", "script-src-attr", "default-src"]) {
       for (const source of ["'unsafe-eval'", "'unsafe-hashes'", "'wasm-unsafe-eval'", "data:", "*", "'UNSAFE-INLINE'"]) {
-        const policy = directive === "default-src" ? `default-src 'self' ${source}; frame-ancestors 'none'` : `${CSP}; ${directive} 'self' ${source}`;
-        assert.ok(cspViolations(policy).length > 0, `${directive} ${source}`);
+        // Each directive appears once, so the only violation the policy can hold is the source under test.
+        const policy =
+          directive === "default-src"
+            ? `default-src 'self' ${source}; frame-ancestors 'none'`
+            : directive === "script-src"
+              ? `default-src 'self'; script-src 'self' ${source}; frame-ancestors 'none'`
+              : `default-src 'self'; script-src 'self'; ${directive} 'self' ${source}; frame-ancestors 'none'`;
+        const violations = cspViolations(policy);
+        assert.ok(
+          violations.some((violation) => violation.toLowerCase().includes(`the ${directive} of the content-security-policy holds ${source.toLowerCase()},`)),
+          `${directive} ${source}: ${violations.join("; ")}`,
+        );
       }
     }
   });
