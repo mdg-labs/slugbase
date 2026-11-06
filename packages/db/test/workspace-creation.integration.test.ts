@@ -109,6 +109,16 @@ describe("create", () => {
     });
   });
 
+  it("records the workspace as self-created, which the strip that verifying an address runs reads", async () => {
+    const owner = await account();
+    const workspace = newWorkspace();
+
+    await accountLevel(owner, (tx) => workspaceRepository(tx).create(workspace));
+
+    const rows = await asSystem(db, (tx) => tx<{ self_created: boolean }[]>`SELECT self_created FROM workspaces WHERE id = ${workspace.id}`);
+    expect(rows).toEqual([{ self_created: true }]);
+  });
+
   it("queues the jobs in the same transaction", async () => {
     const owner = await account();
     const workspace = newWorkspace();

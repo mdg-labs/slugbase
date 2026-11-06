@@ -339,6 +339,24 @@ describe("sys_instance_create_workspace for an owner account", () => {
     });
   });
 
+  it("records a workspace made for another owner as not self-created, and one the admin made itself the owner of as self-created", async () => {
+    const caller = await admin();
+    const owner = await account();
+    const forOther = accountOwned(owner.id);
+    const forSelf = accountOwned(caller);
+    const forInvitee = invited("flags.owner@example.test", "For an invitee");
+    const flags = async (workspaceId: string) =>
+      (await asSystem(db, (tx) => tx<{ self_created: boolean; instance_created: boolean }[]>`SELECT self_created, instance_created FROM workspaces WHERE id = ${workspaceId}`))[0];
+
+    for (const request of [forOther, forSelf, forInvitee]) {
+      expect((await create(caller, request)).kind).toBe("created");
+    }
+
+    expect(await flags(forOther.workspaceId)).toEqual({ self_created: false, instance_created: true });
+    expect(await flags(forSelf.workspaceId)).toEqual({ self_created: true, instance_created: false });
+    expect(await flags(forInvitee.workspaceId)).toEqual({ self_created: false, instance_created: true });
+  });
+
   it("does not make an owner of an account that is unknown or disabled, and writes, queues and records nothing", async () => {
     const caller = await admin();
     const disabled = await account({ disabled: true });

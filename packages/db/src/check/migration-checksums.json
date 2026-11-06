@@ -126,6 +126,7 @@
     "20261105185116_add_instance_mark_verified_strip": "2186e43c197b0eba76ae061260ee21dbcacb99c114e2aafedd843165f594a698",
     "20261105220745_add_verification_creator_strip": "fba969945080fe02e33da747bdeed16c9c9b23bb56cb1ea56a621b7f922c95f3",
     "20261105230009_add_invitation_accept_verification": "61f2948fb7d484af8a4e579af0ab77f415b3e2d247d264f9bf33a30d614ff1dd",
-    "20261105234634_add_instance_owner_link_issued": "cf5fe1143c06b28335bcf3012c28b770cad9ddea4b317ac75c8c43557433433e"
+    "20261105234634_add_instance_owner_link_issued": "cf5fe1143c06b28335bcf3012c28b770cad9ddea4b317ac75c8c43557433433e",
+    "20261106165547_add_workspace_self_created": "e82a3df60464724d06b4c1e693ba90a40d2676fdd219825771f9c054d10af229"
   }
 }

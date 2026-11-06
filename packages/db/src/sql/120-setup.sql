@@ -69,7 +69,9 @@ $$;
 -- than the one a tenant transaction acts for: when app_account_id() names an account, p_account_id
 -- must be that account, so a transaction cannot make a workspace owned by somebody else. The
 -- anonymous flows that create the first workspace of an account (setup, registration, verification)
--- run with no account set and name the account they just made.
+-- run with no account set and name the account they just made. The workspace records the account as its creator and
+-- self_created (the creator is its first owner), which the strip that verifying an address runs reads
+-- (210-email-verification.sql).
 CREATE OR REPLACE FUNCTION public.sys_create_workspace(p_account_id uuid, p_workspace_id uuid, p_name text)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -87,7 +89,7 @@ BEGIN
     RETURN false;
   END IF;
 
-  INSERT INTO public.workspaces (id, name, created_by) VALUES (p_workspace_id, p_name, p_account_id);
+  INSERT INTO public.workspaces (id, name, created_by, self_created) VALUES (p_workspace_id, p_name, p_account_id, true);
   INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (p_workspace_id, p_account_id, 'owner');
   INSERT INTO public.workspace_settings (workspace_id, updated_by) VALUES (p_workspace_id, p_account_id);
   RETURN true;

@@ -1002,6 +1002,38 @@ describe("verifyEmail and what the visitor set up in workspaces", () => {
     expect(await workspacesOf(admin)).toEqual(expect.arrayContaining([expect.objectContaining({ id: workspaceId, role: "member" })]));
   });
 
+  it("leaves a console workspace made before self_created existed as it was, though its creator is the account and a member of it", async () => {
+    // A row as the instance console wrote it before the column existed: the admin is created_by, another account is the first owner, and both
+    // flags read false because nothing wrote them.
+    const admin = await account();
+    const owner = await account({ verified: true });
+    const member = await account({ verified: true });
+    const workspaceId = await seedWorkspace(db, { createdBy: admin, selfCreated: false });
+    await seedMember(db, { workspaceId, accountId: owner, role: "owner" });
+    await populate(workspaceId, owner, member);
+    await seedMember(db, { workspaceId, accountId: admin, role: "member" });
+    const before = await workspaceState(workspaceId);
+    expect(before).toMatchObject({ members: [admin, member, owner].sort(), teams: 1, bookmarkShares: 1, pendingInvitations: 1 });
+
+    await store.verifyEmail(verification(await issue(admin)));
+
+    expect(await workspaceState(workspaceId)).toEqual(before);
+    expect(await workspacesOf(owner)).toMatchObject([{ id: workspaceId, role: "owner" }]);
+    expect(await workspacesOf(admin)).toEqual(expect.arrayContaining([expect.objectContaining({ id: workspaceId, role: "member" })]));
+  });
+
+  it("still judges a workspace made before self_created existed by the only-owner rule, stripping it when the account is its only owner", async () => {
+    const owner = await account();
+    const member = await account({ verified: true });
+    const workspaceId = await seedWorkspace(db, { createdBy: owner, selfCreated: false });
+    await seedMember(db, { workspaceId, accountId: owner, role: "owner" });
+    await populate(workspaceId, owner, member);
+
+    await store.verifyEmail(verification(await issue(owner)));
+
+    expect(await workspaceState(workspaceId)).toMatchObject({ members: [owner], teams: 0, bookmarkShares: 0, pendingInvitations: 0 });
+  });
+
   it("leaves a workspace the account created and then left alone, since it is no member of it to strip", async () => {
     const owner = await account();
     const accomplice = await account({ verified: true });

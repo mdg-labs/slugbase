@@ -76,9 +76,10 @@ $$;
 --     p_ttl_seconds from now by the database's clock. The accept operations give the owner role to exactly that
 --     invitation. Its mail ticket is its own identifier, which is the ticket of the invitation.send job the caller
 --     queues in the same transaction when the link is mailed.
--- The workspace records the calling admin as its creator, and instance_created (true unless the admin made itself the
--- owner) records that the creator is not its first owner, which the strip that verifying an address runs needs to read
--- created_by as the founding owner (210-email-verification.sql).
+-- The workspace records the calling admin as its creator, and self_created (true only when the admin made itself the
+-- owner) records whether the creator is its first owner, which the strip that verifying an address runs needs to read
+-- created_by as the founding owner (210-email-verification.sql). instance_created is written as before (true unless the
+-- admin made itself the owner); nothing reads it any more, and a later release drops it.
 -- p_link_issued (required with p_owner_email) says whether the caller returns the token to the admin as a link, and not by
 -- mail: the invitation is then written link_issued and with no mail ticket (a workspace admin's copyable link has none), and
 -- otherwise with its own identifier as the ticket and link_issued false.
@@ -131,7 +132,8 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO public.workspaces (id, name, created_by, instance_created) VALUES (p_workspace_id, p_name, public.app_account_id(), p_owner_account_id IS DISTINCT FROM public.app_account_id());
+  INSERT INTO public.workspaces (id, name, created_by, instance_created, self_created)
+  VALUES (p_workspace_id, p_name, public.app_account_id(), p_owner_account_id IS DISTINCT FROM public.app_account_id(), coalesce(p_owner_account_id = public.app_account_id(), false));
   INSERT INTO public.workspace_settings (workspace_id, updated_by) VALUES (p_workspace_id, public.app_account_id());
   IF p_owner_account_id IS NOT NULL THEN
     INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (p_workspace_id, p_owner_account_id, 'owner');

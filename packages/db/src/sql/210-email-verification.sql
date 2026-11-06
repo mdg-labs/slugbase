@@ -11,12 +11,14 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- necessarily its owner, and before the owner verifies, the registrant could invite members, form teams, share
 -- content, promote an accomplice to owner and give up their own owner role, so the owner does not inherit a way in
 -- for anyone else. The workspaces it strips are those that are not being deleted, that the account is a member of and
--- that the registrant set up: the ones the account made for itself (workspaces.created_by, with instance_created
--- false: the account was the first owner from the moment the workspace existed, so no owner's ownership predates the
+-- that the registrant set up: the ones the account made for itself (workspaces.created_by, with self_created true:
+-- the account was the first owner from the moment the workspace existed, so no owner's ownership predates the
 -- account's and every other owner holds the role from an owner chain the account began), whatever role the account
 -- holds in them, and the ones the account is the only owner of. A workspace an instance admin made from the instance
--- console for another owner has the admin as created_by too (sys_instance_create_workspace sets instance_created), but
--- its first owner is another account, so the admin is not its founder and it is judged by the only-owner rule alone.
+-- console for another owner has the admin as created_by too, but its first owner is another account, so the admin is
+-- not its founder: sys_instance_create_workspace leaves self_created false and it is judged by the only-owner rule
+-- alone. So is a workspace made before the column existed, whose first owner is not known (self_created is false for
+-- every such row, a console workspace among them), as it was before the column.
 -- In each workspace it strips it removes whatever lets another account in: the memberships of the
 -- other members, other owners included (their accounts stay, and so do the API tokens of the account's own, since
 -- the tokens of a member go with the membership by the foreign key), the teams with their members, every pending
@@ -56,7 +58,7 @@ BEGIN
   JOIN public.workspaces w ON w.id = m.workspace_id AND w.deleting_at IS NULL
   WHERE m.account_id = p_account_id
     AND (
-      (w.created_by = p_account_id AND NOT w.instance_created)
+      (w.created_by = p_account_id AND w.self_created)
       OR (
         m.role = 'owner'
         AND NOT EXISTS (

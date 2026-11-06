@@ -12,6 +12,11 @@ export interface SeedWorkspace {
   readonly id?: string;
   readonly name?: string;
   readonly createdBy?: string | null;
+  /**
+   * What `workspaces.self_created` holds. A workspace with a creator is made the way `sys_create_workspace` makes it, true, unless the test
+   * states otherwise (false is a workspace that predates the column, or a console workspace made for another owner).
+   */
+  readonly selfCreated?: boolean;
   readonly deletingAt?: Date | null;
 }
 
@@ -20,8 +25,8 @@ export async function seedWorkspace(database: TestDatabase, workspace: SeedWorks
   await asSystem(
     database,
     (tx) => tx`
-      INSERT INTO workspaces (id, name, created_by, deleting_at)
-      VALUES (${id}, ${workspace.name ?? "Test workspace"}, ${workspace.createdBy ?? null}, ${workspace.deletingAt ?? null})`,
+      INSERT INTO workspaces (id, name, created_by, self_created, deleting_at)
+      VALUES (${id}, ${workspace.name ?? "Test workspace"}, ${workspace.createdBy ?? null}, ${workspace.selfCreated ?? (workspace.createdBy ?? null) !== null}, ${workspace.deletingAt ?? null})`,
   );
   return id;
 }
