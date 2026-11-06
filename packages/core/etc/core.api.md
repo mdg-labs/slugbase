@@ -4981,6 +4981,7 @@ export type InstanceOwnerInvitationOutcome = {
 export interface InstanceOwnerInvitationReissue {
     readonly email?: string;
     readonly invitationId: string;
+    readonly linkIssued: boolean;
     readonly mailLocale?: string;
     readonly tokenHash: Buffer;
     // (undocumented)
@@ -5198,6 +5199,7 @@ export type InstanceWorkspaceOwnerSeat = {
     readonly tokenHash: Buffer;
     readonly ttlSeconds: number;
     readonly mailLocale?: string;
+    readonly linkIssued: boolean;
 };
 
 // @public

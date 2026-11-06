@@ -64,7 +64,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.workspace_invitations TO sl
 -- handed to a request, doc 02 section 3.4), and any other (a resend, a new invite, the mail job's own token) reaches the
 -- mailbox of the invited address or is held by nobody yet. An update that keeps the hash keeps the flag, so a re-invite where
 -- no mail can be sent does not turn a link an admin holds into a mailed one. slugbase_app has no privilege on the column, so
--- the trigger is the only writer of it.
+-- the trigger is the only writer of it for the invitations slugbase_app writes. The one insert that sets it is the owner invitation
+-- of sys_instance_create_workspace and sys_instance_reissue_owner_invitation (380-instance-workspaces.sql), which a BEFORE INSERT
+-- trigger cannot serve (doc 05 section 5): they write it from their p_link_issued argument.
 CREATE OR REPLACE FUNCTION public.workspace_invitations_track_link_issued() RETURNS trigger
   LANGUAGE plpgsql
   SET search_path = pg_catalog, public, pg_temp

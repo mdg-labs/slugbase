@@ -52,13 +52,27 @@ interface InvitationRow {
   readonly role: string;
   readonly status: string;
   readonly mail_ticket: string | null;
+  readonly link_issued: boolean;
   readonly token_hash: Buffer;
+}
+
+interface AccountRow {
+  readonly id: string;
+  readonly email_verified_at: Date | null;
+}
+
+async function accountOf(email: string): Promise<AccountRow | undefined> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<AccountRow[]>`SELECT id, email_verified_at FROM accounts WHERE email = ${email}`;
+  });
+  return rows[0];
 }
 
 async function invitationsOf(workspaceId: string): Promise<InvitationRow[]> {
   return database().owner.begin(async (tx) => {
     await tx`SET LOCAL ROLE slugbase_system`;
-    return [...(await tx<InvitationRow[]>`SELECT id, email::text AS email, role::text AS role, status, mail_ticket::text AS mail_ticket, token_hash FROM workspace_invitations WHERE workspace_id = ${workspaceId} ORDER BY created_at, id`)];
+    return [...(await tx<InvitationRow[]>`SELECT id, email::text AS email, role::text AS role, status, mail_ticket::text AS mail_ticket, link_issued, token_hash FROM workspace_invitations WHERE workspace_id = ${workspaceId} ORDER BY created_at, id`)];
   });
 }
 
@@ -106,6 +120,18 @@ async function createWaiting(world: World, cookie: string, ownerEmail: string): 
 const issue = (world: World, cookie: string, workspaceId: string, body: unknown = {}) => send(world, "POST", `${WORKSPACES}/${workspaceId}/owner-invitation`, { cookie }, body);
 
 const accept = (world: World, cookie: string, token: string) => send(world, "POST", `${INVITATIONS}/accept`, { cookie }, { token });
+
+const PASSWORD = "correct horse battery staple 42";
+let newOwners = 0;
+
+/** An address no account holds yet: the password form makes the account, and one test database serves every test of the file. */
+const freshOwner = (): string => `new.owner.${String((newOwners += 1))}@example.test`;
+
+/** The password form of the acceptance, which makes the account of the invited address; no session of the caller is needed. */
+const signup = (world: World, token: string) => send(world, "POST", `${INVITATIONS}/accept`, {}, { token, displayName: "New Owner", password: PASSWORD });
+
+/** A composition where a redemption signs the new account in whether or not its address is verified, so the account itself can be read. */
+const NO_VERIFICATION_GATE = { RATE_LIMIT_TOKEN_REDEEM_IP: "10000/hour", RATE_LIMIT_TOKEN_REDEEM_ACCOUNT: "10000/hour", EMAIL_VERIFICATION_REQUIRED: "false" };
 
 describe("POST /instance/workspaces/{id}/owner-invitation where no mail is configured", () => {
   it("replaces an expired owner invitation: the new link makes the invitee the owner and the old link no longer works", async () => {
@@ -372,6 +398,56 @@ describe("POST /instance/workspaces/{id}/owner-invitation where no mail is confi
     expect(response.status).toBe(403);
     expect(await invitationsOf(id)).toEqual(rows);
   });
+
+  it("records an owner invitation returned as a link as link-issued, with no mail ticket, and the password form then makes an unverified owner", async () => {
+    const newOwner = freshOwner();
+    const world = harness.serve({ entitlements: () => true, env: NO_VERIFICATION_GATE });
+    const root = await signInAdmin(database(), world);
+    const { id, invitation } = await createWaiting(world, root.cookie, newOwner);
+    expect(await invitationsOf(id)).toMatchObject([{ role: "owner", status: "pending", mail_ticket: null, link_issued: true }]);
+
+    const created = await signup(world, tokenOf(invitation.link ?? ""));
+
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual({ workspaceId: id, role: "owner" });
+    const account = await accountOf(newOwner);
+    expect(account?.email_verified_at).toBeNull();
+    expect(await harness.rolesOf(id)).toEqual({ [account?.id ?? ""]: "owner" });
+    expect(await queuedMail(id)).toEqual([]);
+  });
+
+  it("records a reissued owner invitation returned as a link as link-issued, and the password form then makes an unverified owner", async () => {
+    const newOwner = freshOwner();
+    const world = harness.serve({ entitlements: () => true, env: NO_VERIFICATION_GATE });
+    const root = await signInAdmin(database(), world);
+    const { id } = await createWaiting(world, root.cookie, newOwner);
+
+    const response = await issue(world, root.cookie, id);
+
+    expect(response.status).toBe(201);
+    const issued = (await response.json()) as Invitation;
+    expect(await invitationsOf(id)).toMatchObject([{ status: "revoked" }, { id: issued.id, status: "pending", mail_ticket: null, link_issued: true }]);
+    const created = await signup(world, tokenOf(issued.link ?? ""));
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual({ workspaceId: id, role: "owner" });
+    const account = await accountOf(newOwner);
+    expect(account?.email_verified_at).toBeNull();
+    expect(await harness.rolesOf(id)).toEqual({ [account?.id ?? ""]: "owner" });
+  });
+
+  it("gives no session to a redeemed owner link where verification is required (the default), and the account stays unverified", async () => {
+    const newOwner = freshOwner();
+    const world = harness.serve({ entitlements: () => true, env: { RATE_LIMIT_TOKEN_REDEEM_IP: "10000/hour", RATE_LIMIT_TOKEN_REDEEM_ACCOUNT: "10000/hour", EMAIL_VERIFICATION_REQUIRED: "true" } });
+    const root = await signInAdmin(database(), world);
+    const { id, invitation } = await createWaiting(world, root.cookie, newOwner);
+
+    const created = await signup(world, tokenOf(invitation.link ?? ""));
+
+    expect(created.status).toBe(202);
+    expect(created.headers.get("set-cookie")).toBeNull();
+    expect((await accountOf(newOwner))?.email_verified_at).toBeNull();
+    expect(Object.values(await harness.rolesOf(id))).toEqual(["owner"]);
+  });
 });
 
 describe("the owner invitation where mail is configured", () => {
@@ -430,6 +506,46 @@ describe("the owner invitation where mail is configured", () => {
     expect(rows[1]?.token_hash.equals(hashCredentialToken(token) ?? Buffer.alloc(0))).toBe(true);
     expect((await accept(world, invitee.cookie, token)).status).toBe(200);
     expect(await harness.rolesOf(id)).toEqual({ [invitee.account.id]: "owner" });
+  });
+
+  it("makes a verified owner when the mailed owner invitation of POST /instance/workspaces is redeemed through the password form", async () => {
+    const newOwner = freshOwner();
+    const world = harness.serve({ mail, entitlements: () => true, env: NO_VERIFICATION_GATE });
+    const root = await signInAdmin(database(), world);
+    const { id } = await createWaiting(world, root.cookie, newOwner);
+    expect(await invitationsOf(id)).toMatchObject([{ role: "owner", link_issued: false }]);
+    await runMailJobs(id);
+    expect(inbox.sent).toHaveLength(1);
+    const token = String(inbox.sent[0]?.data["token"]);
+    expect(await invitationsOf(id)).toMatchObject([{ link_issued: false }]);
+
+    const created = await signup(world, token);
+
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual({ workspaceId: id, role: "owner" });
+    const account = await accountOf(newOwner);
+    expect(account?.email_verified_at).not.toBeNull();
+    expect(await harness.rolesOf(id)).toEqual({ [account?.id ?? ""]: "owner" });
+  });
+
+  it("makes a verified owner when the mailed, reissued owner invitation is redeemed through the password form", async () => {
+    const newOwner = freshOwner();
+    const world = harness.serve({ mail, entitlements: () => true, env: NO_VERIFICATION_GATE });
+    const root = await signInAdmin(database(), world);
+    const { id } = await createWaiting(world, root.cookie, newOwner);
+    const response = await issue(world, root.cookie, id);
+    expect(response.status).toBe(201);
+    await runMailJobs(id);
+    expect(inbox.sent).toHaveLength(1);
+    const token = String(inbox.sent[0]?.data["token"]);
+    expect((await invitationsOf(id)).map((row) => [row.status, row.link_issued])).toEqual([["revoked", false], ["pending", false]]);
+
+    const created = await signup(world, token);
+
+    expect(created.status).toBe(201);
+    const account = await accountOf(newOwner);
+    expect(account?.email_verified_at).not.toBeNull();
+    expect(await harness.rolesOf(id)).toEqual({ [account?.id ?? ""]: "owner" });
   });
 
   it("queues no mail for a refusal", async () => {
