@@ -489,7 +489,7 @@ expect_hit "an event name spelled with a hex escape fails" "esc.yml"
 
 tree="$(new_tree escaped-unicode)"
 write_cla "$tree"
-put "$tree" .github/workflows/esc.yml 'on:' '  "workflow_run":' 'jobs: {}'
+put "$tree" .github/workflows/esc.yml 'on:' '  "workflow\u005frun":' 'jobs: {}'
 check "$tree"
 expect_hit "an event name spelled with a unicode escape fails" "esc.yml"
 
@@ -520,7 +520,7 @@ put "$tree" .github/workflows/cla.yml \
   '    steps:' \
   "      - uses: $pinned" \
   '        env:' \
-  '          ALL: "${{ toJSON(secrets) }}"'
+  '          ALL: "${{ toJSON(secret\u0073) }}"'
 check "$tree"
 expect_hit "the secrets context spelled with an escape fails" "cla.yml"
 
