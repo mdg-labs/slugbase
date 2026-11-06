@@ -144,7 +144,7 @@ describe("an https issuer over the egress adapter", () => {
   const keys = JSON.stringify({ keys: [{ kty: "RSA", kid: "k1" }] });
 
   // The https provider answers its own discovery document; `redirected` names the path it sends to the plain-http server.
-  async function httpsProvider(redirected: "/.well-known/openid-configuration" | "/keys", plain: LocalServer): Promise<{ identity: ReturnType<typeof createOidcIdentity>; lines: unknown[] }> {
+  async function httpsProvider(redirected: "/.well-known/openid-configuration" | "/keys" | "/token", plain: LocalServer): Promise<{ identity: ReturnType<typeof createOidcIdentity>; lines: unknown[] }> {
     const server = await serve((request, socket) => {
       const origin = `https://idp.example.test:${String(socket.localPort)}`;
       if (request.target === redirected) {
@@ -173,6 +173,19 @@ describe("an https issuer over the egress adapter", () => {
     const { identity, lines } = await httpsProvider(path, plain);
     expect(await identity.listProviders()).toEqual([]);
     expect(lines).toEqual([{ message: "An OIDC provider is unavailable", fields: { provider: "tls", reason, code: "egress_blocked" } }]);
+    expect(plain.connections()).toBe(0);
+  });
+
+  it("refuses the code exchange when the token endpoint is redirected to http, and never connects to the http server", async () => {
+    const plain = await serve(asJson((origin) => document(origin)));
+    const { identity, lines } = await httpsProvider("/token", plain);
+    expect(await identity.listProviders()).toEqual([{ id: "tls", displayName: "tls" }]);
+    expect(lines).toEqual([]);
+    await expect(
+      identity.complete({ providerId: "tls", redirectUri: "https://app.example.test/callback", code: "code-1", nonce: "nonce-1", codeVerifier: "verifier-1" }),
+    ).rejects.toMatchObject({ reason: "exchange_failed" });
+    expect(lines).toEqual([{ message: "An OIDC code exchange failed", fields: { provider: "tls", code: "egress_blocked" } }]);
+    expect(JSON.stringify(lines)).not.toContain(SECRET);
     expect(plain.connections()).toBe(0);
   });
 });
