@@ -1197,7 +1197,8 @@ function checkWorkflowOrAction(file, root, kind, report) {
 // ---- Dockerfiles --------------------------------------------------------------------
 
 const KNOWN_INSTRUCTIONS = new Set("FROM RUN CMD ENTRYPOINT HEALTHCHECK ONBUILD SHELL ENV ARG LABEL WORKDIR COPY ADD EXPOSE VOLUME USER STOPSIGNAL MAINTAINER".split(" "));
-const SHELL_FORM_FLAG = /^(\s*--[A-Za-z][A-Za-z-]*(=\S*)?)+\s+/;
+// Each flag owns the whitespace after it, so no input splits into flags in more than one way.
+const SHELL_FORM_FLAG = /^\s*(?:--[A-Za-z][A-Za-z-]*(?:=\S*)?\s+)+/;
 
 /**
  * @param {string} text
@@ -1400,7 +1401,8 @@ const ACTION_NAME = /^action\.ya?ml$/i;
 const DOCKERFILE_NAME = /^(docker|container)file(\..+)?$|\.(docker|container)file$/i;
 // A name such as dockerfile.test.ts or Dockerfile.md is a Dockerfile only when it starts like one.
 const SOURCE_SUFFIX = /\.(m?[jt]sx?|cjs|cts|json|md|mdx|sh|ya?ml|txt|snap|map|html|css|sql)$/i;
-const STARTS_LIKE_DOCKERFILE = /^(\s*(#[^\n]*)?\n)*\s*(FROM|ARG)\s/i;
+// Per-line whitespace excludes the newline, so a run of blank lines splits one way only.
+const STARTS_LIKE_DOCKERFILE = /^(?:[^\S\n]*(?:#[^\n]*)?\n)*[^\S\n]*(?:FROM|ARG)\s/i;
 
 /** @param {string} path @param {string} text */
 function isDockerfile(path, text) {

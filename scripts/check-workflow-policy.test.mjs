@@ -817,6 +817,37 @@ violation("an install in ENTRYPOINT exec form fails", DOCKERFILE, FROZEN, "FROM 
 violation("an install in HEALTHCHECK CMD fails", DOCKERFILE, FROZEN, "FROM node:24-slim", "HEALTHCHECK --interval=5m CMD pnpm install");
 violation("a Dockerfile with CRLF line ends is read", DOCKERFILE, FROZEN, "FROM node:24-slim\r", "RUN pnpm install\r");
 
+violation("an install after several RUN flags with and without values fails", DOCKERFILE, FROZEN, "FROM node:24-slim", "RUN --network=none --security  --mount=type=cache,target=/x pnpm install");
+violation("an install after RUN flags separated by tabs fails", DOCKERFILE, FROZEN, "FROM node:24-slim", "RUN\t--mount=type=cache,target=/x\t--network=none\tpnpm install");
+violation("a Dockerfile-named document that starts with comments and blank lines then FROM is read", "apps/x/Dockerfile.md", FROZEN, "# a note", "", "  # another", "FROM node:24-slim", "RUN pnpm install");
+violation("a Dockerfile-named document that starts with ARG is read", "apps/x/Dockerfile.md", FROZEN, "ARG V=1", "FROM node:24-slim", "RUN pnpm install");
+clean("a Dockerfile-named document that does not start like a Dockerfile is not read", "apps/x/Dockerfile.md", "# Building", "", "Run pnpm install first.", "RUN pnpm install");
+
+/**
+ * Seconds one check of a tree takes.
+ * @param {Record<string, string>} files
+ */
+function secondsToCheck(files) {
+  const dir = tree(files);
+  const start = performance.now();
+  checkRepository(dir);
+  return (performance.now() - start) / 1000;
+}
+
+const REPEATS = 30000;
+test("repeated flags that never reach a body are checked in linear time", () => {
+  for (const flag of ["--A", "--A="]) {
+    const seconds = secondsToCheck({ [DOCKERFILE]: y("FROM node:24-slim", `RUN ${flag.repeat(REPEATS)}`, `HEALTHCHECK ${flag.repeat(REPEATS)}`) });
+    assert.ok(seconds < 1, `${flag} repeated ${String(REPEATS)} times took ${String(seconds)} s`);
+  }
+});
+test("a Dockerfile-named document of blank lines is checked in linear time", () => {
+  for (const blank of ["\n", "\n \n", "\n#\n"]) {
+    const seconds = secondsToCheck({ "apps/x/Dockerfile.md": `${blank.repeat(REPEATS)}x\n` });
+    assert.ok(seconds < 1, `${JSON.stringify(blank)} repeated ${String(REPEATS)} times took ${String(seconds)} s`);
+  }
+});
+
 clean("a RUN with a flag and a frozen install passes", DOCKERFILE, "FROM node:24-slim", "RUN --mount=type=cache,target=/x pnpm install --frozen-lockfile");
 clean("COPY and ADD heredoc bodies are data", DOCKERFILE, "FROM node:24-slim", "COPY <<EOF /x", "pnpm install", "EOF", "RUN true");
 clean("an exec-form CMD passes", DOCKERFILE, "FROM node:24-slim", 'CMD ["server"]', 'ENTRYPOINT ["/app/x.sh"]');
