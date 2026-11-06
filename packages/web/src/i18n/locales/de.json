@@ -751,7 +751,7 @@
     "page": {
       "title": "Tags"
     },
-    "note": "Tags sind nur für dich sichtbar. Andere Mitglieder des Arbeitsbereichs sehen sie nie.",
+    "note": "Tags sind nur für dich sichtbar. Andere Mitglieder des Workspace sehen sie nie.",
     "deleted": "Tag gelöscht.",
     "sort": {
       "label": "Sortieren nach",
