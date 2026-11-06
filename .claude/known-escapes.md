@@ -13,7 +13,7 @@ existing line by adding its PR number.
 ## Guards and checks
 
 - **regex guard** — a pattern keeps false positives out with length caps instead of anchoring, so a long but realistic input carrying the term passes — PR 354
-- **regex guard** — sibling patterns for one thing disagree on an optional detail (one allows a space, the next does not), so the variant slips through — PR 354
+- **regex guard** — sibling patterns for one thing disagree on an optional detail (one allows a space, the next does not), so the variant slips through — PR 354, 775
 - **AST guard** — a lint rule inspects only one syntax form of a value (a string `Literal`) and misses an equivalent form (a static template literal), so the banned construct passes (calls of a function matched, but an alias or a value handed on missed) — PR 365, 397
 - **regex guard** — an HTML-matching pattern in a check is case-sensitive or excludes characters a real tag body can hold, so the tag it guards against escapes the match — PR 397
 - **safe by keyword** — a fail-closed lint marks a statement family safe from its leading keywords without reading the rest, or its safe list holds a form the design doc places in a later phase, so unsafe members of the family pass — PR 381
@@ -54,6 +54,7 @@ existing line by adding its PR number.
 - **comment vs check** — a comment summarising what a check rejects states the rule more broadly than the check enforces ("a secret" where the workflow token is allowed), so the next editor misreads the guard — PR 444
 - **invariant vs feature** — a feature the spec settles (a credential returned once in an API response) contradicts the literal wording of a threat-model invariant, and the invariant is not amended with a narrow, named exception in the same change — PR 471
 - **planned as current** — an operator-facing comment describes a setting's intended end state (a sign-in block) that a later item enforces, so an operator relies on a guard the build does not have yet — PR 491
+- **exception list lags** — a doc lists the exceptions to a rule (the CI jobs that do not run in a container) and a change adds another without updating the list, so the doc states a rule the code breaks — PR 775
 
 ## Processes
 
@@ -71,6 +72,8 @@ existing line by adding its PR number.
 - **race settled in one shape only** — a re-read after racing writes reconciles the case where both writers' values are present but not the case where the racer replaced ours, so the racer's value stands and the log reports ours as applied — PR 500
 - **policies disagree on visibility** — a write that one table's RLS policy still admits reads a related row through another table's policy that already hides it (a workspace being deleted), so the result carries NULL where its type promises a value and the job using it fails on every retry — PR 514
 - **catalog column wider than its name** — a catalog check reads a column by what it usually means (`pg_constraint.conindid` as the index a constraint owns) without filtering on the kinds that set it for another reason (a foreign key names the index it references), so a valid state is refused — PR 696
+- **new column's default read as a fact** — a column is added with a default that the rule reading it treats as a recorded fact (`instance_created = false` read as "the account made it itself"), so every row that predates the column is classified by the default and a destructive rule reaches rows it should not — PR 775
+- **OR across a subquery** — a lock or lookup predicate ORs a column comparison with `IN (subquery)`, or compares a column no index covers, so the planner can use no index for it and scans the whole table while taking row locks — PR 775
 
 ## Optional capabilities
 
@@ -87,12 +90,13 @@ existing line by adding its PR number.
 ## Input handling
 
 - **quadratic regex** — a regular expression with an end-anchored repetition (a trim's `[\s]+$` branch) runs on input whose length the function itself does not bound, relying on a caller's cap, so a long run of the repeated character followed by another one takes quadratic time — PR 558
-- **overlapping quantifiers** — a regular expression puts two repetitions that match the same characters side by side around an optional token (`\s*["']?\s*`), so one run of that character splits between them in as many ways as it is long — PR 629
+- **overlapping quantifiers** — a regular expression puts two repetitions that match the same characters side by side around an optional token (`\s*["']?\s*`), so one run of that character splits between them in as many ways as it is long — PR 629, 775
 - **sibling path skips the cleanup** — one of several entry points that take the same text (a list filter beside the search) applies a weaker cleanup than the others, so a character the database refuses (NUL) reaches it and the request answers 500 — PR 622
 
 ## Shared helpers
 
 - **copy drops side duties** — a second copy of a shared routine (a rate-limit take) keeps its answers but leaves out the original's side duties (the rejection metric, the error report), so the copy's refusals and failures never reach monitoring — PR 520
+- **fan-out into a refusing cap** — a component starts all its requests at once against a shared resource that refuses past a fixed cap instead of queueing (an egress instance's lookup slots), so a list longer than the cap loses its tail on every load — PR 775
 
 ## Tests
 
@@ -122,6 +126,10 @@ existing line by adding its PR number.
 - **URL pathname as a file path** — a test derives a path with `new URL(…, import.meta.url).pathname`, which stays percent-encoded, so a checkout path with a space or a non-ASCII character names a file that does not exist; `fileURLToPath` decodes it — PR 696
 - **insertion strands a comment** — a new test block is inserted between a block comment and the suite it describes, so the comment now documents the new suite and misleads its reader — PR 713
 - **tool behaviour restated from memory** — a comment beside a command describes what the tool does (how `--shard` divides tests) in words that differ from what it does and from the design doc, so the next change to the shard count reasons from the wrong model — PR 696
+- **global count in a parallel suite** — a test proves that nothing was created by comparing a global count before and after, while tests running in parallel create the same kind of row, so an unrelated creation fails it; look for the specific row instead — PR 775
+- **negative case satisfied by another violation** — a test that a checker reports a bad value asserts only that some violation occurs, and its fixture also breaks another rule (a repeated directive), so it passes whatever the checker does with the value — PR 775
+- **fixture without the variant** — a test of a normalisation (an escape decoder, an alphabet mapping) uses an input holding nothing to normalise (a plain spelling, a key with no `+` or `/`), so the branch it names never runs — PR 775
+- **guard tested on some call sites** — a guard applied at several call sites (an https-to-http refusal on discovery, key sets and the token exchange) has tests for only some of them, so dropping it from another still passes — PR 775
 
 ## Web UI
 
@@ -134,3 +142,4 @@ existing line by adding its PR number.
 - **reachability by computed style** — a helper that lists the controls Tab reaches judges them by computed `display` and `visibility` and takes document order, so a control the browser skips without either (inside a closed `<details>`) or orders differently (a positive `tabindex`) becomes the first or last stop and the trap misses the real one — PR 612
 - **secure-context API presumed** — code calls a browser API that exists only in a secure context (`navigator.clipboard`) without allowing for its absence, so on an instance served over http it throws before any feedback — PR 612
 - **error routed to a hidden message** — a page routes a failure to a message shown beside one control, under a broader condition than the one that shows that control (any filter, while the day fields show only for a custom range), so the page renders nothing for that failure: no table, banner or retry — PR 724
+- **one code, several causes** — a client maps a refusal code to one cause and message, though the server answers that code for several causes and names which in the body (an `entitlement_required` for invitations or for teams), so the message names the wrong cause — PR 775

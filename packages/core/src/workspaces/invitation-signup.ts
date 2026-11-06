@@ -11,8 +11,13 @@ import type { WorkspaceRole } from "../ports/tenant-resolver.ts";
 // admin asked for, whoever holds it need not own the mailbox, so the account is created without a verified address and
 // only the owner's verification makes it one. It gets no personal workspace, since the workspace it joins is where it works.
 //
+// Where the deployment requires a verified address to sign in, such an account could not sign in again, so redeeming
+// the link gives it no session either (`sessionCreated` is false): it exists, is a member and has accepted the
+// invitation, and its owner's verification is what lets it in. Only the database reads, under the invitation's lock,
+// whether the live token is the link an admin took, so it decides and tells the caller.
+//
 // The database operation behind it creates the account, adds the membership with exactly the invited role, marks the
-// invitation accepted and signs the account in with a full session acting in the workspace, in one transaction with
+// invitation accepted and signs the account in with a full session acting in the workspace (unless the above), in one transaction with
 // the audit event and the domain events this service prepares for it, so each exists exactly when the others do. The
 // checks run in a fixed order and a refusal writes nothing, so the invitation stays pending and usable: a token that
 // is no longer a pending invitation's, then no seat left, then an address that already has an account.
@@ -33,7 +38,14 @@ export interface InvitationSignupSession {
 
 /** What the database operation answered. */
 export type InvitationSignupResult =
-  | { readonly kind: "accepted"; readonly workspaceId: string; readonly invitationId: string; readonly role: WorkspaceRole }
+  | {
+      readonly kind: "accepted";
+      readonly workspaceId: string;
+      readonly invitationId: string;
+      readonly role: WorkspaceRole;
+      /** False when the account was made without a session: the token is a link an admin took and the deployment requires a verified address to sign in. */
+      readonly sessionCreated: boolean;
+    }
   /** An unknown, used, revoked, replaced or expired token, or a workspace being deleted. */
   | { readonly kind: "gone" }
   | { readonly kind: "seat_limit_reached" }
@@ -58,6 +70,8 @@ export interface NewAccountAcceptance {
   readonly locale: string;
   /** The seats the workspace may hold; null for no limit. */
   readonly seatLimit: number | null;
+  /** Whether the deployment requires a verified address to sign in (`EMAIL_VERIFICATION_REQUIRED`), which decides whether a link an admin took gets a session. */
+  readonly emailVerificationRequired: boolean;
   readonly session: InvitationSignupSession;
   /** Called inside the transaction once the invitation is accepted; what it returns is written in that transaction. */
   readonly onAccepted: (accepted: { readonly workspaceId: string; readonly invitationId: string; readonly role: WorkspaceRole }) => InvitationSignupRecords;
@@ -88,6 +102,8 @@ export interface InvitationSignupAsk {
   readonly passwordHash: string;
   readonly locale: string;
   readonly seatLimit: number | null;
+  /** Whether the deployment requires a verified address to sign in. */
+  readonly emailVerificationRequired: boolean;
   readonly session: InvitationSignupSession;
 }
 
@@ -109,6 +125,7 @@ export async function acceptInvitationWithAccount({ store, newId }: InvitationSi
     passwordHash: ask.passwordHash,
     locale: ask.locale,
     seatLimit: ask.seatLimit,
+    emailVerificationRequired: ask.emailVerificationRequired,
     session: ask.session,
     onAccepted: ({ workspaceId, role }) => ({
       audit: [

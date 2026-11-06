@@ -490,6 +490,51 @@ describe("PATCH /instance/accounts/{id} with emailVerified", () => {
     expect(await login(world, registrant, NEW_PASSWORD)).toMatchObject({ status: 200, next: "done" });
   });
 
+  it("removes the members, teams, invitations and shares of a workspace the registrant owns alone, and keeps the workspace and the registrant's own content", async () => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const registrant = await harness.person(world);
+    const accomplice = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([
+      { person: registrant, role: "owner" },
+      { person: accomplice, role: "member" },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`UPDATE accounts SET email_verified_at = NULL WHERE id = ${registrant.account.id}`;
+      const bookmarkId = crypto.randomUUID();
+      const teamId = crypto.randomUUID();
+      await tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+        VALUES (${bookmarkId}, ${workspaceId}, ${registrant.account.id}, 'https://example.com/', 'https://example.com', 'example.com', 'Planted')`;
+      await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamId}, ${workspaceId}, 'Planted team')`;
+      await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamId}, ${accomplice.account.id})`;
+      await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${crypto.randomUUID()}, ${workspaceId}, ${bookmarkId}, ${accomplice.account.id}, ${registrant.account.id})`;
+      await tx`
+        INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at, invited_by)
+        VALUES (${crypto.randomUUID()}, ${workspaceId}, 'invitee@example.test', 'member', ${Buffer.alloc(32, 7)}, now() + interval '7 days', ${registrant.account.id})`;
+    });
+    const counts = async (): Promise<Record<string, number>> => {
+      const rows = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<Record<string, number>[]>`
+          SELECT (SELECT count(*)::int FROM teams WHERE workspace_id = ${workspaceId}) AS teams,
+                 (SELECT count(*)::int FROM bookmark_shares WHERE workspace_id = ${workspaceId}) AS shares,
+                 (SELECT count(*)::int FROM workspace_invitations WHERE workspace_id = ${workspaceId} AND status = 'pending') AS invitations,
+                 (SELECT count(*)::int FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${registrant.account.id}) AS bookmarks`;
+      });
+      return rows[0] ?? {};
+    };
+    expect(await counts()).toEqual({ teams: 1, shares: 1, invitations: 1, bookmarks: 1 });
+
+    const response = await patch(world, root, registrant.account.id, { emailVerified: true });
+
+    expect(response.status).toBe(200);
+    expect(await harness.rolesOf(workspaceId)).toEqual({ [registrant.account.id]: "owner" });
+    expect(await counts()).toEqual({ teams: 0, shares: 0, invitations: 0, bookmarks: 1 });
+    expect((await statusOf(world, accomplice.cookie))).toBe(200);
+  });
+
   it("answers 200 and writes no event for an address that is verified already", async () => {
     const world = harness.serve();
     const root = await admin(world);

@@ -1,6 +1,6 @@
 import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, fetchBookmarkMetadata as fetchBookmarkMetadataOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
 import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, lookupPageMetadata, normalizeSlug, openBookmark, previewBulkShare, previewBulkTags, readBookmark, SHARE_ENTITLEMENTS, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage, type EgressPort, type EntitlementCheck, type EntitlementUpgradeCheck, type PageMetadataCache, type ShareTarget } from "@slugbase/core";
-import { accountProfileRepository, auditEventRepository, bookmarkRepository, bookmarkShareRepository, isBookmarkSlugTaken, urlMetadataRepository, type TenantTx } from "@slugbase/db";
+import { accountProfileRepository, auditEventRepository, bookmarkRepository, bookmarkShareRepository, isBookmarkSlugTaken, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
@@ -102,11 +102,11 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // in the `go` rate bucket.
 //
 // POST /api/v1/bookmarks/metadata (doc 04 sections 3.2, 7 and 10.6, doc 02 sections 5.4 and 16, doc 10 T6 and T13) answers the title, description, site name,
-// canonical link and language of a page for the modal that is open, from the workspace's cache or from a fetch through the egress adapter that is
+// canonical link and language of a page for the modal that is open, from a fetch through the egress adapter, never from the workspace's cache (doc 10 T2), that is
 // answered within the budget of the composition (three seconds by default; `metadataBudgetMs`). The URL is judged as a bookmark's is: a scheme other than
 // http and https and a target the egress adapter refuses (a private, loopback, link-local, carrier-grade NAT or metadata address, also behind a redirect or a
 // name) are `422 url_not_allowed`, and a fetch that fails, runs out of time, answers a status outside 2xx or a body that is not an HTML page is `502 upstream_failed`;
-// neither says where the connection went. Only a successful result is cached. It takes from the `fetch` bucket and, writing the cache, needs a token of the `write` scope.
+// neither says where the connection went. Nothing is cached. It takes from the `fetch` bucket and needs a token of the `write` scope.
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
@@ -317,18 +317,15 @@ function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> 
   };
 }
 
-/** The workspace's metadata cache, each call in a transaction of its own so that none is open while a page is fetched. */
-function metadataCacheOf(tenant: RequestTenant): PageMetadataCache {
-  return {
-    read: async (urlCanonical) => {
-      const row = await tenant.withTenant((tx) => urlMetadataRepository(tx).current(urlCanonical));
-      return row === undefined
-        ? undefined
-        : { status: row.status, title: row.title, description: row.description, siteName: row.siteName, canonicalUrl: row.canonicalUrl, language: row.language };
-    },
-    write: (urlCanonical, page) => tenant.withTenant((tx) => urlMetadataRepository(tx).store(urlCanonical, { status: "ok", ...page })),
-  };
-}
+/**
+ * The cache the synchronous metadata lookup is handed: one that is always empty and keeps nothing. The workspace's `url_metadata` rows come from every
+ * member's bookmarks, private ones included, so an answer from them, or the time one takes, would tell a member whether a colleague saved or looked up a
+ * page (doc 10 T2); the lookup is always a fetch, and the rows are the fetch job's alone.
+ */
+const NO_METADATA_CACHE: PageMetadataCache = {
+  read: () => Promise.resolve(undefined),
+  write: () => Promise.resolve(),
+};
 
 export function bookmarkRoutes({ entitlements, sharingEntitlements, upgradeAvailable, cursorSecret, usage, egress, metadataBudgetMs = DEFAULT_METADATA_BUDGET_MS }: BookmarkRoutesOptions): RouteBinding[] {
   const cursors = bookmarkCursors(cursorSecret);
@@ -614,11 +611,11 @@ export function bookmarkRoutes({ entitlements, sharingEntitlements, upgradeAvail
     }),
 
     route(fetchBookmarkMetadataOperation).handle(async ({ body }, context) => {
-      const tenant = tenantOf(context);
-      const outcome = await lookupPageMetadata({ egress, cache: metadataCacheOf(tenant), budgetMs: metadataBudgetMs, now: () => performance.now() }, body.url);
+      tenantOf(context);
+      const outcome = await lookupPageMetadata({ egress, cache: NO_METADATA_CACHE, budgetMs: metadataBudgetMs, now: () => performance.now() }, body.url);
       switch (outcome.kind) {
         case "found":
-          return { status: 200, body: { ...outcome.page, cached: outcome.cached } };
+          return { status: 200, body: { ...outcome.page, cached: false } };
         case "url_refused":
           if (outcome.reason === "not_http") {
             throw new ProblemError("url_not_allowed", URL_NOT_ALLOWED, { errors: [{ path: "url", code: "url_not_allowed" }] });

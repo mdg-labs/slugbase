@@ -10,7 +10,11 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- one an admin took as a copyable link (workspace_invitations.link_issued), since its holder need not own the mailbox and
 -- only the owner's own verification (sys_email_verify) may then make the address verified; adds it to the workspace with exactly
 -- the invited role; marks the invitation accepted; and signs the account in with a full session whose active workspace
--- is that one: all in the calling transaction, so a failure at any step leaves nothing. It makes no personal
+-- is that one: all in the calling transaction, so a failure at any step leaves nothing. Where the deployment requires a
+-- verified address to sign in (p_verification_required) and the live token is a link an admin took, the account it just
+-- made could not sign in again until its owner verified the address, so the redemption makes no session either:
+-- everything else is written and session_created is false, which only this function can tell, since only it reads
+-- link_issued under the invitation's lock (doc 02 section 3.4, doc 10 T19). It makes no personal
 -- workspace. The password arrives hashed, or NULL for an account that signs in through a provider
 -- (sys_invitation_accept_with_identity). The outcome is one of: 'accepted'; 'gone' for an unknown, used, revoked,
 -- replaced or expired token or a workspace being deleted, which a caller does not tell apart; 'seat_limit_reached'
@@ -44,8 +48,9 @@ CREATE OR REPLACE FUNCTION public.sys_invitation_accept_new_account(
   p_session_token_hash bytea,
   p_replaced_token_hash bytea,
   p_ip_prefix cidr,
-  p_user_agent text
-) RETURNS TABLE (outcome text, accepted_workspace_id uuid, accepted_invitation_id uuid, accepted_role text)
+  p_user_agent text,
+  p_verification_required boolean
+) RETURNS TABLE (outcome text, accepted_workspace_id uuid, accepted_invitation_id uuid, accepted_role text, session_created boolean)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
   AS $$
@@ -56,16 +61,18 @@ DECLARE
   v_role member_role;
   v_team_ids uuid[];
   v_link_issued boolean;
+  v_session boolean;
 BEGIN
   IF NOT coalesce(
     p_token_hash IS NOT NULL AND octet_length(p_token_hash) = 32
     AND p_account_id IS NOT NULL AND p_display_name IS NOT NULL AND p_locale IS NOT NULL
     AND p_session_id IS NOT NULL AND octet_length(p_session_token_hash) = 32
+    AND p_verification_required IS NOT NULL
     AND (p_replaced_token_hash IS NULL OR octet_length(p_replaced_token_hash) = 32)
     AND (p_seat_limit IS NULL OR p_seat_limit >= 0),
     false
   ) THEN
-    RAISE EXCEPTION 'sys_invitation_accept_new_account needs a 32-byte token hash, the account and its session and a seat limit that is not negative'
+    RAISE EXCEPTION 'sys_invitation_accept_new_account needs a 32-byte token hash, the account and its session, whether verification is required and a seat limit that is not negative'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF public.app_account_id() IS NOT NULL THEN
@@ -122,14 +129,18 @@ BEGIN
   SET status = 'accepted', accepted_by = p_account_id, closed_at = clock_timestamp()
   WHERE id = v_invitation;
 
-  IF NOT public.sys_session_create(
-    p_session_id, p_account_id, 'full', false, p_ip_prefix, p_user_agent, p_session_token_hash, p_replaced_token_hash
-  ) THEN
-    RAISE EXCEPTION 'the session of the account that accepted the invitation could not be created';
+  v_session := NOT (v_link_issued AND p_verification_required);
+  IF v_session THEN
+    IF NOT public.sys_session_create(
+      p_session_id, p_account_id, 'full', false, p_ip_prefix, p_user_agent, p_session_token_hash, p_replaced_token_hash
+    ) THEN
+      RAISE EXCEPTION 'the session of the account that accepted the invitation could not be created';
+    END IF;
+    UPDATE public.sessions SET active_workspace_id = v_workspace WHERE id = p_session_id;
   END IF;
-  UPDATE public.sessions SET active_workspace_id = v_workspace WHERE id = p_session_id;
 
   outcome := 'accepted';
+  session_created := v_session;
   accepted_workspace_id := v_workspace;
   accepted_invitation_id := v_invitation;
   accepted_role := v_role::text;
@@ -137,8 +148,42 @@ BEGIN
 END
 $$;
 
+-- The eleven-argument form, which replicas of the release before p_verification_required still call during a rolling
+-- deploy (doc 05 section 5.2, Q52), and which sys_invitation_accept_with_identity calls for the provider form of the
+-- acceptance, whose account is verified at once and so always gets its session. It is the twelve-argument function
+-- asked for a deployment that does not require verification, so it behaves as it always did: a full session for the
+-- account it creates, whichever way the token reached the invitee. A later contract migration drops it once no
+-- replica or function calls it.
+CREATE OR REPLACE FUNCTION public.sys_invitation_accept_new_account(
+  p_token_hash bytea,
+  p_account_id uuid,
+  p_display_name text,
+  p_password_hash text,
+  p_locale text,
+  p_seat_limit integer,
+  p_session_id uuid,
+  p_session_token_hash bytea,
+  p_replaced_token_hash bytea,
+  p_ip_prefix cidr,
+  p_user_agent text
+) RETURNS TABLE (outcome text, accepted_workspace_id uuid, accepted_invitation_id uuid, accepted_role text)
+  LANGUAGE sql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+  SELECT n.outcome, n.accepted_workspace_id, n.accepted_invitation_id, n.accepted_role
+  FROM public.sys_invitation_accept_new_account(
+    p_token_hash, p_account_id, p_display_name, p_password_hash, p_locale, p_seat_limit, p_session_id, p_session_token_hash,
+    p_replaced_token_hash, p_ip_prefix, p_user_agent, false
+  ) n
+$$;
+
+ALTER FUNCTION public.sys_invitation_accept_new_account(bytea, uuid, text, text, text, integer, uuid, bytea, bytea, cidr, text, boolean) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_invitation_accept_new_account(bytea, uuid, text, text, text, integer, uuid, bytea, bytea, cidr, text) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
+
+REVOKE ALL ON FUNCTION public.sys_invitation_accept_new_account(bytea, uuid, text, text, text, integer, uuid, bytea, bytea, cidr, text, boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.sys_invitation_accept_new_account(bytea, uuid, text, text, text, integer, uuid, bytea, bytea, cidr, text, boolean) TO slugbase_app;
+
 
 REVOKE ALL ON FUNCTION public.sys_invitation_accept_new_account(bytea, uuid, text, text, text, integer, uuid, bytea, bytea, cidr, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_invitation_accept_new_account(bytea, uuid, text, text, text, integer, uuid, bytea, bytea, cidr, text) TO slugbase_app;

@@ -40,7 +40,7 @@ jobs:
       issues: write
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
         env:
           POSTGRES_USER: slugbase_ci
           POSTGRES_PASSWORD: slugbase_ci

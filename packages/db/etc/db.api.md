@@ -1206,6 +1206,7 @@ export interface NewInvitationAccount {
     readonly accountId: string;
     // (undocumented)
     readonly displayName: string;
+    readonly emailVerificationRequired: boolean;
     // (undocumented)
     readonly locale: string;
     readonly onAccepted: (accepted: {

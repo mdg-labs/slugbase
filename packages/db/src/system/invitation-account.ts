@@ -24,6 +24,8 @@ export interface NewInvitationAccount {
   readonly locale: string;
   /** The seats the workspace may hold; null for no limit. */
   readonly seatLimit: number | null;
+  /** Whether the deployment requires a verified address to sign in; if so, the account made by a link an admin took gets no session. */
+  readonly emailVerificationRequired: boolean;
   readonly session: InvitationSignupSession;
   /** Called in the transaction once the invitation is accepted; the audit events and jobs it returns are written in that transaction. */
   readonly onAccepted: (accepted: { readonly workspaceId: string; readonly invitationId: string; readonly role: WorkspaceRole }) => InvitationAccountWrites;
@@ -33,8 +35,9 @@ export interface InvitationAccountStore {
   /**
    * Creates the account of the invitation the token hash belongs to, verified unless the token is a link an admin took, with the invited address and no
    * personal workspace, adds it to the invitation's workspace with the invited role, accepts the invitation and
-   * signs the account in with a full session acting in that workspace, in one transaction with the audit events
-   * and jobs of `onAccepted`. A refusal changes nothing and leaves the invitation pending. A failure of any write
+   * signs the account in with a full session acting in that workspace (not when the token is a link an admin took
+   * and `emailVerificationRequired`: the result then says `sessionCreated: false` and nothing else is different),
+   * in one transaction with the audit events and jobs of `onAccepted`. A refusal changes nothing and leaves the invitation pending. A failure of any write
    * (the session, an audit event, a job) undoes all of it and rejects.
    */
   acceptInvitationWithNewAccount(acceptance: NewInvitationAccount): Promise<InvitationSignupResult>;
@@ -45,6 +48,7 @@ interface AcceptedRow {
   accepted_workspace_id: string | null;
   accepted_invitation_id: string | null;
   accepted_role: string | null;
+  session_created: boolean | null;
 }
 
 function roleOf(value: string): WorkspaceRole {
@@ -71,7 +75,7 @@ export function bindInvitationAccountStore(client: postgres.Sql): InvitationAcco
       }
       return client.begin(async (tx): Promise<InvitationSignupResult> => {
         const rows = await tx<AcceptedRow[]>`
-          SELECT outcome, accepted_workspace_id, accepted_invitation_id, accepted_role
+          SELECT outcome, accepted_workspace_id, accepted_invitation_id, accepted_role, session_created
           FROM sys_invitation_accept_new_account(
             ${acceptance.tokenHash}::bytea,
             ${acceptance.accountId}::uuid,
@@ -83,15 +87,16 @@ export function bindInvitationAccountStore(client: postgres.Sql): InvitationAcco
             ${acceptance.session.tokenHash}::bytea,
             ${acceptance.session.replacedTokenHash}::bytea,
             ${acceptance.session.ipPrefix}::cidr,
-            ${acceptance.session.userAgent}::text)`;
+            ${acceptance.session.userAgent}::text,
+            ${acceptance.emailVerificationRequired}::boolean)`;
         const row = rows[0];
         if (rows.length !== 1 || row === undefined) {
           throw new Error("sys_invitation_accept_new_account did not return exactly one row");
         }
         switch (row.outcome) {
           case "accepted": {
-            if (row.accepted_workspace_id === null || row.accepted_invitation_id === null || row.accepted_role === null) {
-              throw new Error("sys_invitation_accept_new_account accepted without naming the workspace, the invitation and the role");
+            if (row.accepted_workspace_id === null || row.accepted_invitation_id === null || row.accepted_role === null || row.session_created === null) {
+              throw new Error("sys_invitation_accept_new_account accepted without naming the workspace, the invitation, the role and whether it made a session");
             }
             const role = roleOf(row.accepted_role);
             const writes = acceptance.onAccepted({ workspaceId: row.accepted_workspace_id, invitationId: row.accepted_invitation_id, role });
@@ -99,7 +104,7 @@ export function bindInvitationAccountStore(client: postgres.Sql): InvitationAcco
             for (const job of writes.jobs) {
               await enqueueInTransaction(tx, job);
             }
-            return { kind: "accepted", workspaceId: row.accepted_workspace_id, invitationId: row.accepted_invitation_id, role };
+            return { kind: "accepted", workspaceId: row.accepted_workspace_id, invitationId: row.accepted_invitation_id, role, sessionCreated: row.session_created };
           }
           case "gone":
           case "seat_limit_reached":

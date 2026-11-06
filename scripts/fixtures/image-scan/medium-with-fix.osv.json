@@ -1,0 +1,70 @@
+{
+  "results": [
+    {
+      "source": {
+        "path": "/fixture/sbom.spdx.json",
+        "type": "sbom"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "example-lib",
+            "version": "1.0.0",
+            "ecosystem": "npm"
+          },
+          "vulnerabilities": [
+            {
+              "id": "GHSA-gggg-hhhh-iiii",
+              "aliases": [
+                "CVE-2099-0003"
+              ],
+              "summary": "fixture advisory",
+              "affected": [
+                {
+                  "package": {
+                    "ecosystem": "npm",
+                    "name": "example-lib"
+                  },
+                  "ranges": [
+                    {
+                      "type": "SEMVER",
+                      "events": [
+                        {
+                          "introduced": "0"
+                        },
+                        {
+                          "fixed": "1.0.1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "severity": [
+                {
+                  "type": "CVSS_V3",
+                  "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+                }
+              ],
+              "database_specific": {
+                "severity": "MODERATE"
+              }
+            }
+          ],
+          "groups": [
+            {
+              "ids": [
+                "GHSA-gggg-hhhh-iiii",
+                "CVE-2099-0003"
+              ],
+              "aliases": [
+                "CVE-2099-0003"
+              ],
+              "max_severity": "5.3"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

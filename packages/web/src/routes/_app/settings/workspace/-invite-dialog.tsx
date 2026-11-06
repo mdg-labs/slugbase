@@ -6,6 +6,7 @@ import { useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { newIdempotencyKey } from "../../../../api/idempotency-key.ts";
 import { useConfig } from "../../../../config/config-context.tsx";
+import { ENTITLEMENTS_QUERY_KEY, useIsGranted } from "../../../../entitlements/index.ts";
 import { TEAMS_QUERY_KEY } from "../../../../teams/teams.ts";
 import { useAllTeams } from "../../../../teams/use-all-teams.ts";
 import {
@@ -45,7 +46,8 @@ const SEPARATED = /[\s,;]/;
 
 /**
  * Invites people (doc 03 section 11.7): a `form-overlay` with the addresses (several, separated by a comma or Enter),
- * the role as `choice-cards`, the teams the people join on accepting as a `multi-pick`, and one `POST /invitations` per
+ * the role as `choice-cards`, the teams the people join on accepting as a `multi-pick` (offered only where the workspace
+ * holds `teams.manage`, and no team is sent without it), and one `POST /invitations` per
  * address, each under its own idempotency key. The answer
  * lists what became of every address, so a part of them that failed is told apart from the rest and can be sent again.
  */
@@ -59,6 +61,8 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
   const [role, setRole] = useState<InvitationRole>("member");
+  // The server decides in the end; where the entitlements are not known yet the picker is offered.
+  const canPickTeams = useIsGranted("teams.manage");
   const everyone = useAllTeams();
   const [teamIds, setTeamIds] = useState<readonly string[]>([]);
   // A chosen team keeps its option whether or not the list of teams still has it.
@@ -85,6 +89,10 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
     },
     onSuccess: (collected) => {
       setResults(collected);
+      if (collected.some(({ outcome }) => outcome.status === "refused" && (outcome.refusal === "teamsNotIncluded" || outcome.refusal === "invitesNotIncluded"))) {
+        // The refusal shows the grant is not what this page assumed: read the entitlements again so the picker follows.
+        void queryClient.invalidateQueries({ queryKey: ENTITLEMENTS_QUERY_KEY });
+      }
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: INVITATIONS_QUERY_KEY });
@@ -115,7 +123,7 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
       setError(t("settings.members.invite.error.required"));
       return;
     }
-    send.mutate({ emails: accepted, as: role, teams: teamIds });
+    send.mutate({ emails: accepted, as: role, teams: canPickTeams ? teamIds : [] });
   }
 
   function retryable(result: Result): boolean {
@@ -136,6 +144,10 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
         return t("settings.members.invite.result.invalid");
       case "unknownTeam":
         return t("settings.members.invite.result.unknownTeam");
+      case "teamsNotIncluded":
+        return t("settings.members.invite.result.teamsNotIncluded");
+      case "invitesNotIncluded":
+        return t("settings.members.invite.result.invitesNotIncluded");
       case "rateLimited":
         return t("settings.members.invite.result.rateLimited");
       case "unavailable":
@@ -310,28 +322,30 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
           options={roleOptions}
           value={role}
         />
-        <MultiPick
-          description={t("settings.members.invite.teams.description")}
-          disabled={send.isPending}
-          emptyLabel={t("settings.members.invite.teams.empty")}
-          label={t("settings.members.invite.teams.label")}
-          loadingLabel={everyone.status === "loading" ? t("settings.members.invite.teams.loading") : undefined}
-          onValueChange={(next) => {
-            setTeamNames((current) => {
-              const known = new Map(current);
-              for (const team of everyone.teams) {
-                known.set(team.id, team.name);
-              }
-              return known;
-            });
-            setTeamIds(next);
-          }}
-          options={teamOptionList}
-          placeholder={t("settings.members.invite.teams.placeholder")}
-          removeLabel={(label) => t("settings.members.invite.teams.remove", { name: label })}
-          unavailableLabel={everyone.status === "failed" ? t("settings.members.invite.teams.unavailable") : undefined}
-          value={teamIds}
-        />
+        {canPickTeams ? (
+          <MultiPick
+            description={t("settings.members.invite.teams.description")}
+            disabled={send.isPending}
+            emptyLabel={t("settings.members.invite.teams.empty")}
+            label={t("settings.members.invite.teams.label")}
+            loadingLabel={everyone.status === "loading" ? t("settings.members.invite.teams.loading") : undefined}
+            onValueChange={(next) => {
+              setTeamNames((current) => {
+                const known = new Map(current);
+                for (const team of everyone.teams) {
+                  known.set(team.id, team.name);
+                }
+                return known;
+              });
+              setTeamIds(next);
+            }}
+            options={teamOptionList}
+            placeholder={t("settings.members.invite.teams.placeholder")}
+            removeLabel={(label) => t("settings.members.invite.teams.remove", { name: label })}
+            unavailableLabel={everyone.status === "failed" ? t("settings.members.invite.teams.unavailable") : undefined}
+            value={teamIds}
+          />
+        ) : null}
         <div className="flex justify-end gap-2">
           <Button disabled={send.isPending} onClick={close} type="button" variant="outline">
             {t("settings.members.invite.cancel")}

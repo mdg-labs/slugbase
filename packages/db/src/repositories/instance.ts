@@ -601,7 +601,8 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
           ${owner.kind === "invitation" ? owner.email : null}::citext,
           ${owner.kind === "invitation" ? owner.invitationId : null}::uuid,
           ${owner.kind === "invitation" ? owner.tokenHash : null}::bytea,
-          ${owner.kind === "invitation" ? owner.ttlSeconds : null}::integer)`);
+          ${owner.kind === "invitation" ? owner.ttlSeconds : null}::integer,
+          ${owner.kind === "invitation" ? owner.linkIssued : null}::boolean)`);
       const row = rows[0];
       if (rows.length !== 1 || row === undefined) {
         throw new Error("sys_instance_create_workspace did not return exactly one row");
@@ -623,7 +624,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
         SELECT outcome, invitation_email, to_char(invitation_expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS invitation_expires_at
         FROM public.sys_instance_reissue_owner_invitation(
           ${eventId}::uuid, ${ipPrefix}::cidr, ${request.workspaceId}::uuid, ${request.email ?? null}::citext,
-          ${request.invitationId}::uuid, ${request.tokenHash}::bytea, ${request.ttlSeconds}::integer)`);
+          ${request.invitationId}::uuid, ${request.tokenHash}::bytea, ${request.ttlSeconds}::integer, ${request.linkIssued}::boolean)`);
       const row = rows[0];
       if (rows.length !== 1 || row === undefined) {
         throw new Error("sys_instance_reissue_owner_invitation did not return exactly one row");

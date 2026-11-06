@@ -24,6 +24,10 @@ import {
 // tests do. That Docker Compose accepts the files and what it prints are checked
 // in compose-cli.integration.test.ts.
 
+// The digests are of the multi-arch indexes of these tags; Renovate keeps them current.
+const POSTGRES_18_IMAGE = "postgres:18@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583";
+const POSTGRES_17_IMAGE = "postgres:17@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3";
+
 describe("interpolation of compose.yml", () => {
   const env = new Map([["SET", "value"], ["EMPTY", ""]]);
 
@@ -57,7 +61,7 @@ describe("compose.yml", () => {
 
   it("runs PostgreSQL 18 with a volume, a health check and the role script, and publishes nothing", () => {
     const { postgres } = services();
-    expect(postgres.image).toBe("postgres:18");
+    expect(postgres.image).toBe(POSTGRES_18_IMAGE);
     expect(postgres.ports).toBeUndefined();
     expect(postgres.healthcheck?.test.join(" ")).toContain("pg_isready");
     expect(postgres.volumes).toContain("postgres-data:/var/lib/postgresql");
@@ -67,6 +71,14 @@ describe("compose.yml", () => {
       PROVISION_APP_PASSWORD: APP_PASSWORD,
       PROVISION_MIGRATOR_PASSWORD: MIGRATOR_PASSWORD,
     });
+  });
+
+  it.each([COMPOSE_FILE, COMPOSE_PG17_FILE])("pins every fixed image in %s by digest", (file) => {
+    const images = [...readFileSync(file, "utf8").matchAll(/^\s*image:\s*(\S+)\s*$/gm)].map((match) => match[1] ?? "").filter((image) => !image.includes("${"));
+    expect(images.length).toBeGreaterThan(0);
+    for (const image of images) {
+      expect(image).toMatch(/@sha256:[0-9a-f]{64}$/);
+    }
   });
 
   it("mounts the file that provisions the roles", () => {
@@ -190,7 +202,7 @@ const ROLES_MOUNT = "./packages/db/provision/roles.sql:/docker-entrypoint-initdb
 /** Throws unless the database of `config` is PostgreSQL 17 with its data volume at the path that image keeps its data in. */
 function assertPostgres17(config: ComposeConfig): void {
   const { postgres } = config.services;
-  expect(postgres.image).toBe("postgres:17");
+  expect(postgres.image).toBe(POSTGRES_17_IMAGE);
   // Exactly these two mounts: the PostgreSQL 18 mount, kept beside the 17 one, would nest the volume in itself.
   expect(postgres.volumes).toEqual([POSTGRES_17_DATA, ROLES_MOUNT]);
 }
@@ -227,14 +239,14 @@ describe("compose.pg17.yml", () => {
 
   it("leaves compose.yml alone on PostgreSQL 18 with the data volume under /var/lib/postgresql", () => {
     const { postgres } = loadCompose(operatorEnv()).services;
-    expect(postgres.image).toBe("postgres:18");
+    expect(postgres.image).toBe(POSTGRES_18_IMAGE);
     expect(postgres.volumes).toEqual([POSTGRES_18_DATA, ROLES_MOUNT]);
   });
 
   // The assertion above is only worth something if it fails for an override that does not do the job.
   it.each([
-    ["an image that is not changed", (text: string) => text.replace("image: postgres:17", "image: postgres:18")],
-    ["an image that is dropped", (text: string) => text.replace("    image: postgres:17\n", "")],
+    ["an image that is not changed", (text: string) => text.replace(`image: ${POSTGRES_17_IMAGE}`, `image: ${POSTGRES_18_IMAGE}`)],
+    ["an image that is dropped", (text: string) => text.replace(`    image: ${POSTGRES_17_IMAGE}\n`, "")],
     ["a data path that is not changed", (text: string) => text.replace("postgres-data:/var/lib/postgresql/data", POSTGRES_18_DATA)],
     ["volumes that are added to those of compose.yml", (text: string) => text.replace("volumes: !override", "volumes:")],
     ["a role script that is dropped", (text: string) => text.replace(/\s+- \.\/packages\/db\/provision\/roles\.sql[^\n]*/, "")],

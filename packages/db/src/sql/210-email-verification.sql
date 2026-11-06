@@ -8,21 +8,38 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- account_strip_workspaces(account_id): what verifying an address nobody had verified does to the workspaces its
 -- registrant set up (doc 02 section 2.6), the one place the rule is written. Whoever registers an address is not
--- necessarily its owner, and before the owner verifies, the registrant could invite members, form teams and share
--- content, so the owner does not inherit a way in for anyone else. For every workspace the account is the only owner
--- of, and that is not being deleted, it removes whatever lets another account in: the memberships of the other members
--- (their accounts stay, and so do the API tokens of the account's own, since the tokens of a member go with the
--- membership by the foreign key), the teams with their members, every pending invitation and every bookmark and
--- folder share. The workspace itself, the account's membership and role, and all the content stay, the content of a
--- removed member ownerless, as when an account is deleted (doc 02 section 2.10); no job is queued and nothing is announced. A
--- workspace another account also owns, one the account only belongs to and one being deleted are not touched. The
--- workspace rows are locked first, in identifier order, the order the account deletion, the member paths and the
--- invitation paths take them in, and the lock is held to the end of the transaction, so no member joins, leaves or is
--- invited between the check that the account is the only owner and the deletes. The caller (sys_email_verify) locks
--- them before the backup-code rows and the account row and the statement here takes them again, so a workspace created
--- in between is locked too. It is not a system operation: it is SECURITY INVOKER, owned by slugbase_system and
--- executable by it alone, so it runs only inside sys_email_verify and slugbase_app cannot call it. It is never given an
--- account whose address is verified.
+-- necessarily its owner, and before the owner verifies, the registrant could invite members, form teams, share
+-- content, promote an accomplice to owner and give up their own owner role, so the owner does not inherit a way in
+-- for anyone else. The workspaces it strips are those that are not being deleted, that the account is a member of and
+-- that the registrant set up: the ones the account made for itself (workspaces.created_by, with self_created true:
+-- the account was the first owner from the moment the workspace existed, so no owner's ownership predates the
+-- account's and every other owner holds the role from an owner chain the account began), whatever role the account
+-- holds in them, and the ones the account is the only owner of. A workspace an instance admin made from the instance
+-- console for another owner has the admin as created_by too, but its first owner is another account, so the admin is
+-- not its founder: sys_instance_create_workspace leaves self_created false and it is judged by the only-owner rule
+-- alone. So is a workspace made before the column existed, whose first owner is not known (self_created is false for
+-- every such row, a console workspace among them), as it was before the column.
+-- In each workspace it strips it removes whatever lets another account in: the memberships of the
+-- other members, other owners included (their accounts stay, and so do the API tokens of the account's own, since
+-- the tokens of a member go with the membership by the foreign key), the teams with their members, every pending
+-- invitation and every bookmark and folder share, and it makes the account the owner of the workspace when it held
+-- a lesser role, the one membership left, because a workspace keeps an owner (the deferred trigger of
+-- workspace_members, 270-member-roles.sql) and the other owners are gone. The workspace itself, the account's
+-- membership and all the content stay, the content of a removed member ownerless, as when an account is deleted (doc 02
+-- section 2.10); no job is queued and nothing is announced. A workspace another account created and the account was
+-- made an owner of, one the console made for another owner, one the account only belongs to, one whose creator is gone
+-- (created_by is cleared with the creator's account, so nothing says who made the other owners), one the account
+-- created and has left and one being deleted are not touched, unless the account is the only owner. The workspace rows
+-- are locked first, in identifier order, the order the account deletion, the member paths and the invitation paths
+-- take them in, and the lock is held to the end of the transaction, so no member joins, leaves, is invited or is
+-- promoted between the check of who owns it and the changes. The caller (sys_email_verify, or
+-- sys_instance_update_account when an instance admin marks the address) locks them before the backup-code rows and the
+-- account row, and the statement here takes them again, so a workspace created in between is locked too. The rows
+-- locked are every workspace the account created and every one it owns, a superset of those stripped, in both callers
+-- and here; each half is read through an index (workspaces_created_by_idx, workspace_members_account_id_idx) and the
+-- two are joined by identifier, so the statement reads neither whole table. It is not a system operation: it is SECURITY INVOKER, owned by slugbase_system and executable by it
+-- alone, so it runs only inside those two functions and slugbase_app cannot call it. It is never given an account
+-- whose address is verified.
 CREATE OR REPLACE FUNCTION public.account_strip_workspaces(p_account_id uuid) RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY INVOKER
   SET search_path = pg_catalog, public, pg_temp
@@ -32,23 +49,31 @@ DECLARE
 BEGIN
   PERFORM 1 FROM public.workspaces w
   WHERE w.deleting_at IS NULL
-    AND w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner')
+    AND w.id IN (
+      SELECT c.id FROM public.workspaces c WHERE c.created_by = p_account_id
+      UNION
+      SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner')
   ORDER BY w.id
   FOR NO KEY UPDATE OF w;
 
   SELECT coalesce(array_agg(m.workspace_id ORDER BY m.workspace_id), '{}') INTO v_sole
   FROM public.workspace_members m
   JOIN public.workspaces w ON w.id = m.workspace_id AND w.deleting_at IS NULL
-  WHERE m.account_id = p_account_id AND m.role = 'owner'
-    AND NOT EXISTS (
-      SELECT 1 FROM public.workspace_members o
-      WHERE o.workspace_id = m.workspace_id AND o.role = 'owner' AND o.account_id <> p_account_id);
+  WHERE m.account_id = p_account_id
+    AND (
+      (w.created_by = p_account_id AND w.self_created)
+      OR (
+        m.role = 'owner'
+        AND NOT EXISTS (
+          SELECT 1 FROM public.workspace_members o
+          WHERE o.workspace_id = m.workspace_id AND o.role = 'owner' AND o.account_id <> p_account_id)));
 
   DELETE FROM public.bookmark_shares WHERE workspace_id = ANY (v_sole);
   DELETE FROM public.folder_shares WHERE workspace_id = ANY (v_sole);
   DELETE FROM public.workspace_invitations WHERE status = 'pending' AND workspace_id = ANY (v_sole);
   DELETE FROM public.teams WHERE workspace_id = ANY (v_sole);
   DELETE FROM public.workspace_members WHERE workspace_id = ANY (v_sole) AND account_id <> p_account_id;
+  UPDATE public.workspace_members SET role = 'owner' WHERE workspace_id = ANY (v_sole) AND account_id = p_account_id AND role <> 'owner';
 END
 $$;
 
@@ -65,7 +90,7 @@ $$;
 -- sys_instance_update_account (no password: the owner gets in through a password-reset token or a provider). It is not a
 -- system operation: it is SECURITY INVOKER, owned by slugbase_system and executable by it alone, so it runs only inside
 -- those two functions and slugbase_app cannot call it. The workspaces the registrant set up are not part of it:
--- account_strip_workspaces above removes what lets others in, and only sys_email_verify calls that.
+-- account_strip_workspaces above removes what lets others in, and both callers run it after this one.
 CREATE OR REPLACE FUNCTION public.account_mark_verified(p_account_id uuid, p_password_hash text) RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY INVOKER
   SET search_path = pg_catalog, public, pg_temp
@@ -103,7 +128,7 @@ $$;
 -- redemption queues behind a sign-in with a backup code, a rewrite of the codes and
 -- the instance admin's reset of the second factor or mark of the address instead of
 -- deadlocking with them; then its account row (when the address is not verified, the rows of the workspaces the account
--- owns come before both, the order the account deletion documents, so the redemption and an invitation accepted into one
+-- created or owns come before both, the order the account deletion documents, so the redemption and an invitation accepted into one
 -- of them queue and do not wait on each other); and the token is consumed after that
 -- (sys_credential_token_consume: once, before its expiry, purpose email_verify), the
 -- account row before the token row being the order in which
@@ -124,8 +149,8 @@ $$;
 -- verified is not the owner's either. Only then is the address marked verified. All of that is
 -- account_mark_verified above, which the instance admin's marking of an address verified runs too. The same
 -- transaction also removes what lets anyone else into the workspaces the visitor set up (account_strip_workspaces
--- above): in each workspace the account is the only owner of, the other members' memberships, the teams, the pending
--- invitations and the shares; the workspaces, the account's membership and all the content stay, and the account's
+-- above, which that marking runs as well): in each workspace the account made for itself (whatever role it holds there) or is the only owner of, the other members'
+-- memberships (other owners included), the teams, the pending invitations and the shares; the workspaces, the account's membership and all the content stay, and the account's
 -- membership in any other workspace is untouched. Nothing is queued and nothing is announced.
 -- An account that is already verified keeps all of it. The
 -- session is partial for an account whose second factor is on and full
@@ -165,7 +190,10 @@ BEGIN
   FROM public.credential_tokens t WHERE t.purpose = 'email_verify' AND t.token_hash = p_token_hash;
   PERFORM 1 FROM public.workspaces w
   WHERE w.deleting_at IS NULL
-    AND w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = v_token_account AND m.role = 'owner')
+    AND w.id IN (
+      SELECT c.id FROM public.workspaces c WHERE c.created_by = v_token_account
+      UNION
+      SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = v_token_account AND m.role = 'owner')
     AND EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = v_token_account AND a.email_verified_at IS NULL)
   ORDER BY w.id
   FOR NO KEY UPDATE OF w;

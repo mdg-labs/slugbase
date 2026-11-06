@@ -91,6 +91,8 @@ export interface FakeEgressRequest {
     // (undocumented)
     readonly method?: "GET" | "HEAD" | "POST";
     // (undocumented)
+    readonly refuseHttpDowngrade?: boolean;
+    // (undocumented)
     readonly timeoutMs: number;
     // (undocumented)
     readonly truncateAtMaxBytes?: boolean;

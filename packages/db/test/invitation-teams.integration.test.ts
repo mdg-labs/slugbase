@@ -138,6 +138,7 @@ function newAccountInput(hash: Buffer, accountId: string): NewInvitationAccount 
     passwordHash: PASSWORD_HASH,
     locale: "de",
     seatLimit: null,
+    emailVerificationRequired: false,
     session: { id: freshId(), tokenHash: session.hash, replacedTokenHash: null, ipPrefix: "203.0.0.0/16", userAgent: "tests" },
     onAccepted: () => ({ audit: [], jobs: [] }),
   };

@@ -23,9 +23,10 @@
 #
 # Stages: toolchain (pinned Node 24 slim and pnpm) -> build (frozen-lockfile
 # install, build, then the runtime dependencies only) -> runtime (the same pinned
-# base, built output and production dependencies, no sources, tests or git history).
+# base minus its bundled npm, npx and corepack, built output and production
+# dependencies, no sources, tests or git history).
 
-FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS toolchain
+FROM node:24-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS toolchain
 RUN npm install --global --ignore-scripts pnpm@10.34.6
 WORKDIR /app
 
@@ -47,7 +48,7 @@ RUN rm -rf node_modules apps/*/node_modules packages/*/node_modules tooling/node
  && CI=true pnpm install --frozen-lockfile --offline --prod --ignore-scripts \
       --filter slugbase --filter @slugbase/server... --filter @slugbase/adapters... --filter @slugbase/email...
 
-FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS runtime
+FROM node:24-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS runtime
 ARG VERSION=unreleased
 ARG BUILD_COMMIT=unknown
 LABEL org.opencontainers.image.title="SlugBase" \
@@ -58,6 +59,15 @@ LABEL org.opencontainers.image.title="SlugBase" \
       org.opencontainers.image.revision="${BUILD_COMMIT}"
 ENV NODE_ENV=production
 WORKDIR /app
+
+# The base image bundles npm, npx and corepack, which nothing here runs: the
+# entrypoint only starts node on the copied application, and the dependencies are
+# installed in the build stage. Removing them keeps the advisories in the packages
+# they bundle (brace-expansion, undici) out of the image. The bin links go with the
+# directories, so none is left dangling. scripts/smoke-image.sh fails when any of
+# them is back.
+RUN rm -rf /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/slugbase/package.json ./apps/slugbase/package.json

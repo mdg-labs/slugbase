@@ -19,6 +19,20 @@ export const workspaces = pgTable(
     id: uuid().primaryKey(),
     name: text().notNull(),
     createdBy: uuid().references(() => accounts.id, { onDelete: "set null" }),
+    /**
+     * True for a workspace an instance admin made from the instance console (sys_instance_create_workspace) for another first owner; false
+     * for one an account made for itself. Written with `selfCreated` and read by nothing since the strip that verifying an address runs
+     * moved to `selfCreated`; it stays until a later release drops it (expand/contract, doc 05 section 5.2).
+     */
+    instanceCreated: boolean().notNull().default(false),
+    /**
+     * True for a workspace whose first owner is its creator: the one an account makes for itself (sys_create_workspace, which setup,
+     * registration and an account's own workspaces use) and a console workspace whose first owner is the admin who made it. False for a
+     * console workspace made for another owner, and for every workspace that predates the column, whose first owner is not known. The strip
+     * that verifying an address runs reads `createdBy` as the founding owner only where this is true (doc 02 section 2.6), so a workspace
+     * of unknown origin is judged by the only-owner rule alone, as it was before the column.
+     */
+    selfCreated: boolean().notNull().default(false),
     /** Bumped on any plan or entitlement change; the key of the entitlement cache (doc 01 section 8.3). */
     entitlementVersion: integer().notNull().default(1),
     /** The workspace's bookmarks that are not plan-archived; maintained with every bookmark write (doc 05 section 2.2). */
@@ -32,6 +46,10 @@ export const workspaces = pgTable(
   (table) => [
     check("workspaces_name_check", sql`length(${table.name}) BETWEEN 1 AND 64`),
     check("workspaces_bookmark_count_check", sql`${table.bookmarkCount} >= 0`),
+    // The workspaces an account created: read by the foreign-key action of `created_by` (ON DELETE SET NULL) when the account is deleted,
+    // and by any lookup by creator. Partial like the other indexes of a nullable foreign key, since an account's deletion clears the column
+    // and no lookup asks for a missing creator (doc 05 section 2.2).
+    index("workspaces_created_by_idx").on(table.createdBy).where(sql`${table.createdBy} IS NOT NULL`),
   ],
 );
 

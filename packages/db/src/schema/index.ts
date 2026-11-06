@@ -14,7 +14,7 @@ export { folderBookmarks, folders } from "./folders.ts";
 export { teamMembers, teams } from "./teams.ts";
 export { bookmarkShares, folderShares } from "./shares.ts";
 export { slugPreferences } from "./slug-preferences.ts";
-export { favicons } from "./favicons.ts";
+export { favicons, workspaceFavicons } from "./favicons.ts";
 export type { FaviconStatus } from "./favicons.ts";
 export { aiSuggestions, aiSuggestionUsage } from "./ai.ts";
 export type { StoredAiSuggestion } from "./ai.ts";

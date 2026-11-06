@@ -2953,6 +2953,7 @@ export interface EgressRequestBase {
     // (undocumented)
     readonly headers?: Readonly<Record<string, string>>;
     readonly maxBytes: number;
+    readonly refuseHttpDowngrade?: boolean;
     readonly timeoutMs: number;
     readonly truncateAtMaxBytes?: boolean;
     // (undocumented)
@@ -4980,6 +4981,7 @@ export type InstanceOwnerInvitationOutcome = {
 export interface InstanceOwnerInvitationReissue {
     readonly email?: string;
     readonly invitationId: string;
+    readonly linkIssued: boolean;
     readonly mailLocale?: string;
     readonly tokenHash: Buffer;
     // (undocumented)
@@ -5197,6 +5199,7 @@ export type InstanceWorkspaceOwnerSeat = {
     readonly tokenHash: Buffer;
     readonly ttlSeconds: number;
     readonly mailLocale?: string;
+    readonly linkIssued: boolean;
 };
 
 // @public
@@ -5572,6 +5575,7 @@ export interface InvitationSignupAsk {
     readonly accountId?: string;
     // (undocumented)
     readonly displayName: string;
+    readonly emailVerificationRequired: boolean;
     // (undocumented)
     readonly locale: string;
     readonly passwordHash: string;
@@ -5606,6 +5610,7 @@ export type InvitationSignupResult = {
     readonly workspaceId: string;
     readonly invitationId: string;
     readonly role: WorkspaceRole;
+    readonly sessionCreated: boolean;
 }
 /** An unknown, used, revoked, replaced or expired token, or a workspace being deleted. */
 | {
@@ -5952,6 +5957,7 @@ export interface NewAccountAcceptance {
     readonly accountId: string;
     // (undocumented)
     readonly displayName: string;
+    readonly emailVerificationRequired: boolean;
     // (undocumented)
     readonly locale: string;
     readonly onAccepted: (accepted: {

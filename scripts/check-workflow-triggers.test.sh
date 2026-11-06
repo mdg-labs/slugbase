@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Tests scripts/check-workflow-triggers.sh in throwaway directories under the OS
 # temp dir, each holding a copy of the script and a .github/workflows folder.
-# The fixture workflows hold ${{ ... }} expressions that must stay literal.
-# shellcheck disable=SC2016
+# The fixture workflows hold ${{ ... }} expressions and backslashes that must stay literal.
+# shellcheck disable=SC2016,SC1003
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -302,6 +302,241 @@ put "$tree" .github/workflows/cla.yml \
   '    secrets: inherit'
 check "$tree"
 expect_hit "secrets: inherit fails" "cla.yml"
+
+tree="$(new_tree secrets-json-with)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '        with:' \
+  '          dump: ${{ toJSON(secrets) }}'
+check "$tree"
+expect_hit "the whole secrets context in a with input fails" "cla.yml"
+
+tree="$(new_tree secrets-json-env)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '        env:' \
+  '          ALL: ${{ toJSON(secrets) }}'
+check "$tree"
+expect_hit "the whole secrets context in env fails" "cla.yml"
+
+tree="$(new_tree secrets-bare)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '        env:' \
+  "          ALL: \${{ format('{0}', secrets) }}"
+check "$tree"
+expect_hit "the bare secrets context in a function call fails" "cla.yml"
+
+tree="$(new_tree secrets-upper)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '        env:' \
+  '          TOKEN: ${{ SECRETS.REGISTRY_PUSH_TOKEN }}'
+check "$tree"
+expect_hit "a secret read through an upper-case context name fails" "cla.yml"
+
+tree="$(new_tree secrets-token-lookalike)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '        env:' \
+  '          TOKEN: ${{ secrets.GITHUB_TOKEN_PUSH }}'
+check "$tree"
+expect_hit "a secret whose name starts with GITHUB_TOKEN fails" "cla.yml"
+
+tree="$(new_tree secrets-token-lower)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '        env:' \
+  '          GITHUB_TOKEN: ${{ secrets.github_token }}'
+check "$tree"
+expect_pass "the workflow token read in lower case passes"
+
+tree="$(new_tree github-script)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1' \
+  '        with:' \
+  '          script: core.setOutput("x", process.env.TOKEN)'
+check "$tree"
+expect_hit "a pinned github-script step in the allow-listed workflow fails" "actions/github-script"
+
+tree="$(new_tree checkout-mixed-case)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  '      - uses: Actions/Checkout@08eba0b27e820071cde6df949e0beb9ba4906955'
+check "$tree"
+expect_hit "a pinned checkout under a different letter case fails" "Actions/Checkout"
+
+tree="$(new_tree reusable-workflow)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    uses: octo/repo/.github/workflows/x.yml@ca4a40a7d1004f18d9960b404b97e5f30a505a08'
+check "$tree"
+expect_hit "a pinned reusable workflow outside the allow-list fails" "octo/repo"
+
+tree="$(new_tree workflow-run)"
+write_cla "$tree"
+put "$tree" .github/workflows/after-ci.yml \
+  'name: After CI' \
+  'on:' \
+  '  workflow_run:' \
+  '    workflows: [CI]' \
+  '    types: [completed]' \
+  'jobs:' \
+  '  publish:' \
+  '    runs-on: ubuntu-latest' \
+  '    steps:' \
+  '      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0' \
+  '        with:' \
+  '          ref: ${{ github.event.workflow_run.head_sha }}' \
+  '      - run: pnpm install && pnpm build'
+check "$tree"
+expect_hit "a workflow_run workflow that checks out code fails" "after-ci.yml"
+
+tree="$(new_tree workflow-run-flow)"
+put "$tree" .github/workflows/after.yml 'on: [push, workflow_run]' 'jobs: {}'
+check "$tree"
+expect_hit "workflow_run in a flow list fails" "after.yml"
+
+tree="$(new_tree issue-comment)"
+write_cla "$tree"
+put "$tree" .github/workflows/commands.yml \
+  'name: Commands' \
+  'on:' \
+  '  issue_comment:' \
+  '    types: [created]' \
+  'jobs:' \
+  '  run:' \
+  '    runs-on: ubuntu-latest' \
+  '    steps:' \
+  '      - run: echo hi'
+check "$tree"
+expect_hit "an issue_comment workflow other than the allow-listed one fails" "commands.yml"
+
+tree="$(new_tree issue-comment-checkout)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  issue_comment:' \
+  '    types: [created]' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  '      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0' \
+  "      - uses: $pinned"
+check "$tree"
+expect_hit "the allow-listed workflow on issue_comment alone that checks out code fails" "cla.yml"
+if grep -q "actions/checkout" <<<"$out"; then pass "the issue_comment checkout failure names actions/checkout"; else fail "the issue_comment checkout failure names actions/checkout"; fi
+
+tree="$(new_tree issue-comment-run)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  issue_comment:' \
+  '    types: [created]' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  '      - run: echo hi'
+check "$tree"
+expect_hit "the allow-listed workflow on issue_comment alone that has a run step fails" "run: step"
+
+tree="$(new_tree escaped-hex)"
+write_cla "$tree"
+put "$tree" .github/workflows/esc.yml 'on:' '  "pull_request\x5ftarget":' 'jobs: {}'
+check "$tree"
+expect_hit "an event name spelled with a hex escape fails" "esc.yml"
+
+tree="$(new_tree escaped-unicode)"
+write_cla "$tree"
+put "$tree" .github/workflows/esc.yml 'on:' '  "workflow\u005frun":' 'jobs: {}'
+check "$tree"
+expect_hit "an event name spelled with a unicode escape fails" "esc.yml"
+
+tree="$(new_tree escaped-continuation)"
+write_cla "$tree"
+put "$tree" .github/workflows/esc.yml 'on:' '  "pull_request_\' '    target":' 'jobs: {}'
+check "$tree"
+expect_hit "an event name split by a line continuation fails" "esc.yml"
+
+tree="$(new_tree escaped-run-key)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '      - "ru\x6e": echo hi'
+check "$tree"
+expect_hit "a run key spelled with an escape fails" "run: step"
+
+tree="$(new_tree escaped-secret)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '        env:' \
+  '          ALL: "${{ toJSON(secret\u0073) }}"'
+check "$tree"
+expect_hit "the secrets context spelled with an escape fails" "cla.yml"
+
+tree="$(new_tree shell-continuation)"
+write_cla "$tree"
+put "$tree" .github/workflows/ci.yml \
+  'on:' \
+  '  push:' \
+  'jobs:' \
+  '  build:' \
+  '    steps:' \
+  '      - run: |' \
+  '          docker build \' \
+  '            -t x .'
+check "$tree"
+expect_pass "a shell line continuation in a run block passes"
 
 tree="$(new_tree no-folder)"
 rm -r "$tree/.github"

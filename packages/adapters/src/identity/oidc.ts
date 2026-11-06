@@ -10,18 +10,25 @@ import {
   type IdentityProviderInfo,
 } from "@slugbase/core";
 import { IdTokenError, verifyIdToken, type VerifiedIdToken } from "./id-token.ts";
+import { createFifoLimiter } from "./limiter.ts";
 
 // The OIDC providers of the operator (doc 02 section 2.8) behind the identity port. Discovery and the signing
 // keys of each provider are fetched only through the egress port (T6): it resolves and validates the address
 // of every request, so an endpoint the document points at a private address is refused there, and it
 // enforces the time and size caps asked for below. A document is trusted only if its `issuer` is exactly the
-// configured string (T20). A provider that cannot be used is left out and logged; the others stay (D22).
+// configured string (T20). For an https issuer every one of those requests, and the token exchange, asks the
+// port to refuse a redirect to http, so a document or a key set fetched over TLS is never answered in plaintext.
+// A provider that cannot be used is left out and logged; the others stay (D22).
 // The authorization-code handshake is the same adapter: `begin` builds the authorization URL with the PKCE
 // challenge, the state and the nonce, and `complete` exchanges the code at the token endpoint through egress
 // and returns the claims of the ID token only after id-token.ts has verified it. A token signed with a key id the
 // cached key set does not hold makes the adapter fetch the provider's key set once more, at most once a minute
 // for a provider, before it refuses the token, so a provider that rotated its keys does not fail sign-ins until
 // the cache expires.
+// The adapter runs at most OIDC_MAX_CONCURRENT_REQUESTS egress requests at once, discovery, key sets and token
+// exchanges alike, and lets the rest wait in the order they asked, so a long provider list or a burst of sign-ins
+// is served in turns instead of the requests refusing one another at the egress instance's cap on concurrent
+// host-name lookups.
 
 /** Why a provider is unavailable; the fixed words of the log line. */
 export type OidcUnavailableReason = "discovery_failed" | "issuer_mismatch" | "invalid_discovery" | "keys_failed" | "invalid_keys";
@@ -67,6 +74,16 @@ export const DEFAULT_CACHE_TTL_MS = 3_600_000;
 export const DEFAULT_FAILURE_TTL_MS = 60_000;
 /** The shortest time between two fetches of a provider's key set that a token with an unknown key id causes. */
 export const KEYS_REFETCH_INTERVAL_MS = 60_000;
+
+// The most egress requests this adapter has running at once. The composition gives the adapter an egress instance
+// of its own, and an instance refuses a request that finds three host-name lookups already running. A request holds
+// at most one lookup at a time (a redirect looks up after the hop before it has finished), so staying at three
+// keeps the requests of this adapter from refusing one another. A waiting request waits for at most
+// ceil(position / OIDC_MAX_CONCURRENT_REQUESTS) rounds of REQUEST_TIMEOUT_MS, since the egress adapter ends every
+// request it runs, redirects included, within the time asked for. One case stays: the instance keeps a lookup's
+// slot until the lookup itself finishes, which can be after the request that started it timed out, so while a
+// resolver hangs, a later request can still find the instance full and be refused.
+const OIDC_MAX_CONCURRENT_REQUESTS = 3;
 
 const REQUEST_TIMEOUT_MS = 5_000;
 const DISCOVERY_MAX_BYTES = 65_536;
@@ -128,6 +145,11 @@ function tokenAuthMethodOf(supported: unknown): OidcTokenAuthMethod | undefined 
   return methods.includes("client_secret_post") ? "client_secret_post" : undefined;
 }
 
+// By the parsed scheme, so an issuer written in capitals is still an https one.
+function isHttps(issuer: string): boolean {
+  return URL.canParse(issuer) && new URL(issuer).protocol === "https:";
+}
+
 function discoveryUrl(issuer: string): string {
   return `${issuer.endsWith("/") ? issuer.slice(0, -1) : issuer}/.well-known/openid-configuration`;
 }
@@ -157,7 +179,12 @@ function formEncode(value: string): string {
  * The identity port over the providers the operator configured. It is available when there is one.
  */
 export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIdentity {
-  const { egress, logger } = options;
+  const { logger } = options;
+  const schedule = createFifoLimiter(OIDC_MAX_CONCURRENT_REQUESTS);
+  const egress: EgressPort = {
+    available: options.egress.available,
+    request: (request) => schedule(() => options.egress.request(request)),
+  };
   const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
   const failureTtlMs = options.failureTtlMs ?? DEFAULT_FAILURE_TTL_MS;
   const now = options.now ?? Date.now;
@@ -165,6 +192,7 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
   const bySlug = new Map(entries.map((entry) => [entry.config.slug, entry]));
 
   async function fetchJson(
+    config: IdentityProviderConfig,
     url: string,
     maxBytes: number,
     acceptContentTypes: readonly string[],
@@ -173,7 +201,13 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
   ): Promise<unknown> {
     let body: Uint8Array;
     try {
-      const response = await egress.request({ url, timeoutMs: REQUEST_TIMEOUT_MS, maxBytes, acceptContentTypes });
+      const response = await egress.request({
+        url,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        maxBytes,
+        acceptContentTypes,
+        ...(isHttps(config.issuerUrl) ? { refuseHttpDowngrade: true } : {}),
+      });
       if (response.status !== 200) {
         throw new Unavailable(failed, { status: response.status });
       }
@@ -190,7 +224,7 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
 
   async function discover(config: IdentityProviderConfig): Promise<OidcProviderMetadata> {
     const document = asObject(
-      await fetchJson(discoveryUrl(config.issuerUrl), DISCOVERY_MAX_BYTES, DISCOVERY_CONTENT_TYPES, "discovery_failed", "invalid_discovery"),
+      await fetchJson(config, discoveryUrl(config.issuerUrl), DISCOVERY_MAX_BYTES, DISCOVERY_CONTENT_TYPES, "discovery_failed", "invalid_discovery"),
     );
     if (document === undefined) {
       throw new Unavailable("invalid_discovery");
@@ -198,7 +232,7 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
     if (document["issuer"] !== config.issuerUrl) {
       throw new Unavailable("issuer_mismatch");
     }
-    const issuerIsHttps = config.issuerUrl.startsWith("https:");
+    const issuerIsHttps = isHttps(config.issuerUrl);
     const authorizationEndpoint = endpoint(document["authorization_endpoint"], issuerIsHttps);
     const tokenEndpoint = endpoint(document["token_endpoint"], issuerIsHttps);
     const jwksUri = endpoint(document["jwks_uri"], issuerIsHttps);
@@ -206,11 +240,11 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
     if (authorizationEndpoint === undefined || tokenEndpoint === undefined || jwksUri === undefined || tokenAuthMethod === undefined) {
       throw new Unavailable("invalid_discovery");
     }
-    return { issuer: config.issuerUrl, authorizationEndpoint, tokenEndpoint, jwksUri, tokenAuthMethod, keys: await fetchKeys(jwksUri) };
+    return { issuer: config.issuerUrl, authorizationEndpoint, tokenEndpoint, jwksUri, tokenAuthMethod, keys: await fetchKeys(config, jwksUri) };
   }
 
-  async function fetchKeys(jwksUri: string): Promise<JsonWebKeys> {
-    const set = asObject(await fetchJson(jwksUri, KEYS_MAX_BYTES, KEYS_CONTENT_TYPES, "keys_failed", "invalid_keys"));
+  async function fetchKeys(config: IdentityProviderConfig, jwksUri: string): Promise<JsonWebKeys> {
+    const set = asObject(await fetchJson(config, jwksUri, KEYS_MAX_BYTES, KEYS_CONTENT_TYPES, "keys_failed", "invalid_keys"));
     const listed = set?.["keys"];
     const keys = Array.isArray(listed) ? (listed as unknown[]).map(asObject) : [];
     if (keys.length === 0 || keys.some((key) => typeof key?.["kty"] !== "string")) {
@@ -271,7 +305,7 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
   // Never rejects.
   async function refetchKeys(entry: Entry, metadata: OidcProviderMetadata): Promise<OidcProviderMetadata | undefined> {
     try {
-      const updated = { ...metadata, keys: await fetchKeys(metadata.jwksUri) };
+      const updated = { ...metadata, keys: await fetchKeys(entry.config, metadata.jwksUri) };
       if (entry.settled?.metadata === metadata) {
         entry.settled = { until: entry.settled.until, metadata: updated };
       }
@@ -317,6 +351,7 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
         timeoutMs: REQUEST_TIMEOUT_MS,
         maxBytes: TOKEN_MAX_BYTES,
         acceptContentTypes: TOKEN_CONTENT_TYPES,
+        ...(isHttps(config.issuerUrl) ? { refuseHttpDowngrade: true } : {}),
       });
     } catch (error) {
       throw refuse(describeFailure(error));

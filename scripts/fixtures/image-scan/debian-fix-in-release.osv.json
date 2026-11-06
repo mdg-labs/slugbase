@@ -1,0 +1,89 @@
+{
+  "results": [
+    {
+      "source": {
+        "path": "/fixture/sbom.spdx.json",
+        "type": "sbom"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "example-src",
+            "version": "1:1.0-1",
+            "ecosystem": "Debian:12"
+          },
+          "vulnerabilities": [
+            {
+              "id": "DEBIAN-CVE-2099-0002",
+              "aliases": [
+                "CVE-2099-0002"
+              ],
+              "summary": "fixture advisory",
+              "affected": [
+                {
+                  "package": {
+                    "ecosystem": "Debian:12",
+                    "name": "example-src"
+                  },
+                  "ranges": [
+                    {
+                      "type": "ECOSYSTEM",
+                      "events": [
+                        {
+                          "introduced": "0"
+                        },
+                        {
+                          "fixed": "1:1.0-1+deb12u1"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "package": {
+                    "ecosystem": "Debian:13",
+                    "name": "example-src"
+                  },
+                  "ranges": [
+                    {
+                      "type": "ECOSYSTEM",
+                      "events": [
+                        {
+                          "introduced": "0"
+                        },
+                        {
+                          "fixed": "1:1.1-1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "severity": [
+                {
+                  "type": "CVSS_V3",
+                  "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+                }
+              ],
+              "database_specific": {
+                "severity": "HIGH"
+              }
+            }
+          ],
+          "groups": [
+            {
+              "ids": [
+                "DEBIAN-CVE-2099-0002",
+                "CVE-2099-0002"
+              ],
+              "aliases": [
+                "CVE-2099-0002"
+              ],
+              "max_severity": "7.5"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

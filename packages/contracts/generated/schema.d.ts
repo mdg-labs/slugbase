@@ -2061,7 +2061,7 @@ export interface components {
             totalAtLeast?: 10000;
         };
         BookmarkMetadata: {
-            /** @description Whether the answer is the workspace's cached result of an earlier fetch of this page, which expires seven days after it was fetched, and not a fetch made for this request */
+            /** @description Always false: the answer is a fetch made for this request and never a cached result, so that it does not depend on what other members saved or looked up. The field stays so that a client that reads it keeps working */
             cached: boolean;
             /** @description The page's own canonical link, an absolute http or https URL without credentials, as text and never fetched; null when the page gave none */
             canonicalUrl: string | null;
@@ -2359,7 +2359,7 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "member";
-            /** @description The teams the invited person joins on accepting; each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped */
+            /** @description The teams the invited person joins on accepting; naming any needs the teams.manage entitlement besides members.invite, or the request is refused with 403 entitlement_required before the teams are looked up. Each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped */
             teamIds?: string[];
         };
         CreateTagRequest: {
@@ -5482,7 +5482,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the page says about itself, from the workspace's cached result when it has not expired or from a fetch made for this request, which is then cached for the workspace for seven days. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed */
+            /** @description What the page says about itself, from a fetch made for this request, so that the answer and the time it takes never depend on what other members saved or looked up. Nothing is stored or read from the workspace's cache. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9449,7 +9449,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required) */
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), the workspace does not hold the members.invite entitlement, or holds it and not teams.manage while the request names teams in teamIds (entitlement_required; nothing is written) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9529,7 +9529,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvitationAccepted"];
                 };
             };
-            /** @description A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists with the invited address, verified whatever the deployment requires of other accounts when the live token is the one the invitation's email carried, and not verified when it is a link an admin asked for (the verification email is then queued where mail can be sent, and only the owner of the address verifying it makes the address verified), with no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced */
+            /** @description A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists with the invited address, verified whatever the deployment requires of other accounts when the live token is the one the invitation's email carried, and not verified when it is a link an admin asked for (the verification email is then queued where mail can be sent, and only the owner of the address verifying it makes the address verified), with no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced. Where the deployment requires a verified address and the token is a link an admin asked for, the answer is 202 and creates no session */
             201: {
                 headers: {
                     /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
@@ -9539,6 +9539,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InvitationAccepted"];
                 };
+            };
+            /** @description A request with the token, a display name and a password, for an invited address that has no account, where the deployment requires a verified address to sign in (EMAIL_VERIFICATION_REQUIRED) and the live token is a link an admin asked for: the token is redeemed, once, and in one transaction the unverified account exists with the invited address, it is a member of the invitation's workspace with exactly the invited role and the invitation is accepted, but no session is created, since the account could not sign in again before its address is verified (the verification email is queued where mail can be sent, and only the owner of the address verifying it makes the address verified; otherwise an administrator of the instance can). The answer has no body and no Set-Cookie, and a session cookie the request carried is left as it was. A token the invitation's email carried never gets this answer: its account is verified and is answered 201 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request was malformed */
             400: {

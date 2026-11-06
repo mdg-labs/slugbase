@@ -534,7 +534,7 @@ export const BookmarkMetadataSchema = z
     siteName: z.string().nullable().describe("The page's site name (its og:site_name), plain text of at most 100 characters; null when the page gave none"),
     canonicalUrl: z.string().nullable().describe("The page's own canonical link, an absolute http or https URL without credentials, as text and never fetched; null when the page gave none"),
     language: z.string().nullable().describe("The page's language tag, such as en or de-AT; null when the page gave none"),
-    cached: z.boolean().describe("Whether the answer is the workspace's cached result of an earlier fetch of this page, which expires seven days after it was fetched, and not a fetch made for this request"),
+    cached: z.boolean().describe("Always false: the answer is a fetch made for this request and never a cached result, so that it does not depend on what other members saved or looked up. The field stays so that a client that reads it keeps working"),
   })
   .meta({ id: "BookmarkMetadata" });
 
@@ -853,7 +853,7 @@ export const fetchBookmarkMetadata = defineOperation({
   request: { body: BookmarkMetadataRequestSchema },
   responses: {
     200: jsonResponse(
-      "What the page says about itself, from the workspace's cached result when it has not expired or from a fetch made for this request, which is then cached for the workspace for seven days. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed",
+      "What the page says about itself, from a fetch made for this request, so that the answer and the time it takes never depend on what other members saved or looked up. Nothing is stored or read from the workspace's cache. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed",
       BookmarkMetadataSchema,
     ),
     400: problemResponse("The request was malformed"),

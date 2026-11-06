@@ -21,7 +21,7 @@ const TEST_TIMEOUT_MS = 60_000;
 
 const database = useTestDatabase();
 const harness = workspaceHarness(database);
-const GRANTED: EntitlementCheck = (entitlement) => entitlement === "members.invite";
+const GRANTED: EntitlementCheck = (entitlement) => entitlement === "members.invite" || entitlement === "teams.manage";
 
 beforeAll(() => harness.start(), HOOK_TIMEOUT_MS);
 

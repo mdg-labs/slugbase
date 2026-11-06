@@ -60,6 +60,7 @@ export interface FakeEgressRequest {
   readonly timeoutMs: number;
   readonly maxBytes: number;
   readonly truncateAtMaxBytes?: boolean;
+  readonly refuseHttpDowngrade?: boolean;
   readonly acceptContentTypes?: readonly string[];
 }
 
@@ -173,7 +174,7 @@ function withoutFragment(url: ParsedUrl): string {
  * answered. It does what the port does: a redirect route is followed with the
  * hop limit, loop detection and per-hop validation of the port (a target with a
  * scheme other than http and https, with credentials, or an IP literal that is
- * not a public address is refused), the content-type allowlist is applied to
+ * not a public address is refused, and so is an https to http hop of a request that sets `refuseHttpDowngrade`), the content-type allowlist is applied to
  * the final response before its body, and a body larger than the request's
  * `maxBytes` is refused, or cut to `maxBytes` when the request sets `truncateAtMaxBytes`. A route can also time out. It refuses the requests the
  * port refuses before any connection: invalid limits (`RangeError`) and a
@@ -243,6 +244,9 @@ export class FakeEgress {
           next = checkDestination(new URL(route.to, url).href);
         } catch (error) {
           throw error instanceof FakeEgressError ? error : new FakeEgressError("egress_blocked");
+        }
+        if (request.refuseHttpDowngrade === true && url.protocol === "https:" && next.protocol === "http:") {
+          throw new FakeEgressError("egress_blocked");
         }
         if (visited.has(withoutFragment(next)) || redirects === MAX_REDIRECTS) {
           throw new FakeEgressError("egress_failed");

@@ -22,6 +22,11 @@ export interface EgressRequestBase {
    * Without the list the type is not checked.
    */
   readonly acceptContentTypes?: readonly string[];
+  /**
+   * Refuses a redirect from an `https` URL to an `http` one with `EgressBlocked`, before any connection to the `http` target is opened. The
+   * request's own URL is not checked by it, and a redirect that keeps the scheme or moves from `http` to `https` is followed as without it.
+   */
+  readonly refuseHttpDowngrade?: boolean;
 }
 
 export interface EgressBodylessRequest extends EgressRequestBase {
@@ -94,7 +99,8 @@ export class EgressTooLarge extends EgressError {
  * passes the same validation as the first request, accepts only `http` and
  * `https` targets and shares the one time budget. A redirect loop, a longer
  * chain and a response outside `acceptContentTypes` fail with an `EgressError`;
- * a hop to an address or scheme the port refuses fails with `EgressBlocked`.
+ * a hop to an address or scheme the port refuses, or an `https` to `http` hop of a request
+ * that sets `refuseHttpDowngrade`, fails with `EgressBlocked`.
  * Failures are `EgressError`s.
  */
 export interface EgressPort extends Port {

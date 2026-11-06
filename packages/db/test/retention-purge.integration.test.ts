@@ -78,8 +78,8 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events, `idempotencyKeys` idempotency keys, `invitations` invitations, `urlMetadata` cached page metadata, `favicons` cached favicons, `aiSuggestions` cached AI suggestions and `aiUsage` counts of accepted fields, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0, invitations = 0, urlMetadata = 0, favicons = 0, aiSuggestions = 0, aiUsage = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events, `idempotencyKeys` idempotency keys, `invitations` invitations, `urlMetadata` cached page metadata, `favicons` cached favicons, `aiSuggestions` cached AI suggestions and `aiUsage` counts of accepted fields and `workspaceFavicons` records of a favicon fetch of a workspace, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0, invitations = 0, urlMetadata = 0, favicons = 0, aiSuggestions = 0, aiUsage = 0, workspaceFavicons = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
@@ -89,6 +89,7 @@ function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialToke
     { table: "idempotency_keys", deleted: idempotencyKeys },
     { table: "url_metadata", deleted: urlMetadata },
     { table: "favicons", deleted: favicons },
+    { table: "workspace_favicons", deleted: workspaceFavicons },
     { table: "ai_suggestions", deleted: aiSuggestions },
     { table: "ai_suggestion_usage", deleted: aiUsage },
     { table: "audit_events", deleted: auditEvents },
@@ -736,6 +737,64 @@ describe("purging expired favicons", () => {
 
   it("gives slugbase_app no DELETE on favicons: the purge is the only way it removes a row", async () => {
     await expect(db.app.unsafe("DELETE FROM public.favicons")).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+describe("purging expired favicon fetches of workspaces", () => {
+  let workspaceA: string;
+  let workspaceB: string;
+
+  beforeAll(async () => {
+    workspaceA = await seedWorkspace(db, { name: "Favicon purge A" });
+    workspaceB = await seedWorkspace(db, { name: "Favicon purge B" });
+  });
+
+  /** Seeds a record that expires `expiresIn` milliseconds from now (negative is in the past). */
+  async function seedFetch(workspaceId: string, host: string, expiresIn: number): Promise<void> {
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at)
+        VALUES (${workspaceId}, ${host}, now() - interval '8 days', now() + ${expiresIn} * interval '1 millisecond')`,
+    );
+  }
+
+  async function remaining(): Promise<string[]> {
+    const rows = await asSystem(db, (tx) => tx<{ key: string }[]>`SELECT workspace_id || ' ' || host AS key FROM workspace_favicons`);
+    return rows.map((row) => row.key).sort();
+  }
+
+  it("deletes a record past its expiry in every workspace and keeps a current one, counting what it deleted", async () => {
+    await clearSessions();
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_favicons`);
+    await seedFetch(workspaceA, "gone.example.com", -HOUR_MS);
+    await seedFetch(workspaceB, "gone.example.com", -DAY_MS);
+    await seedFetch(workspaceA, "kept.example.com", HOUR_MS);
+    await seedFetch(workspaceB, "kept.example.com", 6 * DAY_MS);
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2));
+    expect(await remaining()).toEqual([`${workspaceA} kept.example.com`, `${workspaceB} kept.example.com`].sort());
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("deletes one batch of 5 000 per call and finishes the rest on the next calls", async () => {
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_favicons`);
+    const extra = 3;
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at)
+        SELECT ${workspaceA}, 'batch' || n || '.example.com', now() - interval '8 days', now() - interval '1 hour'
+        FROM generate_series(1, ${BATCH + extra}::int) AS n`,
+    );
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, extra));
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("gives slugbase_app no DELETE on workspace_favicons: the purge is the only way it removes a row", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.workspace_favicons")).rejects.toMatchObject({ code: "42501" });
   });
 });
 

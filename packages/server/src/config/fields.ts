@@ -113,6 +113,9 @@ export function sentryDsn() {
   );
 }
 
+/** The message for a development value that production refuses. */
+export const DEVELOPMENT_DEFAULT_REFUSAL = "is a development default from .env.example, which production refuses";
+
 function isBase64Of(value: string, bytes: number): boolean {
   if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) {
     return false;
@@ -120,6 +123,14 @@ function isBase64Of(value: string, bytes: number): boolean {
   const decoded = Buffer.from(value, "base64");
   const canonical = (text: string): string => text.replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
   return decoded.length === bytes && canonical(decoded.toString("base64")) === canonical(value);
+}
+
+/**
+ * The bytes a key value spells, whichever alphabet and padding it uses; `undefined` when the text is not
+ * base64 of `bytes` bytes. Two values that spell the same bytes are the same key.
+ */
+export function decodeBase64Key(value: string, bytes: number): Buffer | undefined {
+  return isBase64Of(value, bytes) ? Buffer.from(value, "base64") : undefined;
 }
 
 /** Base64 or base64url text that decodes to exactly `bytes` bytes. */

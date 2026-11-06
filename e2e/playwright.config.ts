@@ -26,6 +26,8 @@ const SETUP = /.*\.setup\.ts/;
 const ACCOUNTS = /accounts\.spec\.ts/;
 // The AI journey (tests/ai.spec.ts) counts the requests the stack's stand-in for an AI provider received, so one engine runs it.
 const AI = /ai\.spec\.ts/;
+// The production-defaults journey (tests/production-defaults.spec.ts) speaks HTTP only and signs a member of its own in once, so one engine runs it (doc 08 section 5.1).
+const PRODUCTION_DEFAULTS = /production-defaults\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./tests",
@@ -51,7 +53,7 @@ export default defineConfig({
   projects: [
     { name: "setup", testMatch: SETUP, use: { ...devices["Desktop Chrome"], storageState: { cookies: [], origins: [] } } },
     { name: "chromium", testIgnore: SETUP, dependencies: ["setup"], use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", testIgnore: [SETUP, ACCOUNTS, AI], dependencies: ["setup"], use: { ...devices["Desktop Firefox"] } },
-    { name: "webkit", testIgnore: [SETUP, ACCOUNTS, AI], dependencies: ["setup"], use: { ...devices["Desktop Safari"] } },
+    { name: "firefox", testIgnore: [SETUP, ACCOUNTS, AI, PRODUCTION_DEFAULTS], dependencies: ["setup"], use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", testIgnore: [SETUP, ACCOUNTS, AI, PRODUCTION_DEFAULTS], dependencies: ["setup"], use: { ...devices["Desktop Safari"] } },
   ],
 });

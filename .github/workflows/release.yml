@@ -81,6 +81,9 @@ jobs:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
+      # The image build fetches each package from where the lockfile says.
+      - name: Check the lockfile sources
+        run: bash scripts/check-lockfile-sources.sh
       - name: Log in to the registry
         env:
           REGISTRY_USER: ${{ github.actor }}
@@ -91,6 +94,34 @@ jobs:
       # SBOM and provenance attestations need BuildKit's container driver.
       - name: Create the builder
         run: docker buildx create --name release --driver docker-container --use
+      # The image is scanned before anything is pushed. The same builder builds it
+      # again below from its cache, so the SBOM scanned is the one of the image
+      # pushed. A High or Critical finding with a fix, or a scanner that fails,
+      # stops the job here.
+      - name: Install the scanner
+        run: |
+          set -euo pipefail
+          bash scripts/scan-image.sh --install "$RUNNER_TEMP/osv-scanner"
+          echo "OSV_SCANNER=$RUNNER_TEMP/osv-scanner/osv-scanner" >> "$GITHUB_ENV"
+      - name: Check the scanner reports a known vulnerability
+        run: |
+          set -euo pipefail
+          bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary.spdx.json
+          bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary-debian.spdx.json
+      - name: Scan the image
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --file apps/slugbase/Dockerfile \
+            --build-arg "VERSION=$VERSION" \
+            --build-arg "BUILD_COMMIT=$BUILD_COMMIT" \
+            --sbom=true \
+            --output "type=local,dest=$RUNNER_TEMP/image" \
+            .
+          bash scripts/scan-image.sh "$RUNNER_TEMP/image/sbom.spdx.json"
       # The tags come from the plan; the version it validated is semver, so it
       # holds nothing a shell would read as syntax.
       - name: Build and push

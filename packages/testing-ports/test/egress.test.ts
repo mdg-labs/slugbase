@@ -110,6 +110,23 @@ describe("FakeEgress", () => {
     await expect(egress.request({ url: "https://example.test/self", ...limits })).rejects.toMatchObject({ code: "egress_failed" });
   });
 
+  it("refuses an https to http redirect only for a request that sets refuseHttpDowngrade, before the http URL is fetched", async () => {
+    const egress = new FakeEgress({
+      "https://idp.example.test/keys": { kind: "redirect", to: "http://idp.example.test/keys" },
+      "http://idp.example.test/keys": { body: bytes("keys") },
+      "https://idp.example.test/moved": { kind: "redirect", to: "https://other.example.test/keys" },
+      "https://other.example.test/keys": { body: bytes("keys") },
+      "http://plain.example.test/a": { kind: "redirect", to: "http://plain.example.test/b" },
+      "http://plain.example.test/b": { body: bytes("keys") },
+    });
+    const guarded = { refuseHttpDowngrade: true, ...limits };
+    await expect(egress.request({ url: "https://idp.example.test/keys", ...guarded })).rejects.toMatchObject({ code: "egress_blocked" });
+    expect(egress.fetched).toEqual(["https://idp.example.test/keys"]);
+    expect((await egress.request({ url: "https://idp.example.test/moved", ...guarded })).url).toBe("https://other.example.test/keys");
+    expect((await egress.request({ url: "http://plain.example.test/a", ...guarded })).url).toBe("http://plain.example.test/b");
+    expect((await egress.request({ url: "https://idp.example.test/keys", ...limits })).url).toBe("http://idp.example.test/keys");
+  });
+
   it("follows five redirects and refuses a sixth", async () => {
     const chain = (length: number): FakeEgress => {
       const egress = new FakeEgress({ [`https://example.test/${String(length)}`]: { body: bytes("end") } });

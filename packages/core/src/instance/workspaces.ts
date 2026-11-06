@@ -20,7 +20,9 @@ import { INVITATION_TTL_SECONDS } from "../workspaces/invitations.ts";
 // An owner invitation is the one invitation that carries the owner role (doc 02 section 11.1). Its token is made here
 // and only its hash is stored. Where the caller can mail the link (`mailLocale` is given), the invitation.send job makes
 // the token that goes into the message and the outcome carries no link; otherwise the value is in the outcome, for the
-// caller to hand to the admin once, and nowhere else.
+// caller to hand to the admin once, and nowhere else. The store is told which of the two it is (`linkIssued`) and writes a
+// link handed to the admin as link-issued, like a workspace admin's copyable link, so the password form makes an
+// unverified account of it (doc 02 section 3.4, doc 10 T19).
 //
 // `reissueInstanceWorkspaceOwnerInvitation` replaces the owner invitation of a workspace that still waits for its first
 // owner: a lost link or an expired invitation is then recovered without deleting and creating the workspace again.
@@ -55,6 +57,11 @@ export type InstanceWorkspaceOwnerSeat =
       readonly ttlSeconds: number;
       /** The language of the invitation email, present when the caller queues the mail job in the transaction that creates the invitation. */
       readonly mailLocale?: string;
+      /**
+       * Whether the token is returned to the admin as a link and not mailed (`mailLocale` is absent). The invitation is then
+       * written link-issued, so redeeming it through the password form makes an unverified account (doc 02 section 3.4).
+       */
+      readonly linkIssued: boolean;
     };
 
 export interface InstanceWorkspaceCreation {
@@ -78,6 +85,11 @@ export interface InstanceOwnerInvitationReissue {
   readonly ttlSeconds: number;
   /** The language of the invitation email, present when the caller queues the mail job in the transaction that writes the invitation. */
   readonly mailLocale?: string;
+  /**
+   * Whether the token is returned to the admin as a link and not mailed (`mailLocale` is absent). The invitation is then
+   * written link-issued, so redeeming it through the password form makes an unverified account (doc 02 section 3.4).
+   */
+  readonly linkIssued: boolean;
 }
 
 export type InstanceOwnerInvitationReissueResult =
@@ -226,6 +238,7 @@ export async function createInstanceWorkspace(
         tokenHash: token.hash,
         ttlSeconds: ask.ttlSeconds ?? INVITATION_TTL_SECONDS,
         ...(ask.mailLocale === undefined ? {} : { mailLocale: ask.mailLocale }),
+        linkIssued: ask.mailLocale === undefined,
       },
       events: [],
     },
@@ -278,6 +291,7 @@ export async function reissueInstanceWorkspaceOwnerInvitation(
       tokenHash: token.hash,
       ttlSeconds: ask.ttlSeconds ?? INVITATION_TTL_SECONDS,
       ...(ask.mailLocale === undefined ? {} : { mailLocale: ask.mailLocale }),
+      linkIssued: ask.mailLocale === undefined,
     },
     newId(),
     ask.ipPrefix,

@@ -79,10 +79,14 @@ The `postgres` service holds the database. Dump it as the database superuser `sl
 
 A snapshot of the `postgres-data` volume backs up the whole database cluster, roles included. The database must be stopped while you copy it. A snapshot restores only onto the same PostgreSQL major version, so a dump is the better choice when you plan to upgrade PostgreSQL.
 
+The commands below start their helper container from the image of your `postgres` service, so they pull nothing new.
+
 ```sh
 install -d -m 700 backups
 docker compose stop
-docker run --rm --volumes-from "$(docker compose ps -aq postgres)" -v "$PWD/backups":/backup --entrypoint sh postgres:18 -c "umask 077 && tar czf /backup/postgres-data.tgz -C /var/lib/postgresql . && chown $(id -u):$(id -g) /backup/postgres-data.tgz"
+POSTGRES_CONTAINER="$(docker compose ps -aq postgres)"
+POSTGRES_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$POSTGRES_CONTAINER")"
+docker run --rm --volumes-from "$POSTGRES_CONTAINER" -v "$PWD/backups":/backup --entrypoint sh "$POSTGRES_IMAGE" -c "umask 077 && tar czf /backup/postgres-data.tgz -C /var/lib/postgresql . && chown $(id -u):$(id -g) /backup/postgres-data.tgz"
 docker compose start
 ```
 
@@ -93,7 +97,9 @@ To restore it, create an empty volume, unpack the archive into it and start the 
 ```sh
 docker compose down -v
 docker compose up --no-start postgres
-docker run --rm --volumes-from "$(docker compose ps -aq postgres)" -v "$PWD/backups":/backup --entrypoint tar postgres:18 xzf /backup/postgres-data.tgz -C /var/lib/postgresql
+POSTGRES_CONTAINER="$(docker compose ps -aq postgres)"
+POSTGRES_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$POSTGRES_CONTAINER")"
+docker run --rm --volumes-from "$POSTGRES_CONTAINER" -v "$PWD/backups":/backup --entrypoint tar "$POSTGRES_IMAGE" xzf /backup/postgres-data.tgz -C /var/lib/postgresql
 docker compose up -d
 ```
 

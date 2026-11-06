@@ -1,0 +1,1 @@
+{"entries": [{"id": "DEBIAN-CVE-2099-0002", "reason": "The vulnerable function is never reached by the image.", "expires": "2099-12-31"}]}

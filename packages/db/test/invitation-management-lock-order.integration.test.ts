@@ -184,6 +184,7 @@ function accepting(scenario: Scene, requestId: string): Promise<Settled<Invitati
       passwordHash: PASSWORD_HASH,
       locale: "en",
       seatLimit: null,
+      emailVerificationRequired: false,
       session: { id: freshId(), tokenHash: session.hash, replacedTokenHash: null, ipPrefix: "203.0.0.0/16", userAgent: "tests" },
       onAccepted: () => ({ audit: [], jobs: [] }),
     }),

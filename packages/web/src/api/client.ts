@@ -13,6 +13,7 @@ type ProblemFields = {
   errors?: readonly FieldError[] | undefined;
   retryAfterSeconds?: number | undefined;
   workspaces?: unknown;
+  entitlement?: unknown;
 };
 
 /** A workspace a `last_owner` problem names. */
@@ -29,7 +30,8 @@ const CONFIG_PATH = "/api/config";
  * the stable machine `code`, the HTTP `status` and the `requestId` that ties the
  * failure to the server log. The English `detail` of the document is kept off the
  * error message because it may hold user-supplied values. `retryAfterSeconds` is the
- * wait a `Retry-After` header asks for, and `errors` the per-field errors of the document.
+ * wait a `Retry-After` header asks for, and `errors` the per-field errors of the document. `entitlement` is the
+ * entitlement a `403 entitlement_required` names, when the document carries one.
  */
 export class ApiProblemError extends Error {
   readonly code: ApiProblemCode;
@@ -37,6 +39,7 @@ export class ApiProblemError extends Error {
   readonly requestId: string;
   readonly retryAfterSeconds: number | undefined;
   readonly errors: readonly { readonly path: string; readonly code: string }[];
+  readonly entitlement: string | undefined;
 
   constructor(problem: {
     code: ApiProblemCode;
@@ -44,6 +47,7 @@ export class ApiProblemError extends Error {
     requestId: string;
     errors?: readonly { readonly path: string; readonly code: string }[] | undefined;
     retryAfterSeconds?: number | undefined;
+    entitlement?: string | undefined;
   }) {
     super(`The API answered ${String(problem.status)} ${problem.code}`);
     this.name = "ApiProblemError";
@@ -52,6 +56,7 @@ export class ApiProblemError extends Error {
     this.requestId = problem.requestId;
     this.retryAfterSeconds = problem.retryAfterSeconds;
     this.errors = problem.errors ?? [];
+    this.entitlement = problem.entitlement;
   }
 }
 
@@ -188,6 +193,7 @@ function createProblemMiddleware(onUnauthenticated: (() => void) | undefined): M
           ...problem,
           errors: Array.isArray(problem.errors) ? problem.errors.filter(isFieldError) : undefined,
           retryAfterSeconds: parseRetryAfter(response.headers.get("Retry-After")),
+          entitlement: typeof problem.entitlement === "string" ? problem.entitlement : undefined,
         };
         throw Array.isArray(problem.workspaces) ? new ApiWorkspacesProblemError(fields, problem.workspaces.filter(isProblemWorkspace)) : new ApiProblemError(fields);
       }

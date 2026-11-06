@@ -673,6 +673,7 @@ export function createServer(options: CreateServerOptions): Server {
       withTenant: context.withTenant,
       cookie: sessionCookieSpec(config.APP_ORIGIN),
       passwordPolicy,
+      registration,
       hashPassword,
       entitlements: entitlementCheck,
       upgradeAvailable: upgradeCheck,

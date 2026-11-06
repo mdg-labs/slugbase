@@ -26,9 +26,12 @@ export class ApiProblemError extends Error {
             readonly code: string;
         }[] | undefined;
         retryAfterSeconds?: number | undefined;
+        entitlement?: string | undefined;
     });
     // (undocumented)
     readonly code: ApiProblemCode;
+    // (undocumented)
+    readonly entitlement: string | undefined;
     // (undocumented)
     readonly errors: readonly {
         readonly path: string;

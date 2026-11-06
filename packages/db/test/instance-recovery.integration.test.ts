@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAuthStore, instanceRepository, type AuthStore, type PasswordReset, type QueuedJob, type TenantTx } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, freshToken, seedAccount, sessionRows } from "./support/auth-fixture.ts";
+import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The recovery operations of the CE instance admin (doc 05 sections 2.9 and 3.3, doc 02 sections 2.5, 2.6, 2.7 and
 // 11.2, doc 10 T4, T7, T17 and T18). The failure scenarios: an account that is not an instance admin with a second
@@ -956,4 +957,397 @@ describe("sys_instance_update_account, marking an address verified", () => {
     expect(rows).toMatchObject([{ outcome: "updated", admin_changed: false, disabled_changed: true, acct_disabled: true }]);
     expect((await instanceEvents()).at(-1)).toMatchObject({ id: eventId, action: "instance.account_disabled" });
   });
+});
+
+interface Planted {
+  readonly workspaceId: string;
+  readonly bookmarkId: string;
+  readonly folderId: string;
+}
+
+/**
+ * A workspace as the registrant of `creator` left it: a bookmark and a folder of the creator's, a team with `member`, a share of
+ * the bookmark and of the folder with the member and one of the bookmark with the team, an API token of the member and a pending
+ * invitation. The creator joins as `creatorRole`, the member as `memberRole`.
+ */
+async function plantWorkspace(creator: string, member: string, options: { creatorRole?: "owner" | "admin"; memberRole?: "owner" | "admin" | "member" } = {}): Promise<Planted> {
+  const workspaceId = await seedWorkspace(db, { createdBy: creator });
+  await seedMember(db, { workspaceId, accountId: creator, role: options.creatorRole ?? "owner" });
+  await seedMember(db, { workspaceId, accountId: member, role: options.memberRole ?? "member" });
+  const bookmarkId = freshId();
+  const folderId = freshId();
+  const teamId = freshId();
+  await asSystem(db, async (tx) => {
+    await tx`
+      INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+      VALUES (${bookmarkId}, ${workspaceId}, ${creator}, 'https://example.com/', 'https://example.com', 'example.com', 'Planted')`;
+    await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${folderId}, ${workspaceId}, ${creator}, 'Planted')`;
+    await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamId}, ${workspaceId}, 'Planted team')`;
+    await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamId}, ${member})`;
+    await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${bookmarkId}, ${member}, ${creator})`;
+    await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${folderId}, ${member}, ${creator})`;
+    await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_team_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${bookmarkId}, ${teamId}, ${creator})`;
+    await tx`
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at, invited_by)
+      VALUES (${freshId()}, ${workspaceId}, ${`invitee-${workspaceId}@example.test`}, 'member', ${freshToken().hash}, now() + interval '7 days', ${creator})`;
+  });
+  await db.owner.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${member}, true)`;
+    await tx`
+      INSERT INTO api_tokens (id, account_id, workspace_id, name, token_hash, token_prefix, scope)
+      VALUES (${freshId()}, ${member}, ${workspaceId}, ${`token ${workspaceId}`}, ${freshToken().hash}, 'abcdef', 'read')`;
+  });
+  return { workspaceId, bookmarkId, folderId };
+}
+
+interface WorkspaceState {
+  readonly exists: boolean;
+  readonly members: string[];
+  readonly teams: number;
+  readonly teamMembers: number;
+  readonly bookmarkShares: number;
+  readonly folderShares: number;
+  readonly pendingInvitations: number;
+  readonly apiTokens: number;
+  readonly bookmarks: number;
+  readonly folders: number;
+}
+
+async function workspaceState(workspaceId: string): Promise<WorkspaceState> {
+  const rows = await asSystem(
+    db,
+    (tx) =>
+      tx<
+        {
+          exists: boolean;
+          members: string[] | null;
+          teams: number;
+          team_members: number;
+          bookmark_shares: number;
+          folder_shares: number;
+          invitations: number;
+          tokens: number;
+          bookmarks: number;
+          folders: number;
+        }[]
+      >`
+        SELECT EXISTS (SELECT 1 FROM workspaces w WHERE w.id = ${workspaceId} AND w.deleting_at IS NULL) AS exists,
+               (SELECT array_agg(account_id::text ORDER BY account_id) FROM workspace_members WHERE workspace_id = ${workspaceId}) AS members,
+               (SELECT count(*)::int FROM teams WHERE workspace_id = ${workspaceId}) AS teams,
+               (SELECT count(*)::int FROM team_members WHERE workspace_id = ${workspaceId}) AS team_members,
+               (SELECT count(*)::int FROM bookmark_shares WHERE workspace_id = ${workspaceId}) AS bookmark_shares,
+               (SELECT count(*)::int FROM folder_shares WHERE workspace_id = ${workspaceId}) AS folder_shares,
+               (SELECT count(*)::int FROM workspace_invitations WHERE workspace_id = ${workspaceId} AND status = 'pending') AS invitations,
+               (SELECT count(*)::int FROM api_tokens WHERE workspace_id = ${workspaceId}) AS tokens,
+               (SELECT count(*)::int FROM bookmarks WHERE workspace_id = ${workspaceId}) AS bookmarks,
+               (SELECT count(*)::int FROM folders WHERE workspace_id = ${workspaceId}) AS folders`,
+  );
+  const row = rows[0];
+  if (row === undefined) {
+    throw new Error("the state query returned no row");
+  }
+  return {
+    exists: row.exists,
+    members: row.members ?? [],
+    teams: row.teams,
+    teamMembers: row.team_members,
+    bookmarkShares: row.bookmark_shares,
+    folderShares: row.folder_shares,
+    pendingInvitations: row.invitations,
+    apiTokens: row.tokens,
+    bookmarks: row.bookmarks,
+    folders: row.folders,
+  };
+}
+
+/**
+ * A workspace as the instance console makes it: `adminId` (an instance admin) creates it with the existing account `ownerId` as its first
+ * owner, which records the admin as its creator, and then adds itself to it as a member.
+ */
+async function consoleWorkspace(adminId: string, ownerId: string): Promise<string> {
+  const workspaceId = freshId();
+  await db.app.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${adminId}, true)`;
+    const created = await tx`
+      SELECT * FROM sys_instance_create_workspace(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, 'Console workspace', ${ownerId}::uuid, NULL::citext, NULL::uuid, NULL::bytea, NULL::integer)`;
+    expect(created[0]).toMatchObject({ outcome: "created" });
+  });
+  return workspaceId;
+}
+
+async function addInstanceAdminMembership(adminId: string, workspaceId: string): Promise<void> {
+  await db.app.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${adminId}, true)`;
+    const added = await tx`SELECT sys_instance_add_membership(${freshId()}::uuid, ${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid) AS outcome`;
+    expect(added[0]?.["outcome"]).toBe("added");
+  });
+}
+
+/** A member, a team, a share and a pending invitation of the workspace, as its owner set them up. */
+async function populate(workspaceId: string, ownerId: string, memberId: string): Promise<void> {
+  await seedMember(db, { workspaceId, accountId: memberId, role: "member" });
+  const bookmarkId = freshId();
+  const teamId = freshId();
+  await asSystem(db, async (tx) => {
+    await tx`
+      INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+      VALUES (${bookmarkId}, ${workspaceId}, ${ownerId}, 'https://example.com/', 'https://example.com', 'example.com', 'Owner')`;
+    await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamId}, ${workspaceId}, 'Team')`;
+    await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamId}, ${memberId})`;
+    await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${bookmarkId}, ${memberId}, ${ownerId})`;
+    await tx`
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at, invited_by)
+      VALUES (${freshId()}, ${workspaceId}, ${`invitee-${workspaceId}@example.test`}, 'member', ${freshToken().hash}, now() + interval '7 days', ${ownerId})`;
+  });
+}
+
+async function roleOf(workspaceId: string, accountId: string): Promise<string | undefined> {
+  const rows = await asSystem(db, (tx) => tx<{ role: string }[]>`SELECT role::text AS role FROM workspace_members WHERE workspace_id = ${workspaceId} AND account_id = ${accountId}`);
+  return rows[0]?.role;
+}
+
+const planted = (members: string[]): WorkspaceState => ({
+  exists: true,
+  members: members.sort(),
+  teams: 1,
+  teamMembers: 1,
+  bookmarkShares: 2,
+  folderShares: 1,
+  pendingInvitations: 1,
+  apiTokens: 1,
+  bookmarks: 1,
+  folders: 1,
+});
+
+const stripped = (owner: string): WorkspaceState => ({
+  exists: true,
+  members: [owner],
+  teams: 0,
+  teamMembers: 0,
+  bookmarkShares: 0,
+  folderShares: 0,
+  pendingInvitations: 0,
+  apiTokens: 0,
+  bookmarks: 1,
+  folders: 1,
+});
+
+describe("sys_instance_update_account, marking an address verified, and what the registrant shared", () => {
+  it("leaves the account alone in a workspace it owns alone, with no team, invitation or share, and keeps its own bookmarks and folders", async () => {
+    const caller = await admin();
+    const target = await account({ verified: false });
+    const accomplice = await account({ verified: true });
+    const workspace = await plantWorkspace(target.id, accomplice.id, { memberRole: "admin" });
+    expect(await workspaceState(workspace.workspaceId)).toEqual(planted([target.id, accomplice.id]));
+
+    expect(await markVerified(caller, target.id)).toMatchObject({ kind: "updated", verifiedChanged: true, account: { emailVerified: true } });
+
+    expect(await workspaceState(workspace.workspaceId)).toEqual(stripped(target.id));
+    expect(await accountRow(accomplice.id)).toMatchObject({ verified: true });
+    expect((await mailJobs()).length).toBe(0);
+  });
+
+  it("strips every workspace the account owns alone or created, and leaves one another account created and also owns, one it only belongs to and one being deleted as they were", async () => {
+    const caller = await admin();
+    const target = await account({ verified: false });
+    const accomplice = await account({ verified: true });
+    const first = await plantWorkspace(target.id, accomplice.id);
+    const second = await plantWorkspace(target.id, accomplice.id, { memberRole: "admin" });
+    const promoted = await plantWorkspace(target.id, accomplice.id, { memberRole: "owner" });
+    const shared = await plantWorkspace(accomplice.id, target.id, { creatorRole: "owner", memberRole: "owner" });
+    const joined = await plantWorkspace(accomplice.id, target.id, { creatorRole: "owner", memberRole: "member" });
+    const deleting = await plantWorkspace(target.id, accomplice.id);
+    await asSystem(db, (tx) => tx`UPDATE workspaces SET deleting_at = now() WHERE id = ${deleting.workspaceId}`);
+    const sharedBefore = await workspaceState(shared.workspaceId);
+    const joinedBefore = await workspaceState(joined.workspaceId);
+    const deletingBefore = await asSystem(db, (tx) => tx<{ members: number; shares: number }[]>`
+      SELECT (SELECT count(*)::int FROM workspace_members WHERE workspace_id = ${deleting.workspaceId}) AS members,
+             (SELECT count(*)::int FROM bookmark_shares WHERE workspace_id = ${deleting.workspaceId}) AS shares`);
+
+    await markVerified(caller, target.id);
+
+    expect(await workspaceState(first.workspaceId)).toEqual(stripped(target.id));
+    expect(await workspaceState(second.workspaceId)).toEqual(stripped(target.id));
+    expect(await workspaceState(promoted.workspaceId)).toEqual(stripped(target.id));
+    // The mark deletes every API token of the account, the one it holds in a workspace it co-owns included.
+    expect(await workspaceState(shared.workspaceId)).toEqual({ ...sharedBefore, apiTokens: 0 });
+    expect(sharedBefore.members).toContain(target.id);
+    // The mark deletes every API token of the account, the one it holds in a workspace it only belongs to included.
+    expect(await workspaceState(joined.workspaceId)).toEqual({ ...joinedBefore, apiTokens: 0 });
+    expect(joinedBefore.members).toContain(target.id);
+    expect(
+      await asSystem(db, (tx) => tx<{ members: number; shares: number }[]>`
+        SELECT (SELECT count(*)::int FROM workspace_members WHERE workspace_id = ${deleting.workspaceId}) AS members,
+               (SELECT count(*)::int FROM bookmark_shares WHERE workspace_id = ${deleting.workspaceId}) AS shares`),
+    ).toEqual(deletingBefore);
+  });
+
+  it("strips a workspace the account created and then demoted itself in, after promoting an accomplice to owner, and leaves the account its only member and owner", async () => {
+    const caller = await admin();
+    const target = await account({ verified: false });
+    const accomplice = await account({ verified: true });
+    const workspace = await plantWorkspace(target.id, accomplice.id, { creatorRole: "admin", memberRole: "owner" });
+    expect(await roleOf(workspace.workspaceId, target.id)).toBe("admin");
+
+    await markVerified(caller, target.id);
+
+    expect(await workspaceState(workspace.workspaceId)).toEqual(stripped(target.id));
+    expect(await roleOf(workspace.workspaceId, target.id)).toBe("owner");
+  });
+
+  it(
+    "takes the row of a workspace the account created but no longer owns before the account rows, so a lock on that workspace is waited for first",
+    async () => {
+      const caller = await admin();
+      const target = await account({ verified: false });
+      const accomplice = await account({ verified: true });
+      const workspace = await plantWorkspace(target.id, accomplice.id, { creatorRole: "admin", memberRole: "owner" });
+      let release: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let held: () => void = () => undefined;
+      const holding = new Promise<void>((resolve) => {
+        held = resolve;
+      });
+      const holder = settle(
+        db.owner.begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          await tx`SELECT 1 FROM workspaces WHERE id = ${workspace.workspaceId} FOR NO KEY UPDATE`;
+          held();
+          await released;
+        }),
+      );
+      await holding;
+      const marking = settle(markVerified(caller, target.id));
+      let targetRowFree = false;
+      try {
+        await waitUntilWaiting(1, "the mark");
+        // The mark is waiting for the workspace, so it holds no lock on the account rows yet.
+        await db.owner.begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          await tx`SELECT 1 FROM accounts WHERE id = ${target.id} FOR UPDATE NOWAIT`;
+          targetRowFree = true;
+        });
+      } finally {
+        release();
+      }
+
+      const [, outcome] = await Promise.all([holder, marking]);
+
+      expect(outcome).not.toHaveProperty("error");
+      expect(targetRowFree).toBe(true);
+      expect(await workspaceState(workspace.workspaceId)).toEqual(stripped(target.id));
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it("leaves a workspace the instance console created for another owner as it was, though its creator is the account and a member of it", async () => {
+    const caller = await admin();
+    const target = await account({ verified: false, admin: true, mfa: true });
+    const owner = await account({ verified: true });
+    const member = await account({ verified: true });
+    const workspaceId = await consoleWorkspace(target.id, owner.id);
+    await populate(workspaceId, owner.id, member.id);
+    await addInstanceAdminMembership(target.id, workspaceId);
+    const before = await workspaceState(workspaceId);
+    expect(before.members).toHaveLength(3);
+
+    await markVerified(caller, target.id);
+
+    expect(await workspaceState(workspaceId)).toEqual(before);
+    expect(await roleOf(workspaceId, owner.id)).toBe("owner");
+    expect(await roleOf(workspaceId, target.id)).toBe("member");
+  });
+
+  it("strips nothing for the calling admin's own account, which keeps its credentials too", async () => {
+    const caller = await account({ admin: true, mfa: true, verified: false });
+    const accomplice = await account({ verified: true });
+    const workspace = await plantWorkspace(caller.id, accomplice.id);
+
+    await markVerified(caller.id, caller.id);
+
+    expect(await workspaceState(workspace.workspaceId)).toEqual(planted([caller.id, accomplice.id]));
+  });
+
+  it("strips nothing of an address that is verified already", async () => {
+    const caller = await admin();
+    const target = await account({ verified: true });
+    const accomplice = await account({ verified: true });
+    const workspace = await plantWorkspace(target.id, accomplice.id);
+
+    expect(await markVerified(caller, target.id)).toMatchObject({ verifiedChanged: false });
+
+    expect(await workspaceState(workspace.workspaceId)).toEqual(planted([target.id, accomplice.id]));
+  });
+
+  it("strips nothing of another account's workspaces, even one the two share a member in", async () => {
+    const caller = await admin();
+    const target = await account({ verified: false });
+    const other = await account({ verified: true });
+    const accomplice = await account({ verified: true });
+    const workspace = await plantWorkspace(other.id, accomplice.id);
+    await seedMember(db, { workspaceId: workspace.workspaceId, accountId: target.id, role: "member" });
+    const before = await workspaceState(workspace.workspaceId);
+
+    await markVerified(caller, target.id);
+
+    expect(await workspaceState(workspace.workspaceId)).toEqual(before);
+  });
+
+  it("keeps the account's workspaces, the credentials it had and the mark when a member cannot be removed, undoing the whole call", async () => {
+    const caller = await admin();
+    const target = await account({ verified: false, mfa: true });
+    const accomplice = await account({ verified: true });
+    const workspace = await plantWorkspace(target.id, accomplice.id);
+    const footholds = await plantFootholds(target.id);
+    const before = await workspaceState(workspace.workspaceId);
+    const events = await instanceEvents();
+    await db.owner.unsafe(`
+      CREATE FUNCTION fail_member_delete_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'member removal failed'; END $$;
+      CREATE TRIGGER fail_member_delete BEFORE DELETE ON workspace_members FOR EACH ROW EXECUTE FUNCTION fail_member_delete_fn();`);
+
+    try {
+      await expect(markVerified(caller, target.id)).rejects.toThrow();
+    } finally {
+      await db.owner.unsafe("DROP TRIGGER fail_member_delete ON workspace_members; DROP FUNCTION fail_member_delete_fn()");
+    }
+
+    expect(await workspaceState(workspace.workspaceId)).toEqual(before);
+    expect(await accountRow(target.id)).toEqual({ verified: false, password: true, disabled: false });
+    expect(await store.lookupSession(footholds.session)).toBeDefined();
+    expect((await mfaState(target.id))?.codes).toBe(2);
+    expect(await instanceEvents()).toEqual(events);
+  });
+
+  it(
+    "queues behind a redemption of the verification link of the same account instead of deadlocking, and leaves the workspace stripped",
+    async () => {
+      const caller = await admin();
+      const target = await account({ verified: false });
+      const accomplice = await account({ verified: true });
+      const workspace = await plantWorkspace(target.id, accomplice.id);
+      const tokenHash = await seedToken(target.id, "email_verify");
+
+      const [marked, redeemed] = await Promise.allSettled([
+        markVerified(caller, target.id),
+        store.verifyEmail({
+          tokenHash,
+          passwordHash: NEW_HASH,
+          sessionId: freshId(),
+          sessionTokenHash: freshToken().hash,
+          ipPrefix: null,
+          userAgent: null,
+          replacedTokenHash: null,
+          afterVerified: () => Promise.resolve(),
+        }),
+      ]);
+
+      expect(marked.status).toBe("fulfilled");
+      expect(redeemed.status).toBe("fulfilled");
+      expect(await workspaceState(workspace.workspaceId)).toEqual(stripped(target.id));
+      expect((await accountRow(target.id)).verified).toBe(true);
+    },
+    TEST_TIMEOUT_MS,
+  );
 });

@@ -11,6 +11,7 @@ import {
   createSentryErrorReport,
   createOpenAiCompatibleAi,
   createSmtpMail,
+  type CreateEgressOptions,
   type MailTemplates,
 } from "@slugbase/adapters";
 import "@slugbase/contracts";
@@ -19,7 +20,6 @@ import {
   unconfigured,
   type Adapters,
   type AiSuggestPort,
-  type EgressPort,
   type IdentityPort,
   type MailPort,
   type RegistrationSettings,
@@ -191,22 +191,34 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
   return createSmtpMail({ host, port, security, ...(auth === undefined ? {} : { auth }), from, templates: mailTemplates(config) });
 }
 
+// What a test may change about the egress instances the composition builds: the resolver, and the allowances that
+// the adapter itself refuses when `NODE_ENV` is `production`. `nodeEnv` is always set after the options are spread, so
+// no options object can replace the process's own value, whatever it carries.
+export type EgressTestOptions = Pick<CreateEgressOptions, "resolve" | "testOnly">;
+
 // Identity is the OIDC adapter when the operator configured a provider, and the unconfigured default when not.
 // Only the server serves sign-in, so only its configuration has providers. The adapter reaches the providers
 // through the egress port and discovers them when they are first listed, so a provider that is down at start-up
-// is logged then and never stops the process.
-function composeIdentity(config: ServerConfig | WorkerConfig, egress: EgressPort, logger: Logger): IdentityPort {
+// is logged then and never stops the process. The adapter gets an egress instance of its own: an instance runs at
+// most three host-name lookups at a time and refuses a request past that, and the shared one can be held full by
+// the fetches a member starts, which would refuse every discovery and code exchange of a sign-in. The adapter in
+// turn keeps itself to three requests at once and queues the rest in order, so a long provider list or a burst
+// of sign-ins does not make its own requests refuse one another on this instance. The instance keeps a lookup's
+// slot until the lookup finishes, even after the request that started it timed out, so while a resolver hangs a
+// later request can still be refused. The instance carries no allowance, as the shared one does not.
+export function composeIdentity(config: ServerConfig | WorkerConfig, logger: Logger, egressOptions: EgressTestOptions): IdentityPort {
   const providers = "OIDC_PROVIDERS" in config ? config.OIDC_PROVIDERS : [];
   if (providers.length === 0) {
     return unconfigured().identity;
   }
   logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug) });
+  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV });
   return createOidcIdentity({ providers, egress, logger });
 }
 
 // AI suggestions are the OpenAI-compatible adapter when the operator configured an endpoint, and the unconfigured default,
 // which reports itself unavailable, when not. Only the server answers suggestions, so only its configuration has the keys.
-// The adapter gets an egress instance of its own: the shared one that metadata, favicons and OIDC discovery use is built
+// The adapter gets an egress instance of its own: the shared one that metadata and favicons use is built
 // without any allowance, and this one carries the operator's allowance for a private endpoint (Q90) when
 // `AI_ALLOWED_PRIVATE_HOST` is set, which the configuration only accepts when it is the host of `AI_BASE_URL`.
 function composeAi(config: ServerConfig | WorkerConfig, logger: Logger): AiSuggestPort {
@@ -241,7 +253,7 @@ function composeAi(config: ServerConfig | WorkerConfig, logger: Logger): AiSugge
 // bucket registry of the server package, with the `RATE_LIMIT_*` keys applied. The entitlement source is the
 // full one: every flag is granted and every limit is unlimited (doc 01 section 7.5); the server's engine
 // reads it, and no edition flag decides anything (D4).
-export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): Adapters {
+export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger, egressOptions: EgressTestOptions = {}): Adapters {
   const secretBox = createSecretBox({
     current: { keyId: config.ENCRYPTION_KEY_ID, key: Buffer.from(config.ENCRYPTION_KEY, "base64") },
     previous: config.ENCRYPTION_KEY_PREVIOUS.map(({ keyId, key }) => ({ keyId, key: Buffer.from(key, "base64") })),
@@ -264,7 +276,7 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
   const mail = composeMail(config, logger);
   logger.info(mail.available ? "Mail ready" : "Mail is off; messages are only logged");
-  const egress = new HttpEgress({ nodeEnv: config.NODE_ENV });
+  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV });
   return {
     ...defaults,
     mail,
@@ -273,7 +285,7 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
     errors,
     egress,
     imageCodec: new SharpImageCodec(),
-    identity: composeIdentity(config, egress, logger),
+    identity: composeIdentity(config, logger, egressOptions),
     rateLimit,
     entitlements: createFullEntitlementSource(),
     tenantResolver: createAccountOnlyTenantResolver(),

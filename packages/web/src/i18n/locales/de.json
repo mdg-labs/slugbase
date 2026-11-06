@@ -751,7 +751,7 @@
     "page": {
       "title": "Tags"
     },
-    "note": "Tags sind nur für dich sichtbar. Andere Mitglieder des Arbeitsbereichs sehen sie nie.",
+    "note": "Tags sind nur für dich sichtbar. Andere Mitglieder des Workspace sehen sie nie.",
     "deleted": "Tag gelöscht.",
     "sort": {
       "label": "Sortieren nach",
@@ -1306,7 +1306,7 @@
         "markVerified": {
           "label": "Als bestätigt markieren",
           "title": "{email} als bestätigt markieren?",
-          "description": "Wer diese Adresse registriert hat, besitzt sie womöglich nicht. Wird sie als bestätigt markiert, werden Passwort, Sitzungen, Zwei-Faktor-Authentifizierung, API-Tokens und verknüpfte Anmeldungen des Kontos entfernt. Der Besitzer kommt dann über einen Link zum Zurücksetzen des Passworts oder über einen Anmeldeanbieter hinein.",
+          "description": "Wer diese Adresse registriert hat, besitzt sie womöglich nicht. Wird sie als bestätigt markiert, werden Passwort, Sitzungen, Zwei-Faktor-Authentifizierung, API-Tokens und verknüpfte Anmeldungen des Kontos entfernt. In jedem Workspace, den das Konto allein besitzt, werden außerdem die übrigen Mitglieder, die Teams, die offenen Einladungen und die Freigaben entfernt. Der Besitzer kommt dann über einen Link zum Zurücksetzen des Passworts oder über einen Anmeldeanbieter hinein.",
           "descriptionOwn": "Das ist dein eigenes Konto. Seine Adresse wird als bestätigt markiert; dein Passwort, deine Sitzungen und deine Zwei-Faktor-Authentifizierung bleiben unverändert.",
           "done": "{email} ist als bestätigt markiert."
         },
@@ -2229,6 +2229,8 @@
           "alreadyMember": "Bereits Mitglied dieses Workspace.",
           "invalid": "Keine gültige E-Mail-Adresse.",
           "unknownTeam": "Ein Team, das du gewählt hast, gibt es nicht mehr. Gehe zurück, entferne es und versuche es erneut.",
+          "teamsNotIncluded": "Der Tarif dieses Workspace enthält keine Teams, daher können Personen nicht in ein Team eingeladen werden.",
+          "invitesNotIncluded": "Der Tarif dieses Workspace enthält keine Einladungen, daher können keine Personen eingeladen werden.",
           "rateLimited": "Zu viele Anfragen. Versuche es in einer Weile erneut.",
           "unavailable": "Der Server ist ausgelastet. Versuche es erneut.",
           "failed": "Die Einladung konnte nicht erstellt werden.",
@@ -3317,6 +3319,12 @@
         "invalid": "Prüfe deine Eingaben und versuche es erneut.",
         "unavailable": "Das Konto kann gerade nicht erstellt werden. Versuche es gleich noch einmal."
       }
+    },
+    "verifyEmail": {
+      "title": "Bestätige deine Adresse, um dich anzumelden",
+      "description": "Das Konto für {email} ist angelegt und gehört jetzt zum Workspace {workspace}. Bestätige die Adresse, bevor du dich anmeldest.",
+      "hint": "Öffne den Link in der E-Mail, die an diese Adresse gegangen ist. Kommt keine an, bitte einen Administrator dieser Instanz, die Adresse für dich zu bestätigen.",
+      "action": "Zur Anmeldung"
     }
   },
   "palette": {

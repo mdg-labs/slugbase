@@ -4,6 +4,9 @@
 //
 // - the EN and DE catalogs hold the same keys, and each key the same
 //   placeholders and the same plural and select options in both;
+// - no message of a locale uses a word its product vocabulary rules out
+//   (doc 00 section 3), such as "Arbeitsbereich" in German, where the UI says
+//   "Workspace";
 // - every message parses as ICU MessageFormat;
 // - every key is referenced by a literal `t("key")` / `i18nKey="key"` in the
 //   package's source, and every referenced key is in the catalogs;
@@ -21,6 +24,12 @@ import { literalStringConfig } from "./i18n-eslint.mjs";
 
 const LOCALES = ["en", "de"];
 const REFERENCE = "en";
+/**
+ * Words a locale must not use for a product term (doc 00 section 3). Matching is a
+ * case-insensitive substring match, so every inflection and compound is caught.
+ * A new locale rule is one added entry.
+ */
+const FORBIDDEN_WORDS = new Map([["de", [{ word: "Arbeitsbereich", use: "Workspace" }]]]);
 const CATALOG_DIRS = [join("src", "i18n", "locales"), join("src", "i18n")];
 
 function walk(dir, visit) {
@@ -163,6 +172,18 @@ function checkCatalogs(catalogs, problems) {
   }
 }
 
+function checkVocabulary(catalogs, problems) {
+  for (const [locale, { file, messages }] of catalogs) {
+    for (const { word, use } of FORBIDDEN_WORDS.get(locale) ?? []) {
+      for (const [key, message] of messages) {
+        if (message.toLowerCase().includes(word.toLowerCase())) {
+          problems.push(`${file}: "${key}" uses "${word}"; ${locale.toUpperCase()} UI copy says "${use}" (doc 00 section 3): ${message}`);
+        }
+      }
+    }
+  }
+}
+
 function stripWrappers(node) {
   let current = node;
   while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isSatisfiesExpression(current) || ts.isNonNullExpression(current)) {
@@ -298,6 +319,7 @@ export async function checkPackage(packageDir, { requireCatalogs = false } = {})
   }
   if (catalogs !== undefined) {
     checkCatalogs(catalogs, problems);
+    checkVocabulary(catalogs, problems);
   }
   checkReferences(catalogs, collectReferences(root, problems), problems);
   await checkLiteralStrings(root, problems);

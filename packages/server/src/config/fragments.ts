@@ -10,11 +10,13 @@ import {
 } from "./development-defaults.ts";
 import { envBoolean } from "./env-boolean.ts";
 import {
+  DEVELOPMENT_DEFAULT_REFUSAL,
   KEY_ID_PATTERN,
   aiBaseUrl,
   bareHost,
   base64Key,
   baseUrl,
+  decodeBase64Key,
   displayName,
   envInteger,
   mailbox,
@@ -76,6 +78,21 @@ export const secretsFragment = envFragment({
   refine(values, context) {
     if (context.production && values.SESSION_SECRET.length < MIN_SESSION_SECRET_LENGTH) {
       context.issue("SESSION_SECRET", `must be at least ${String(MIN_SESSION_SECRET_LENGTH)} characters in production`);
+    }
+    if (context.production) {
+      // The published key is refused by its bytes, not its spelling: padding and alphabet do not change the key.
+      const developmentBytes = decodeBase64Key(DEVELOPMENT_ENCRYPTION_KEY, 32);
+      const isDevelopmentKey = (text: string): boolean => {
+        const decoded = decodeBase64Key(text, 32);
+        // A key that cannot be decoded here is refused, never accepted.
+        return developmentBytes === undefined || decoded === undefined || decoded.equals(developmentBytes);
+      };
+      if (isDevelopmentKey(values.ENCRYPTION_KEY)) {
+        context.issue("ENCRYPTION_KEY", DEVELOPMENT_DEFAULT_REFUSAL);
+      }
+      if (values.ENCRYPTION_KEY_PREVIOUS.some((previous) => isDevelopmentKey(previous.key))) {
+        context.issue("ENCRYPTION_KEY_PREVIOUS", DEVELOPMENT_DEFAULT_REFUSAL);
+      }
     }
     const ids = [values.ENCRYPTION_KEY_ID, ...values.ENCRYPTION_KEY_PREVIOUS.map((previous) => previous.keyId)];
     if (new Set(ids).size !== ids.length) {

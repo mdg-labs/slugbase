@@ -92,6 +92,8 @@ export interface WorkspaceSettingsServerOptions {
   readonly patch?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers every other call, such as the members operations. */
   readonly other?: Transport;
+  /** Whether the workspace is granted `teams.manage`; without it `GET /entitlements` is not served, as for any route a test does not use. */
+  readonly teamsManage?: boolean;
   /** The account acts in no workspace. */
   readonly noWorkspace?: boolean;
   /** The members `GET /members` lists, in one page unless `pageSize` splits them. */
@@ -422,6 +424,23 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
         role = "admin";
       }
       return json(promoted);
+    }
+    if (pathname === "/api/v1/entitlements" && request.method === "GET" && options.teamsManage !== undefined) {
+      return json({
+        entitlements: {
+          "bookmarks.max": "unlimited",
+          "seats.max": "unlimited",
+          "workspaces.ownMax": "unlimited",
+          "ai.suggestions": true,
+          "sharing.members": true,
+          "sharing.teams": true,
+          "members.invite": true,
+          "teams.manage": options.teamsManage,
+          "audit.log": true,
+        },
+        usage: { "bookmarks.used": 0, "seats.used": 2, "workspaces.owned": 1 },
+        upgradeAvailable: true,
+      });
     }
     if (pathname === "/api/v1/teams" && request.method === "GET") {
       // The invite dialog lists the teams to choose from; unless a test names them, the workspace has none.

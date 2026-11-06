@@ -33,6 +33,9 @@ const SECONDS_PER_MINUTE = 60;
 type PreviewState = { readonly status: "loading" } | InspectOutcome;
 type ViewerState = { readonly status: "loading" } | { readonly status: "unavailable" } | Viewer;
 
+/** The account exists and is a member, but has no session until its address is verified: the page says so and goes no further. */
+type VerificationState = { readonly workspaceName: string; readonly email: string } | undefined;
+
 const LOADING = { status: "loading" } as const;
 const EXPIRED = { status: "expired" } as const;
 
@@ -230,6 +233,7 @@ export function InvitePage({ token }: { token: string }): ReactElement {
   const rateLimitMessage = useRateLimitMessage();
   const [preview, setPreview] = useState<PreviewState>(LOADING);
   const [viewer, setViewer] = useState<ViewerState>(LOADING);
+  const [verification, setVerification] = useState<VerificationState>(undefined);
   const alive = useRef(false);
   const started = useRef(false);
 
@@ -302,7 +306,12 @@ export function InvitePage({ token }: { token: string }): ReactElement {
 
   function settleSignUp(outcome: SignUpSettled, invitation: InvitationPreview): void {
     if (outcome.status === "joined") {
-      finish();
+      if (outcome.signedIn) {
+        finish();
+      } else {
+        // No session was made: the address has to be verified before the account can sign in.
+        setVerification({ workspaceName: invitation.workspaceName, email: invitation.email });
+      }
     } else if (outcome.status === "expired") {
       setPreview(EXPIRED);
     } else {
@@ -317,6 +326,21 @@ export function InvitePage({ token }: { token: string }): ReactElement {
 
   const title = t("invite.title");
 
+  if (verification !== undefined) {
+    return (
+      <Page title={t("invite.verifyEmail.title")}>
+        <div className="flex flex-col gap-4">
+          <p>{t("invite.verifyEmail.description", { email: verification.email, workspace: verification.workspaceName })}</p>
+          <p className="text-muted-foreground text-sm">{t("invite.verifyEmail.hint")}</p>
+          <div>
+            <Button render={<Link to="/login" {...NO_REFERRER} />} size="sm" variant="outline">
+              {t("invite.verifyEmail.action")}
+            </Button>
+          </div>
+        </div>
+      </Page>
+    );
+  }
   if (preview.status === "expired") {
     return (
       <Page title={title}>

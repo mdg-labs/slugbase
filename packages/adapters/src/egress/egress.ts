@@ -346,6 +346,9 @@ export class HttpEgress implements EgressPort {
           return hop.response;
         }
         const next = parseTarget(redirectTarget(hop.location, target.url));
+        if (request.refuseHttpDowngrade === true && target.url.protocol === "https:" && next.url.protocol === "http:") {
+          throw new EgressBlocked();
+        }
         if (visited.has(withoutFragment(next.url)) || redirects === MAX_REDIRECTS) {
           throw new EgressError();
         }

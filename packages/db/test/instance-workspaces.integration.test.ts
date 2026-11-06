@@ -178,9 +178,9 @@ const accountOwned = (ownerId: string, name = "Owned by an account"): InstanceWo
 const eventJobs = (request: InstanceWorkspaceCreation): QueuedJob[] =>
   request.events.map((event) => ({ id: event.eventId, queue: EVENT_QUEUE, data: { eventId: event.eventId, ...event.payload } }));
 
-const invited = (email: string, name = "Waiting for an owner"): InstanceWorkspaceCreation & { hash: Buffer } => {
+const invited = (email: string, name = "Waiting for an owner", linkIssued = false): InstanceWorkspaceCreation & { hash: Buffer } => {
   const { hash } = freshToken();
-  return { workspaceId: freshId(), name, owner: { kind: "invitation", invitationId: freshId(), email, tokenHash: hash, ttlSeconds: 7 * 24 * 60 * 60 }, events: [], hash };
+  return { workspaceId: freshId(), name, owner: { kind: "invitation", invitationId: freshId(), email, tokenHash: hash, ttlSeconds: 7 * 24 * 60 * 60, linkIssued }, events: [], hash };
 };
 
 async function create(adminId: string, request: InstanceWorkspaceCreation, eventId = freshId(), ipPrefix: string | null = null) {
@@ -195,6 +195,9 @@ async function appAs<T>(accountId: string, workspaceId: string | undefined, work
   });
   return result.value;
 }
+
+/** Runs `work` as slugbase_app with the account set, as the application calls a system function directly. */
+const asAdmin = <T>(accountId: string, work: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> => appAs(accountId, undefined, work);
 
 async function ownersOf(workspaceId: string): Promise<string[]> {
   const rows = await asSystem(db, (tx) => tx<{ account_id: string }[]>`SELECT account_id FROM workspace_members WHERE workspace_id = ${workspaceId} AND role = 'owner'`);
@@ -334,6 +337,24 @@ describe("sys_instance_create_workspace for an owner account", () => {
       metadata: { owner: "account" },
       ip_prefix: "203.0.0.0/16",
     });
+  });
+
+  it("records a workspace made for another owner as not self-created, and one the admin made itself the owner of as self-created", async () => {
+    const caller = await admin();
+    const owner = await account();
+    const forOther = accountOwned(owner.id);
+    const forSelf = accountOwned(caller);
+    const forInvitee = invited("flags.owner@example.test", "For an invitee");
+    const flags = async (workspaceId: string) =>
+      (await asSystem(db, (tx) => tx<{ self_created: boolean; instance_created: boolean }[]>`SELECT self_created, instance_created FROM workspaces WHERE id = ${workspaceId}`))[0];
+
+    for (const request of [forOther, forSelf, forInvitee]) {
+      expect((await create(caller, request)).kind).toBe("created");
+    }
+
+    expect(await flags(forOther.workspaceId)).toEqual({ self_created: false, instance_created: true });
+    expect(await flags(forSelf.workspaceId)).toEqual({ self_created: true, instance_created: false });
+    expect(await flags(forInvitee.workspaceId)).toEqual({ self_created: false, instance_created: true });
   });
 
   it("does not make an owner of an account that is unknown or disabled, and writes, queues and records nothing", async () => {
@@ -531,7 +552,7 @@ describe("sys_instance_reissue_owner_invitation", () => {
   const reissue = (
     caller: string,
     workspaceId: string,
-    options: { email?: string; hash?: Buffer; invitationId?: string; eventId?: string; ipPrefix?: string | null; jobs?: readonly QueuedJob[] } = {},
+    options: { email?: string; hash?: Buffer; invitationId?: string; eventId?: string; ipPrefix?: string | null; jobs?: readonly QueuedJob[]; linkIssued?: boolean } = {},
   ) => {
     const { hash } = freshToken();
     const invitationId = options.invitationId ?? freshId();
@@ -543,6 +564,7 @@ describe("sys_instance_reissue_owner_invitation", () => {
           invitationId,
           tokenHash: options.hash ?? hash,
           ttlSeconds: 7 * 24 * 60 * 60,
+          linkIssued: options.linkIssued ?? false,
         },
         options.eventId ?? freshId(),
         options.ipPrefix ?? null,
@@ -786,6 +808,116 @@ describe("sys_instance_reissue_owner_invitation", () => {
     expect(await refusedWith(call(caller, workspaceId, freshId(), freshToken().hash, 0))).toBe(INVALID_PARAMETER);
     expect(ownWorkspace).not.toBe(workspaceId);
     expect(await invitationsOf(workspaceId)).toEqual(rows);
+  });
+
+  describe("the owner invitation of an instance admin that is returned as a link (link_issued)", () => {
+    interface InvitationFlags {
+      id: string;
+      status: string;
+      mail_ticket: string | null;
+      link_issued: boolean;
+    }
+
+    const flagsOf = async (workspaceId: string): Promise<InvitationFlags[]> =>
+      [
+        ...(await asSystem(
+          db,
+          (tx) => tx<InvitationFlags[]>`SELECT id, status, mail_ticket::text AS mail_ticket, link_issued FROM workspace_invitations WHERE workspace_id = ${workspaceId} ORDER BY created_at, id`,
+        )),
+      ];
+
+    const instanceCreated = async (workspaceId: string): Promise<boolean | undefined> =>
+      (await asSystem(db, (tx) => tx<{ instance_created: boolean }[]>`SELECT instance_created FROM workspaces WHERE id = ${workspaceId}`))[0]?.instance_created;
+
+    it("writes an owner invitation created as a link link-issued with no mail ticket, and one that is mailed not link-issued with its own ticket", async () => {
+      const caller = await admin();
+      const linked = invited("linked.owner@example.test", "Linked", true);
+      const mailed = invited("mailed.owner@example.test", "Mailed", false);
+
+      expect((await create(caller, linked)).kind).toBe("created");
+      expect((await create(caller, mailed)).kind).toBe("created");
+
+      expect(await flagsOf(linked.workspaceId)).toMatchObject([{ status: "pending", mail_ticket: null, link_issued: true }]);
+      const mailedOwner = mailed.owner;
+      expect(await flagsOf(mailed.workspaceId)).toMatchObject([{ status: "pending", mail_ticket: mailedOwner.kind === "invitation" ? mailedOwner.invitationId : null, link_issued: false }]);
+      expect(await instanceCreated(linked.workspaceId)).toBe(true);
+      expect(await instanceCreated(mailed.workspaceId)).toBe(true);
+    });
+
+    it("writes a reissued owner invitation link-issued with no mail ticket when it is returned as a link, and not link-issued with its own ticket when mailed", async () => {
+      const caller = await admin();
+      const { workspaceId } = await waiting(caller, "reissued.owner@example.test");
+
+      const linked = await reissue(caller, workspaceId, { linkIssued: true });
+      expect(linked.result.kind).toBe("issued");
+      expect(await flagsOf(workspaceId)).toMatchObject([{ status: "revoked", link_issued: false }, { id: linked.invitationId, status: "pending", mail_ticket: null, link_issued: true }]);
+
+      const mailed = await reissue(caller, workspaceId, { linkIssued: false });
+      expect(mailed.result.kind).toBe("issued");
+      expect(await flagsOf(workspaceId)).toMatchObject([
+        { status: "revoked", link_issued: false },
+        { id: linked.invitationId, status: "revoked", mail_ticket: null, link_issued: true },
+        { id: mailed.invitationId, status: "pending", mail_ticket: mailed.invitationId, link_issued: false },
+      ]);
+    });
+
+    it("keeps the previous forms as the mailed one for the replicas of the release before: not link-issued, with the invitation's own ticket", async () => {
+      const caller = await admin();
+      const workspaceId = freshId();
+      const invitationId = freshId();
+      const created = await asAdmin(caller, (tx) =>
+        tx`SELECT * FROM sys_instance_create_workspace(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, 'Previous release', NULL::uuid, 'previous@example.test'::citext, ${invitationId}::uuid, ${freshToken().hash}::bytea, 3600)`,
+      );
+      expect(created[0]).toMatchObject({ outcome: "created" });
+      expect(await flagsOf(workspaceId)).toMatchObject([{ id: invitationId, status: "pending", mail_ticket: invitationId, link_issued: false }]);
+      expect(await instanceCreated(workspaceId)).toBe(true);
+
+      const reissuedId = freshId();
+      const reissued = await asAdmin(caller, (tx) =>
+        tx`SELECT * FROM sys_instance_reissue_owner_invitation(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, NULL::citext, ${reissuedId}::uuid, ${freshToken().hash}::bytea, 3600)`,
+      );
+      expect(reissued[0]).toMatchObject({ outcome: "issued", invitation_email: "previous@example.test" });
+      expect(await flagsOf(workspaceId)).toMatchObject([{ status: "revoked" }, { id: reissuedId, status: "pending", mail_ticket: reissuedId, link_issued: false }]);
+    });
+
+    it("refuses an owner invitation that does not say whether its link is returned, writing nothing", async () => {
+      const caller = await admin();
+      const { workspaceId } = await waiting(caller, "unsaid@example.test");
+      const rows = await flagsOf(workspaceId);
+      const before = await workspaceCount();
+
+      const created = () =>
+        asAdmin(caller, (tx) =>
+          tx`SELECT * FROM sys_instance_create_workspace(${freshId()}::uuid, NULL::cidr, ${freshId()}::uuid, 'Unsaid', NULL::uuid, 'unsaid.two@example.test'::citext, ${freshId()}::uuid, ${freshToken().hash}::bytea, 3600, NULL::boolean)`,
+        );
+      const reissued = () =>
+        asAdmin(caller, (tx) =>
+          tx`SELECT * FROM sys_instance_reissue_owner_invitation(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, NULL::citext, ${freshId()}::uuid, ${freshToken().hash}::bytea, 3600, NULL::boolean)`,
+        );
+
+      expect(await refusedWith(created())).toBe(INVALID_PARAMETER);
+      expect(await refusedWith(reissued())).toBe(INVALID_PARAMETER);
+      expect(await flagsOf(workspaceId)).toEqual(rows);
+      expect(await workspaceCount()).toBe(before);
+    });
+
+    it("is not reachable without the admin: a plain account is refused by the new form of both functions", async () => {
+      const caller = await admin();
+      const { workspaceId } = await waiting(caller, "guarded@example.test");
+      const plain = (await account()).id;
+
+      const created = () =>
+        asAdmin(plain, (tx) =>
+          tx`SELECT * FROM sys_instance_create_workspace(${freshId()}::uuid, NULL::cidr, ${freshId()}::uuid, 'Guarded', NULL::uuid, 'guarded.two@example.test'::citext, ${freshId()}::uuid, ${freshToken().hash}::bytea, 3600, true)`,
+        );
+      const reissued = () =>
+        asAdmin(plain, (tx) =>
+          tx`SELECT * FROM sys_instance_reissue_owner_invitation(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, NULL::citext, ${freshId()}::uuid, ${freshToken().hash}::bytea, 3600, true)`,
+        );
+
+      expect(await refusedWith(created())).toBe(INSUFFICIENT_PRIVILEGE);
+      expect(await refusedWith(reissued())).toBe(INSUFFICIENT_PRIVILEGE);
+    });
   });
 });
 

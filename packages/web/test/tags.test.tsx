@@ -408,7 +408,7 @@ describe("reaching the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/tags");
 
     await screen.findByRole("heading", { level: 1, name: "Tags" });
-    expect(await screen.findByText("Tags sind nur für dich sichtbar. Andere Mitglieder des Arbeitsbereichs sehen sie nie.")).toBeDefined();
+    expect(await screen.findByText("Tags sind nur für dich sichtbar. Andere Mitglieder des Workspace sehen sie nie.")).toBeDefined();
     expect(inPage.getByText("9 Lesezeichen")).toBeDefined();
     await press(screen.getByRole("button", { name: "Aktionen für Lesen" }));
     await press(await screen.findByRole("menuitem", { name: "Löschen" }));

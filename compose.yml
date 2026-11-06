@@ -15,7 +15,10 @@
 # the worker and the database's published surface (none) never do.
 #
 # The image is the published one; SLUGBASE_IMAGE names another (a pinned release,
-# or a locally built tag). `docker compose up --build` builds it from this
+# or a locally built tag). The default follows the latest tag; set SLUGBASE_IMAGE
+# to a release version tag or an image digest to keep the server and the worker on
+# an image you chose. The database image is pinned by digest, which Renovate keeps
+# current. `docker compose up --build` builds it from this
 # checkout instead of pulling it, and tags it with that name.
 #
 # Compose reads .env by itself. To use another file: docker compose --env-file <file> ...
@@ -105,7 +108,7 @@ x-slugbase-environment: &slugbase-environment
 
 services:
   postgres:
-    image: postgres:18
+    image: postgres:18@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
     environment:
       POSTGRES_USER: slugbase
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}

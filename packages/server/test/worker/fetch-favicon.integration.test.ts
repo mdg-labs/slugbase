@@ -37,6 +37,7 @@ beforeEach(async () => {
   await database().owner.begin(async (tx) => {
     await tx`SET LOCAL ROLE slugbase_system`;
     await tx`DELETE FROM favicons`;
+    await tx`DELETE FROM workspace_favicons`;
   });
 });
 
@@ -68,6 +69,14 @@ interface Row {
   readonly content_32: Buffer | null;
   readonly fetched_at: Date;
   readonly expires_at: Date;
+}
+
+async function fetchesOf(placed: Placed): Promise<string[]> {
+  const found = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ host: string }[]>`SELECT host FROM workspace_favicons WHERE workspace_id = ${placed.workspaceId} ORDER BY host`;
+  });
+  return found.map((row) => row.host);
 }
 
 async function rows(): Promise<Row[]> {
@@ -105,7 +114,7 @@ const image = (body: Uint8Array = ICON, contentType = "image/x-icon"): FakeEgres
 const html = (body: string): FakeEgressRoute => ({ contentType: "text/html", body: encode(body) });
 const missing: FakeEgressRoute = { status: 404, contentType: "text/html" };
 
-describe("the job fetches the icon of a host and stores it for the deployment", () => {
+describe("the job fetches the icon of a host and stores it", () => {
   it("asks the port for /favicon.ico with the 64 KiB cap and the image types, and stores the 64 px and the 32 px PNG for seven days", async () => {
     const world = harness.serve();
     const a = await workspace(world);
@@ -128,6 +137,7 @@ describe("the job fetches the icon of a host and stores it for the deployment", 
     expect(row?.content?.equals(Buffer.from(OUT.png64))).toBe(true);
     expect(row?.content_32?.equals(Buffer.from(OUT.png32))).toBe(true);
     expect((row?.expires_at.getTime() ?? 0) - (row?.fetched_at.getTime() ?? 0)).toBe(7 * 24 * 3600 * 1000);
+    expect(await fetchesOf(a)).toEqual([HOST]);
   });
 
   it("finds the icon through the link rel=icon of the home page when /favicon.ico has none", async () => {
@@ -245,7 +255,7 @@ describe("the job fetches for a member who can read a bookmark on the host, and 
     expect(await rows()).toEqual([]);
   });
 
-  it("fetches nothing for a host whose icon has not expired, and fetches again once it has", async () => {
+  it("fetches nothing for a host fetched for the workspace and not expired, and fetches again once it has", async () => {
     const world = harness.serve();
     const a = await workspace(world);
     await bookmarkOn(a, HOST);
@@ -256,12 +266,33 @@ describe("the job fetches for a member who can read a bookmark on the host, and 
 
     await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
-      await tx`UPDATE favicons SET fetched_at = now() - interval '8 days', expires_at = now() - interval '1 second'`;
+      await tx`UPDATE workspace_favicons SET fetched_at = now() - interval '8 days', expires_at = now() - interval '1 second'`;
     });
     await run(a, egress);
 
     expect(egress.requests).toHaveLength(2);
     expect(await rows()).toMatchObject([{ status: "ok" }]);
+  });
+});
+
+describe("the job answers for the workspace that asked", () => {
+  it("fetches a host that only another workspace has cached, and records the fetch for the workspace that asked", async () => {
+    const world = harness.serve();
+    const a = await workspace(world);
+    const b = await workspace(world);
+    await bookmarkOn(a, HOST);
+    await bookmarkOn(b, HOST);
+    const egress = new FakeEgress({ [`https://${HOST}/favicon.ico`]: image() });
+    await run(a, egress);
+    expect(await fetchesOf(b)).toEqual([]);
+
+    await run(b, egress);
+
+    expect(egress.requests).toHaveLength(2);
+    expect(await fetchesOf(a)).toEqual([HOST]);
+    expect(await fetchesOf(b)).toEqual([HOST]);
+    await run(b, egress);
+    expect(egress.requests).toHaveLength(2);
   });
 });
 
@@ -357,12 +388,13 @@ describe("a failure that is the job's", () => {
 });
 
 describe("the queued job", () => {
-  it("carries the host and the two identifiers and is keyed by the host alone, so the queue holds one waiting job for it", () => {
+  it("carries the host and the two identifiers and is keyed by the host and the workspace, so the queue holds one waiting job for the pair", () => {
     const placed = { host: HOST, workspaceId: randomUUID(), accountId: randomUUID() };
     const job = queueFetchFavicon(randomUUID(), placed);
 
-    expect(job).toMatchObject({ queue: "favicon.fetch", data: placed, singletonKey: HOST });
-    expect(queueFetchFavicon(randomUUID(), { ...placed, workspaceId: randomUUID() }).singletonKey).toBe(job.singletonKey);
+    expect(job).toMatchObject({ queue: "favicon.fetch", data: placed, singletonKey: `${HOST}:${placed.workspaceId}` });
+    expect(queueFetchFavicon(randomUUID(), { ...placed, accountId: randomUUID() }).singletonKey).toBe(job.singletonKey);
+    expect(queueFetchFavicon(randomUUID(), { ...placed, workspaceId: randomUUID() }).singletonKey).not.toBe(job.singletonKey);
     expect(fetchFaviconJob.dedupe).toBe(true);
   });
 });

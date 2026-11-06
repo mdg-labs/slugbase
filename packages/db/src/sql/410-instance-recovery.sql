@@ -25,11 +25,15 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- clean-up sys_email_verify runs when the owner redeems the verification link: whoever registered the address is not
 -- necessarily its owner, so the account's password is removed, its sessions, second factor and backup codes, API tokens,
 -- linked identities and the pending handshakes that would link one are deleted, and so are its unused password-reset,
--- email-change and verification tokens, all in the same transaction as the mark. The owner then gets in through a
--- password-reset token (sys_instance_issue_reset_link) or through a provider. It writes 'instance.account_email_verified'
+-- email-change and verification tokens, all in the same transaction as the mark. It also runs account_strip_workspaces
+-- of 210-email-verification.sql, as sys_email_verify does: in each workspace the account is the only owner of, the other
+-- members, the teams, the pending invitations and the shares are removed, and the workspace, the account's membership and
+-- all content stay. The rows of those workspaces are locked in identifier order before the backup-code and account rows,
+-- the order sys_email_verify takes them in, so a mark and a redemption of the link for one account queue and do not
+-- deadlock. The owner then gets in through a password-reset token (sys_instance_issue_reset_link) or through a provider. It writes 'instance.account_email_verified'
 -- under verified_event_id. The one account the clean-up does not run for is the calling admin's own, whose second factor
 -- and session are what authorised the call: for it the address is marked and its unused verification tokens deleted, and
--- nothing else changes. A disabled account may be marked verified; that opens no door, since a reset or a sign-in refuses
+-- nothing else changes, its workspaces included. A disabled account may be marked verified; that opens no door, since a reset or a sign-in refuses
 -- it for as long as it is disabled. A call that marks an address takes the target's backup-code rows
 -- first, the order sys_mfa_lock gives every writer of them. Everything else is as sys_instance_update_account was: the
 -- same locks, the same refusals, and the extra column verified_changed after disabled_changed.
@@ -72,6 +76,15 @@ BEGIN
   END IF;
 
   IF p_mark_verified IS NOT NULL THEN
+    PERFORM 1 FROM public.workspaces w
+    WHERE w.deleting_at IS NULL AND p_account_id <> public.app_account_id()
+      AND w.id IN (
+        SELECT c.id FROM public.workspaces c WHERE c.created_by = p_account_id
+        UNION
+        SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner')
+      AND EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = p_account_id AND a.email_verified_at IS NULL)
+    ORDER BY w.id
+    FOR NO KEY UPDATE OF w;
     PERFORM 1 FROM public.mfa_backup_codes c WHERE c.account_id = p_account_id ORDER BY c.id FOR UPDATE;
   END IF;
   PERFORM 1 FROM public.accounts a WHERE a.id IN (public.app_account_id(), p_account_id) ORDER BY a.id FOR UPDATE;
@@ -121,6 +134,7 @@ BEGIN
       UPDATE public.accounts SET email_verified_at = clock_timestamp() WHERE id = p_account_id;
     ELSE
       PERFORM public.account_mark_verified(p_account_id, NULL);
+      PERFORM public.account_strip_workspaces(p_account_id);
     END IF;
     DELETE FROM public.credential_tokens WHERE account_id = p_account_id AND purpose = 'email_verify' AND used_at IS NULL;
   END IF;

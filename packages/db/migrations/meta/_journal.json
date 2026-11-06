@@ -855,6 +855,62 @@
       "when": 1793869837530,
       "tag": "20261105091037_add_verification_workspace_strip",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1793902169710,
+      "tag": "20261105180929_add_workspace_favicons",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1793904676304,
+      "tag": "20261105185116_add_instance_mark_verified_strip",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1793916465259,
+      "tag": "20261105220745_add_verification_creator_strip",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1793919609336,
+      "tag": "20261105230009_add_invitation_accept_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1793922394104,
+      "tag": "20261105234634_add_instance_owner_link_issued",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1793984147577,
+      "tag": "20261106165547_add_workspace_self_created",
+      "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1793984744957,
+      "tag": "20261106170544_index_workspace_created_by",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1793985430313,
+      "tag": "20261106171710_add_verification_lock_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -150,6 +150,33 @@ describe("pnpm i18n:check", { timeout: TIMEOUT_MS }, () => {
     expect(result.stderr).toContain('src/i18n/de.json: "subject" is in en.json but missing here');
   });
 
+  it("fails on Arbeitsbereich in the German catalog, in any inflection", () => {
+    for (const word of ["Arbeitsbereich", "Arbeitsbereichs", "Arbeitsbereiche", "Arbeitsbereichen", "arbeitsbereich"]) {
+      const result = check({ ...catalogs(EN, { ...DE, greeting: `Hallo im ${word} {name}` }), "src/app.tsx": APP });
+      expect(result.code, word).toBe(1);
+      expect(result.stderr, word).toContain(`de.json: "greeting" uses "Arbeitsbereich"; DE UI copy says "Workspace"`);
+    }
+  });
+
+  it("fails on Arbeitsbereich inside a plural option and in the email catalog layout", () => {
+    const result = check({
+      "src/i18n/en.json": JSON.stringify({ subject: "{count, plural, one {# workspace} other {# workspaces}}" }),
+      "src/i18n/de.json": JSON.stringify({ subject: "{count, plural, one {# Arbeitsbereich} other {# Arbeitsbereiche}}" }),
+      "src/mail.tsx": 'export const subject = (t: (key: string) => string) => t("subject");\n',
+    });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('src/i18n/de.json: "subject" uses "Arbeitsbereich"');
+  });
+
+  it("accepts Workspace in the German catalog and Arbeitsbereich in the English one", () => {
+    const result = check({
+      ...catalogs({ ...EN, greeting: "Arbeitsbereich {name}" }, { ...DE, greeting: "Im Workspace {name}" }),
+      "src/app.tsx": APP,
+    });
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+  });
+
   it("fails on a literal string in JSX in every form a reader can see", () => {
     const result = check({
       ...catalogs(),
