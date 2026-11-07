@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   HttpEgress,
+  createLookupBudget,
   SharpImageCodec,
   createFullEntitlementSource,
   createLogOnlyMail,
@@ -12,6 +13,7 @@ import {
   createOpenAiCompatibleAi,
   createSmtpMail,
   type CreateEgressOptions,
+  type LookupBudget,
   type MailTemplates,
 } from "@slugbase/adapters";
 import "@slugbase/contracts";
@@ -196,24 +198,39 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
 // no options object can replace the process's own value, whatever it carries.
 export type EgressTestOptions = Pick<CreateEgressOptions, "resolve" | "testOnly">;
 
+// The egress instances of one process (the shared one, the AI adapter's and the identity adapter's) draw on one budget of
+// host-name lookups, three in all against the four threads libuv starts, because each lookup holds a thread until the name
+// server answers (doc 01 section 6). Each instance reserves one slot that the others cannot take, so a stall on one
+// instance, whether a member's fetch or a provider's redirect, leaves the other two a lookup. An instance that is not built
+// reserves nothing: the worker's shared instance may use all three.
+const LOOKUP_RESERVE = 1;
+
 // Identity is the OIDC adapter when the operator configured a provider, and the unconfigured default when not.
 // Only the server serves sign-in, so only its configuration has providers. The adapter reaches the providers
 // through the egress port and discovers them when they are first listed, so a provider that is down at start-up
-// is logged then and never stops the process. The adapter gets an egress instance of its own: an instance runs at
-// most three host-name lookups at a time and refuses a request past that, and the shared one can be held full by
-// the fetches a member starts, which would refuse every discovery and code exchange of a sign-in. The adapter in
-// turn keeps itself to three requests at once and queues the rest in order, so a long provider list or a burst
-// of sign-ins does not make its own requests refuse one another on this instance. The instance keeps a lookup's
-// slot until the lookup finishes, even after the request that started it timed out, so while a resolver hangs a
-// later request can still be refused. The instance carries no allowance, as the shared one does not.
-export function composeIdentity(config: ServerConfig | WorkerConfig, logger: Logger, egressOptions: EgressTestOptions): IdentityPort {
+// is not marked unavailable for good. The list of providers waits for every provider that is not cached yet, and the
+// adapter's requests run one at a time, each up to 5 s, so a slow provider delays the list; a provider that fails
+// stays out of the list for the failure TTL.
+// The adapter gets an egress instance of its own, so a member who fills the shared instance's lookup slots cannot
+// make a sign-in fail with it (doc 01 section 6). Its lookups draw on the process's lookup budget with a slot
+// reserved for it (`LOOKUP_RESERVE`), which is all the lookups it is guaranteed, so the adapter runs that many
+// requests at once and queues the rest in order: a long provider list or a burst of sign-ins is served in turns
+// and its own requests do not refuse one another. The instance keeps a lookup's slot until the lookup finishes,
+// even after the request that started it timed out, so while a resolver hangs a later request can still be
+// refused. The instance carries no allowance, as the shared one does not.
+export function composeIdentity(
+  config: ServerConfig | WorkerConfig,
+  logger: Logger,
+  egressOptions: EgressTestOptions,
+  lookups: LookupBudget = createLookupBudget(),
+): IdentityPort {
   const providers = "OIDC_PROVIDERS" in config ? config.OIDC_PROVIDERS : [];
   if (providers.length === 0) {
     return unconfigured().identity;
   }
   logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug) });
-  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV });
-  return createOidcIdentity({ providers, egress, logger });
+  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV, lookups: lookups.share(LOOKUP_RESERVE) });
+  return createOidcIdentity({ providers, egress, logger, maxConcurrentRequests: LOOKUP_RESERVE });
 }
 
 // AI suggestions are the OpenAI-compatible adapter when the operator configured an endpoint, and the unconfigured default,
@@ -221,7 +238,9 @@ export function composeIdentity(config: ServerConfig | WorkerConfig, logger: Log
 // The adapter gets an egress instance of its own: the shared one that metadata and favicons use is built
 // without any allowance, and this one carries the operator's allowance for a private endpoint (Q90) when
 // `AI_ALLOWED_PRIVATE_HOST` is set, which the configuration only accepts when it is the host of `AI_BASE_URL`.
-function composeAi(config: ServerConfig | WorkerConfig, logger: Logger): AiSuggestPort {
+// A provider's redirect can lead to a host whose name server stalls, so the instance's lookups draw on the process's
+// lookup budget with a slot reserved for it (`LOOKUP_RESERVE`) and can hold no more than the budget leaves it.
+function composeAi(config: ServerConfig | WorkerConfig, logger: Logger, lookups: LookupBudget, egressOptions: EgressTestOptions): AiSuggestPort {
   if (!("AI_BASE_URL" in config)) {
     return unconfigured().ai;
   }
@@ -230,7 +249,9 @@ function composeAi(config: ServerConfig | WorkerConfig, logger: Logger): AiSugge
     return unconfigured().ai;
   }
   const egress = new HttpEgress({
+    ...egressOptions,
     nodeEnv: config.NODE_ENV,
+    lookups: lookups.share(LOOKUP_RESERVE),
     ...(privateHost === undefined ? {} : { privateOrigin: new URL(baseUrl).origin }),
   });
   logger.info("AI suggestions configured", { provider, privateEndpoint: privateHost !== undefined });
@@ -276,16 +297,18 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
   const mail = composeMail(config, logger);
   logger.info(mail.available ? "Mail ready" : "Mail is off; messages are only logged");
-  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV });
+  const lookups = createLookupBudget();
+  // The shared instance is built first and every other instance joins its budget.
+  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV, lookups: lookups.share(LOOKUP_RESERVE) });
   return {
     ...defaults,
     mail,
-    ai: composeAi(config, logger),
+    ai: composeAi(config, logger, lookups, egressOptions),
     secretBox,
     errors,
     egress,
     imageCodec: new SharpImageCodec(),
-    identity: composeIdentity(config, logger, egressOptions),
+    identity: composeIdentity(config, logger, egressOptions, lookups),
     rateLimit,
     entitlements: createFullEntitlementSource(),
     tenantResolver: createAccountOnlyTenantResolver(),

@@ -14,7 +14,7 @@ import {
   type EgressPort,
   type EgressRequest,
 } from "@slugbase/core";
-import { HttpEgress } from "../src/index.ts";
+import { createLookupBudget, HttpEgress } from "../src/index.ts";
 import { respond, startLocalServer, type Handler, type LocalServer } from "./support/local-http.ts";
 
 // T6: nothing here reaches the internet. The resolver is scripted and the servers listen on loopback;
@@ -939,6 +939,104 @@ describe("limits", () => {
       const other = open(scripted(["127.0.0.1"]).resolve);
       expect((await other.request(get(`http://named.example.test:${String(server.port)}/`))).status).toBe(200);
       await Promise.all(held);
+    });
+  });
+
+  describe("sharing one lookup budget across instances", () => {
+    // The threadpool is one per process, so instances built for one process draw on one budget; a share
+    // reserves slots for its instance so that a stall on another instance cannot take them.
+    const typed = (error: unknown): string => (error instanceof EgressTimeout ? "timeout" : error instanceof EgressError ? "error" : "other");
+
+    function stallingFor(calls: string[]) {
+      return (hostname: string): Promise<readonly string[]> => {
+        calls.push(hostname);
+        return new Promise(() => undefined);
+      };
+    }
+
+    const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+    it("refuses a further lookup on either instance, without calling its resolver, once the process-wide budget is held", async () => {
+      const budget = createLookupBudget(3);
+      const aiCalls: string[] = [];
+      const sharedCalls: string[] = [];
+      const ai = new HttpEgress({ nodeEnv: "test", resolve: stallingFor(aiCalls), lookups: budget.share(0) });
+      const shared = new HttpEgress({ nodeEnv: "test", resolve: stallingFor(sharedCalls), lookups: budget.share(0) });
+
+      const held = [
+        ...Array.from({ length: 2 }, (_, index) => rejection(ai, get(`http://ai-held${String(index)}.example.test/`, { timeoutMs: 60 }))),
+        rejection(shared, get("http://shared-held.example.test/", { timeoutMs: 60 })),
+      ];
+      await wait(20);
+      expect(aiCalls).toHaveLength(2);
+      expect(sharedCalls).toHaveLength(1);
+
+      expect(typed(await rejection(ai, get("http://ai-extra.example.test/")))).toBe("error");
+      expect(typed(await rejection(shared, get("http://shared-extra.example.test/")))).toBe("error");
+      expect(aiCalls).toHaveLength(2);
+      expect(sharedCalls).toHaveLength(1);
+      expect((await Promise.all(held)).map(typed)).toEqual(["timeout", "timeout", "timeout"]);
+
+      expect(typed(await rejection(shared, get("http://after-deadline.example.test/")))).toBe("error");
+      expect(sharedCalls).toHaveLength(1);
+    });
+
+    it("keeps each share's reserved slots free of the other instances' stalls", async () => {
+      const budget = createLookupBudget(3);
+      const sharedCalls: string[] = [];
+      const aiCalls: string[] = [];
+      const oidcCalls: string[] = [];
+      const shared = new HttpEgress({ nodeEnv: "test", resolve: stallingFor(sharedCalls), lookups: budget.share(1) });
+      const ai = new HttpEgress({ nodeEnv: "test", resolve: stallingFor(aiCalls), lookups: budget.share(1) });
+      const oidc = new HttpEgress({ nodeEnv: "test", resolve: stallingFor(oidcCalls), lookups: budget.share(1) });
+
+      const stalled = Array.from({ length: 6 }, (_, index) => rejection(shared, get(`http://member${String(index)}.example.test/`, { timeoutMs: 60 })));
+      await wait(20);
+      expect(sharedCalls).toHaveLength(1);
+
+      const aiTry = rejection(ai, get("http://provider.example.test/", { timeoutMs: 60 }));
+      const oidcTry = rejection(oidc, get("http://issuer.example.test/", { timeoutMs: 60 }));
+      await wait(20);
+      expect(aiCalls).toHaveLength(1);
+      expect(oidcCalls).toHaveLength(1);
+      expect(typed(await rejection(ai, get("http://provider-2.example.test/")))).toBe("error");
+      expect(aiCalls).toHaveLength(1);
+      await Promise.all([...stalled, aiTry, oidcTry]);
+    });
+
+    it("lets an instance use slots that no other share reserves, and no more", async () => {
+      const budget = createLookupBudget(3);
+      budget.share(1);
+      const calls: string[] = [];
+      const egress = new HttpEgress({ nodeEnv: "test", resolve: stallingFor(calls), lookups: budget.share(0) });
+      const held = Array.from({ length: 5 }, (_, index) => rejection(egress, get(`http://spare${String(index)}.example.test/`, { timeoutMs: 60 })));
+      await wait(20);
+      expect(calls).toHaveLength(2);
+      await Promise.all(held);
+    });
+
+    it("frees a share's slot when its lookup settles", async () => {
+      const budget = createLookupBudget(1);
+      const pending: ((answers: readonly string[]) => void)[] = [];
+      const egress = new HttpEgress({
+        nodeEnv: "test",
+        resolve: () => new Promise((resolve) => pending.push(resolve)),
+        lookups: budget.share(0),
+      });
+      expect(typed(await rejection(egress, get("http://one.example.test/", { timeoutMs: 30 })))).toBe("timeout");
+      expect(typed(await rejection(egress, get("http://two.example.test/")))).toBe("error");
+      pending[0]?.(["8.8.8.8"]);
+      await wait(20);
+      expect(typed(await rejection(egress, get("http://three.example.test/", { timeoutMs: 30 })))).toBe("timeout");
+      expect(pending).toHaveLength(2);
+    });
+
+    it("refuses shares whose reserved slots exceed the budget", () => {
+      const budget = createLookupBudget(3);
+      budget.share(2);
+      budget.share(1);
+      expect(() => budget.share(1)).toThrow();
+      expect(() => createLookupBudget(3).share(4)).toThrow();
     });
   });
 

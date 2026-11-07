@@ -25,7 +25,7 @@ import { createFifoLimiter } from "./limiter.ts";
 // cached key set does not hold makes the adapter fetch the provider's key set once more, at most once a minute
 // for a provider, before it refuses the token, so a provider that rotated its keys does not fail sign-ins until
 // the cache expires.
-// The adapter runs at most OIDC_MAX_CONCURRENT_REQUESTS egress requests at once, discovery, key sets and token
+// The adapter runs at most `maxConcurrentRequests` egress requests at once, discovery, key sets and token
 // exchanges alike, and lets the rest wait in the order they asked, so a long provider list or a burst of sign-ins
 // is served in turns instead of the requests refusing one another at the egress instance's cap on concurrent
 // host-name lookups.
@@ -56,6 +56,8 @@ export interface CreateOidcIdentityOptions {
   /** The enabled providers of the operator, in the order they are listed. */
   readonly providers: readonly IdentityProviderConfig[];
   readonly egress: EgressPort;
+  /** The most egress requests running at once; defaults to three. */
+  readonly maxConcurrentRequests?: number;
   readonly logger: OidcIdentityLogger;
   /** How long fetched metadata is used before it is fetched again. */
   readonly cacheTtlMs?: number;
@@ -75,14 +77,14 @@ export const DEFAULT_FAILURE_TTL_MS = 60_000;
 /** The shortest time between two fetches of a provider's key set that a token with an unknown key id causes. */
 export const KEYS_REFETCH_INTERVAL_MS = 60_000;
 
-// The most egress requests this adapter has running at once. The composition gives the adapter an egress instance
-// of its own, and an instance refuses a request that finds three host-name lookups already running. A request holds
-// at most one lookup at a time (a redirect looks up after the hop before it has finished), so staying at three
-// keeps the requests of this adapter from refusing one another. A waiting request waits for at most
-// ceil(position / OIDC_MAX_CONCURRENT_REQUESTS) rounds of REQUEST_TIMEOUT_MS, since the egress adapter ends every
-// request it runs, redirects included, within the time asked for. One case stays: the instance keeps a lookup's
-// slot until the lookup itself finishes, which can be after the request that started it timed out, so while a
-// resolver hangs, a later request can still find the instance full and be refused.
+// The most egress requests this adapter has running at once unless the composition says otherwise. The egress
+// instance refuses a request that finds its cap on host-name lookups already taken, and a request holds at most one
+// lookup at a time (a redirect looks up after the hop before it has finished), so the composition passes the number
+// of lookups its instance is guaranteed and the requests of this adapter cannot refuse one another. A waiting
+// request waits for at most ceil(position / concurrency) rounds of REQUEST_TIMEOUT_MS, since the egress adapter
+// ends every request it runs, redirects included, within the time asked for. One case stays: the instance keeps a
+// lookup's slot until the lookup itself finishes, which can be after the request that started it timed out, so while
+// a resolver hangs, a later request can still find the instance full and be refused.
 const OIDC_MAX_CONCURRENT_REQUESTS = 3;
 
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -180,7 +182,11 @@ function formEncode(value: string): string {
  */
 export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIdentity {
   const { logger } = options;
-  const schedule = createFifoLimiter(OIDC_MAX_CONCURRENT_REQUESTS);
+  const maxConcurrentRequests = options.maxConcurrentRequests ?? OIDC_MAX_CONCURRENT_REQUESTS;
+  if (!Number.isSafeInteger(maxConcurrentRequests) || maxConcurrentRequests < 1) {
+    throw new RangeError("The OIDC adapter needs a positive whole number of concurrent requests");
+  }
+  const schedule = createFifoLimiter(maxConcurrentRequests);
   const egress: EgressPort = {
     available: options.egress.available,
     request: (request) => schedule(() => options.egress.request(request)),

@@ -10,8 +10,8 @@ export {
   createOpenAiCompatibleAi,
 } from "./ai/index.ts";
 export type { CreateOpenAiCompatibleAiOptions } from "./ai/index.ts";
-export { HttpEgress } from "./egress/index.ts";
-export type { CreateEgressOptions, EgressResolver } from "./egress/index.ts";
+export { HttpEgress, PROCESS_LOOKUP_BUDGET, createLookupBudget } from "./egress/index.ts";
+export type { CreateEgressOptions, EgressResolver, LookupBudget, LookupShare } from "./egress/index.ts";
 export { SharpImageCodec } from "./images/index.ts";
 export { RateLimitError, createRateLimiter } from "./rate-limit/index.ts";
 export type { BucketLimit, CreateRateLimiterOptions, RateLimitErrorReason } from "./rate-limit/index.ts";
