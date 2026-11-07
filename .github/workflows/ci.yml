@@ -305,8 +305,13 @@ jobs:
           set -euo pipefail
           bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary.spdx.json
           bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary-debian.spdx.json
+      # The builder and the SBOM generator are named by digest, as in release.yml;
+      # Renovate keeps the tags and digests current.
       - name: Create the builder
-        run: docker buildx create --name image-scan --driver docker-container --use
+        run: |
+          docker buildx create --name image-scan --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe \
+            --use
       - name: Build the image and its SBOM
         env:
           BUILD_COMMIT: ${{ github.sha }}
@@ -315,7 +320,7 @@ jobs:
           docker buildx build \
             --file apps/slugbase/Dockerfile \
             --build-arg "BUILD_COMMIT=$BUILD_COMMIT" \
-            --sbom=true \
+            --sbom=generator=docker/buildkit-syft-scanner:1.12.1@sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315 \
             --output "type=local,dest=$RUNNER_TEMP/image" \
             .
       - name: Scan the SBOM

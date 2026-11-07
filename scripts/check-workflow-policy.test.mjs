@@ -34,6 +34,9 @@ let counter = 0;
 const y = (...lines) => `${lines.join("\n")}\n`;
 
 const checkout = "actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0";
+// The images a builder and an SBOM generator are pinned to, as the workflows name them.
+const BUILDKIT = "moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe";
+const GENERATOR = "docker/buildkit-syft-scanner:1.12.1@sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315";
 const RELEASE = ".github/workflows/release.yml";
 const CI = ".github/workflows/ci.yml";
 const OTHER = ".github/workflows/other.yml";
@@ -90,7 +93,7 @@ const ciWorkflow = y(
   "      - name: Build the image, not pushed",
   "        run: |",
   "          docker buildx build \\",
-  "            --sbom=true \\",
+  `            --sbom=generator=${GENERATOR} \\`,
   '            --output "type=local,dest=$RUNNER_TEMP/image" \\',
   "            .",
   "      - run: git push --dry-run origin HEAD",
@@ -375,7 +378,7 @@ clean("packages: read and none in other workflows pass", OTHER, "on: push", "per
 clean("permissions: read-all and an empty permissions pass", OTHER, "on: push", "permissions: read-all", "jobs:", "  b:", "    permissions: {}", "    steps: []");
 clean("a local docker build and git push (no docker) pass", OTHER, ...pushJob("      - run: docker build --load -t x .", "      - run: git push origin HEAD"));
 clean("docker/build-push-action named only in a comment passes", OTHER, "on: push", "# Not docker/build-push-action: docker buildx build --push belongs to release.yml.", "jobs: {}");
-clean("a multi-line local build with SBOM and a local output passes", CI, ...pushJob("      - run: |", "          docker buildx build \\", "            --sbom=true \\", '            --output "type=local,dest=$RUNNER_TEMP/image" \\', "            .", "      - run: >-", "          docker buildx build", "          --output=type=docker ."));
+clean("a multi-line local build with SBOM and a local output passes", CI, ...pushJob("      - run: |", "          docker buildx build \\", `            --sbom=generator=${GENERATOR} \\`, '            --output "type=local,dest=$RUNNER_TEMP/image" \\', "            .", "      - run: >-", "          docker buildx build", "          --output=type=docker ."));
 clean("push=false and --push=false pass", OTHER, ...pushJob("      - run: docker buildx build --push=false --output type=image,push=false ."));
 clean("an escaped newline between docker and push is two commands", OTHER, ...pushJob('      - run: "docker\\npush ghcr.io/x/y"'));
 clean("docker and a later push in another command pass", OTHER, ...pushJob("      - run: docker build -t x . && git push origin HEAD", "      - run: docker build -t x .; git push origin HEAD", "      - run: docker build -t x . | tee log"));
@@ -384,7 +387,7 @@ clean("docker and a push in the next step pass", CI, ...pushJob("      - run: do
 clean("docker in one job and push in a later job pass", CI, "on: push", "jobs:", "  a:", "    steps:", "      - run: docker build -t x .", "  b:", "    if: github.event_name == 'push'", "    steps: []");
 clean("push in a trigger, a step name and a branch list pass", OTHER, "on:", "  push:", "    branches: [push, dev]", "jobs:", "  b:", "    steps:", "      - name: Build docker image on push", "        run: docker build -t x .");
 clean("a push word in a shell comment after the command passes", OTHER, ...pushJob("      - run: |", "          docker build -t x . # push it later"));
-clean("docker/setup-buildx-action passes", OTHER, ...pushJob("      - uses: docker/setup-buildx-action@0000000000000000000000000000000000000000", "        with:", "          push: false"));
+clean("docker/setup-buildx-action passes", OTHER, ...pushJob("      - uses: docker/setup-buildx-action@0000000000000000000000000000000000000000", "        with:", "          push: false", `          driver-opts: image=${BUILDKIT}`));
 clean("a docker format template in single quotes passes", OTHER, ...pushJob("      - run: |", "          docker ps --all --format '{{.ID}} {{.Label \"com.docker.compose.project\"}}' |", "            xargs --no-run-if-empty docker rm --force --volumes"));
 clean("a backslash in a plain scalar, a block scalar and a known escape pass", OTHER, ...pushJob('      - run: docker pull "$(sed -n s/^K="\\(.*\\)";$/\\1/p f)"', "      - run: |", '          jq -r "\\(.a) \\q"', '          "a\\qb" c', '      - run: "echo a\\tb \\\\ \\" \\/ \\x41"'));
 clean("a trigger map with a branch list passes", OTHER, "on: {push: {branches: [dev]}}", "jobs:", "  b:", "    steps:", "      - run: docker build -t x .");
@@ -1057,6 +1060,85 @@ test("the command with no argument passes on the repository", () => {
   const result = spawnSync(process.execPath, [script], { encoding: "utf8", timeout: 60_000 });
   assert.equal(result.status, 0, result.stderr);
 });
+
+// ---- The builder and the SBOM generator are pinned by digest --------------------------
+
+const IMAGES = "pinned-build-images";
+const DIGEST = "sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe";
+
+runViolation("a builder with no image named fails", IMAGES, "docker buildx create --name release --driver docker-container --use");
+runViolation("a builder with no image named fails in release.yml", IMAGES, "docker buildx create --name release --driver docker-container --use", RELEASE);
+runViolation("a builder with no image named fails in ci.yml", IMAGES, "docker buildx create --name image-scan --driver docker-container --use", CI);
+runViolation("a builder image named by tag only fails", IMAGES, "docker buildx create --driver-opt image=moby/buildkit:v0.34.2 --use");
+runViolation("a builder image named with no tag or digest fails", IMAGES, "docker buildx create --driver-opt image=moby/buildkit --use");
+runViolation("a builder image with a short digest fails", IMAGES, "docker buildx create --driver-opt image=moby/buildkit:v0.34.2@sha256:c5f8862f --use");
+runViolation("a builder image with an upper-case digest fails", IMAGES, `docker buildx create --driver-opt image=moby/buildkit:v0.34.2@sha256:${"C5F8862F52499773AF85BC07695B2379EF08E8002352B0DF2C4864C91D78DABE"} --use`);
+runViolation("a builder image with a digest and no name fails", IMAGES, `docker buildx create --driver-opt image=@${DIGEST} --use`);
+runViolation("a builder image from a parameter fails", IMAGES, 'docker buildx create --driver-opt "image=$BUILDKIT_IMAGE" --use');
+runViolation("a builder image from an expression fails", IMAGES, "docker buildx create --driver-opt image=${{ vars.BUILDKIT }} --use");
+runViolation("driver options with no image fail", IMAGES, "docker buildx create --driver-opt network=host --use");
+runViolation("a pinned image beside an unpinned one fails", IMAGES, `docker buildx create --driver-opt image=${BUILDKIT} --driver-opt image=moby/buildkit:latest --use`);
+runViolation("an unpinned image after a pinned one in one option fails", IMAGES, `docker buildx create --driver-opt "image=${BUILDKIT},image=moby/buildkit:latest" --use`);
+runViolation("an upper-case option key is read as the image", IMAGES, "docker buildx create --driver-opt IMAGE=moby/buildkit:latest --use");
+runViolation("the docker-buildx plugin name is read", IMAGES, "docker-buildx create --use");
+runViolation("a path to the plugin is read", IMAGES, "/usr/libexec/docker/cli-plugins/docker-buildx create --use");
+runViolation("a builder named before create is read", IMAGES, "docker buildx --builder other create --use");
+runViolation("create after a debug flag is read", IMAGES, "docker buildx -D create --use");
+runViolation("a builder created behind sudo is read", IMAGES, "sudo docker buildx create --use");
+runViolation("a subcommand that cannot be read fails", IMAGES, 'docker buildx "$SUB" --use');
+runViolation("a builder created in sh -c is read", IMAGES, "sh -c 'docker buildx create --use'");
+violation("a builder created in a Dockerfile RUN is read", DOCKERFILE, IMAGES, "FROM node:24-slim", "RUN docker buildx create --use");
+clean("a builder pinned by digest passes", OTHER, ...pushJob(`      - run: docker buildx create --name release --driver docker-container --driver-opt image=${BUILDKIT} --use`));
+clean("a builder pinned in the --driver-opt=image= form passes", OTHER, ...pushJob(`      - run: docker buildx create --driver-opt=image=${BUILDKIT} --use`));
+clean("a builder pinned beside other driver options passes", OTHER, ...pushJob(`      - run: docker buildx create --driver-opt "network=host,image=${BUILDKIT}" --use`));
+clean("a builder pinned over several lines passes", OTHER, ...pushJob("      - run: |", "          docker buildx create \\", "            --name release \\", `            --driver-opt image=${BUILDKIT} \\`, "            --use"));
+clean("other buildx commands need no builder image", OTHER, ...pushJob("      - run: docker buildx ls", "      - run: docker buildx inspect --bootstrap", "      - run: docker buildx rm release", "      - run: docker buildx use release"));
+clean("the word create after another subcommand is not a builder", OTHER, ...pushJob("      - run: docker buildx inspect create"));
+
+runViolation("an SBOM build with no generator fails", IMAGES, "docker buildx build --sbom=true --output type=local,dest=out .");
+runViolation("an SBOM build with no generator fails in release.yml", IMAGES, "docker buildx build --sbom=true --provenance=mode=max --push .", RELEASE);
+runViolation("an SBOM build with no generator fails in ci.yml", IMAGES, "docker buildx build --sbom=true --output type=local,dest=out .", CI);
+runViolation("a bare --sbom fails", IMAGES, "docker buildx build --sbom --output type=local,dest=out .");
+runViolation("--sbom with a separate true fails", IMAGES, "docker buildx build --sbom true --output type=local,dest=out .");
+runViolation("a generator named by tag only fails", IMAGES, "docker buildx build --sbom=generator=docker/buildkit-syft-scanner:1.12.1 .");
+runViolation("a generator named with no tag or digest fails", IMAGES, "docker buildx build --sbom=generator=docker/buildkit-syft-scanner .");
+runViolation("a generator from a parameter fails", IMAGES, 'docker buildx build "--sbom=generator=$GENERATOR" .');
+runViolation("a generator from an expression fails", IMAGES, "docker buildx build --sbom=generator=${{ vars.GENERATOR }} .");
+runViolation("SBOM options with no generator fail", IMAGES, "docker buildx build --sbom=disabled=false .");
+runViolation("a generator beside an unpinned one fails", IMAGES, `docker buildx build "--sbom=generator=${GENERATOR},generator=docker/buildkit-syft-scanner:1" .`);
+runViolation("--attest type=sbom with no generator fails", IMAGES, "docker buildx build --attest type=sbom .");
+runViolation("--attest=type=sbom with no generator fails", IMAGES, "docker buildx build --attest=type=sbom .");
+runViolation("an SBOM attestation behind a provenance one fails", IMAGES, "docker buildx build --attest type=provenance,mode=max --attest type=sbom .");
+runViolation("an attestation with an unpinned generator fails", IMAGES, "docker buildx build --attest type=sbom,generator=docker/buildkit-syft-scanner:1 .");
+runViolation("an upper-case attestation type is read", IMAGES, "docker buildx build --attest TYPE=SBOM .");
+runViolation("docker build is read like docker buildx build", IMAGES, "docker build --sbom=true -t x .");
+runViolation("an SBOM build behind sudo is read", IMAGES, "sudo docker buildx build --sbom=true .");
+violation("an SBOM build over several lines fails", OTHER, IMAGES, ...pushJob("      - run: |", "          docker buildx build \\", "            --file apps/slugbase/Dockerfile \\", "            --sbom=true \\", "            .", "          true"));
+violation("an SBOM build in a Dockerfile RUN is read", DOCKERFILE, IMAGES, "FROM node:24-slim", "RUN docker buildx build --sbom=true .");
+clean("a generator pinned by digest passes", OTHER, ...pushJob(`      - run: docker buildx build --sbom=generator=${GENERATOR} --output type=local,dest=out .`));
+clean("a generator pinned in an attestation passes", OTHER, ...pushJob(`      - run: docker buildx build --attest type=sbom,generator=${GENERATOR} --attest type=provenance,mode=max .`));
+clean("a generator pinned in the --attest= form passes", OTHER, ...pushJob(`      - run: docker buildx build --attest=type=sbom,generator=${GENERATOR} .`));
+clean("a generator pinned beside other SBOM options passes", OTHER, ...pushJob(`      - run: docker buildx build "--sbom=scan-context=true,generator=${GENERATOR}" .`));
+clean("a build with the SBOM turned off passes", OTHER, ...pushJob("      - run: docker buildx build --sbom=false --provenance=false ."));
+clean("a build with no SBOM option passes", OTHER, ...pushJob("      - run: docker buildx build --provenance=mode=max --output type=docker ."));
+clean("an --sbom flag of another tool passes", OTHER, ...pushJob("      - run: syft --sbom=true ."));
+
+const SETUP_BUILDX = "docker/setup-buildx-action@0000000000000000000000000000000000000000";
+const BUILD_ACTION = "docker/build-push-action@0000000000000000000000000000000000000000";
+violation("setup-buildx-action with no driver options fails", OTHER, IMAGES, ...pushJob(`      - uses: ${SETUP_BUILDX}`));
+violation("setup-buildx-action with an unpinned builder image fails", OTHER, IMAGES, ...pushJob(`      - uses: ${SETUP_BUILDX}`, "        with:", "          driver-opts: image=moby/buildkit:latest"));
+violation("setup-buildx-action with other driver options only fails", OTHER, IMAGES, ...pushJob(`      - uses: ${SETUP_BUILDX}`, "        with:", "          driver-opts: network=host"));
+violation("setup-buildx-action with a pinned and an unpinned image on two lines fails", OTHER, IMAGES, ...pushJob(`      - uses: ${SETUP_BUILDX}`, "        with:", "          driver-opts: |", `            image=${BUILDKIT}`, "            image=moby/buildkit:latest"));
+violation("setup-buildx-action with an image from an expression fails", OTHER, IMAGES, ...pushJob(`      - uses: ${SETUP_BUILDX}`, "        with:", "          driver-opts: image=${{ vars.BUILDKIT }}"));
+clean("setup-buildx-action with a builder image pinned by digest passes", OTHER, ...pushJob(`      - uses: ${SETUP_BUILDX}`, "        with:", "          driver-opts: |", "            network=host", `            image=${BUILDKIT}`));
+violation("an action with sbom: true and no generator fails", OTHER, IMAGES, ...pushJob(`      - uses: ${BUILD_ACTION}`, "        with:", "          sbom: true"));
+violation("an action with sbom: true and no generator fails in release.yml", RELEASE, IMAGES, "on:", "  push:", "    branches: [main]", "permissions: {}", "jobs:", "  b:", "    runs-on: ubuntu-latest", "    steps:", `      - uses: ${BUILD_ACTION}`, "        with:", "          sbom: true");
+violation("an action with an unpinned sbom generator fails", OTHER, IMAGES, ...pushJob(`      - uses: ${BUILD_ACTION}`, "        with:", "          sbom: generator=docker/buildkit-syft-scanner:1"));
+violation("an action with an sbom attestation and no generator fails", OTHER, IMAGES, ...pushJob(`      - uses: ${BUILD_ACTION}`, "        with:", "          attests: |", "            type=provenance,mode=max", "            type=sbom"));
+violation("an action with sbom set by an expression fails", OTHER, IMAGES, ...pushJob(`      - uses: ${BUILD_ACTION}`, "        with:", "          sbom: ${{ vars.SBOM }}"));
+clean("an action with sbom: false passes", OTHER, ...pushJob(`      - uses: ${BUILD_ACTION.replace("build-push", "bake")}`, "        with:", "          sbom: false"));
+clean("an action with a pinned sbom generator passes", OTHER, ...pushJob(`      - uses: ${BUILD_ACTION.replace("build-push", "bake")}`, "        with:", `          sbom: generator=${GENERATOR}`));
+clean("an action with a pinned sbom attestation passes", OTHER, ...pushJob(`      - uses: ${BUILD_ACTION.replace("build-push", "bake")}`, "        with:", "          attests: |", "            type=provenance,mode=max", `            type=sbom,generator=${GENERATOR}`));
 
 // ---- Every rule has a case that fails it ----------------------------------------------------------
 

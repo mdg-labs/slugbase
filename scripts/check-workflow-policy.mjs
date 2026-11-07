@@ -12,6 +12,14 @@
 //   or an input with push= (not false or 0) or type=registry) or holds `packages:`
 //   above read, and
 //   write-all is held nowhere.
+// - pinned-build-images: every `docker buildx create` names its builder image with
+//   `--driver-opt image=<name>[:<tag>]@sha256:<64 hex digits>`, and every build that
+//   asks for an SBOM (`--sbom`, or `--attest` with type=sbom) names its generator with
+//   `generator=<name>[:<tag>]@sha256:<64 hex digits>`, so the program that builds, and
+//   the one that writes the SBOM the scan gate reads, do not come from a floating
+//   upstream tag. The setup-buildx-action input driver-opts and the sbom and attests
+//   inputs of an action are held to the same rule. An image from a parameter, a
+//   substitution or an expression fails, since its digest cannot be read.
 // - release-triggers: release.yml runs on a push with `branches: [main]` and/or a
 //   release with `types: [published]` and on nothing else.
 // - frozen-lockfile: every pnpm install (install, i, install-test, it, ci and their
@@ -142,6 +150,7 @@ export const RULES = [
   "dockerfile",
   "pull-request-secrets",
   "image-push",
+  "pinned-build-images",
   "release-triggers",
   "frozen-lockfile",
   "internal",
@@ -756,6 +765,105 @@ function pushMessages(words) {
   return messages;
 }
 
+// An image named by a digest: a name, an optional tag, and @sha256: with 64 lower-case
+// hex digits. A name or digest built from a parameter, a substitution or an expression
+// cannot be read, so it does not count.
+const PINNED_IMAGE = /^[^\s@]+@sha256:[0-9a-f]{64}$/;
+
+/** @param {string} image */
+const isPinnedImage = (image) => !isDynamic(image) && PINNED_IMAGE.test(image);
+
+/** @param {string} word */
+const isBuildx = (word) => ["buildx", "docker-buildx"].includes(baseName(word));
+
+/**
+ * The values of a long option given as `--name value` or `--name=value`.
+ * @param {string[]} words
+ * @param {string} name
+ */
+function optionValues(words, name) {
+  /** @type {string[]} */
+  const values = [];
+  words.forEach((word, index) => {
+    if (word === name) {
+      values.push(words[index + 1] ?? "");
+    } else if (word.startsWith(`${name}=`)) {
+      values.push(word.slice(name.length + 1));
+    }
+  });
+  return values;
+}
+
+/**
+ * The `key=` entries of comma- or line-separated build options, with the key removed.
+ * @param {string[]} values
+ * @param {string} key
+ * @param {RegExp} separator
+ */
+function entriesOf(values, key, separator) {
+  const prefix = `${key}=`;
+  return values.flatMap((value) => value.split(separator)).filter((entry) => entry.slice(0, prefix.length).toLowerCase() === prefix).map((entry) => entry.slice(prefix.length));
+}
+
+/**
+ * The findings about the image of a builder or of an SBOM generator.
+ * @param {string[]} images The values named, none when the image is not named.
+ * @param {string} what
+ * @param {string} option
+ * @param {string[]} words
+ */
+function pinnedImageMessages(images, what, option, words) {
+  if (images.length === 0) {
+    return [`${what} is not named (${option}=<name>@sha256:<digest>), so it comes from a floating upstream tag: ${quoteCommand(words)}`];
+  }
+  return images.filter((image) => !isPinnedImage(image)).map((image) => `${what} ${show(image)} is not pinned by a sha256 digest: ${quoteCommand(words)}`);
+}
+
+/**
+ * The findings of one command about the images that build: the builder
+ * `docker buildx create` starts and the generator of a requested SBOM.
+ * @param {string[]} words
+ * @returns {string[]}
+ */
+function buildImageMessages(words) {
+  /** @type {string[]} */
+  const messages = [];
+  const buildxAt = words.findIndex(isBuildx);
+  if (buildxAt >= 0) {
+    let at = buildxAt + 1;
+    while (at < words.length && (words[at] ?? "").startsWith("-")) {
+      at += words[at] === "--builder" ? 2 : 1;
+    }
+    const sub = words[at];
+    if (sub !== undefined && isDynamic(sub)) {
+      messages.push(`a buildx subcommand this check cannot read may be create, which starts a builder: ${quoteCommand(words)}`);
+    } else if (sub?.toLowerCase() === "create") {
+      messages.push(...pinnedImageMessages(entriesOf(optionValues(words, "--driver-opt"), "image", /,/), "the image of the builder buildx create starts", "--driver-opt image", words));
+    }
+  }
+  if (buildxAt >= 0 || words.some((word) => CONTAINER_TOOLS.has(baseName(word)))) {
+    /** @type {string[]} */
+    const requests = [];
+    words.forEach((word, index) => {
+      if (word === "--sbom" || word.startsWith("--sbom=")) {
+        const value = word === "--sbom" ? words[index + 1] : word.slice("--sbom=".length);
+        if (value?.toLowerCase() !== "false") {
+          requests.push(value === undefined || value.startsWith("-") ? "true" : value);
+        }
+      }
+    });
+    for (const attestation of optionValues(words, "--attest")) {
+      if (attestation.split(",").some((entry) => entry.toLowerCase() === "type=sbom")) {
+        requests.push(attestation);
+      }
+    }
+    for (const request of requests) {
+      messages.push(...pinnedImageMessages(entriesOf([request], "generator", /,/), "the generator of the SBOM", "generator", words));
+    }
+  }
+  return messages;
+}
+
 const UNKNOWN_SUBCOMMAND = "<unknown>";
 
 /**
@@ -969,6 +1077,9 @@ function scanCommands(commands, allowPush) {
     for (const message of installMessages(words)) {
       found.set(`frozen-lockfile ${message}`, { rule: "frozen-lockfile", message });
     }
+    for (const message of buildImageMessages(words)) {
+      found.set(`pinned-build-images ${message}`, { rule: "pinned-build-images", message });
+    }
     if (!allowPush) {
       for (const message of pushMessages(words)) {
         found.set(`image-push ${message}`, { rule: "image-push", message });
@@ -1022,6 +1133,41 @@ function checkPermissions(value, isRelease, report) {
 }
 
 /**
+ * The builder image and the SBOM generator an action is given: the driver-opts of
+ * docker/setup-buildx-action, and the sbom and attests inputs of a build action.
+ * @param {Map<string, unknown>} step
+ * @param {string} uses
+ * @param {Report} report
+ */
+function checkBuildInputs(step, uses, report) {
+  const inputs = get(step, "with");
+  const action = (uses.split("@")[0] ?? "").toLowerCase();
+  /** @param {string} name */
+  const text = (name) => {
+    const value = get(inputs, name);
+    return value === undefined || value === null ? undefined : String(value);
+  };
+  /** @param {string[]} messages */
+  const reportAll = (messages) => {
+    for (const message of messages) {
+      report("pinned-build-images", message);
+    }
+  };
+  if (action === "docker/setup-buildx-action") {
+    reportAll(pinnedImageMessages(entriesOf([text("driver-opts") ?? ""], "image", /[\n,]/), `the builder image of ${show(uses)}`, "driver-opts: image", [uses]));
+  }
+  const sbom = text("sbom");
+  if (sbom !== undefined && sbom.toLowerCase() !== "false") {
+    reportAll(pinnedImageMessages(entriesOf([sbom], "generator", /,/), `the SBOM generator of ${show(uses)}`, "sbom: generator", [uses]));
+  }
+  for (const attestation of (text("attests") ?? "").split("\n")) {
+    if (attestation.split(",").some((entry) => entry.trim().toLowerCase() === "type=sbom")) {
+      reportAll(pinnedImageMessages(entriesOf([attestation], "generator", /,/), `the SBOM generator of ${show(uses)}`, "attests: generator", [uses]));
+    }
+  }
+}
+
+/**
  * @param {Map<string, unknown>} step
  * @param {boolean} isRelease
  * @param {Report} report
@@ -1032,6 +1178,7 @@ function checkUses(step, isRelease, report) {
     report("image-push", `uses: ${show(uses)} is not a form this check reads`);
     return;
   }
+  checkBuildInputs(step, uses, report);
   if (isRelease) {
     return;
   }
