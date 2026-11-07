@@ -184,7 +184,7 @@ function clean(name, file, ...lines) {
 }
 
 /** A workflow with one job and the given step lines after `steps:`. */
-const pushJob = (...steps) => ["on: push", "jobs:", "  b:", "    steps:", ...steps];
+const pushJob = (...steps) => ["on: push", "permissions: {}", "jobs:", "  b:", "    steps:", ...steps];
 
 /**
  * A `run:` value in a push-triggered workflow.
@@ -210,7 +210,7 @@ test("the repository's own workflows, actions and Dockerfiles pass", () => {
 
 // ---- Pull-request workflows read no secret --------------------------------------
 
-const prHead = ["name: PR", "on:", "  pull_request:", "jobs:", "  t:", "    runs-on: ubuntu-latest", "    steps:"];
+const prHead = ["name: PR", "on:", "  pull_request:", "permissions: {}", "jobs:", "  t:", "    runs-on: ubuntu-latest", "    steps:"];
 const PR = ".github/workflows/pr.yml";
 const SECRETS = "pull-request-secrets";
 
@@ -253,12 +253,12 @@ violation("a workflow with no on key fails", PR, SECRETS, "name: x", "jobs: {}")
 violation("jobs that are no mapping fail", PR, SECRETS, "on: pull_request", "jobs: []");
 violation("a job that is no mapping fails", PR, SECRETS, "on: pull_request", "jobs:", "  t: build");
 
-clean("the workflow token in a pull_request workflow passes", PR, "on: pull_request", "jobs:", "  t:", "    steps:", "      - run: gh pr view", "        env:", "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
-clean("the workflow token spelled secrets['github_token'] passes", PR, "on: pull_request", "jobs:", "  t:", "    steps:", "      - run: gh pr view", "        env:", "          GH_TOKEN: ${{ secrets [ 'github_token' ] }}");
-clean("a named secret in a push-only workflow passes", PR, "on:", "  push:", "    branches: [main]", "  workflow_dispatch:", "jobs:", "  t:", "    steps:", "      - run: ./send", "        env:", "          TOKEN: ${{ secrets.DISPATCH_TOKEN }}");
-clean("an environment in a push-only workflow passes", PR, "on: push", "jobs:", "  t:", "    environment: production", "    steps:", "      - run: ./deploy");
-clean("secrets named in a full-line comment of a pull_request workflow pass", PR, "on: pull_request", "# No secrets: secrets.NPM_TOKEN is never read, nor an environment.", "jobs:", "  t:", "    steps:", "      - run: pnpm lint");
-clean("the words secrets and environment in names and plain strings pass", PR, "on: pull_request", "jobs:", "  t:", "    steps:", "      - name: Print the environment, no secrets", "        run: echo environment secrets");
+clean("the workflow token in a pull_request workflow passes", PR, "on: pull_request", "permissions: {}", "jobs:", "  t:", "    steps:", "      - run: gh pr view", "        env:", "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
+clean("the workflow token spelled secrets['github_token'] passes", PR, "on: pull_request", "permissions: {}", "jobs:", "  t:", "    steps:", "      - run: gh pr view", "        env:", "          GH_TOKEN: ${{ secrets [ 'github_token' ] }}");
+clean("a named secret in a push-only workflow passes", PR, "on:", "  push:", "    branches: [main]", "  workflow_dispatch:", "permissions: {}", "jobs:", "  t:", "    steps:", "      - run: ./send", "        env:", "          TOKEN: ${{ secrets.DISPATCH_TOKEN }}");
+clean("an environment in a push-only workflow passes", PR, "on: push", "permissions: {}", "jobs:", "  t:", "    environment: production", "    steps:", "      - run: ./deploy");
+clean("secrets named in a full-line comment of a pull_request workflow pass", PR, "on: pull_request", "# No secrets: secrets.NPM_TOKEN is never read, nor an environment.", "permissions: {}", "jobs:", "  t:", "    steps:", "      - run: pnpm lint");
+clean("the words secrets and environment in names and plain strings pass", PR, "on: pull_request", "permissions: {}", "jobs:", "  t:", "    steps:", "      - name: Print the environment, no secrets", "        run: echo environment secrets");
 
 // ---- Image push only from the release workflow ------------------------------------
 
@@ -377,20 +377,20 @@ violation("a docker push hidden in a comment-looking quoted word fails", OTHER, 
 clean("packages: read and none in other workflows pass", OTHER, "on: push", "permissions:", "  contents: read", "  packages: read", "jobs:", "  b:", "    permissions: {packages: none}", "    steps: []");
 clean("permissions: read-all and an empty permissions pass", OTHER, "on: push", "permissions: read-all", "jobs:", "  b:", "    permissions: {}", "    steps: []");
 clean("a local docker build and git push (no docker) pass", OTHER, ...pushJob("      - run: docker build --load -t x .", "      - run: git push origin HEAD"));
-clean("docker/build-push-action named only in a comment passes", OTHER, "on: push", "# Not docker/build-push-action: docker buildx build --push belongs to release.yml.", "jobs: {}");
+clean("docker/build-push-action named only in a comment passes", OTHER, "on: push", "# Not docker/build-push-action: docker buildx build --push belongs to release.yml.", "permissions: {}", "jobs: {}");
 clean("a multi-line local build with SBOM and a local output passes", CI, ...pushJob("      - run: |", "          docker buildx build \\", `            --sbom=generator=${GENERATOR} \\`, '            --output "type=local,dest=$RUNNER_TEMP/image" \\', "            .", "      - run: >-", "          docker buildx build", "          --output=type=docker ."));
 clean("push=false and --push=false pass", OTHER, ...pushJob("      - run: docker buildx build --push=false --output type=image,push=false ."));
 clean("an escaped newline between docker and push is two commands", OTHER, ...pushJob('      - run: "docker\\npush ghcr.io/x/y"'));
 clean("docker and a later push in another command pass", OTHER, ...pushJob("      - run: docker build -t x . && git push origin HEAD", "      - run: docker build -t x .; git push origin HEAD", "      - run: docker build -t x . | tee log"));
 clean("docker and a push separated by a blank line pass", CI, ...pushJob("      - run: |", "          docker build -t x .", "", "          git push origin HEAD"));
 clean("docker and a push in the next step pass", CI, ...pushJob("      - run: docker build -t x .", "      - name: Publish the notes", "        run: git push origin HEAD"));
-clean("docker in one job and push in a later job pass", CI, "on: push", "jobs:", "  a:", "    steps:", "      - run: docker build -t x .", "  b:", "    if: github.event_name == 'push'", "    steps: []");
-clean("push in a trigger, a step name and a branch list pass", OTHER, "on:", "  push:", "    branches: [push, dev]", "jobs:", "  b:", "    steps:", "      - name: Build docker image on push", "        run: docker build -t x .");
+clean("docker in one job and push in a later job pass", CI, "on: push", "permissions: {}", "jobs:", "  a:", "    steps:", "      - run: docker build -t x .", "  b:", "    if: github.event_name == 'push'", "    steps: []");
+clean("push in a trigger, a step name and a branch list pass", OTHER, "on:", "  push:", "    branches: [push, dev]", "permissions: {}", "jobs:", "  b:", "    steps:", "      - name: Build docker image on push", "        run: docker build -t x .");
 clean("a push word in a shell comment after the command passes", OTHER, ...pushJob("      - run: |", "          docker build -t x . # push it later"));
 clean("docker/setup-buildx-action passes", OTHER, ...pushJob("      - uses: docker/setup-buildx-action@0000000000000000000000000000000000000000", "        with:", "          push: false", `          driver-opts: image=${BUILDKIT}`));
 clean("a docker format template in single quotes passes", OTHER, ...pushJob("      - run: |", "          docker ps --all --format '{{.ID}} {{.Label \"com.docker.compose.project\"}}' |", "            xargs --no-run-if-empty docker rm --force --volumes"));
 clean("a backslash in a plain scalar, a block scalar and a known escape pass", OTHER, ...pushJob('      - run: docker pull "$(sed -n s/^K="\\(.*\\)";$/\\1/p f)"', "      - run: |", '          jq -r "\\(.a) \\q"', '          "a\\qb" c', '      - run: "echo a\\tb \\\\ \\" \\/ \\x41"'));
-clean("a trigger map with a branch list passes", OTHER, "on: {push: {branches: [dev]}}", "jobs:", "  b:", "    steps:", "      - run: docker build -t x .");
+clean("a trigger map with a branch list passes", OTHER, "on: {push: {branches: [dev]}}", "permissions: {}", "jobs:", "  b:", "    steps:", "      - run: docker build -t x .");
 
 // A command name from a substitution or a parameter is read as possibly any tool.
 runViolation("a tool name from $(echo docker) fails", PUSH, "$(echo docker) push x");
@@ -787,7 +787,7 @@ clean("npm i -g and npm install -g pass", DOCKERFILE, "FROM node:24-slim", "RUN 
 clean("pnpm commands that are not installs pass", OTHER, ...pushJob("      - run: pnpm fetch", "      - run: pnpm exec playwright install chromium", "      - run: pnpm dlx some-tool add", "      - run: pnpm run install-hooks", "      - run: pnpm store path --silent", "      - run: npm exec playwright install", "      - run: npm run build", "      - run: pnpm --filter slugbase exec vitest run", "      - run: pnpm turbo run build --filter=slugbase", "      - run: pnpm audit --audit-level=high"));
 clean("pnpm named in a step name, a cache key and an action path passes", OTHER, ...pushJob("      - name: Install pnpm from the lockfile", "      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0", "      - run: echo \"key=pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}\""));
 clean("backslashes that are not YAML escapes in a Dockerfile pass", DOCKERFILE, "FROM node:24-slim", "RUN true \\", '  "a\\.b \\$HOME \\q" \\', " && pnpm install --frozen-lockfile --offline");
-clean("an install mentioned in a full-line comment passes", OTHER, "on: push", "# pnpm install and npm ci were replaced by the setup action.", "jobs: {}");
+clean("an install mentioned in a full-line comment passes", OTHER, "on: push", "# pnpm install and npm ci were replaced by the setup action.", "permissions: {}", "jobs: {}");
 clean("a Dockerfile inside node_modules is not read", "node_modules/pkg/Dockerfile", "RUN pnpm install");
 clean("a test file named like a Dockerfile is not one", "apps/x/dockerfile.test.ts", "// pnpm install", "import { test } from 'vitest';");
 clean("apt-get and script installs pass", OTHER, ...pushJob("      - run: apt-get install -y jq", '      - run: bash scripts/scan-image.sh --install "$RUNNER_TEMP/osv-scanner"'));
@@ -904,9 +904,9 @@ violation("a secret behind an explicit key fails", PR, SECRETS, "on: pull_reques
 violation("a run that is a list is no form the check reads", OTHER, PUSH, ...pushJob("      - run: [docker, push]"));
 violation("shell text nested too deeply fails", OTHER, "internal", ...pushJob(`      - run: ${JSON.stringify(Array.from({ length: 12 }).reduce((text) => `echo $(${String(text)})`, "true"))}`));
 
-clean("an anchored and aliased clean run passes", OTHER, "on: push", "x-cmd: &cmd pnpm install --frozen-lockfile", "jobs:", "  b:", "    steps:", "      - run: *cmd", "      - run: *cmd");
-clean("flow maps and sequences pass", OTHER, "{on: [push], jobs: {b: {steps: [{run: 'pnpm install --frozen-lockfile'}]}}}");
-clean("quoted keys and an explicit key pass", OTHER, '"on": push', "? jobs", ": {b: {steps: [{run: pnpm fetch}]}}");
+clean("an anchored and aliased clean run passes", OTHER, "on: push", "permissions: {}", "x-cmd: &cmd pnpm install --frozen-lockfile", "jobs:", "  b:", "    steps:", "      - run: *cmd", "      - run: *cmd");
+clean("flow maps and sequences pass", OTHER, "{on: [push], permissions: {}, jobs: {b: {steps: [{run: 'pnpm install --frozen-lockfile'}]}}}");
+clean("quoted keys and an explicit key pass", OTHER, '"on": push', "permissions: {}", "? jobs", ": {b: {steps: [{run: pnpm fetch}]}}");
 clean("a block scalar with a keep indicator passes", OTHER, ...pushJob("      - run: |+", "          pnpm install --frozen-lockfile", ""));
 
 // ---- The command tables follow the installed tools ---------------------------------------
@@ -1139,6 +1139,29 @@ violation("an action with sbom set by an expression fails", OTHER, IMAGES, ...pu
 clean("an action with sbom: false passes", OTHER, ...pushJob(`      - uses: ${BUILD_ACTION.replace("build-push", "bake")}`, "        with:", "          sbom: false"));
 clean("an action with a pinned sbom generator passes", OTHER, ...pushJob(`      - uses: ${BUILD_ACTION.replace("build-push", "bake")}`, "        with:", `          sbom: generator=${GENERATOR}`));
 clean("an action with a pinned sbom attestation passes", OTHER, ...pushJob(`      - uses: ${BUILD_ACTION.replace("build-push", "bake")}`, "        with:", "          attests: |", "            type=provenance,mode=max", `            type=sbom,generator=${GENERATOR}`));
+
+// ---- A workflow declares its token permissions ----------------------------------------
+
+const DECLARED = "permissions-declared";
+
+violation("a push-triggered workflow with no permissions anywhere fails", OTHER, DECLARED, "on: push", "jobs:", "  b:", "    runs-on: ubuntu-latest", "    steps:", "      - run: pnpm lint");
+violation("a workflow with no permissions and no job fails", OTHER, DECLARED, "on: push", "jobs: {}");
+violation("a workflow with permissions on one of two jobs fails", OTHER, DECLARED, "on: push", "jobs:", "  a:", "    permissions: {}", "    steps: []", "  b:", "    steps: []");
+violation("a workflow with permissions on only the second of two jobs fails", OTHER, DECLARED, "on: push", "jobs:", "  a:", "    steps: []", "  b:", "    permissions: {}", "    steps: []");
+violation("a workflow whose permissions key is empty fails", OTHER, DECLARED, "on: push", "permissions:", "jobs:", "  b:", "    steps: []");
+violation("a workflow whose job permissions key is empty fails", OTHER, DECLARED, "on: push", "jobs:", "  b:", "    permissions:", "    steps: []");
+violation("a pull_request workflow with no permissions fails", PR, DECLARED, "on: pull_request", "jobs:", "  t:", "    steps:", "      - run: pnpm lint");
+violation("a workflow whose jobs are no mapping fails", OTHER, DECLARED, "on: push", "jobs: []");
+violation("a workflow whose job is no mapping fails", OTHER, DECLARED, "on: push", "jobs:", "  b: build");
+violation("release.yml with no permissions fails", RELEASE, DECLARED, "on:", "  push:", "    branches: [main]", "jobs:", "  b:", "    steps:", "      - run: docker buildx build --push .");
+violation("a workflow with a permissions key only under a step fails", OTHER, DECLARED, "on: push", "jobs:", "  b:", "    steps:", "      - run: pnpm lint", "        with:", "          permissions: read-all");
+clean("a workflow with top-level permissions passes", OTHER, "on: push", "permissions:", "  contents: read", "jobs:", "  b:", "    steps:", "      - run: pnpm lint");
+clean("a workflow with empty top-level permissions passes", OTHER, "on: push", "permissions: {}", "jobs:", "  b:", "    steps:", "      - run: pnpm lint");
+clean("a workflow with read-all passes", OTHER, "on: push", "permissions: read-all", "jobs:", "  b:", "    steps:", "      - run: pnpm lint");
+clean("a workflow with permissions on every job passes", OTHER, "on: push", "jobs:", "  a:", "    permissions: {}", "    steps: []", "  b:", "    permissions:", "      contents: read", "    steps: []");
+clean("a workflow with a quoted permissions key on every job passes", OTHER, "on: push", "jobs:", "  a:", '    "permissions": {}', "    steps: []");
+clean("a job that calls a reusable workflow and declares permissions passes", OTHER, "on: push", "jobs:", "  a:", "    permissions:", "      contents: read", "    uses: ./.github/workflows/other.yml");
+clean("a composite action needs no permissions", ".github/actions/other/action.yml", "name: Other", "description: x", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      run: echo hi");
 
 // ---- Every rule has a case that fails it ----------------------------------------------------------
 

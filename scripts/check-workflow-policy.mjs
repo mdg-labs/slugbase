@@ -12,6 +12,9 @@
 //   or an input with push= (not false or 0) or type=registry) or holds `packages:`
 //   above read, and
 //   write-all is held nowhere.
+// - permissions-declared: a workflow declares `permissions` at its top level or on
+//   every one of its jobs (a null value does not count), so the repository's default
+//   token permissions never apply to it. A composite action has no token of its own.
 // - pinned-build-images: every `docker buildx create` names its builder image with
 //   `--driver-opt image=<name>[:<tag>]@sha256:<64 hex digits>`, and every build that
 //   asks for an SBOM (`--sbom`, or `--attest` with type=sbom) names its generator with
@@ -150,6 +153,7 @@ export const RULES = [
   "dockerfile",
   "pull-request-secrets",
   "image-push",
+  "permissions-declared",
   "pinned-build-images",
   "release-triggers",
   "frozen-lockfile",
@@ -1287,6 +1291,29 @@ function checkPullRequestSecrets(root, report) {
 }
 
 /**
+ * A workflow without a permissions block gets the repository's default token
+ * permissions, which may include packages: write. It declares them at its top level
+ * or on every job.
+ * @param {unknown} root
+ * @param {Report} report
+ */
+function checkPermissionsDeclared(root, report) {
+  /** @param {unknown} map */
+  const declares = (map) => {
+    const value = get(map, "permissions");
+    return value !== undefined && value !== null;
+  };
+  if (declares(root)) {
+    return;
+  }
+  const jobs = get(root, "jobs");
+  if (isMap(jobs) && jobs.size > 0 && [...jobs.values()].every(declares)) {
+    return;
+  }
+  report("permissions-declared", "neither the workflow nor every one of its jobs declares permissions, so the default token permissions apply");
+}
+
+/**
  * @param {unknown} on
  * @param {Report} report
  */
@@ -1329,6 +1356,7 @@ function checkWorkflowOrAction(file, root, kind, report) {
   if (kind !== "workflow") {
     return;
   }
+  checkPermissionsDeclared(root, report);
   const on = get(root, "on");
   if (isRelease) {
     checkReleaseTriggers(on, report);
