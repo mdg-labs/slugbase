@@ -3,22 +3,29 @@
 The measurement of doc 08 section 5.3 and doc 01 section 9.3: against a database filled with the large instance, with PostgreSQL on
 the same machine, `/go` has a p95 server time under 30 ms and the bookmark list and search under 100 ms. It is opt-in: it is not part of
 `pnpm test:*` or `pnpm gate`, and an exceeded budget never fails a developer's gate. `.github/workflows/nightly.yml` runs it every week
-and on a pull request to `main`, and opens an issue when a budget is exceeded. The older, narrower measurement of the `/go` query alone
+and on a pull request to `main`, against the CE image built from the commit under test, and opens an issue when a budget is exceeded or `/go` writes more than the usage buffer allows. The older, narrower measurement of the `/go` query alone
 under row-level security and transaction pooling is `packages/db/test/perf/` (`pnpm --filter @slugbase/db perf:go`).
 
 ## Run it
 
 ```sh
 pnpm dev:services     # the development Postgres of compose.dev.yml, which the test harness builds its databases on
-pnpm perf             # builds the server and the seed, then runs scripts/perf/run.mjs
+pnpm perf             # builds the server and the seed, then runs scripts/perf/run.mjs against the built server
 node scripts/perf/run.mjs --bookmarks 5000 --workspaces 20 --duration 10   # a small instance, for trying the scripts
+
+docker build -f apps/slugbase/Dockerfile --build-arg BUILD_COMMIT="$(git rev-parse HEAD)" -t slugbase:perf .
+pnpm turbo run build --filter=@slugbase/testing
+node scripts/perf/run.mjs --image slugbase:perf   # the server is the image, as in nightly.yml
 ```
 
 It needs `psql` and Docker. k6 runs from a pinned image (`K6_IMAGE` in `run.mjs`, by tag and digest) on the host network; nothing is installed
-on the host. The run creates a database through the test harness, seeds it, starts `apps/slugbase/dist/main.js server` against it as
-`slugbase_app` on a free port, and drops the database, stops the server and removes the k6 container when it ends or is interrupted.
+on the host. The run creates a database through the test harness, seeds it, starts the server against it as `slugbase_app` on a free port, and drops the database,
+stops the server and removes the k6 containers when it ends or is interrupted. Without `--image` the server is `apps/slugbase/dist/main.js server`. With
+`--image <ref>` it is that image run with `server` (`docker run --network host`, the same environment, `MIGRATE_ON_START=false` and `DATABASE_URL` as `slugbase_app`), which
+is stopped, so that it flushes the usage buffer, and removed with the rest; `nightly.yml` builds the image from the commit under test and never pulls one. The variables go to
+`docker run` by name, so no value is in its arguments.
 `--out <dir>` keeps `k6-summary.json` and `result.json` there; without it they go to a new directory under the temporary directory.
-The exit status is 0 when every budget holds, 10 when one is exceeded and 1 when the run itself failed.
+The exit status is 0 when every budget holds and the write load is within its limit, 10 when one is exceeded and 1 when the run itself failed.
 
 ## The instance
 
@@ -40,13 +47,23 @@ scenarios run one after another so that a budget is measured without the load of
 a second, for `--duration` seconds each):
 
 - `go`: `GET /go/<slug>` for a slug of the admin (six in ten), for a slug the admin has and a member shares as well (the admin's own is followed), for the slug only one
-  member shares (followed), for the slug several members share (the single-page app, status 200, which asks to choose), and for a slug nobody has (not found).
+  member shares (followed), for the slug several members share (the single-page app, status 200, which asks to choose), for a slug nobody has (not found) and for the slug of one of the admin's
+  plan-archived bookmarks (`archivedSlugs` of `fixtures.json`; not found as well).
 - `list`: `GET /api/v1/bookmarks` for each of the six sorts, the first page and a deep page (the 400th of 48).
+- `list_q`: `GET /api/v1/bookmarks?q=<term>` for the seven terms of the seed, the first page and a deep page (the 20th of 48, or the last page a term has when it matches fewer; a cursor is valid only
+  for the text it was issued for, so `setup()` follows each term's pages on its own).
+- `list_filter`: `GET /api/v1/bookmarks?tag=<id>` and `?folderId=<id>` for the admin's own tags and folders (`tagIds` and `folderIds` of `fixtures.json`), the first page.
 - `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders, and for the slugs of the shared bookmarks, which only the shares let the admin find. Each request is tagged with its
   term (`budgets.js` lists the seven of the seed, which `tooling/test/perf-budgets.test.ts` holds to `searchTerms` of `large.ts`) or with `shared` for those slugs, and the run reports the p95 of each, so a regression names the term.
 
-The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape and every search term has a threshold of its own, so a
-regression names the sort and the page or the term. `budgets.js` holds the sorts, the pages, the terms and the limits once: `scenarios.js` makes the thresholds from it and
+A second set of scenarios, `go-hot`, runs first, in a k6 run of its own (`SCENARIO_SET=go-hot`): 10 000 `GET /go/<slug>` for one forwarding slug of the admin, 20 at a time. `/go` counts an open in the server's memory and writes the counts once
+every 10 s (doc 01 section 8.1), so the one bookmark may be updated once for each interval that began during the requests and once more for the flush that follows them (`writeLoadLimit` in `budgets.js`).
+`run.mjs` reads `pg_stat_user_tables.n_tup_upd` of `bookmarks` as the server's user of the harness before the requests and after them (waiting 15 s for the last flush and the statistics to arrive), and puts the
+requests, the updates, the time and the limit in `result.json` (`writeLoad`) and the job summary. More updates than the limit are reported like an exceeded budget (exit status 10); a reading that fails, or no update at all
+after 10 000 requests, is a failed run (status 1), never a zero. It runs before the budgets so that the flush of the `go` scenario's many slugs does not fall in its window.
+
+The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape and every search term has a threshold of its own (`list q first`, `list q deep`, `list filter tag`, `list filter folder`, each sort on each page, each term), so a
+regression names the shape and the page, the sort or the term. `budgets.js` holds the sorts, the pages, the terms and the limits once: `scenarios.js` makes the thresholds from it and
 `run.mjs` reports every one of them, so a threshold that is crossed is always an exceeded budget (exit status 10); only a failed `checks`
 threshold, a response that was not what a scenario asked for, ends the run as failed. The server runs with its rate limits raised to the highest value, so that the run measures the server
 and not its limiter; a token is still taken on every request. It runs with `NODE_ENV=development` because the harness's databases use the

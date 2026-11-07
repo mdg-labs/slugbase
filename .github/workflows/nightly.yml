@@ -1,11 +1,12 @@
 name: Nightly
 
 # The scheduled checks of doc 08 section 5.3 and 6.2 that no developer's gate waits for. Today that is the performance budgets: the
-# built server and k6 (scripts/perf/run.mjs) against a database that the test harness made and filled with the large instance
-# (50 000 bookmarks in one workspace, 2 000 further workspaces), with PostgreSQL on the same runner. It runs every week and on
-# a pull request to `main`, which is the promotion. A budget that is exceeded opens an issue (or adds to the one that is open)
-# and does not fail the job; only a run that could not measure fails it. The job holds the workflow token with `issues: write`
-# and nothing else, references no secret, and the workflow never runs on pull_request_target (doc 10 T16).
+# CE image, built here from the commit under test and never pulled, and k6 (scripts/perf/run.mjs) against a database that the test
+# harness made and filled with the large instance (50 000 bookmarks in one workspace, 2 000 further workspaces), with PostgreSQL on
+# the same runner. It runs every week and on a pull request to `main`, which is the promotion. A budget that is exceeded, or a /go
+# that writes more than the usage buffer allows, opens an issue (or adds to the one that is open) and does not fail the job; only a
+# run that could not measure fails it. The job holds the workflow token with `issues: write` and nothing else, references no
+# secret, and the workflow never runs on pull_request_target (doc 10 T16).
 
 on:
   schedule:
@@ -68,19 +69,24 @@ jobs:
           set -euo pipefail
           command -v psql
           docker version --format '{{.Server.Version}}'
-      - name: Build the server and the seed
-        run: pnpm turbo run build --filter=slugbase --filter=@slugbase/testing
+      - name: Build the seed
+        run: pnpm turbo run build --filter=@slugbase/testing
+      # Built from the checked-out commit, the way the build job of ci.yml does, and not pushed or pulled: the server under load is this image.
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:perf .
       - name: Pull k6
         run: docker pull "$(sed -n 's/^const K6_IMAGE = "\(.*\)";$/\1/p' scripts/perf/run.mjs)"
-      # Exit status 10 is a budget that was exceeded: the result is reported below and the job goes on. Any other
-      # status is a run that could not measure, and fails the job.
+      # Exit status 10 is a budget that was exceeded, or a /go that wrote more than the usage buffer allows: the result is
+      # reported below and the job goes on. Any other status is a run that could not measure, and fails the job.
       - name: Measure the budgets
         id: measure
         env:
           SLUGBASE_TEST_PG_URL: postgres://slugbase_ci:slugbase_ci@127.0.0.1:5432/postgres
         run: |
           set +e
-          node scripts/perf/run.mjs --out perf-results
+          node scripts/perf/run.mjs --image slugbase:perf --out perf-results
           status=$?
           set -e
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -105,6 +111,8 @@ jobs:
             echo "| Scenario | p95 server time | Budget | |"
             echo "|---|---|---|---|"
             jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
+            echo
+            jq -r '"Write load: \(.writeLoad.requests) requests for one slug updated \(.writeLoad.updates) rows of bookmarks in \(.writeLoad.elapsedSeconds) s (at most \(.writeLoad.limit): one for each flush interval of \(.writeLoad.flushIntervalSeconds) s, and one more), \(if .writeLoad.ok then "ok" else "exceeded" end)."' perf-results/result.json
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Open an issue for an exceeded budget
         if: ${{ steps.measure.outputs.status == '10' }}
@@ -116,9 +124,9 @@ jobs:
           REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          exceeded="$(jq -r '[.budgets[] | select(.ok | not) | .name] | join(", ")' perf-results/result.json)"
+          exceeded="$(jq -r '[.budgets[] | select(.ok | not) | .name] + (if .writeLoad.ok then [] else ["write load of /go"] end) | join(", ")' perf-results/result.json)"
           {
-            echo "The performance run exceeded a budget of doc 08 section 5.3 (${exceeded}) on \`${EVENT}\` at \`${REF}\`."
+            echo "The performance run exceeded a budget or the write load of doc 08 section 5.3 (${exceeded}) on \`${EVENT}\` at \`${REF}\`."
             echo
             echo "| Scenario | Requests completed | Dropped iterations | Peak VUs | |"
             echo "|---|---|---|---|---|"
@@ -129,6 +137,8 @@ jobs:
             echo "| Scenario | p95 server time | Budget | |"
             echo "|---|---|---|---|"
             jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
+            echo
+            jq -r '"Write load: \(.writeLoad.requests) requests for one slug updated \(.writeLoad.updates) rows of bookmarks in \(.writeLoad.elapsedSeconds) s (at most \(.writeLoad.limit): one for each flush interval of \(.writeLoad.flushIntervalSeconds) s, and one more), \(if .writeLoad.ok then "ok" else "exceeded" end)."' perf-results/result.json
             echo
             echo "Run: ${RUN_URL}"
             echo
