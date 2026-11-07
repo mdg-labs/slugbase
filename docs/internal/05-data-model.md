@@ -108,7 +108,7 @@ Policies: `accounts_tenant`, for every command, `USING (id = app_account_id())` 
 | `user_agent` | text | Truncated to 256 chars |
 | `mfa_failures` | smallint NOT NULL DEFAULT 0 | Codes refused while the session is `partial`; the fifth deletes the session (doc 04 §4.3). CHECK ≥ 0 |
 
-Index `(account_id)`, `(expires_at)`. The account sees its own sessions through `sys_list_sessions` (§3).
+Index `(account_id)`, `(expires_at)`, `(absolute_expires_at)`: the retention purge deletes a session past either expiry (§6), and each arm of that predicate reads its own index, so the hourly purge does not scan the table. `sessions_absolute_expires_at_idx` is built concurrently on the existing table, in a non-transactional migration of its own (§5.2). The account sees its own sessions through `sys_list_sessions` (§3).
 
 **`oidc_login_states`** — RLS: S
 

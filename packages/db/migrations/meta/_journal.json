@@ -932,6 +932,13 @@
       "when": 1794045332173,
       "tag": "20261107095532_add_upgraded_link_invitation_unverified",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1794051928048,
+      "tag": "20261107114528_index_sessions_absolute_expires_at",
+      "breakpoints": true
     }
   ]
 }
