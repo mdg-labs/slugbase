@@ -15,6 +15,13 @@ import { urlOf, useMigratableDatabase } from "./support.ts";
 const database = useMigratableDatabase();
 const migratorUrl = (): string => urlOf(database().owner);
 
+// A test that sets a database back a version, runs the upgrade, and waits for the state of that run takes as long as the cluster is loaded by the other
+// integration suites of a full run: its bound is the sum of those steps and polls, not the 5 s default.
+// Creating the second database and waiting for the decoy to show in `pg_stat_activity` are bounded the same way, the wait by the condition it waits
+// for, with room for that, and the test by that wait plus the setup and teardown.
+const DECOY_VISIBLE_TIMEOUT_MS = 60_000;
+const UPGRADE_TEST_TIMEOUT_MS = 120_000;
+
 const expected = (createRequire(import.meta.url)("pg-boss/package.json") as { pgboss: { schema: number } }).pgboss.schema;
 
 async function rows<T extends Record<string, unknown>>(sql: string): Promise<T[]> {
@@ -65,7 +72,7 @@ async function failureOf(run: () => Promise<unknown>): Promise<MigrationError> {
 }
 
 describe("a pg-boss schema older than this build's", () => {
-  it("is upgraded as slugbase_owner, builds its concurrent indexes, and a second run does nothing", async () => {
+  it("is upgraded as slugbase_owner, builds its concurrent indexes, and a second run does nothing", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     expect(await rows(`SELECT 1 FROM information_schema.columns WHERE table_schema = '${PGBOSS_SCHEMA}' AND table_name = 'job' AND column_name = 'upsert_by_key'`)).toHaveLength(0);
 
@@ -84,7 +91,7 @@ describe("a pg-boss schema older than this build's", () => {
     expect((await runMigrations({ url: migratorUrl() })).applied).toEqual([]);
   });
 
-  it("builds its concurrent indexes on the partition of a queue that has one", async () => {
+  it("builds its concurrent indexes on the partition of a queue that has one", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     await rows(`SELECT ${PGBOSS_SCHEMA}.create_queue('partitioned', '{"partition": true, "policy": "standard"}'::jsonb)`);
     const [queue] = await rows<{ table_name: string }>(`SELECT table_name FROM ${PGBOSS_SCHEMA}.queue WHERE name = 'partitioned'`);
@@ -97,7 +104,7 @@ describe("a pg-boss schema older than this build's", () => {
     expect(await invalidIndexes()).toEqual([]);
   });
 
-  it("is upgraded across several versions at once", async () => {
+  it("is upgraded across several versions at once", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(2);
     const result = await runMigrations({ url: migratorUrl() });
     expect(result.applied).toEqual([{ chain: PGBOSS_SCHEMA, tag: `schema_${String(expected)}` }]);
@@ -105,7 +112,7 @@ describe("a pg-boss schema older than this build's", () => {
     expect(await invalidIndexes()).toEqual([]);
   });
 
-  it("builds its indexes outside a transaction with lock_timeout off, waiting as long as statement_timeout allows", async () => {
+  it("builds its indexes outside a transaction with lock_timeout off, waiting as long as statement_timeout allows", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     const holdMs = 1500;
     // The session starts with a lock_timeout that a wait of this length exceeds, unless the build turns it off.
@@ -137,7 +144,7 @@ describe("a pg-boss schema older than this build's", () => {
     expect(await invalidIndexes()).toEqual([]);
   });
 
-  it("makes a second run wait for the index builds of the first, which holds the lock", async () => {
+  it("makes a second run wait for the index builds of the first, which holds the lock", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     let released = 0;
     let holding!: () => void;
@@ -166,7 +173,7 @@ describe("a pg-boss schema older than this build's", () => {
     expect(await invalidIndexes()).toEqual([]);
   });
 
-  it("is upgraded once by runs started together", async () => {
+  it("is upgraded once by runs started together", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     const runs = await Promise.all([1, 2, 3].map(() => runMigrations({ url: migratorUrl() })));
     const steps = runs.flatMap((run) => run.applied);
@@ -175,7 +182,7 @@ describe("a pg-boss schema older than this build's", () => {
     expect(await invalidIndexes()).toEqual([]);
   });
 
-  it("is served by pg-boss as slugbase_app once upgraded", async () => {
+  it("is served by pg-boss as slugbase_app once upgraded", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     await runMigrations({ url: migratorUrl() });
     const boss = new PgBoss({
@@ -274,13 +281,6 @@ async function indexState(name: string): Promise<{ oid: number; valid: boolean }
   return found[0];
 }
 
-// Creating the second database and waiting for the decoy to show in `pg_stat_activity` take as long as the cluster is loaded by the other integration
-// suites of a full run, so the wait is bounded by the condition it waits for, with room for that, and the test by that wait plus the setup and teardown.
-// The same holds for a test that sets a database back a version, runs the upgrade, and waits for the state of that run: its bound is the sum of those
-// steps and polls, not the 5 s default.
-const DECOY_VISIBLE_TIMEOUT_MS = 60_000;
-const UPGRADE_TEST_TIMEOUT_MS = 120_000;
-
 describe("the lookup of the index build of an upgrade", () => {
   it("ignores the same step running in another database", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await withTestDatabase(async (other) => {
@@ -324,7 +324,7 @@ describe("the lookup of the index build of an upgrade", () => {
 });
 
 describe("the index builds of an upgrade that stopped", () => {
-  it("are finished by the next run, which drops the INVALID index the stopped build left", async () => {
+  it("are finished by the next run, which drops the INVALID index the stopped build left", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     const reader = holdSnapshot();
     await reader.held;
@@ -413,7 +413,7 @@ describe("the record of the index builds still owed", () => {
     expect((await runMigrations({ url: migratorUrl() })).applied).toEqual([]);
   });
 
-  it("is discarded when the transaction it was written for did not commit", async () => {
+  it("is discarded when the transaction it was written for did not commit", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     await recordPending(expected, [`CREATE INDEX CONCURRENTLY IF NOT EXISTS stale_i1 ON ${PGBOSS_SCHEMA}.version (version)`]);
     await runMigrations({ url: migratorUrl() });
@@ -424,7 +424,7 @@ describe("the record of the index builds still owed", () => {
 });
 
 describe("the DDL of an upgrade", () => {
-  it("ignores a queue table name pg-boss did not generate", async () => {
+  it("ignores a queue table name pg-boss did not generate", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(1);
     await rows(`SELECT ${PGBOSS_SCHEMA}.create_queue('partitioned', '{"partition": true, "policy": "standard"}'::jsonb)`);
     const [queue] = await rows<{ table_name: string }>(`SELECT table_name FROM ${PGBOSS_SCHEMA}.queue WHERE name = 'partitioned'`);
@@ -442,7 +442,7 @@ describe("the DDL of an upgrade", () => {
 });
 
 describe("the session of the pg-boss step", () => {
-  it("is the owner role with the connection check, keepalives and statement timeout of the engine", async () => {
+  it("is the owner role with the connection check, keepalives and statement timeout of the engine", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(0);
     const boss = new PgBoss({
       connectionString: ownerSessionUrl(migratorUrl()),
@@ -473,7 +473,7 @@ describe("the session of the pg-boss step", () => {
 });
 
 describe("a pg-boss schema that migrate cannot upgrade", () => {
-  it("is refused when it is newer than this build's, naming both versions and no connection string", async () => {
+  it("is refused when it is newer than this build's, naming both versions and no connection string", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(0);
     await rows(`UPDATE ${PGBOSS_SCHEMA}.version SET version = ${String(expected + 1)}`);
     const url = migratorUrl();
@@ -486,7 +486,7 @@ describe("a pg-boss schema that migrate cannot upgrade", () => {
     await rows(`UPDATE ${PGBOSS_SCHEMA}.version SET version = ${String(expected)}`);
   });
 
-  it("is refused, and left as it was, when it is older than pg-boss can upgrade from", async () => {
+  it("is refused, and left as it was, when it is older than pg-boss can upgrade from", { timeout: UPGRADE_TEST_TIMEOUT_MS }, async () => {
     await behind(0);
     await rows(`UPDATE ${PGBOSS_SCHEMA}.version SET version = 1`);
     const url = migratorUrl();
