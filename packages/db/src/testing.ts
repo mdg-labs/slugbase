@@ -38,6 +38,9 @@ const DEFAULT_SERVER_URL = "postgres://slugbase:slugbase@127.0.0.1:54329/slugbas
 // keeps whatever it was provisioned with.
 const APP_PASSWORD = "slugbase_app_dev_only";
 const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";
+// The console login of the test PgBouncer (test/pooler/userlist.txt).
+const POOLER_ADMIN_USER = "slugbase_pooler_admin";
+const POOLER_ADMIN_PASSWORD = "slugbase_pooler_admin_dev_only";
 
 // Roles are cluster-wide, and every test database depends on them staying as
 // roles.sql leaves them. Each process holds this advisory lock shared for as
@@ -90,8 +93,19 @@ export interface TestDatabase {
     /** Whether this call built the template; false when it already existed. */
     readonly built: boolean;
   };
-  /** A pool as `slugbase_app`, what the server connects as: row-level security applies. */
+  /**
+   * A pool as `slugbase_app`, what the server connects as: row-level security
+   * applies. Where `SLUGBASE_TEST_POOLER_URL` is set it connects through that
+   * PgBouncer.
+   */
   readonly app: TestSql;
+  /**
+   * The PgBouncer the `app` pool and `tenant` connect through, from
+   * `SLUGBASE_TEST_POOLER_URL`, or undefined for a direct connection. The
+   * harness has checked, before it returns, that the pooler really serves this
+   * database in transaction mode with a server pool of one connection.
+   */
+  readonly pooler: { readonly host: string; readonly port: number } | undefined;
   /** A pool as `slugbase_owner`, for fixtures that create objects or insert what the app role may not. */
   readonly owner: TestSql;
   /**
@@ -138,6 +152,18 @@ function resolveServer(serverUrl: string | undefined): Server {
   };
 }
 
+function resolvePooler(): { host: string; port: number } | undefined {
+  const raw = process.env["SLUGBASE_TEST_POOLER_URL"];
+  if (raw === undefined || raw === "") {
+    return undefined;
+  }
+  const match = /^([^\s:/@]+):([0-9]{1,5})$/.exec(raw);
+  if (match === null) {
+    throw new Error("SLUGBASE_TEST_POOLER_URL is not a host:port address");
+  }
+  return { host: match[1] ?? "", port: Number(match[2]) };
+}
+
 function quote(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
@@ -157,6 +183,8 @@ function assertTestName(name: string): void {
 interface OpenOptions {
   max: number;
   role?: string;
+  /** Connect here instead of to the server, for a pool that goes through the pooler. */
+  endpoint?: { host: string; port: number };
 }
 
 function open(
@@ -166,8 +194,8 @@ function open(
   options: OpenOptions,
 ): TestSql {
   return postgres({
-    host: server.host,
-    port: server.port,
+    host: options.endpoint?.host ?? server.host,
+    port: options.endpoint?.port ?? server.port,
     database,
     username: login.username,
     password: login.password,
@@ -186,6 +214,36 @@ function open(
 
 function openAdmin(server: Server): TestSql {
   return open(server, server, server.database, { max: 1 });
+}
+
+// Fails unless the pooler serves `database` to `slugbase_app` in transaction
+// mode with a server pool of one connection, read from its console. A pooler
+// that is missing, or that is not the one the tests are written for, is an
+// error and never a fall back to a direct connection.
+async function assertPooled(pooler: { host: string; port: number }, database: string): Promise<void> {
+  const control = postgres({
+    host: pooler.host,
+    port: pooler.port,
+    database: "pgbouncer",
+    username: POOLER_ADMIN_USER,
+    password: POOLER_ADMIN_PASSWORD,
+    max: 1,
+    fetch_types: false,
+    onnotice: () => undefined,
+  });
+  try {
+    const pools = await control.unsafe<{ database: string; user: string; pool_mode: string | null }[]>("SHOW POOLS");
+    const pool = pools.find((row) => row.database === database && row.user === "slugbase_app");
+    if (pool === undefined || pool.pool_mode !== "transaction") {
+      throw new Error(`the pooler at ${pooler.host}:${String(pooler.port)} has no transaction-mode pool of slugbase_app for ${database}`);
+    }
+    const databases = await control.unsafe<{ name: string; pool_size: number }[]>("SHOW DATABASES");
+    if (databases.find((row) => row.name === database)?.pool_size !== 1) {
+      throw new Error(`the pooler at ${pooler.host}:${String(pooler.port)} does not give ${database} a server pool of one connection`);
+    }
+  } finally {
+    await control.end({ timeout: 5 });
+  }
 }
 
 function frame(hash: ReturnType<typeof createHash>, label: string, content: Buffer): void {
@@ -479,6 +537,7 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
   const session = await acquireSession(server);
   const name = `test_${randomBytes(8).toString("hex")}`;
   assertTestName(name);
+  const pooler = resolvePooler();
   const pools: TestSql[] = [];
   let created = false;
   let usingTemplate = false;
@@ -489,7 +548,10 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
     await session.admin.unsafe(`CREATE DATABASE ${quote(name)} TEMPLATE ${quote(templateName)}`);
     created = true;
     await grantDatabasePrivileges(session.admin, name);
-    const app = open(server, { username: "slugbase_app", password: APP_PASSWORD }, name, { max: APP_POOL_SIZE });
+    const app = open(server, { username: "slugbase_app", password: APP_PASSWORD }, name, {
+      max: APP_POOL_SIZE,
+      ...(pooler === undefined ? {} : { endpoint: pooler }),
+    });
     pools.push(app);
     // The owner role cannot log in; the migrator can act as it, so its
     // sessions start with that role set.
@@ -499,6 +561,9 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
     });
     pools.push(owner);
     await Promise.all([app`SELECT 1`, owner`SELECT 1`]);
+    if (pooler !== undefined) {
+      await assertPooled(pooler, name);
+    }
 
     let dropped: Promise<void> | undefined;
     const drop = (): Promise<void> => {
@@ -512,7 +577,7 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
       })();
       return dropped;
     };
-    return { name, template: { name: templateName, built }, app, owner, tenant: bindTenantDatabase(app), drop };
+    return { name, template: { name: templateName, built }, app, pooler, owner, tenant: bindTenantDatabase(app), drop };
   } catch (error) {
     try {
       await Promise.all(pools.map((pool) => pool.end({ timeout: 5 })));
