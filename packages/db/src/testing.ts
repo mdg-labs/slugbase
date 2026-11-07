@@ -217,10 +217,20 @@ function openAdmin(server: Server): TestSql {
 }
 
 // Fails unless the pooler serves `database` to `slugbase_app` in transaction
-// mode with a server pool of one connection, read from its console. A pooler
-// that is missing, or that is not the one the tests are written for, is an
-// error and never a fall back to a direct connection.
-async function assertPooled(pooler: { host: string; port: number }, database: string): Promise<void> {
+// mode with a server pool of one connection. A pooler that is missing, or that
+// is not the one the tests are written for, is an error and never a fall back
+// to a direct connection; so is a console that cannot be read, because then
+// nothing is proven.
+//
+// The console is not the only evidence. PgBouncer registers a database created
+// by the `*` entry as an auto-database at its first login, and `SHOW DATABASES`
+// can omit such a database while its pool is in use, so a missing row proves
+// nothing and a listed row is checked only as a further witness. The pool of
+// one is read from the configuration it comes from (`default_pool_size`, which
+// no entry of the test pooler overrides) and shown by behaviour: queries that
+// overlap through the application pool must all land on one Postgres backend.
+async function assertPooled(pooler: { host: string; port: number }, database: string, app: TestSql): Promise<void> {
+  const address = `${pooler.host}:${String(pooler.port)}`;
   const control = postgres({
     host: pooler.host,
     port: pooler.port,
@@ -232,17 +242,30 @@ async function assertPooled(pooler: { host: string; port: number }, database: st
     onnotice: () => undefined,
   });
   try {
+    const config = new Map(
+      (await control.unsafe<{ key: string; value: string | null }[]>("SHOW CONFIG")).map((row) => [row.key, row.value]),
+    );
+    if (config.get("pool_mode") !== "transaction") {
+      throw new Error(`the pooler at ${address} does not pool in transaction mode`);
+    }
+    if (config.get("default_pool_size") !== "1") {
+      throw new Error(`the pooler at ${address} does not give ${database} a server pool of one connection (default_pool_size)`);
+    }
     const pools = await control.unsafe<{ database: string; user: string; pool_mode: string | null }[]>("SHOW POOLS");
     const pool = pools.find((row) => row.database === database && row.user === "slugbase_app");
     if (pool === undefined || pool.pool_mode !== "transaction") {
-      throw new Error(`the pooler at ${pooler.host}:${String(pooler.port)} has no transaction-mode pool of slugbase_app for ${database}`);
+      throw new Error(`the pooler at ${address} has no transaction-mode pool of slugbase_app for ${database}`);
     }
-    const databases = await control.unsafe<{ name: string; pool_size: number }[]>("SHOW DATABASES");
-    if (databases.find((row) => row.name === database)?.pool_size !== 1) {
-      throw new Error(`the pooler at ${pooler.host}:${String(pooler.port)} does not give ${database} a server pool of one connection`);
+    const listed = (await control.unsafe<{ name: string; pool_size: number }[]>("SHOW DATABASES")).find((row) => row.name === database);
+    if (listed !== undefined && listed.pool_size !== 1) {
+      throw new Error(`the pooler at ${address} does not give ${database} a server pool of one connection (pool_size)`);
     }
   } finally {
     await control.end({ timeout: 5 });
+  }
+  const backends = await Promise.all(Array.from({ length: APP_POOL_SIZE * 2 }, () => app<{ pid: number }[]>`SELECT pg_backend_pid() AS pid, pg_sleep(0.05)`));
+  if (new Set(backends.map((rows) => rows[0]?.pid)).size !== 1) {
+    throw new Error(`the pooler at ${address} does not give ${database} a server pool of one connection (overlapping queries ran on several backends)`);
   }
 }
 
@@ -562,7 +585,7 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
     pools.push(owner);
     await Promise.all([app`SELECT 1`, owner`SELECT 1`]);
     if (pooler !== undefined) {
-      await assertPooled(pooler, name);
+      await assertPooled(pooler, name, app);
     }
 
     let dropped: Promise<void> | undefined;

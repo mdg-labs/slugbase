@@ -1,3 +1,4 @@
+import { createServer } from "node:net";
 import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -29,6 +30,8 @@ const LABELS_SQL = "SELECT label FROM tenant_probe ORDER BY label";
 const ROLLBACK = new Error("roll this transaction back");
 
 let database: TestDatabase;
+// Set once createTestDatabase has returned: a setup that failed has nothing to drop, and its own error is the one to report.
+let created = false;
 const clients: postgres.Sql[] = [];
 
 // A pool of one client connection to the pooler, as the application role, like one process of the server.
@@ -180,6 +183,7 @@ beforeAll(async () => {
     return;
   }
   database = await createTestDatabase();
+  created = true;
   await createProbeTables(database);
   await seedProbeRows(database);
 }, HOOK_TIMEOUT_MS);
@@ -189,7 +193,9 @@ afterAll(async () => {
     return;
   }
   await Promise.all(clients.map((client) => client.end({ timeout: 5 })));
-  await database.drop();
+  if (created) {
+    await database.drop();
+  }
 }, HOOK_TIMEOUT_MS);
 
 describe.skipIf(!POOLED)("the tenant context behind PgBouncer in transaction mode", () => {
@@ -243,4 +249,81 @@ describe.skipIf(!POOLED)("the tenant context behind PgBouncer in transaction mod
     }
     expect(observed((await observer.unsafe<Row[]>(SETTINGS_SQL))[0])).toMatchObject({ account: null, workspace: null });
   });
+});
+
+// The harness has to refuse a pooler that is not the one these tests are written
+// for. Each case changes one setting through the console of the test pooler and
+// puts it back with RELOAD, which re-reads pgbouncer.ini; the file's other
+// tests are finished by then, and no other process uses this pooler while the
+// pooled files run one after the other.
+describe.skipIf(!POOLED)("the harness's check of the pooler", () => {
+  async function underSetting(setting: string, value: string, run: () => Promise<void>): Promise<void> {
+    const pooler = database.pooler;
+    if (pooler === undefined) {
+      throw new Error("the test database has no pooler");
+    }
+    const control = postgres({
+      host: pooler.host,
+      port: pooler.port,
+      database: "pgbouncer",
+      username: "slugbase_pooler_admin",
+      password: "slugbase_pooler_admin_dev_only",
+      max: 1,
+      fetch_types: false,
+      onnotice: () => undefined,
+    });
+    try {
+      await control.unsafe(`SET ${setting} = ${value}`);
+      await run();
+    } finally {
+      await control.unsafe("RELOAD");
+      await control.end({ timeout: 5 });
+    }
+  }
+
+  // What createTestDatabase rejects with; a database it unexpectedly returns is dropped again.
+  async function refusal(): Promise<unknown> {
+    try {
+      await (await createTestDatabase()).drop();
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  }
+
+  it("refuses a pooler whose server pool is larger than one connection", async () => {
+    await underSetting("default_pool_size", "2", async () => {
+      expect(String(await refusal())).toMatch(/does not give test_[0-9a-f]{16} a server pool of one connection/);
+    });
+  }, HOOK_TIMEOUT_MS);
+
+  it("refuses a pooler that is not in transaction mode", async () => {
+    await underSetting("pool_mode", "'session'", async () => {
+      expect(String(await refusal())).toMatch(/does not pool in transaction mode/);
+    });
+  }, HOOK_TIMEOUT_MS);
+
+  it("refuses a pooler that is not there, and does not connect to the server directly", async () => {
+    const unused = await new Promise<number>((resolve, reject) => {
+      const probe = createServer();
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", () => {
+        const address = probe.address();
+        probe.close(() => {
+          resolve(typeof address === "object" && address !== null ? address.port : 0);
+        });
+      });
+    });
+    const named = process.env["SLUGBASE_TEST_POOLER_URL"];
+    process.env["SLUGBASE_TEST_POOLER_URL"] = `127.0.0.1:${String(unused)}`;
+    try {
+      expect(await refusal()).toBeInstanceOf(Error);
+    } finally {
+      if (named === undefined) {
+        delete process.env["SLUGBASE_TEST_POOLER_URL"];
+      } else {
+        process.env["SLUGBASE_TEST_POOLER_URL"] = named;
+      }
+    }
+  }, HOOK_TIMEOUT_MS);
 });
