@@ -23,6 +23,15 @@
 //   upstream tag. The setup-buildx-action input driver-opts and the sbom and attests
 //   inputs of an action are held to the same rule. An image from a parameter, a
 //   substitution or an expression fails, since its digest cannot be read.
+// - local-action: every `uses: ./<path>` of a workflow or composite action, wherever the
+//   path points, names a workflow under .github/workflows or a folder with an
+//   action.yml or action.yaml, which is then read as a composite action like those under
+//   .github/actions (so its `run:` steps are held to the rules below). A path that is
+//   missing, leaves the repository or holds an expression or parameter fails.
+// - dockerfile: a build command (`docker build`, `buildx build`, `podman build`) whose
+//   -f or --file, or a build-push-action `file:` input, names a file that is not named like
+//   a Dockerfile (Dockerfile, Containerfile or *.Dockerfile, as the list of files this
+//   check reads), so the file the image is built from is always one of those it reads.
 // - release-triggers: release.yml runs on a push with `branches: [main]` and/or a
 //   release with `types: [published]` and on nothing else.
 // - frozen-lockfile: every pnpm install (install, i, install-test, it, ci and their
@@ -33,8 +42,9 @@
 //   them) except a global install of exact versions (below); no yarn; and no
 //   frozen-lockfile setting through the environment.
 //
-// It reads .github/workflows/*.yml|yaml, .github/actions/**/action.yml|yaml and
-// every Dockerfile or Containerfile outside node_modules. A workflow or action is
+// It reads .github/workflows/*.yml|yaml, .github/actions/**/action.yml|yaml, every
+// local action a workflow or action uses (`uses: ./<path>`, wherever it is) and every
+// Dockerfile or Containerfile outside node_modules. A workflow or action is
 // read as the parsed value of the `yaml` package, never as text, so the rules do
 // not depend on how YAML spells a key or a string (quotes, escapes, flow forms,
 // anchors and aliases, explicit keys, folded and plain multi-line scalars). The
@@ -140,7 +150,7 @@
 // Exit status: 0 when the tree follows the policy, 1 when it does not, 2 when
 // the check could not run. A finding reads "workflow-policy: <file>: <rule>: ...".
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { join, resolve, dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseAllDocuments } from "yaml";
 
@@ -157,6 +167,7 @@ export const RULES = [
   "pinned-build-images",
   "release-triggers",
   "frozen-lockfile",
+  "local-action",
   "internal",
 ];
 
@@ -868,6 +879,48 @@ function buildImageMessages(words) {
   return messages;
 }
 
+/**
+ * True when the check reads a file of this name as a Dockerfile.
+ * @param {string} path
+ */
+function isDockerfilePath(path) {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return !isDynamic(path) && DOCKERFILE_NAME.test(name) && !SOURCE_SUFFIX.test(name);
+}
+
+/**
+ * The findings about the file a build command builds from: it must be named like a
+ * Dockerfile, the names the check lists and reads.
+ * @param {string[]} words
+ * @returns {string[]}
+ */
+function buildFileMessages(words) {
+  const toolAt = words.findIndex((word) => CONTAINER_TOOLS.has(baseName(word)) || isBuildx(word));
+  if (toolAt < 0 || words.some((word) => ["compose", "docker-compose"].includes(baseName(word)))) {
+    return [];
+  }
+  if (!words.slice(toolAt + 1).some((word) => word === "build" || word === "bud")) {
+    return [];
+  }
+  /** @type {string[]} */
+  const messages = [];
+  words.forEach((word, index) => {
+    /** @type {string | undefined} */
+    let file;
+    if (word === "-f" || word === "--file") {
+      file = words[index + 1] ?? "";
+    } else if (word.startsWith("--file=")) {
+      file = word.slice("--file=".length);
+    } else if (word.startsWith("-f") && !word.startsWith("--") && word.length > 2) {
+      file = word.slice(2).replace(/^=/, "");
+    }
+    if (file !== undefined && !isDockerfilePath(file)) {
+      messages.push(`the build file ${show(file)} is not named like a Dockerfile (Dockerfile, Containerfile or *.Dockerfile), so it is not read: ${quoteCommand(words)}`);
+    }
+  });
+  return messages;
+}
+
 const UNKNOWN_SUBCOMMAND = "<unknown>";
 
 /**
@@ -1084,6 +1137,9 @@ function scanCommands(commands, allowPush) {
     for (const message of buildImageMessages(words)) {
       found.set(`pinned-build-images ${message}`, { rule: "pinned-build-images", message });
     }
+    for (const message of buildFileMessages(words)) {
+      found.set(`dockerfile ${message}`, { rule: "dockerfile", message });
+    }
     if (!allowPush) {
       for (const message of pushMessages(words)) {
         found.set(`image-push ${message}`, { rule: "image-push", message });
@@ -1137,8 +1193,9 @@ function checkPermissions(value, isRelease, report) {
 }
 
 /**
- * The builder image and the SBOM generator an action is given: the driver-opts of
- * docker/setup-buildx-action, and the sbom and attests inputs of a build action.
+ * What a build action is given: the builder image (driver-opts of
+ * docker/setup-buildx-action), the SBOM generator (the sbom and attests inputs) and
+ * the file to build from (the file input of docker/build-push-action).
  * @param {Map<string, unknown>} step
  * @param {string} uses
  * @param {Report} report
@@ -1159,6 +1216,10 @@ function checkBuildInputs(step, uses, report) {
   };
   if (action === "docker/setup-buildx-action") {
     reportAll(pinnedImageMessages(entriesOf([text("driver-opts") ?? ""], "image", /[\n,]/), `the builder image of ${show(uses)}`, "driver-opts: image", [uses]));
+  }
+  const file = text("file");
+  if (action === "docker/build-push-action" && file !== undefined && !isDockerfilePath(file)) {
+    report("dockerfile", `the build file ${show(file)} of ${show(uses)} is not named like a Dockerfile (Dockerfile, Containerfile or *.Dockerfile), so it is not read`);
   }
   const sbom = text("sbom");
   if (sbom !== undefined && sbom.toLowerCase() !== "false") {
@@ -1236,6 +1297,28 @@ function checkCommon(root, isRelease, report) {
     },
     () => undefined,
   );
+}
+
+/**
+ * The local paths a workflow or action `uses`: values that start with ./ or ../.
+ * @param {unknown} root
+ * @returns {string[]}
+ */
+function localUses(root) {
+  /** @type {string[]} */
+  const paths = [];
+  walk(
+    root,
+    (map) => {
+      for (const [key, value] of map) {
+        if (lower(key) === "uses" && typeof value === "string" && /^\.{1,2}(\/|$)/.test(value)) {
+          paths.push(value);
+        }
+      }
+    },
+    () => undefined,
+  );
+  return paths;
 }
 
 /**
@@ -1636,11 +1719,19 @@ export function checkRepository(root) {
       }
     }
   };
+  /** The workflow and action files read, so one used from several places is read once. */
+  const checked = new Set();
+  /** @type {{ from: string, uses: string }[]} */
+  const pending = [];
   /**
    * @param {string} file
    * @param {"workflow" | "action"} kind
    */
   const checkYamlFile = (file, kind) => {
+    if (checked.has(file)) {
+      return;
+    }
+    checked.add(file);
     run(file, (text, report) => {
       const loaded = loadYaml(text);
       if (loaded.errors.length > 0) {
@@ -1650,7 +1741,41 @@ export function checkRepository(root) {
         return;
       }
       checkWorkflowOrAction(file, loaded.value, kind, report);
+      for (const uses of localUses(loaded.value)) {
+        pending.push({ from: file, uses });
+      }
     });
+  };
+  /**
+   * The action files a local `uses` names, or why it names none.
+   * @param {string} uses
+   * @returns {{ files: string[] } | { problem: string }}
+   */
+  const resolveLocalUse = (uses) => {
+    if (isDynamic(uses)) {
+      return { problem: `uses: ${show(uses)} holds an expression or a parameter, so the action it names cannot be read` };
+    }
+    const path = posix.normalize(uses).replace(/\/$/, "");
+    if (path === ".." || path.startsWith("../") || path.startsWith("/")) {
+      return { problem: `uses: ${show(uses)} leaves the repository` };
+    }
+    const dir = path === "." ? "" : path;
+    if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(dir)) {
+      return checked.has(dir) ? { files: [] } : { problem: `uses: ${show(uses)} names no workflow` };
+    }
+    const candidates = ["action.yml", "action.yaml"].map((name) => (dir === "" ? name : `${dir}/${name}`));
+    const files = candidates.filter((candidate) => {
+      try {
+        return statSync(join(root, candidate)).isFile();
+      } catch (error) {
+        if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
+          return false;
+        }
+        add(candidate, "unreadable", error instanceof Error ? error.message : String(error));
+        return false;
+      }
+    });
+    return files.length > 0 ? { files } : { problem: `uses: ${show(uses)} names no action: neither ${candidates.join(" nor ")} exists` };
   };
 
   const workflows = listFiles(join(root, ".github", "workflows"), ".github/workflows", unreadable, new Set()).filter(
@@ -1667,6 +1792,16 @@ export function checkRepository(root) {
   );
   for (const file of actions) {
     checkYamlFile(file, "action");
+  }
+  for (let next = pending.shift(); next !== undefined; next = pending.shift()) {
+    const resolved = resolveLocalUse(next.uses);
+    if ("problem" in resolved) {
+      add(next.from, "local-action", resolved.problem);
+    } else {
+      for (const file of resolved.files) {
+        checkYamlFile(file, "action");
+      }
+    }
   }
   const dockerfiles = listFiles(root, "", unreadable, new Set(["node_modules", ".git"])).filter((path) =>
     DOCKERFILE_NAME.test(path.slice(path.lastIndexOf("/") + 1)),

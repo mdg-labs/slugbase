@@ -197,6 +197,15 @@ const runViolation = (name, rule, run, file = OTHER) => {
   violation(name, file, rule, ...pushJob(`      - run: ${run}`));
 };
 
+/**
+ * A `run:` value in a push-triggered workflow that the check passes.
+ * @param {string} name
+ * @param {string} run
+ */
+const runClean = (name, run) => {
+  clean(name, OTHER, ...pushJob(`      - run: ${run}`));
+};
+
 test("a tree that follows the policy passes", () => {
   const { findings } = checkRepository(tree());
   assert.deepEqual(findings, [], describeFindings(findings));
@@ -972,7 +981,7 @@ test("a folder with no workflow fails", () => {
 });
 
 test("a tree with no composite action passes", () => {
-  const { findings } = checkRepository(tree({ [ACTION]: null }));
+  const { findings } = checkRepository(tree({ [ACTION]: null, [CI]: ciWorkflow.replace("      - uses: ./.github/actions/setup\n", "") }));
   assert.deepEqual(findings, [], describeFindings(findings));
 });
 
@@ -1162,6 +1171,114 @@ clean("a workflow with permissions on every job passes", OTHER, "on: push", "job
 clean("a workflow with a quoted permissions key on every job passes", OTHER, "on: push", "jobs:", "  a:", '    "permissions": {}', "    steps: []");
 clean("a job that calls a reusable workflow and declares permissions passes", OTHER, "on: push", "jobs:", "  a:", "    permissions:", "      contents: read", "    uses: ./.github/workflows/other.yml");
 clean("a composite action needs no permissions", ".github/actions/other/action.yml", "name: Other", "description: x", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      run: echo hi");
+
+// ---- Local actions are read wherever they are ------------------------------------------
+
+const LOCAL = "local-action";
+const LOCAL_ACTION = "tooling/ci/action.yml";
+const localUse = (path) => ["on: push", "permissions: {}", "jobs:", "  b:", "    steps:", `      - uses: ${path}`];
+const localAction = (...runs) => y("name: Local", "description: x", "runs:", "  using: composite", "  steps:", ...runs.flatMap((run) => ["    - shell: bash", `      run: ${run}`]));
+
+/**
+ * A tree whose other.yml uses a local action, with the files the case adds.
+ * @param {string} path
+ * @param {Record<string, string | null>} files
+ */
+const localTree = (path, files) => tree({ [OTHER]: y(...localUse(path)), ...files });
+
+/**
+ * @param {string} name
+ * @param {string} path
+ * @param {Record<string, string | null>} files
+ * @param {string} file
+ * @param {string} rule
+ */
+function localViolation(name, path, files, file, rule) {
+  test(name, () => {
+    const { findings } = checkRepository(localTree(path, files));
+    assert.ok(
+      findings.some((finding) => finding.file === file && finding.rule === rule),
+      `expected a finding of ${rule} naming ${file}, got ${describeFindings(findings)}`,
+    );
+    rulesWithAViolation.add(rule);
+  });
+}
+
+/**
+ * @param {string} name
+ * @param {string} path
+ * @param {Record<string, string | null>} files
+ */
+function localClean(name, path, files) {
+  test(name, () => {
+    const { findings } = checkRepository(localTree(path, files));
+    assert.deepEqual(findings, [], describeFindings(findings));
+  });
+}
+
+localViolation("a local action outside .github/actions that installs without --frozen-lockfile is read", "./tooling/ci", { [LOCAL_ACTION]: localAction("pnpm install") }, LOCAL_ACTION, "frozen-lockfile");
+localViolation("a local action outside .github/actions that pushes an image is read", "./tooling/ci", { [LOCAL_ACTION]: localAction("docker push ghcr.io/x/y:1") }, LOCAL_ACTION, PUSH);
+localViolation("a local action outside .github/actions that grants packages: write is read", "./tooling/ci", { [LOCAL_ACTION]: y("name: Local", "permissions:", "  packages: write", "runs:", "  using: composite", "  steps: []") }, LOCAL_ACTION, PUSH);
+localViolation("a local action named action.yaml is read", "./tooling/ci", { [LOCAL_ACTION]: null, "tooling/ci/action.yaml": localAction("pnpm install") }, "tooling/ci/action.yaml", "frozen-lockfile");
+localViolation("a local action is read when both spellings of its file exist", "./tooling/ci", { [LOCAL_ACTION]: localAction("pnpm install --frozen-lockfile"), "tooling/ci/action.yaml": localAction("pnpm install") }, "tooling/ci/action.yaml", "frozen-lockfile");
+localViolation("a local action named with a trailing slash is read", "./tooling/ci/", { [LOCAL_ACTION]: localAction("pnpm install") }, LOCAL_ACTION, "frozen-lockfile");
+localViolation("a local action named through a dot segment is read", "./tooling/./x/../ci", { [LOCAL_ACTION]: localAction("pnpm install") }, LOCAL_ACTION, "frozen-lockfile");
+localViolation("a local action at the repository root is read", "./", { "action.yml": localAction("pnpm install") }, "action.yml", "frozen-lockfile");
+localViolation("a local action used by a local action is read", "./tooling/ci", { [LOCAL_ACTION]: y("name: Local", "runs:", "  using: composite", "  steps:", "    - uses: ./tooling/inner"), "tooling/inner/action.yml": localAction("npm install left-pad") }, "tooling/inner/action.yml", "frozen-lockfile");
+localViolation("a local action used by a composite action in .github/actions is read", "./.github/actions/setup", { [ACTION]: y("name: Set up", "runs:", "  using: composite", "  steps:", "    - uses: ./tooling/ci"), [LOCAL_ACTION]: localAction("pnpm install") }, LOCAL_ACTION, "frozen-lockfile");
+localViolation("a local action that does not exist fails", "./tooling/missing", {}, OTHER, LOCAL);
+localViolation("a local action folder with no action file fails", "./tooling/ci", { "tooling/ci/README.md": "# ci\n" }, OTHER, LOCAL);
+localViolation("a local action path that leaves the repository fails", "./../elsewhere", {}, OTHER, LOCAL);
+localViolation("a local action path that leaves the repository after a segment fails", "./tooling/../../elsewhere", {}, OTHER, LOCAL);
+localViolation("a local action path from an expression fails", "./${{ matrix.dir }}", {}, OTHER, LOCAL);
+localViolation("a local action path with a parameter fails", "./tooling/$DIR", {}, OTHER, LOCAL);
+localViolation("a reusable workflow that does not exist fails", "./.github/workflows/gone.yml", {}, OTHER, LOCAL);
+localViolation("an unparsable local action fails", "./tooling/ci", { [LOCAL_ACTION]: "runs: [\n" }, LOCAL_ACTION, YAML);
+localClean("a local action outside .github/actions that follows the policy passes", "./tooling/ci", { [LOCAL_ACTION]: localAction("pnpm install --frozen-lockfile", "docker build -t x .") });
+localClean("a local action in .github/actions is read once", "./.github/actions/setup", {});
+localClean("a reusable workflow call that exists passes", "./.github/workflows/ci.yml", {});
+localClean("a local action used twice is read once", "./tooling/ci", { [LOCAL_ACTION]: localAction("pnpm install --frozen-lockfile"), [CI]: y(...localUse("./tooling/ci")) });
+localClean("local actions that use each other in a cycle pass", "./tooling/ci", { [LOCAL_ACTION]: y("name: Local", "runs:", "  using: composite", "  steps:", "    - uses: ./tooling/inner"), "tooling/inner/action.yml": y("name: Inner", "runs:", "  using: composite", "  steps:", "    - uses: ./tooling/ci") });
+test("a local action used twice is reported once", () => {
+  const { findings } = checkRepository(localTree("./tooling/ci", { [LOCAL_ACTION]: localAction("pnpm install"), [CI]: y(...localUse("./tooling/ci")) }));
+  assert.equal(findings.filter((finding) => finding.file === LOCAL_ACTION).length, 1, describeFindings(findings));
+});
+test("the finding for a missing local action names the path", () => {
+  const { findings } = checkRepository(localTree("./tooling/missing", {}));
+  assert.ok(findings.some((finding) => finding.rule === LOCAL && finding.message.includes("tooling/missing")), describeFindings(findings));
+});
+
+// A Dockerfile the build names under any other name is not in the list the check reads.
+const buildRun = (flags) => `docker buildx build ${flags} .`;
+runViolation("docker build -f with a file not named like a Dockerfile fails", DOCKER, buildRun("-f ci/build.txt"));
+runViolation("docker build --file with a file not named like a Dockerfile fails", DOCKER, buildRun("--file ci/build.txt"));
+runViolation("docker build --file= with a file not named like a Dockerfile fails", DOCKER, buildRun("--file=ci/build.txt"));
+runViolation("docker build -f= with a file not named like a Dockerfile fails", DOCKER, buildRun("-f=ci/build.txt"));
+runViolation("docker build -f attached to its value fails", DOCKER, buildRun("-fci/build.txt"));
+runViolation("docker build -f reading standard input fails", DOCKER, buildRun("-f -"));
+runViolation("docker build -f with a file named from a parameter fails", DOCKER, buildRun('-f "$FILE"'));
+runViolation("docker build -f with a file named from an expression fails", DOCKER, buildRun("-f ${{ vars.FILE }}"));
+runViolation("docker build -f with a source file name fails", DOCKER, buildRun("-f Dockerfile.sh"));
+runViolation("docker build -f in a plain docker build fails", DOCKER, "docker build -f ci/build.txt -t x .");
+runViolation("podman build -f with an odd name fails", DOCKER, "podman build -f ci/build.txt .");
+runViolation("docker build -f last on the line fails", DOCKER, "docker build . -f ci/build.txt");
+runViolation("a Dockerfile name in a later word does not hide the file", DOCKER, "docker build -f ci/build.txt -t Dockerfile .");
+violation("docker build -f over several lines fails", OTHER, DOCKER, ...pushJob("      - run: |", "          docker build \\", "            -f ci/build.txt \\", "            -t x ."));
+violation("docker build -f in a Dockerfile RUN fails", DOCKERFILE, DOCKER, "FROM node:24-slim", "RUN docker build -f ci/build.txt .");
+violation("build-push-action with a file not named like a Dockerfile fails", RELEASE, DOCKER, "on:", "  push:", "    branches: [main]", "permissions: {}", "jobs:", "  b:", "    steps:", "      - uses: docker/build-push-action@0000000000000000000000000000000000000000", "        with:", "          file: ci/build.txt");
+runClean("docker build -f apps/slugbase/Dockerfile passes", "docker buildx build -f apps/slugbase/Dockerfile .");
+runClean("docker build --file with a Dockerfile.ci name passes", "docker buildx build --file=ci/Dockerfile.ci .");
+runClean("docker build -f with a name ending in .Dockerfile passes", "docker build -f ci/app.Dockerfile .");
+runClean("docker build -f with a Containerfile name passes", "podman build -f ci/Containerfile .");
+runClean("docker build -f with an upper-case name passes", "docker build -f ci/DOCKERFILE .");
+runClean("docker compose -f names a compose file, not a Dockerfile", "docker compose -f compose.dev.yml build");
+runClean("docker-compose -f names a compose file, not a Dockerfile", "docker-compose -f compose.dev.yml build");
+runClean("a build with no -f passes", "docker build -t x .");
+runClean("-f of another command passes", "tail -f build.log");
+test("build-push-action with a Dockerfile name passes", () => {
+  const { findings } = checkRepository(tree({ [RELEASE]: y("on:", "  push:", "    branches: [main]", "permissions: {}", "jobs:", "  b:", "    steps:", "      - uses: docker/build-push-action@0000000000000000000000000000000000000000", "        with:", "          file: apps/slugbase/Dockerfile") }));
+  assert.deepEqual(findings, [], describeFindings(findings));
+});
 
 // ---- Every rule has a case that fails it ----------------------------------------------------------
 
