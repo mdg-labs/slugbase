@@ -4,6 +4,7 @@ import { goRepository } from "../src/index.ts";
 import { candidatesStatement } from "../src/repositories/go.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { assertSlugCandidatePlan, nodesOf, type PlanNode } from "./support/slug-plan.ts";
 import { vacuumUntilAllVisible } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
@@ -12,7 +13,8 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // (the slow plan the doc describes is an Index Only Scan too), and no sequential scan appears anywhere in the statement, the read of the remembered choice
 // included. The failure scenario: a slug column whose equality is not leakproof, or an access predicate that reads a column the index does not hold, turns the
 // scan into a filter over the workspace's rows or a read of the table, which this test sees as a missing slug in the index condition, a Seq Scan or an
-// Index Scan that fetches heap rows.
+// Index Scan that fetches heap rows. The rule is `assertSlugCandidatePlan` (support/slug-plan.ts); two more cases hand it the plans it exists to reject, one taken without bookmarks_slug_idx and one with
+// the slug compared through `citext`, and check that it throws and why.
 
 const HOOK_TIMEOUT_MS = 300_000;
 const BOOKMARKS = 50_000;
@@ -24,6 +26,7 @@ let accountId: string;
 let otherId: string;
 let workspaceId: string;
 let hotBookmarkId: string;
+let slugIndexDefinition: string;
 let sharedIds: { direct: string; team: string; folder: string };
 
 beforeAll(async () => {
@@ -100,22 +103,20 @@ beforeAll(async () => {
       SELECT gen_random_uuid(), ${tx.unsafe(small("n"))}, ${tx.unsafe(small("n"))}, ${otherId}, ${accountId} FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
   });
   await vacuumUntilAllVisible(db, ["bookmarks", "slug_preferences", "bookmark_shares", "folder_bookmarks", "folder_shares"]);
+  slugIndexDefinition = await slugIndexDefinitionOf();
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
   await db.drop();
 }, HOOK_TIMEOUT_MS);
 
-interface PlanNode {
-  "Node Type": string;
-  "Relation Name"?: string;
-  "Index Name"?: string;
-  "Index Cond"?: string;
-  Plans?: PlanNode[];
-}
-
-function nodesOf(node: PlanNode): PlanNode[] {
-  return [node, ...(node.Plans ?? []).flatMap(nodesOf)];
+/** The definition of `bookmarks_slug_idx` as the catalog records it, which `CREATE INDEX` accepts as it stands. */
+async function slugIndexDefinitionOf(): Promise<string> {
+  const rows = await db.owner<{ indexdef: string }[]>`SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'bookmarks' AND indexname = 'bookmarks_slug_idx'`;
+  if (rows.length !== 1 || rows[0] === undefined) {
+    throw new Error("bookmarks_slug_idx is not defined");
+  }
+  return rows[0].indexdef;
 }
 
 /** The nodes of the plan of a statement, as the database plans it for a transaction of `slugbase_app` with the settings of `withTenant`. */
@@ -131,28 +132,86 @@ async function planOf(statement: { sql: string; params: unknown[] }): Promise<Pl
   return nodesOf(result.plan);
 }
 
+/** The candidate scan of the slug, as the statement and parameters the repository sends. */
+function candidateStatement(slug: string): Promise<{ sql: string; params: unknown[] }> {
+  return inTenant((tx) => Promise.resolve(new PgDialect({ casing: "snake_case" }).sqlToQuery(candidatesStatement(tx, { slug, accountId }))));
+}
+
 function inTenant<T>(work: Parameters<typeof db.tenant.withTenant<T>>[1]): Promise<T> {
   return db.tenant.withTenant({ accountId, workspaceId, requestId: "go-plan-test" }, work);
 }
 
 describe.each(["mail", "slug-15", "slug-5", "shared-slug", "shared-team", "shared-folder", "shared-none"])("the candidate scan of the slug %s on a workspace of 50 000 bookmarks", (slug) => {
   it("is an Index Only Scan of bookmarks_slug_idx with the slug in its index condition and no sequential scan anywhere", async () => {
-    const statement = await inTenant((tx) => Promise.resolve(new PgDialect({ casing: "snake_case" }).sqlToQuery(candidatesStatement(tx, { slug, accountId }))));
+    const nodes = await planOf(await candidateStatement(slug));
 
-    const nodes = await planOf(statement);
+    assertSlugCandidatePlan(nodes, slug);
+  });
+});
 
-    expect(nodes.map((node) => node["Node Type"])).not.toContain("Seq Scan");
+describe("the guard of the candidate scan rejects the plans it exists to catch", () => {
+  // The failure cases plan the statement of the passing cases above, as slugbase_app with the settings of `withTenant` and the policies forced, and hand the plan to the assertion they use.
+
+  /** The plan of the statement without `bookmarks_slug_idx`, which the owner drops and creates again from its recorded definition whatever the planning does; if it cannot be created again the case fails with both errors. */
+  async function planWithoutSlugIndex(statement: { sql: string; params: unknown[] }): Promise<PlanNode[]> {
+    await db.owner.unsafe("DROP INDEX bookmarks_slug_idx");
+    let nodes: PlanNode[] = [];
+    let planFailure: Error | undefined;
+    try {
+      nodes = await planOf(statement);
+    } catch (error) {
+      planFailure = error instanceof Error ? error : new Error(String(error));
+    }
+    try {
+      await db.owner.unsafe(slugIndexDefinition);
+    } catch (restoreFailure) {
+      throw new AggregateError([planFailure, restoreFailure].filter((error) => error !== undefined), "bookmarks_slug_idx could not be created again");
+    }
+    if (planFailure !== undefined) {
+      throw planFailure;
+    }
+    return nodes;
+  }
+
+  /** The plans are those of `slugbase_app`, which the policies of `bookmarks` bind because they are forced. */
+  async function expectPoliciesForced(): Promise<void> {
+    const [state] = await db.app<{ role: string; forced: boolean }[]>`SELECT current_user AS role, (SELECT relforcerowsecurity FROM pg_class WHERE oid = 'public.bookmarks'::regclass) AS forced`;
+    expect(state).toEqual({ role: "slugbase_app", forced: true });
+  }
+
+  it("rejects the plan of a workspace whose bookmarks_slug_idx is dropped, for there is no scan of it", async () => {
+    await expectPoliciesForced();
+    const statement = await candidateStatement("mail");
+
+    const nodes = await planWithoutSlugIndex(statement);
+
+    expect(nodes.filter((node) => node["Index Name"] === "bookmarks_slug_idx")).toEqual([]);
+    expect(() => {
+      assertSlugCandidatePlan(nodes, "mail");
+    }).toThrow("no bookmarks_slug_idx scan in the plan");
+  });
+
+  it("rejects the plan whose slug comparison is not leakproof, for an Index Only Scan of bookmarks_slug_idx that holds the workspace alone keeps the slug as a filter", async () => {
+    await expectPoliciesForced();
+    const statement = await candidateStatement("mail");
+    const sql = statement.sql.replace('"bookmarks"."slug" = $', '"bookmarks"."slug"::citext = $');
+    expect(sql).not.toBe(statement.sql);
+
+    const nodes = await planOf({ ...statement, sql });
+
     const scans = nodes.filter((node) => node["Index Name"] === "bookmarks_slug_idx");
     expect(scans.map((node) => node["Node Type"])).toEqual(["Index Only Scan"]);
-    expect(scans[0]?.["Index Cond"]).toContain(`slug = '${slug}'::text`);
     expect(scans[0]?.["Index Cond"]).toContain("workspace_id");
-    expect(nodes.filter((node) => node["Relation Name"] === "bookmarks").map((node) => node["Node Type"])).toEqual(["Index Only Scan"]);
-    // The shares are probed for the candidates only: each by its index, with the candidate's identifier or the account as the condition, never read as a whole.
-    const probes = nodes.filter((node) => node["Relation Name"] === "bookmark_shares" || node["Relation Name"] === "folder_bookmarks" || node["Relation Name"] === "folder_shares");
-    expect(probes.length).toBeGreaterThan(0);
-    for (const node of probes) {
-      expect(node["Node Type"], `${node["Relation Name"] ?? ""} ${node["Node Type"]}`).toMatch(/Index/);
-    }
+    expect(scans[0]?.["Index Cond"]).not.toContain("slug");
+    expect(() => {
+      assertSlugCandidatePlan(nodes, "mail");
+    }).toThrow("the slug is not in the index condition of bookmarks_slug_idx");
+  });
+
+  it("leaves bookmarks_slug_idx as it was, and the plan of the statement as the passing cases take it", async () => {
+    expect(await slugIndexDefinitionOf()).toBe(slugIndexDefinition);
+
+    assertSlugCandidatePlan(await planOf(await candidateStatement("mail")), "mail");
   });
 });
 
