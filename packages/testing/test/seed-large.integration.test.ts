@@ -1,10 +1,14 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { assertBookmarkCountMatches } from "../src/bookmark-count.ts";
 import { useTestDatabase } from "../src/db.ts";
 import { buildLargeInstance, perfServer, preparePerfInstance, runSeedScript, seedLargeInstance } from "../src/seed/index.ts";
 
 // The large instance, at a small size, written into a database made from the migrations (doc 08 section 3.2) the way the
 // performance run writes it, and read back through the application role.
 
+const execFileAsync = promisify(execFile);
 const HOOK_TIMEOUT_MS = 300_000;
 const MAX_STOP_MS = 10_000;
 const PASSWORD_HASH = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0$c3RhbmQtaW4taGFzaC1mb3ItdGVzdHMtb25seS0wMDAwMDAwMDAw";
@@ -24,16 +28,16 @@ describe("seeding the large instance into a harness database", () => {
   it("writes every workspace, bookmark, tag, folder and link, and leaves each workspace's counter equal to its rows", { timeout: HOOK_TIMEOUT_MS }, async () => {
     const db = database();
     const counts = await seedLargeInstance(db, server, instance, PASSWORD_HASH);
-    expect(counts).toEqual({ database: db.name, accounts: instance.accounts.length, workspaces: 7, bookmarks: 600 + 6 * 10, largestWorkspace: 600 });
+    expect(counts).toEqual({ database: db.name, accounts: instance.accounts.length, workspaces: 7, bookmarks: 600 + 6 * 10, largestWorkspace: large.bookmarks.filter((bookmark) => bookmark.planArchivedAt === null).length });
     const rows = await db.owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
-      return tx<{ tags: number; folders: number; tagged: number; filed: number; slugged: number; forwarding: number; teams: number; teamMembers: number; bookmarkShares: number; folderShares: number; stale: number }[]>`
+      return tx<{ tags: number; folders: number; tagged: number; filed: number; slugged: number; forwarding: number; archived: number; teams: number; teamMembers: number; bookmarkShares: number; folderShares: number; stale: number }[]>`
         SELECT (SELECT count(*)::int FROM tags) AS tags, (SELECT count(*)::int FROM folders) AS folders,
                (SELECT count(*)::int FROM bookmark_tags) AS tagged, (SELECT count(*)::int FROM folder_bookmarks) AS filed,
                (SELECT count(*)::int FROM bookmarks WHERE slug IS NOT NULL) AS slugged, (SELECT count(*)::int FROM bookmarks WHERE forwarding) AS forwarding,
+               (SELECT count(*)::int FROM bookmarks WHERE plan_archived_at IS NOT NULL) AS archived,
                (SELECT count(*)::int FROM teams) AS teams, (SELECT count(*)::int FROM team_members) AS "teamMembers", (SELECT count(*)::int FROM bookmark_shares) AS "bookmarkShares",
-               (SELECT count(*)::int FROM folder_shares) AS "folderShares",
-               (SELECT count(*)::int FROM workspaces w WHERE bookmark_count <> (SELECT count(*) FROM bookmarks b WHERE b.workspace_id = w.id)) AS stale`;
+               (SELECT count(*)::int FROM folder_shares) AS "folderShares"`;
     });
     const all = instance.workspaces;
     expect(rows[0]).toEqual({
@@ -43,13 +47,54 @@ describe("seeding the large instance into a harness database", () => {
       filed: all.reduce((sum, workspace) => sum + workspace.folderBookmarks.length, 0),
       slugged: all.reduce((sum, workspace) => sum + workspace.bookmarks.filter((bookmark) => bookmark.slug !== null).length, 0),
       forwarding: all.reduce((sum, workspace) => sum + workspace.bookmarks.filter((bookmark) => bookmark.forwarding).length, 0),
+      archived: all.reduce((sum, workspace) => sum + workspace.bookmarks.filter((bookmark) => bookmark.planArchivedAt !== null).length, 0),
       teams: 1,
       teamMembers: 3,
       bookmarkShares: large.bookmarkShares.length,
       folderShares: large.folderShares.length,
-      stale: 0,
     });
     expect(large.bookmarkShares.length).toBeGreaterThan(0);
+    expect(rows[0]?.archived).toBeGreaterThan(0);
+    await assertBookmarkCountMatches(db);
+  });
+
+  it("leaves row-level security enabled and forced on every tenant table, and hands the server a role that bypasses nothing and owns no table", { timeout: HOOK_TIMEOUT_MS }, async () => {
+    const prepared = await preparePerfInstance({
+      serverUrl: process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev",
+      path: process.env["PATH"] ?? "",
+      harnessUrl,
+      bookmarks: 600,
+      workspaces: 6,
+    });
+    try {
+      expect(prepared.instance.fixtures.archivedSlugs.length).toBeGreaterThan(0);
+      const url = new URL(prepared.appUrl);
+      // The query runs over the URL the instance hands out, in the database it seeded, as the role the server runs as.
+      const query = `SELECT json_build_object(
+        'user', current_user,
+        'bypass', (SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname = current_user),
+        'owned', (SELECT count(*) FROM pg_class c WHERE c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user) AND c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'S')),
+        'tenantTables', (SELECT count(*) FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'workspace_id' AND NOT a.attisdropped WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')),
+        'unprotected', (SELECT coalesce(json_agg(c.relname ORDER BY c.relname), '[]'::json) FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'workspace_id' AND NOT a.attisdropped WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p') AND NOT (c.relrowsecurity AND c.relforcerowsecurity))
+      )`;
+      const { stdout } = await execFileAsync("psql", ["-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", query], {
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          PGHOST: url.hostname.replace(/^\[|\]$/gu, ""),
+          PGPORT: url.port,
+          PGDATABASE: decodeURIComponent(url.pathname.slice(1)),
+          PGUSER: decodeURIComponent(url.username),
+          PGPASSWORD: decodeURIComponent(url.password),
+          PGCONNECT_TIMEOUT: "10",
+        },
+        timeout: 60_000,
+      });
+      const role = JSON.parse(stdout) as { user: string; bypass: boolean; owned: number; tenantTables: number; unprotected: string[] };
+      expect(role).toEqual({ user: "slugbase_app", bypass: false, owned: 0, tenantTables: role.tenantTables, unprotected: [] });
+      expect(role.tenantTables).toBeGreaterThan(10);
+    } finally {
+      await prepared.drop();
+    }
   });
 
   it("reads each workspace's own rows and no other's through row-level security", { timeout: HOOK_TIMEOUT_MS }, async () => {

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import {
+  DEMO_NOW,
   PERF_BOOKMARK_COUNT,
   PERF_EXTRA_WORKSPACES,
   PerfSeedError,
@@ -73,7 +74,7 @@ describe("the large instance", () => {
   it("names, for the scenarios, slugs the first account resolves in the large workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const admin = instance.accounts.find((account) => account.email === instance.fixtures.email);
     expect(admin?.isInstanceAdmin).toBe(true);
-    const mine = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === admin?.id && bookmark.forwarding).map((bookmark) => bookmark.slug));
+    const mine = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === admin?.id && bookmark.forwarding && bookmark.planArchivedAt === null).map((bookmark) => bookmark.slug));
     expect(instance.fixtures.slugs.length).toBeGreaterThan(100);
     expect(instance.fixtures.slugs.every((slug) => mine.has(slug))).toBe(true);
     expect(instance.fixtures.tagIds.length).toBeGreaterThan(0);
@@ -100,6 +101,7 @@ describe("the large instance", () => {
       const bookmark = byId.get(share.subjectId);
       expect(bookmark?.ownerId, share.subjectId).toBe(share.grantedBy);
       expect(bookmark?.forwarding).toBe(true);
+      expect(bookmark?.planArchivedAt).toBeNull();
       expect([share.accountId === null, share.teamId === null].filter(Boolean)).toHaveLength(1);
     }
     const folders = new Map(large.folders.map((folder) => [folder.id, folder.ownerId]));
@@ -107,7 +109,7 @@ describe("the large instance", () => {
       expect(folders.get(share.subjectId)).toBe(share.grantedBy);
     }
     const slugsOf = (ids: Iterable<string>): Set<string | null> => new Set([...ids].map((id) => byId.get(id)?.slug ?? null));
-    const owners = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === admin.id && bookmark.forwarding).map((bookmark) => bookmark.slug));
+    const owners = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === admin.id && bookmark.forwarding && bookmark.planArchivedAt === null).map((bookmark) => bookmark.slug));
     // The owner's own slugs collide with the shared ones, which the scenarios resolve: the owner's comes first.
     expect(instance.fixtures.collidingSlugs.length).toBeGreaterThan(10);
     expect(instance.fixtures.collidingSlugs.every((slug) => owners.has(slug) && slugsOf(large.bookmarkShares.map((share) => share.subjectId)).has(slug) || large.folderBookmarks.some((link) => byId.get(link.bookmarkId)?.slug === slug))).toBe(true);
@@ -120,6 +122,58 @@ describe("the large instance", () => {
     expect(large.bookmarks.filter((bookmark) => bookmark.slug === "perf-shared-many").map((bookmark) => bookmark.ownerId).toSorted()).toEqual([first.id, second.id].toSorted());
   });
 
+  it("plan-archives about 2 % of the large workspace, slugged rows that would forward and slugged rows that would not, and none of the other workspaces", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    const archived = large.bookmarks.filter((bookmark) => bookmark.planArchivedAt !== null);
+    expect(archived.length / large.bookmarks.length).toBeGreaterThan(0.015);
+    expect(archived.length / large.bookmarks.length).toBeLessThan(0.025);
+    expect(archived.some((bookmark) => bookmark.slug !== null && bookmark.forwarding)).toBe(true);
+    expect(archived.some((bookmark) => bookmark.slug !== null && !bookmark.forwarding)).toBe(true);
+    expect(archived.some((bookmark) => bookmark.slug === null)).toBe(true);
+    expect(others.every((workspace) => workspace.bookmarks.every((bookmark) => bookmark.planArchivedAt === null))).toBe(true);
+    const again = buildLargeInstance().workspaces[0]?.bookmarks.filter((bookmark) => bookmark.planArchivedAt !== null);
+    expect(again?.map((bookmark) => [bookmark.id, bookmark.slug, bookmark.forwarding, bookmark.planArchivedAt?.toISOString()])).toEqual(
+      archived.map((bookmark) => [bookmark.id, bookmark.slug, bookmark.forwarding, bookmark.planArchivedAt?.toISOString()]),
+    );
+  });
+
+  it("keeps the archived bookmarks out of every slug list of the fixtures and names some of the first account's own for /go to pass over", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    const admin = instance.accounts.find((account) => account.email === instance.fixtures.email);
+    const mine = large.bookmarks.filter((bookmark) => bookmark.ownerId === admin?.id);
+    const archived = new Set(mine.filter((bookmark) => bookmark.planArchivedAt !== null).map((bookmark) => bookmark.slug));
+    const live = new Set(mine.filter((bookmark) => bookmark.planArchivedAt === null && bookmark.forwarding).map((bookmark) => bookmark.slug));
+    const { fixtures } = instance;
+    for (const list of [fixtures.slugs, fixtures.collidingSlugs]) {
+      expect(list.length).toBeGreaterThan(0);
+      expect(list.every((slug) => live.has(slug) && !archived.has(slug))).toBe(true);
+    }
+    // The shared slugs are carried by live shared bookmarks only, and no archived bookmark carries them.
+    const carriers = (slug: string) => large.bookmarks.filter((bookmark) => bookmark.slug === slug);
+    for (const slug of [...fixtures.sharedSlugs, ...fixtures.ambiguousSlugs, ...fixtures.sharedSearchTerms]) {
+      expect(carriers(slug).length).toBeGreaterThan(0);
+      expect(carriers(slug).every((bookmark) => bookmark.planArchivedAt === null && bookmark.forwarding)).toBe(true);
+    }
+    // archivedSlugs: up to 20 slugs of archived bookmarks that would forward, which no live bookmark of the account or shared with it carries.
+    const sharedIds = new Set(large.bookmarkShares.map((share) => share.subjectId));
+    const sharedFolders = new Set(large.folderShares.map((share) => share.subjectId));
+    for (const link of large.folderBookmarks) {
+      if (sharedFolders.has(link.folderId)) {
+        sharedIds.add(link.bookmarkId);
+      }
+    }
+    const reachable = new Set(large.bookmarks.filter((bookmark) => sharedIds.has(bookmark.id)).map((bookmark) => bookmark.slug));
+    expect(fixtures.archivedSlugs.length).toBeGreaterThan(5);
+    expect(fixtures.archivedSlugs.length).toBeLessThanOrEqual(20);
+    expect(new Set(fixtures.archivedSlugs).size).toBe(fixtures.archivedSlugs.length);
+    for (const slug of fixtures.archivedSlugs) {
+      const own = mine.filter((bookmark) => bookmark.slug === slug);
+      expect(own).toHaveLength(1);
+      expect(own[0]?.planArchivedAt).not.toBeNull();
+      expect(own[0]?.forwarding).toBe(true);
+      expect(live.has(slug)).toBe(false);
+      expect(reachable.has(slug)).toBe(false);
+    }
+  });
+
   it("is written as one transaction that creates every account and workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const script = largeSeedScript(buildLargeInstance({ bookmarks: 40, workspaces: 3 }), "$argon2id$stand-in");
     expect(script.startsWith("SET standard_conforming_strings = on;\nBEGIN;\nSET LOCAL ROLE slugbase_system;")).toBe(true);
@@ -128,8 +182,14 @@ describe("the large instance", () => {
     expect(script.match(/sys_create_workspace\(/gu)).toHaveLength(4);
   });
 
+  it("writes the archive time of the plan-archived rows into the bookmarks insert", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    const script = largeSeedScript(buildLargeInstance({ bookmarks: 300, workspaces: 1 }), "$argon2id$stand-in");
+    expect(script).toContain("plan_archived_at");
+    expect(script).toContain(`'${DEMO_NOW.toISOString()}'`);
+  });
+
   it("writes the team and the shares of the members with the owner", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
-    const script = largeSeedScript(buildLargeInstance({ bookmarks: 4_000, workspaces: 1 }), "$argon2id$stand-in");
+    const script = largeSeedScript(buildLargeInstance({ bookmarks: 6_000, workspaces: 1 }), "$argon2id$stand-in");
     expect(script.match(/^INSERT INTO public\.teams /gmu)).toHaveLength(1);
     expect(script.match(/^INSERT INTO public\.team_members /gmu)).toHaveLength(1);
     expect(script.match(/^INSERT INTO public\.bookmark_shares /gmu)?.length).toBeGreaterThan(0);

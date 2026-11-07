@@ -18,6 +18,11 @@ export const PERF_EXTRA_WORKSPACE_BOOKMARKS = 10;
 /** Share of the bookmarks that carry a slug, and of those the share that /go forwards to. */
 const SLUGGED_SHARE = 0.12;
 const FORWARDING_SHARE = 0.85;
+/** One bookmark in this many of the large workspace is plan-archived (doc 05 section 2.2): 2 %, taken by position so that the random sequence of the rest of the instance does not move. */
+const ARCHIVE_EVERY = 50;
+const ARCHIVE_OFFSET = 7;
+/** How many of the owner's archived slugs the /go scenario asks for. */
+const ARCHIVED_SAMPLE = 20;
 const TAGGED_SHARE = 0.4;
 const FILED_SHARE = 0.35;
 /** The owner of the large workspace holds eight in ten of its bookmarks, the two members the rest. */
@@ -53,6 +58,8 @@ export interface LargeAccount {
 export interface LargeBookmark extends SeedBookmark {
   readonly slug: string | null;
   readonly forwarding: boolean;
+  /** Set when the bookmark is over the plan's limit and no longer counts (doc 05 section 2.2); /go meets it as a candidate and passes it over. */
+  readonly planArchivedAt: Date | null;
 }
 
 export interface LargeNamed {
@@ -108,6 +115,8 @@ export interface PerfFixtures {
   readonly sharedSlugs: readonly string[];
   /** Slugs that several shared bookmarks have and the account has none: /go asks to choose. */
   readonly ambiguousSlugs: readonly string[];
+  /** Slugs of the account's own plan-archived bookmarks that would forward but for the archive, and that no bookmark shared with the account carries: /go answers not found. */
+  readonly archivedSlugs: readonly string[];
   /** Search terms that only bookmarks shared with the account match. */
   readonly sharedSearchTerms: readonly string[];
 }
@@ -147,7 +156,7 @@ function populate(population: Population, workspace: { id: string; name: string;
   const bookmarks = seeded.map((bookmark): LargeBookmark => {
     const next = slugs.get(bookmark.ownerId);
     const slug = next !== undefined && random.chance(SLUGGED_SHARE) ? next() : null;
-    return { ...bookmark, slug, forwarding: slug !== null && random.chance(FORWARDING_SHARE) };
+    return { ...bookmark, slug, forwarding: slug !== null && random.chance(FORWARDING_SHARE), planArchivedAt: null };
   });
   const people = [...new Set(owners)];
   const tags = people.flatMap((ownerId) => TAG_NAMES.slice(0, tagCount).map((name): LargeNamed => ({ id: ids(), ownerId, name })));
@@ -167,6 +176,14 @@ function populate(population: Population, workspace: { id: string; name: string;
     }
   }
   return { ...workspace, bookmarks, tags, folders, bookmarkTags, folderBookmarks, teams: [], bookmarkShares: [], folderShares: [] };
+}
+
+/** The workspace with every `ARCHIVE_EVERY`th bookmark plan-archived, slugged or not, forwarding or not. */
+function planArchive(workspace: LargeWorkspace): LargeWorkspace {
+  return {
+    ...workspace,
+    bookmarks: workspace.bookmarks.map((bookmark, index) => (index % ARCHIVE_EVERY === ARCHIVE_OFFSET ? { ...bookmark, planArchivedAt: DEMO_NOW } : bookmark)),
+  };
 }
 
 /** What `shareWithOwner` made of the workspace, and the slugs the scenarios resolve through the shares. */
@@ -198,9 +215,9 @@ function shareWithOwner(large: LargeWorkspace, ownerId: string, memberIds: reado
     teamId: "teamId" in target ? target.teamId : null,
   });
   const colliding: string[] = [];
-  const ownerSlugs = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === ownerId && bookmark.forwarding).map((bookmark) => bookmark.slug));
+  const ownerSlugs = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === ownerId && bookmark.forwarding && bookmark.planArchivedAt === null).map((bookmark) => bookmark.slug));
   memberIds.forEach((memberId, index) => {
-    const mine = large.bookmarks.filter((bookmark) => bookmark.ownerId === memberId && bookmark.forwarding && bookmark.slug !== null);
+    const mine = large.bookmarks.filter((bookmark) => bookmark.ownerId === memberId && bookmark.forwarding && bookmark.slug !== null && bookmark.planArchivedAt === null);
     const special = index === 0 ? [SHARED_SINGLE_SLUG, SHARED_MANY_SLUG] : [SHARED_MANY_SLUG];
     special.forEach((slug, at) => {
       const bookmark = mine[at];
@@ -261,14 +278,14 @@ export function buildLargeInstance(options: LargeInstanceOptions = {}): LargeIns
   const members = [account("perf-member-1@example.test", "Perf Member 1"), account("perf-member-2@example.test", "Perf Member 2")];
   const accounts: LargeAccount[] = [admin, ...members];
   const owners = [...Array.from({ length: ADMIN_WEIGHT }, () => admin.id), ...members.map((member) => member.id)];
-  const large = populate(
+  const large = planArchive(populate(
     population,
     { id: ids(), name: "Large workspace", ownerId: admin.id, members: members.map((member) => ({ accountId: member.id, role: "member" as const })) },
     owners,
     options.bookmarks ?? PERF_BOOKMARK_COUNT,
     TAG_NAMES.length,
     FOLDER_NAMES.length,
-  );
+  ));
   const workspaces: LargeWorkspace[] = [large];
   for (let index = 1; index <= (options.workspaces ?? PERF_EXTRA_WORKSPACES); index += 1) {
     const owner = account(`perf-owner-${String(index)}@example.test`, `Perf Owner ${String(index)}`);
@@ -277,8 +294,18 @@ export function buildLargeInstance(options: LargeInstanceOptions = {}): LargeIns
   }
   const shared = shareWithOwner(large, admin.id, members.map((member) => member.id), ids);
   workspaces[0] = shared.workspace;
-  const forwarding = large.bookmarks.filter((bookmark) => bookmark.ownerId === admin.id && bookmark.forwarding && bookmark.slug !== null);
+  const forwarding = large.bookmarks.filter((bookmark) => bookmark.ownerId === admin.id && bookmark.forwarding && bookmark.planArchivedAt === null && bookmark.slug !== null);
   const step = Math.max(1, Math.floor(forwarding.length / SLUG_SAMPLE));
+  const reachable = new Set<string>();
+  const sharedFolders = new Set(shared.workspace.folderShares.map((share) => share.subjectId));
+  const sharedBookmarks = new Set([...shared.workspace.bookmarkShares.map((share) => share.subjectId), ...shared.workspace.folderBookmarks.filter((link) => sharedFolders.has(link.folderId)).map((link) => link.bookmarkId)]);
+  for (const bookmark of shared.workspace.bookmarks) {
+    if (sharedBookmarks.has(bookmark.id) && bookmark.slug !== null) {
+      reachable.add(bookmark.slug);
+    }
+  }
+  const archived = large.bookmarks.filter((bookmark) => bookmark.ownerId === admin.id && bookmark.forwarding && bookmark.planArchivedAt !== null && bookmark.slug !== null && !reachable.has(bookmark.slug));
+  const archivedStep = Math.max(1, Math.floor(archived.length / ARCHIVED_SAMPLE));
   return {
     accounts,
     workspaces,
@@ -288,6 +315,7 @@ export function buildLargeInstance(options: LargeInstanceOptions = {}): LargeIns
       tagIds: large.tags.filter((tag) => tag.ownerId === admin.id).map((tag) => tag.id),
       folderIds: large.folders.filter((folder) => folder.ownerId === admin.id).map((folder) => folder.id),
       searchTerms: SEARCH_TERMS,
+      archivedSlugs: archived.filter((_, index) => index % archivedStep === 0).slice(0, ARCHIVED_SAMPLE).map((bookmark) => bookmark.slug ?? ""),
       collidingSlugs: shared.collidingSlugs,
       sharedSlugs: shared.sharedSlugs,
       ambiguousSlugs: shared.ambiguousSlugs,

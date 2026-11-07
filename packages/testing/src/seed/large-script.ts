@@ -40,10 +40,11 @@ function workspaceLines(workspace: LargeWorkspace): string[] {
           String(bookmark.openCount),
           time(bookmark.lastOpenedAt),
           time(bookmark.createdAt),
+          time(bookmark.planArchivedAt),
         ].join(", ")})`,
     );
     lines.push(
-      `INSERT INTO public.bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, open_count, last_opened_at, created_at, updated_at) SELECT v.id::uuid, ${id}::uuid, v.owner_id::uuid, v.url, v.url_canonical, v.host, v.title, v.description, v.slug, v.forwarding, v.pinned_at::timestamptz, v.open_count, v.last_opened_at::timestamptz, v.created_at::timestamptz, v.created_at::timestamptz FROM (VALUES ${rows.join(", ")}) AS v(id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, open_count, last_opened_at, created_at);`,
+      `INSERT INTO public.bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, open_count, last_opened_at, plan_archived_at, created_at, updated_at) SELECT v.id::uuid, ${id}::uuid, v.owner_id::uuid, v.url, v.url_canonical, v.host, v.title, v.description, v.slug, v.forwarding, v.pinned_at::timestamptz, v.open_count, v.last_opened_at::timestamptz, v.plan_archived_at::timestamptz, v.created_at::timestamptz, v.created_at::timestamptz FROM (VALUES ${rows.join(", ")}) AS v(id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, open_count, last_opened_at, created_at, plan_archived_at);`,
     );
   }
   for (const group of batches(workspace.tags)) {
