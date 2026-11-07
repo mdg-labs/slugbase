@@ -37,6 +37,7 @@ const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_MEMBER = "There is no such member.";
 const NOT_ALLOWED = "Your role does not allow this change.";
+const UNVERIFIED = "Verify your email address before you grant the owner role or give up yours in a workspace you made.";
 const LAST_OWNER = "A workspace always has an owner; make another member an owner first.";
 
 export interface MemberRoutesOptions {
@@ -146,7 +147,7 @@ export function memberRoutes({ cursorSecret, cookie, now = Date.now }: MemberRou
             { store: reauthGatedOwnerChanges(repository, reauthenticated), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
             { workspaceId: tenant.workspaceId, actor, actorAccountId: accountId, targetAccountId, role: body.role, ipPrefix },
           );
-          if (outcome.kind === "forbidden" || outcome.kind === "not_found") {
+          if (outcome.kind === "forbidden" || outcome.kind === "unverified" || outcome.kind === "not_found") {
             return outcome;
           }
           const rotated = outcome.kind === "changed" && outcome.self;
@@ -166,6 +167,8 @@ export function memberRoutes({ cursorSecret, cookie, now = Date.now }: MemberRou
       switch (result.kind) {
         case "forbidden":
           throw new ProblemError("forbidden", NOT_ALLOWED);
+        case "unverified":
+          throw new ProblemError("email_unverified", UNVERIFIED);
         case "not_found":
         case "unavailable":
           throw new ProblemError("not_found", NO_SUCH_MEMBER);

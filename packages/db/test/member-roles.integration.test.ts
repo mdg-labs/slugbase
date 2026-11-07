@@ -448,7 +448,7 @@ describe("memberRepository.roles and setRole", () => {
       return { roles, written, after: await repository.member(member?.accountId ?? "") };
     });
 
-    expect(result.roles).toEqual({ actor: "admin", target: "member" });
+    expect(result.roles).toEqual({ actor: "admin", target: "member", actorUnverifiedFounder: false });
     expect(result.written).toBe(true);
     expect(result.after?.role).toBe("admin");
     expect(await rolesOf(workspaceId)).toEqual({ [admin?.accountId ?? ""]: "admin", [member?.accountId ?? ""]: "admin" });
@@ -467,9 +467,30 @@ describe("memberRepository.roles and setRole", () => {
     });
     const deleting = await inTenant({ accountId: going.members[0]?.accountId ?? "", workspaceId: going.workspaceId }, (tx) => memberRepository(tx).roles(going.members[1]?.accountId ?? ""));
 
-    expect(foreign).toEqual({ roles: { actor: "owner", target: undefined }, written: false });
+    expect(foreign).toEqual({ roles: { actor: "owner", target: undefined, actorUnverifiedFounder: false }, written: false });
     expect(deleting).toBeUndefined();
     expect(await workspaceChecksum(db, b.workspaceId)).toBe(before);
+  });
+
+  it("reports a caller that made the workspace for itself and has not verified its address, and no other", async () => {
+    const seed = async (options: { readonly creator: "caller" | "other" | "none"; readonly verified: boolean; readonly selfCreated?: boolean }) => {
+      const callerId = freshId();
+      await seedAccount(db, { id: callerId, email: `caller${freshId()}@example.test`, passwordHash: "$argon2id$stub", emailVerified: options.verified });
+      const otherId = await account();
+      const workspaceId = await seedWorkspace(db, {
+        createdBy: options.creator === "caller" ? callerId : options.creator === "other" ? otherId : null,
+        ...(options.selfCreated === undefined ? {} : { selfCreated: options.selfCreated }),
+      });
+      await seedMember(db, { workspaceId, accountId: callerId, role: "owner" });
+      await seedMember(db, { workspaceId, accountId: otherId, role: "member" });
+      return inTenant({ accountId: callerId, workspaceId }, async (tx) => (await memberRepository(tx).roles(otherId))?.actorUnverifiedFounder);
+    };
+
+    expect(await seed({ creator: "caller", verified: false })).toBe(true);
+    expect(await seed({ creator: "caller", verified: true })).toBe(false);
+    expect(await seed({ creator: "caller", verified: false, selfCreated: false })).toBe(false);
+    expect(await seed({ creator: "other", verified: false })).toBe(false);
+    expect(await seed({ creator: "none", verified: false, selfCreated: true })).toBe(false);
   });
 
   it("queues two role changes of one workspace, so the second judges the roles the first left", async () => {

@@ -9,7 +9,9 @@ import type { MemberRoleStore } from "./members.ts";
 // workspace_members), which refuses the commit of a transaction that would leave none. Only an owner may
 // transfer; the authorization stage has judged that before the service runs, and it is judged again here under
 // the lock. A transfer that changed nothing writes no audit event; a failure of a write rejects, so the
-// caller's transaction does not commit and neither role is changed alone.
+// caller's transaction does not commit and neither role is changed alone. An owner who made the workspace for itself
+// and has not verified its address transfers nothing (`MemberRoles.actorUnverifiedFounder`): verifying would make it
+// the sole owner again.
 
 export interface OwnershipTransferDependencies {
   readonly store: MemberRoleStore;
@@ -37,6 +39,8 @@ export type OwnershipTransferOutcome =
   | { readonly kind: "unchanged" }
   /** The account that asks is not an owner; nothing was written. */
   | { readonly kind: "forbidden" }
+  /** The account that asks made the workspace for itself and its address is not verified; nothing was written. */
+  | { readonly kind: "unverified" }
   /** The recipient is the account that asks; nothing was written. */
   | { readonly kind: "invalid_recipient" }
   /** The workspace has no such member, the caller is none, or the workspace cannot be reached. */
@@ -64,6 +68,9 @@ export async function transferOwnership({ store, audit }: OwnershipTransferDepen
   const promoted = roles.target !== "owner";
   if (!promoted && !ask.demoteSelf) {
     return { kind: "unchanged" };
+  }
+  if (roles.actorUnverifiedFounder) {
+    return { kind: "unverified" };
   }
   if (promoted && !(await store.setRole(ask.targetAccountId, "owner"))) {
     throw new Error("the recipient of the ownership transfer has no membership row to change");

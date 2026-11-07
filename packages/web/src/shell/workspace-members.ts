@@ -53,7 +53,7 @@ export function membersQuery(api: ApiClient) {
 }
 
 /** Why a role change was refused, as far as the member is told. */
-export type RoleChangeRefusal = "lastOwner" | "forbidden" | "notAMember";
+export type RoleChangeRefusal = "lastOwner" | "forbidden" | "unverified" | "notAMember";
 
 export type RoleChange =
   | { readonly status: "changed"; readonly member: Member }
@@ -76,7 +76,7 @@ export async function changeMemberRole(api: ApiClient, accountId: string, role: 
         return { status: "refused", refusal: "lastOwner" };
       }
       if (caught.status === 403) {
-        return { status: "refused", refusal: "forbidden" };
+        return { status: "refused", refusal: caught.code === "email_unverified" ? "unverified" : "forbidden" };
       }
       if (caught.status === 404) {
         return { status: "refused", refusal: "notAMember" };
@@ -220,7 +220,7 @@ export function defaultRecipient(members: readonly Member[], departingId: string
 }
 
 /** Why an ownership transfer was refused, as far as the member is told. */
-export type OwnershipRefusal = "lastOwner" | "forbidden" | "notAMember" | "reauthRequired";
+export type OwnershipRefusal = "lastOwner" | "forbidden" | "unverified" | "notAMember" | "reauthRequired";
 
 export type OwnershipTransfer =
   | { readonly status: "transferred"; readonly member: Member }
@@ -251,7 +251,7 @@ export async function transferOwnership(api: ApiClient, accountId: string, demot
         return { status: "refused", refusal: "lastOwner" };
       }
       if (caught.status === 403) {
-        return { status: "refused", refusal: "forbidden" };
+        return { status: "refused", refusal: caught.code === "email_unverified" ? "unverified" : "forbidden" };
       }
       if (caught.status === 404) {
         return { status: "refused", refusal: "notAMember" };

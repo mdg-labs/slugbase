@@ -23,8 +23,11 @@ function ids(): () => string {
   };
 }
 
+/** The roles a store reports; the caller is a verified account unless a test says it made the workspace for itself without verifying its address. */
+type RolesOption = Omit<MemberRoles, "actorUnverifiedFounder"> & { readonly actorUnverifiedFounder?: boolean };
+
 interface WorldOptions {
-  roles: MemberRoles | undefined;
+  roles: RolesOption | undefined;
   /** The accounts whose row `setRole` does not find. */
   missing?: readonly string[];
   auditFails?: boolean;
@@ -38,7 +41,7 @@ function world({ roles, missing = [], auditFails = false }: WorldOptions) {
   const store: MemberRoleStore = {
     roles(target) {
       log.push(`roles ${target}`);
-      return Promise.resolve(roles);
+      return Promise.resolve(roles === undefined ? undefined : { actorUnverifiedFounder: false, ...roles });
     },
     setRole(target, role) {
       log.push("setRole");
@@ -130,6 +133,32 @@ describe("transferOwnership", () => {
     expect(written).toEqual([]);
     expect(audits).toEqual([]);
     expect(log).toEqual([`roles ${RECIPIENT}`]);
+  });
+
+  it.each([
+    ["promotes a member", false, { actor: "owner", target: "member" }],
+    ["promotes a member and steps down", true, { actor: "owner", target: "member" }],
+    ["only steps down, the recipient being an owner", true, { actor: "owner", target: "owner" }],
+  ] as const)("refuses a caller that made the workspace for itself without verifying its address when it %s, and writes nothing", async (_what, demoteSelf, roles) => {
+    const { dependencies, written, audits, log } = world({ roles: { ...roles, actorUnverifiedFounder: true } });
+
+    expect(await transferOwnership(dependencies, ask(demoteSelf))).toEqual({ kind: "unverified" });
+    expect(written).toEqual([]);
+    expect(audits).toEqual([]);
+    expect(log).toEqual([`roles ${RECIPIENT}`]);
+  });
+
+  it("leaves a transfer that changes nothing as it is for a caller that made the workspace without verifying its address", async () => {
+    const { dependencies, written } = world({ roles: { actor: "owner", target: "owner", actorUnverifiedFounder: true } });
+
+    expect(await transferOwnership(dependencies, ask(false))).toEqual({ kind: "unchanged" });
+    expect(written).toEqual([]);
+  });
+
+  it("asks a caller that is no owner about its role before its address, so an admin who made the workspace is forbidden", async () => {
+    const { dependencies } = world({ roles: { actor: "admin", target: "member", actorUnverifiedFounder: true } });
+
+    expect(await transferOwnership(dependencies, ask(false))).toEqual({ kind: "forbidden" });
   });
 
   it("answers not found for a recipient outside the workspace, and for a workspace that cannot be reached", async () => {

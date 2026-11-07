@@ -23,8 +23,11 @@ function ids(): () => string {
   };
 }
 
+/** The roles a store reports; the caller is a verified account unless a test says it made the workspace for itself without verifying its address. */
+type RolesOption = Omit<MemberRoles, "actorUnverifiedFounder"> & { readonly actorUnverifiedFounder?: boolean };
+
 interface WorldOptions {
-  roles: MemberRoles | undefined;
+  roles: RolesOption | undefined;
   setRole?: boolean;
   auditFails?: boolean;
 }
@@ -37,7 +40,7 @@ function world({ roles, setRole = true, auditFails = false }: WorldOptions) {
   const store: MemberRoleStore = {
     roles(target) {
       log.push(`roles ${target}`);
-      return Promise.resolve(roles);
+      return Promise.resolve(roles === undefined ? undefined : { actorUnverifiedFounder: false, ...roles });
     },
     setRole(target, role) {
       log.push("setRole");
@@ -128,6 +131,38 @@ describe("changeMemberRole", () => {
     expect(written).toEqual([]);
     expect(audits).toEqual([]);
     expect(log).toEqual([`roles ${OTHER_ACCOUNT}`]);
+  });
+
+  it.each([
+    ["promotes a member to owner", { actor: "owner", target: "member" }, "owner", OTHER_ACCOUNT],
+    ["promotes an admin to owner", { actor: "owner", target: "admin" }, "owner", OTHER_ACCOUNT],
+    ["steps down to admin", { actor: "owner", target: "owner" }, "admin", ACTOR_ACCOUNT],
+    ["steps down to member, in whatever case the identifier is written", { actor: "owner", target: "owner" }, "member", ACTOR_ACCOUNT.toUpperCase()],
+  ] as const)("refuses a caller that made the workspace for itself without verifying its address when it %s, and writes nothing", async (_what, roles, to, target) => {
+    const { dependencies, written, audits, log } = world({ roles: { ...roles, actorUnverifiedFounder: true } });
+
+    expect(await changeMemberRole(dependencies, ask(to, { targetAccountId: target }))).toEqual({ kind: "unverified" });
+    expect(written).toEqual([]);
+    expect(audits).toEqual([]);
+    expect(log).toEqual([`roles ${target}`]);
+  });
+
+  it.each([
+    ["switches a member to admin", { actor: "owner", target: "member" }, "admin"],
+    ["switches an admin to member", { actor: "owner", target: "admin" }, "member"],
+    ["demotes another owner", { actor: "owner", target: "owner" }, "admin"],
+  ] as const)("lets a caller that made the workspace for itself without verifying its address change roles when it %s", async (_what, roles, to) => {
+    const { dependencies, written } = world({ roles: { ...roles, actorUnverifiedFounder: true } });
+
+    expect(await changeMemberRole(dependencies, ask(to))).toMatchObject({ kind: "changed", to });
+    expect(written).toEqual([{ account: OTHER_ACCOUNT, role: to }]);
+  });
+
+  it("leaves a role the member already has as it is for a caller that made the workspace without verifying its address", async () => {
+    const { dependencies, written } = world({ roles: { actor: "owner", target: "owner", actorUnverifiedFounder: true } });
+
+    expect(await changeMemberRole(dependencies, ask("owner"))).toEqual({ kind: "unchanged", role: "owner" });
+    expect(written).toEqual([]);
   });
 
   it("writes nothing when the member already has the role, an owner asked to become an owner included", async () => {

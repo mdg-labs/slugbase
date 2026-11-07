@@ -1,6 +1,6 @@
-import type { AuditRecord } from "@slugbase/core";
+import { changeMemberRole, createAuditWriter, transferOwnership, type AuditRecord } from "@slugbase/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createAuthStore, type AuthStore, type EmailVerification, type NewRegistration, type QueuedJob } from "../src/index.ts";
+import { auditEventRepository, createAuthStore, memberRepository, type AuthStore, type EmailVerification, type NewRegistration, type QueuedJob } from "../src/index.ts";
 import { systemOperations } from "../src/system/registry.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, freshToken, seedAccount, sessionRows } from "./support/auth-fixture.ts";
@@ -1266,6 +1266,106 @@ describe("verifyEmail and what the visitor set up in workspaces", () => {
     expect(await footholds(owner)).toEqual(footholdsBefore);
     expect(await accountRow(owner)).toEqual({ password_hash: OLD_HASH, verified: false, password_changed: false });
     expect(await tokenRows(owner)).toEqual([{ used: false }]);
+  });
+});
+
+/** What the role services of `@slugbase/core` answer `actorId` acting in the workspace, over the repository the routes hand them. */
+function asMember(actorId: string, workspaceId: string) {
+  const actor = { type: "account", accountId: actorId, label: "Actor" } as const;
+  const dependencies = (tx: Parameters<typeof memberRepository>[0]) => ({
+    store: memberRepository(tx),
+    audit: createAuditWriter({ store: auditEventRepository(tx), newId: freshId }),
+  });
+  const inTenant = <T>(work: Parameters<typeof db.tenant.withTenant<T>>[1]): Promise<T> => db.tenant.withTenant({ accountId: actorId, workspaceId, requestId: "founder-test" }, work);
+  return {
+    setRole: (targetAccountId: string, role: "owner" | "admin" | "member") =>
+      inTenant(async (tx) => (await changeMemberRole(dependencies(tx), { workspaceId, actor, actorAccountId: actorId, targetAccountId, role, ipPrefix: null })).kind),
+    transfer: (targetAccountId: string, demoteSelf: boolean) =>
+      inTenant(async (tx) => (await transferOwnership(dependencies(tx), { workspaceId, actor, actorAccountId: actorId, targetAccountId, demoteSelf, ipPrefix: null })).kind),
+  };
+}
+
+async function rolesIn(workspaceId: string): Promise<Record<string, string>> {
+  const rows = await asSystem(db, (tx) => tx<{ account_id: string; role: string }[]>`SELECT account_id, role::text AS role FROM workspace_members WHERE workspace_id = ${workspaceId}`);
+  return Object.fromEntries(rows.map((row) => [row.account_id, row.role]));
+}
+
+describe("an account that made a workspace for itself before its address is verified", () => {
+  it("cannot hand ownership of it to another account, with or without stepping down, so verifying leaves it the owner and no one else one", async () => {
+    const founder = await account();
+    const other = await account({ verified: true });
+    const workspaceId = await seedWorkspace(db, { createdBy: founder });
+    await seedMember(db, { workspaceId, accountId: founder, role: "owner" });
+    await seedMember(db, { workspaceId, accountId: other, role: "member" });
+    const asFounder = asMember(founder, workspaceId);
+
+    expect(await asFounder.setRole(other, "owner")).toBe("unverified");
+    expect(await asFounder.transfer(other, false)).toBe("unverified");
+    expect(await asFounder.transfer(other, true)).toBe("unverified");
+
+    expect(await rolesIn(workspaceId)).toEqual({ [founder]: "owner", [other]: "member" });
+    expect((await auditRows()).filter((row) => row.workspace_id === workspaceId)).toEqual([]);
+    await store.verifyEmail(verification(await issue(founder)));
+    expect(await workspacesOf(founder)).toMatchObject([{ id: workspaceId, role: "owner" }]);
+  });
+
+  it("cannot step down from owner while another owner exists, since the verification would take the ownership back", async () => {
+    const founder = await account();
+    const other = await account({ verified: true });
+    const workspaceId = await seedWorkspace(db, { createdBy: founder });
+    await seedMember(db, { workspaceId, accountId: founder, role: "owner" });
+    await seedMember(db, { workspaceId, accountId: other, role: "owner" });
+
+    expect(await asMember(founder, workspaceId).setRole(founder, "admin")).toBe("unverified");
+    expect(await asMember(founder, workspaceId).setRole(founder, "member")).toBe("unverified");
+
+    expect(await rolesIn(workspaceId)).toEqual({ [founder]: "owner", [other]: "owner" });
+  });
+
+  it("still switches members between admin and member, and demotes or removes another owner it finds there", async () => {
+    const founder = await account();
+    const other = await account({ verified: true });
+    const workspaceId = await seedWorkspace(db, { createdBy: founder });
+    await seedMember(db, { workspaceId, accountId: founder, role: "owner" });
+    await seedMember(db, { workspaceId, accountId: other, role: "member" });
+    const asFounder = asMember(founder, workspaceId);
+
+    expect(await asFounder.setRole(other, "admin")).toBe("changed");
+    expect(await asFounder.setRole(other, "member")).toBe("changed");
+    expect(await asFounder.setRole(other, "member")).toBe("unchanged");
+    expect(await asFounder.setRole(founder, "owner")).toBe("unchanged");
+
+    expect(await rolesIn(workspaceId)).toEqual({ [founder]: "owner", [other]: "member" });
+  });
+
+  it("can hand ownership over when its address is verified", async () => {
+    const founder = await account({ verified: true });
+    const other = await account({ verified: true });
+    const workspaceId = await seedWorkspace(db, { createdBy: founder });
+    await seedMember(db, { workspaceId, accountId: founder, role: "owner" });
+    await seedMember(db, { workspaceId, accountId: other, role: "member" });
+
+    expect(await asMember(founder, workspaceId).transfer(other, true)).toBe("transferred");
+
+    expect(await rolesIn(workspaceId)).toEqual({ [founder]: "admin", [other]: "owner" });
+  });
+});
+
+describe("an unverified account in a workspace it did not make for itself", () => {
+  it.each([
+    ["another account created", (creator: string) => seedWorkspace(db, { createdBy: creator })],
+    ["the instance console created for it", (creator: string) => seedWorkspace(db, { createdBy: creator, selfCreated: false })],
+    ["has no recorded creator", () => seedWorkspace(db, { createdBy: null })],
+  ])("keeps the owner role it holds in a workspace %s: it can hand ownership over", async (_description, make) => {
+    const unverified = await account();
+    const other = await account({ verified: true });
+    const workspaceId = await make(other);
+    await seedMember(db, { workspaceId, accountId: unverified, role: "owner" });
+    await seedMember(db, { workspaceId, accountId: other, role: "member" });
+
+    expect(await asMember(unverified, workspaceId).transfer(other, true)).toBe("transferred");
+
+    expect(await rolesIn(workspaceId)).toEqual({ [unverified]: "admin", [other]: "owner" });
   });
 });
 

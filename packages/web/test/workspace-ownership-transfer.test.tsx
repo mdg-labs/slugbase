@@ -235,6 +235,11 @@ describe("the transfer dialog", () => {
   it.each([
     ["409 last_owner", () => problem(409, "last_owner", "req-409"), "A workspace needs at least one owner. The ownership was not changed."],
     ["403", () => problem(403, "forbidden", "req-403"), "Only an owner can transfer ownership. The page has been reloaded."],
+    [
+      "403 email_unverified",
+      () => problem(403, "email_unverified", "req-403"),
+      "Verify your email address before you transfer ownership of a workspace you made. The ownership was not changed.",
+    ],
     ["404", () => problem(404, "not_found", "req-404"), "This person is no longer a member of the workspace. The list has been reloaded."],
   ])("explains a refusal with %s, changes nothing and loads the list again", async (_name, answer, message) => {
     const server = stubWorkspaceSettingsServer({ members: [SELF, GRACE], transfer: answer });

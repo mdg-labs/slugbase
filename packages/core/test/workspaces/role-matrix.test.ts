@@ -69,7 +69,7 @@ function world(callerRole: WorkspaceRole | undefined, targetRole: WorkspaceRole 
   const audit = createAuditWriter({ store: auditStore, newId: ids() });
   const bind = (accountOfTransaction: string) => {
     const store: MembershipEndStore = {
-      roles: (target) => Promise.resolve({ actor: roster.get(accountOfTransaction), target: roster.get(target.toLowerCase()) }),
+      roles: (target) => Promise.resolve({ actor: roster.get(accountOfTransaction), target: roster.get(target.toLowerCase()), actorUnverifiedFounder: false }),
       setRole(target, role) {
         if (!roster.has(target.toLowerCase())) {
           return Promise.resolve(false);

@@ -16,6 +16,12 @@ export interface MemberRoles {
   readonly actor: WorkspaceRole | undefined;
   /** The role of the member the change is for; undefined when the workspace has no such member. */
   readonly target: WorkspaceRole | undefined;
+  /**
+   * Whether the account that asks made the workspace for itself (doc 02 section 2.6, `workspaces.created_by` with
+   * `self_created`) and has not verified its address. Verifying strips such a workspace and makes the account its owner
+   * again, whatever role it holds, so until then the account can neither give ownership away nor give its own up.
+   */
+  readonly actorUnverifiedFounder: boolean;
 }
 
 export interface MemberRoleStore {
@@ -52,13 +58,17 @@ export type MemberRoleOutcome =
   | { readonly kind: "unchanged"; readonly role: WorkspaceRole }
   /** The account that asks may not make this change; nothing was written. */
   | { readonly kind: "forbidden" }
+  /** The account that asks made the workspace for itself and its address is not verified, and the change grants the owner role or removes its own; nothing was written. */
+  | { readonly kind: "unverified" }
   /** The workspace has no such member, or cannot be reached. */
   | { readonly kind: "not_found" };
 
 /**
  * An admin or an owner switches a member who is not an owner between `admin` and `member`; only an owner
- * promotes to `owner` or changes the role of an owner, an admin included when it asks about itself. Writes
- * `member.role_changed` with the old and the new role in the transaction the stores are bound to.
+ * promotes to `owner` or changes the role of an owner, an admin included when it asks about itself. An account that
+ * made the workspace for itself and has not verified its address may not promote to `owner` or give up its own owner
+ * role (`MemberRoles.actorUnverifiedFounder`). Writes `member.role_changed` with the old and the new role in the
+ * transaction the stores are bound to.
  */
 export async function changeMemberRole({ store, audit }: MemberRoleDependencies, ask: MemberRoleAsk): Promise<MemberRoleOutcome> {
   const roles = await store.roles(ask.targetAccountId);
@@ -77,6 +87,10 @@ export async function changeMemberRole({ store, audit }: MemberRoleDependencies,
   if (roles.target === ask.role) {
     return { kind: "unchanged", role: roles.target };
   }
+  const self = ask.targetAccountId.toLowerCase() === ask.actorAccountId.toLowerCase();
+  if (roles.actorUnverifiedFounder && (ask.role === "owner" || (self && roles.target === "owner"))) {
+    return { kind: "unverified" };
+  }
   if (!(await store.setRole(ask.targetAccountId, ask.role))) {
     return { kind: "not_found" };
   }
@@ -88,5 +102,5 @@ export async function changeMemberRole({ store, audit }: MemberRoleDependencies,
     metadata: { from: roles.target, to: ask.role },
     ipPrefix: ask.ipPrefix,
   });
-  return { kind: "changed", from: roles.target, to: ask.role, self: ask.targetAccountId.toLowerCase() === ask.actorAccountId.toLowerCase() };
+  return { kind: "changed", from: roles.target, to: ask.role, self };
 }

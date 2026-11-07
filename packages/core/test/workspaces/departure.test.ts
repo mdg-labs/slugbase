@@ -47,7 +47,7 @@ function world({ members, longestStandingOwner, ends = true, auditFails = false,
   const store: MembershipEndStore = {
     roles(target): Promise<MemberRoles | undefined> {
       log.push(`roles ${target}`);
-      return Promise.resolve(unreachable ? undefined : { actor: members[ACTOR_ACCOUNT], target: members[target] });
+      return Promise.resolve(unreachable ? undefined : { actor: members[ACTOR_ACCOUNT], target: members[target], actorUnverifiedFounder: false });
     },
     setRole() {
       throw new Error("a departure sets no role");

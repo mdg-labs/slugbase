@@ -118,8 +118,8 @@ async function signIn(world: World, account: SeededAccount, reauthenticate: bool
   return cookie;
 }
 
-async function person(world: World): Promise<Person> {
-  const account = await seedAccount(database(), { emailVerified: true });
+async function person(world: World, emailVerified = true): Promise<Person> {
+  const account = await seedAccount(database(), { emailVerified });
   const cookie = await signIn(world, account, true);
   const stale = await signIn(world, account, false);
   const sessions = await sessionRows(database(), account.id);
@@ -209,6 +209,31 @@ interface MemberBody {
 }
 
 describe("POST /api/v1/workspace/transfer-ownership", () => {
+  it.each([false, true])(
+    "answers 403 email_unverified and writes nothing when the owner made the workspace for itself and has not verified its address (demoteSelf %s)",
+    async (demoteSelf) => {
+      const world = serve(canSend);
+      const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+      const [owner, recipient] = [only(people, 0), only(people, 1)];
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE workspaces SET created_by = ${owner.account.id}, self_created = true WHERE id = ${workspaceId}`;
+        await tx`UPDATE accounts SET email_verified_at = NULL WHERE id = ${owner.account.id}`;
+      });
+      const before = await tokenHashOf(owner.sessionId, owner.account.id);
+
+      const response = await send(world, "POST", TRANSFER, { cookie: owner.cookie }, { accountId: recipient.account.id, demoteSelf });
+
+      expect(response.status).toBe(403);
+      expect(await problem(response)).toMatchObject({ code: "email_unverified" });
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect(await rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [recipient.account.id]: "member" });
+      expect(await auditOf(workspaceId)).toEqual([]);
+      expect(await mailJobs()).toEqual([]);
+      expect(await tokenHashOf(owner.sessionId, owner.account.id)).toBe(before);
+    },
+  );
+
   it("makes the recipient an owner and keeps the caller one, with the audit event and the recipient's email queued", async () => {
     const world = serve(canSend);
     const { workspaceId, people } = await workspaceOf(world, "owner", "member");

@@ -217,6 +217,17 @@ describe("the members table", () => {
     });
   }, SLOW_TEST_TIMEOUT_MS);
 
+  it("tells the owner of a workspace they made to verify their address, not that the role is forbidden, and keeps the role", async () => {
+    stubWorkspaceSettingsServer({ memberPatch: () => problem(403, "email_unverified", "req-403") });
+    await openList();
+
+    await choose("Role of Grace Hopper", "Owner");
+
+    expect(await screen.findByText("Verify your email address before you make someone an owner or give up your own owner role in a workspace you made.")).toBeTruthy();
+    expect(screen.queryByText("You are not allowed to change this role.")).toBeNull();
+    expect(within(rowOf("Grace Hopper")).getByRole("combobox", { name: "Role of Grace Hopper" }).textContent).toContain("Member");
+  }, SLOW_TEST_TIMEOUT_MS);
+
   it("says a member who left is no longer a member, and loads the list again", async () => {
     const server = stubWorkspaceSettingsServer({ memberPatch: () => problem(404, "not_found", "req-404") });
     await openList();
