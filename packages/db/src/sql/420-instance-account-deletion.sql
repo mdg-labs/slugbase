@@ -13,7 +13,7 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- sys_instance_account_deletion_scope(account_id): what deleting the account would do, and the locks that keep it true for
 -- the rest of the transaction, so the caller can refuse or ask the deletion guard before anything changes. It locks, in the
 -- order of sys_account_deletion_scope: the workspaces the account is a member of or created and that are not being deleted
--- (identifier order), the account's backup-code rows (identifier order, the order sys_mfa_lock documents), the rows of the
+-- (identifier order, each half read through an index as in sys_account_deletion_scope), the account's backup-code rows (identifier order, the order sys_mfa_lock documents), the rows of the
 -- calling admin and of the account together in identifier order (the order of sys_instance_update_account), and, when the
 -- account is an instance admin, the advisory key of the set of admins (doc 05 section 7.1), last of all. The admin is
 -- checked again under those locks. The first row says what to do:
@@ -50,8 +50,10 @@ BEGIN
 
   PERFORM 1 FROM public.workspaces w
   WHERE w.deleting_at IS NULL
-    AND (w.created_by = p_account_id
-         OR w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id))
+    AND w.id IN (
+      SELECT c.id FROM public.workspaces c WHERE c.created_by = p_account_id
+      UNION
+      SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id)
   ORDER BY w.id
   FOR UPDATE OF w;
   PERFORM 1 FROM public.mfa_backup_codes c WHERE c.account_id = p_account_id ORDER BY c.id FOR UPDATE;

@@ -52,6 +52,9 @@ interface PlanNode {
   "Node Type": string;
   "Relation Name"?: string;
   "Index Name"?: string;
+  "Sort Key"?: string[];
+  "Scan Direction"?: string;
+  Alias?: string;
   Plans?: PlanNode[];
 }
 
@@ -61,7 +64,7 @@ function nodesOf(node: PlanNode): PlanNode[] {
 
 let prepared = 0;
 
-async function planOf(sql: string, mode: "force_custom_plan" | "force_generic_plan"): Promise<PlanNode[]> {
+async function planRootOf(sql: string, mode: "force_custom_plan" | "force_generic_plan"): Promise<PlanNode> {
   prepared += 1;
   const name = `creator_lookup_${String(prepared)}`;
   const explain = async (tx: postgres.TransactionSql): Promise<PlanNode | undefined> => {
@@ -74,7 +77,11 @@ async function planOf(sql: string, mode: "force_custom_plan" | "force_generic_pl
   if (plan === undefined) {
     throw new Error("EXPLAIN returned no plan");
   }
-  return nodesOf(plan);
+  return plan;
+}
+
+async function planOf(sql: string, mode: "force_custom_plan" | "force_generic_plan"): Promise<PlanNode[]> {
+  return nodesOf(await planRootOf(sql, mode));
 }
 
 // The statements that read workspaces by their creator: the foreign-key action of `created_by` (ON DELETE SET NULL), which PostgreSQL runs on the delete
@@ -104,20 +111,24 @@ describe(`the lookups by the creator on a table of ${String(WORKSPACES + 80)} wo
     }
   }
 
-  // The locks the verification strip takes on the workspaces an account created or owns before it changes anything, read from the functions as the database holds
-  // them (210-email-verification.sql, 410-instance-recovery.sql): the first statement of each that locks workspaces, as a SELECT of the account in $1. Each half
-  // of the set must be read through an index and the workspaces then locked by identifier, so no statement reads the whole table of workspaces.
-  const LOCK_OF: readonly { name: string; fn: string; account: string }[] = [
-    { name: "account_strip_workspaces", fn: "account_strip_workspaces", account: "p_account_id" },
-    { name: "sys_email_verify", fn: "sys_email_verify", account: "v_token_account" },
-    { name: "sys_instance_update_account", fn: "sys_instance_update_account", account: "p_account_id" },
+  // The locks the verification strip and the two account deletions take on the workspaces an account created or belongs to before they change anything, read
+  // from the functions as the database holds them (210-email-verification.sql, 410-instance-recovery.sql, 290-account-deletion.sql,
+  // 420-instance-account-deletion.sql): the first statement of each that locks workspaces, as a SELECT of the account in $1. Each half of the set must be read
+  // through an index and the workspaces then locked by identifier, so no statement reads the whole table of workspaces.
+  const LOCK_OF: readonly { name: string; fn: string; account: string; mode: string }[] = [
+    { name: "account_strip_workspaces", fn: "account_strip_workspaces", account: "p_account_id", mode: "FOR NO KEY UPDATE OF w" },
+    { name: "sys_email_verify", fn: "sys_email_verify", account: "v_token_account", mode: "FOR NO KEY UPDATE OF w" },
+    { name: "sys_instance_update_account", fn: "sys_instance_update_account", account: "p_account_id", mode: "FOR NO KEY UPDATE OF w" },
+    { name: "sys_account_deletion_scope", fn: "sys_account_deletion_scope", account: "p_account_id", mode: "FOR UPDATE OF w" },
+    { name: "sys_instance_account_deletion_scope", fn: "sys_instance_account_deletion_scope", account: "p_account_id", mode: "FOR UPDATE OF w" },
   ];
+  const DELETIONS = LOCK_OF.filter((lock) => lock.mode === "FOR UPDATE OF w").map((lock) => lock.name);
   const LOCKS: { name: string; sql: string }[] = [];
 
   beforeAll(async () => {
-    for (const { name, fn, account } of LOCK_OF) {
+    for (const { name, fn, account, mode } of LOCK_OF) {
       const rows = await db.owner<{ source: string }[]>`SELECT prosrc AS source FROM pg_proc WHERE proname = ${fn} AND pronamespace = 'public'::regnamespace`;
-      const statements = rows.flatMap((row) => /PERFORM 1 FROM public\.workspaces w[\s\S]*?FOR NO KEY UPDATE OF w;/.exec(row.source)?.[0] ?? []);
+      const statements = rows.flatMap((row) => new RegExp(`PERFORM 1 FROM public\\.workspaces w[\\s\\S]*?${mode};`).exec(row.source)?.[0] ?? []);
       expect(statements, `${fn} locks workspaces once`).toHaveLength(1);
       const [statement] = statements;
       if (statement === undefined) {
@@ -137,6 +148,89 @@ describe(`the lookups by the creator on a table of ${String(WORKSPACES + 80)} wo
       });
     }
   }
+
+  // The two account deletions lock in identifier order (doc 05 section 7.1): LockRows takes its rows in the order its input delivers them. A nested loop and a
+  // unique pass on the order of their outer input, so following the outer inputs down from LockRows must reach the node that fixes the order: a sort by the
+  // identifier of a workspace (the join makes the identifiers of the two relations one), ascending, or a read of the primary key of workspaces in order.
+  const ORDER_KEPT = new Set(["Nested Loop", "Merge Join", "Subquery Scan", "Unique"]);
+  const orderOf = (root: PlanNode): string => {
+    if (root["Node Type"] !== "LockRows") {
+      return `the root is ${root["Node Type"]}`;
+    }
+    let node: PlanNode | undefined = root.Plans?.[0];
+    while (node !== undefined && ORDER_KEPT.has(node["Node Type"])) {
+      node = node.Plans?.[0];
+    }
+    if (node?.["Node Type"] === "Sort" && node["Sort Key"]?.length === 1 && /^[wc]\.id$/.test(node["Sort Key"][0] ?? "")) {
+      return "identifier";
+    }
+    if (node?.["Node Type"] === "Index Scan" && node["Index Name"] === "workspaces_pkey" && node["Scan Direction"] === "Forward" && node.Alias === "w") {
+      return "identifier";
+    }
+    return `${node?.["Node Type"] ?? "nothing"} on ${JSON.stringify(node?.["Sort Key"] ?? node?.["Index Name"])}`;
+  };
+
+  for (const name of DELETIONS) {
+    for (const mode of ["force_custom_plan", "force_generic_plan"] as const) {
+      it(`delivers the rows of the lock of ${name} to LockRows in the order of the workspace identifier (${mode})`, async () => {
+        const lock = LOCKS[LOCK_OF.findIndex((candidate) => candidate.name === name)];
+
+        expect(orderOf(await planRootOf(lock?.sql ?? "", mode))).toBe("identifier");
+      });
+    }
+  }
+
+  // The set a deletion locks is the set the statement it replaced matched, compared as lists of identifiers in lock order, on an account that holds a workspace
+  // it created and belongs to, one it created and left, one it only belongs to as an owner, an admin and a member, one it created that is being deleted, one it
+  // belongs to that is being deleted, workspaces whose creator is gone that it belongs to, and workspaces that are none of those (and one it did not create
+  // that another account owns).
+  it("locks exactly the workspaces the account created or belongs to that are not being deleted, the set the statement it replaced matched", async () => {
+    const subject = freshId();
+    const other = freshId();
+    await seedAccount(db, { id: subject, email: "workspace-deletion-lock-subject@example.test", passwordHash: "$argon2id$stub" });
+    await seedAccount(db, { id: other, email: "workspace-deletion-lock-other@example.test", passwordHash: "$argon2id$stub" });
+    const made = async (name: string, creator: string | null, deleting: boolean): Promise<string> => {
+      const id = freshId();
+      await asSystem(db, (tx) => tx`INSERT INTO workspaces (id, name, created_by, deleting_at) VALUES (${id}::uuid, ${name}, ${creator}::uuid, ${deleting ? new Date() : null})`);
+      return id;
+    };
+    const member = async (workspace: string, account: string, role: "owner" | "admin" | "member"): Promise<void> => {
+      await asSystem(db, (tx) => tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${workspace}::uuid, ${account}::uuid, ${role})`);
+    };
+    const createdAndOwned = await made("Eq created and owned", subject, false);
+    await member(createdAndOwned, subject, "owner");
+    const createdAndLeft = await made("Eq created and left", subject, false);
+    await member(createdAndLeft, other, "owner");
+    const ownedOnly = await made("Eq owned only", other, false);
+    await member(ownedOnly, subject, "owner");
+    const adminOnly = await made("Eq admin only", other, false);
+    await member(adminOnly, subject, "admin");
+    const memberOnly = await made("Eq member only", null, false);
+    await member(memberOnly, subject, "member");
+    const orphanOwned = await made("Eq orphan owned", null, false);
+    await member(orphanOwned, subject, "owner");
+    const createdDeleting = await made("Eq created deleting", subject, true);
+    await member(createdDeleting, subject, "owner");
+    const memberDeleting = await made("Eq member deleting", other, true);
+    await member(memberDeleting, subject, "member");
+    const othersOwn = await made("Eq others own", other, false);
+    await member(othersOwn, other, "owner");
+    const orphanOthers = await made("Eq orphan others", null, false);
+    await member(orphanOthers, other, "owner");
+
+    const id = `'${subject}'::uuid`;
+    const expected = [createdAndOwned, createdAndLeft, ownedOnly, adminOnly, memberOnly, orphanOwned].sort();
+    for (const name of DELETIONS) {
+      const lock = LOCKS[LOCK_OF.findIndex((candidate) => candidate.name === name)];
+      const [row] = await asSystem(db, (tx) => tx.unsafe<{ locked: string[]; before: string[] }[]>(`
+        SELECT (SELECT array_agg(l.id) FROM (${(lock?.sql ?? "").replaceAll("$1", id).replace("SELECT 1 FROM", "SELECT w.id FROM")}) l) AS locked,
+               (SELECT array_agg(o.id ORDER BY o.id) FROM (SELECT w.id FROM public.workspaces w WHERE w.deleting_at IS NULL
+                 AND (w.created_by = ${id} OR w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = ${id}))
+                 ORDER BY w.id) o) AS before`));
+      expect(row?.locked, name).toEqual(row?.before);
+      expect(row?.locked, name).toEqual(expected);
+    }
+  });
 
   it("locks exactly the workspaces the account created and owns that are not being deleted, the set the statement it replaced matched", async () => {
     const id = `'${accountId}'::uuid`;

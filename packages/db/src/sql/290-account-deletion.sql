@@ -23,7 +23,9 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- account is a member of and those it created (created_by), members or not: deleting the account sets created_by of
 -- the latter to NULL, which writes their rows, and a path that took the account first and those rows after would
 -- deadlock with an invitation accepted into one of them, which takes the workspace and then the account. A workspace
--- already being deleted is locked in neither case.
+-- already being deleted is locked in neither case. Each half is read through an index (workspaces_created_by_idx,
+-- workspace_members_account_id_idx) and the union is joined by identifier, so the statement does not scan the table of
+-- workspaces while it holds the locks.
 -- The backup-code rows of the account, in identifier order, come before its row, the order sys_mfa_lock documents for
 -- every writer of them (a backup-code sign-in consumes a code and then promotes its session, which locks the account
 -- row): deleting the account deletes them by cascade, so a deletion that took the account row first would wait in the
@@ -47,8 +49,10 @@ BEGIN
   END IF;
   PERFORM 1 FROM public.workspaces w
   WHERE w.deleting_at IS NULL
-    AND (w.created_by = p_account_id
-         OR w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id))
+    AND w.id IN (
+      SELECT c.id FROM public.workspaces c WHERE c.created_by = p_account_id
+      UNION
+      SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id)
   ORDER BY w.id
   FOR UPDATE OF w;
   PERFORM 1 FROM public.mfa_backup_codes c WHERE c.account_id = p_account_id ORDER BY c.id FOR UPDATE;

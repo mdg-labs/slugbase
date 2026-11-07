@@ -953,6 +953,13 @@
       "when": 1794063145243,
       "tag": "20261107145225_add_bookmark_title_page",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1794072420265,
+      "tag": "20261107172700_add_account_deletion_lock_indexes",
+      "breakpoints": true
     }
   ]
 }
