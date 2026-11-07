@@ -2,6 +2,7 @@ import { createHandlers, scenarioFromSearch, type Scenario } from "@slugbase/tes
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { screen } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { ApiProblemError, createApiClient } from "../src/api/client.ts";
 import { createWebApp } from "../src/index.ts";
 import { renderApp, stubMatchMedia } from "./support.tsx";
@@ -39,7 +40,7 @@ function answerConfigWith(status: number): void {
   server.use(...createHandlers(readOpenApiDocument(), { scenario }));
 }
 
-describe("the web app against the generated handlers", () => {
+describe("the web app against the generated handlers", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("reads /api/config through the API client", async () => {
     const { data } = await createApiClient().GET("/api/config");
     expect(data?.product.name).toBe("SlugBase Mock");

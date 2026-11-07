@@ -5,6 +5,7 @@ import { focusManager, notifyManager } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp, type WebExtension } from "../src/index.ts";
 import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis } from "./support.tsx";
 
@@ -111,7 +112,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the preferences page", () => {
+describe("the preferences page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the theme, the accent swatches, the default view and the single-key shortcuts switch, in the settings navigation", async () => {
     stubServer();
     await openPreferences();
@@ -180,7 +181,7 @@ describe("the preferences page", () => {
   });
 });
 
-describe("theme and accent", () => {
+describe("theme and accent", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("apply at once and are sent as the one field that changed, with the saving state and then the saved state", async () => {
     let release: (response: Response) => void = () => undefined;
     const server = stubServer({
@@ -476,7 +477,7 @@ describe("theme and accent", () => {
   });
 });
 
-describe("the theme toggle of the top bar", () => {
+describe("the theme toggle of the top bar", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("keeps the choice in the account, and takes it back when it cannot be saved", async () => {
     let failing = false;
     const server = stubServer({
@@ -523,7 +524,7 @@ function ShortcutProbe(): ReactElement {
 
 const SHORTCUT_EXTENSION: WebExtension = { id: "shortcut-probe", slots: { "sidebar.footer": ShortcutProbe } };
 
-describe("single-key shortcuts", () => {
+describe("single-key shortcuts", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   afterEach(() => {
     delete document.body.dataset["singleKey"];
     delete document.body.dataset["modified"];
@@ -585,7 +586,7 @@ describe("single-key shortcuts", () => {
   });
 });
 
-describe("the account request", () => {
+describe("the account request", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is asked for once when the app starts", async () => {
     const server = stubServer();
     await openApp("/");

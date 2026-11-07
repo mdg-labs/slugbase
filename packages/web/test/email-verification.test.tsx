@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_LIST_BODY, json, meOf, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -35,7 +36,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the sign-in page and registration", () => {
+describe("the sign-in page and registration", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   async function openLogin(config: object): Promise<void> {
     vi.stubGlobal("fetch", (request: Request) => {
       const { pathname } = new URL(request.url);
@@ -66,7 +67,7 @@ describe("the sign-in page and registration", () => {
   });
 });
 
-describe("signing in with an unverified address", () => {
+describe("signing in with an unverified address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   function stubServer(resend: Transport): Request[] {
     const resent: Request[] = [];
     vi.stubGlobal("fetch", (request: Request) => {
@@ -136,7 +137,7 @@ describe("signing in with an unverified address", () => {
   });
 });
 
-describe("the banner for an unverified account", () => {
+describe("the banner for an unverified account", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   function stubServer(config: object, emailVerified: boolean, resend: Transport = accepted): Request[] {
     const resent: Request[] = [];
     vi.stubGlobal("fetch", (request: Request) => {

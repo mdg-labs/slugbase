@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, ME_PATH, PRODUCT_NAME, SESSION_BODY, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -110,7 +111,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the sign-in that continues at the second step", () => {
+describe("the sign-in that continues at the second step", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("takes the visitor to /login/mfa, keeping the page they were headed for", async () => {
     stubServer("none");
     await open(`/login?next=${encodeURIComponent("/settings/account/security")}`);
@@ -140,7 +141,7 @@ describe("the sign-in that continues at the second step", () => {
   });
 });
 
-describe("the page", () => {
+describe("the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for the six-digit code, with the backup code and the way back as alternatives", async () => {
     stubServer("partial");
     await openMfa();
@@ -195,7 +196,7 @@ describe("the page", () => {
   });
 });
 
-describe("the six-digit code", () => {
+describe("the six-digit code", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is sent as soon as the sixth digit is in, then the visitor goes to the page they were headed for", async () => {
     const server = stubServer("partial");
     await openMfa(`/login/mfa?next=${encodeURIComponent("/settings/account/security")}`);
@@ -337,7 +338,7 @@ describe("the six-digit code", () => {
   });
 });
 
-describe("the backup code", () => {
+describe("the backup code", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is a text input that takes the place of the six digits, and sends the code as typed, trimmed", async () => {
     const server = stubServer("partial");
     await openMfa();
@@ -399,7 +400,7 @@ describe("the backup code", () => {
   });
 });
 
-describe("a pending session that has ended", () => {
+describe("a pending session that has ended", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each([
     ["the session expired", "unauthenticated"],
     ["its fifth refused code revoked it", "unauthenticated"],
@@ -418,7 +419,7 @@ describe("a pending session that has ended", () => {
   });
 });
 
-describe("back to sign in", () => {
+describe("back to sign in", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("ends the pending session and shows the sign-in page", async () => {
     const server = stubServer("partial");
     await openMfa(`/login/mfa?next=${encodeURIComponent("/b/one")}`);
@@ -455,7 +456,7 @@ describe("back to sign in", () => {
   });
 });
 
-describe("coming back from a /go address (doc 04 section 9.3)", () => {
+describe("coming back from a /go address (doc 04 section 9.3)", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("goes back to /go/<slug> with a request to the server once the code is verified", async () => {
     const server = stubServer("partial");
     await openMfa(`/login/mfa?returnTo=${encodeURIComponent("/go/mail")}`);

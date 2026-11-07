@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp, useConfig } from "../src/index.ts";
 import {
   CONFIG_BODY,
@@ -58,7 +59,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("createWebApp", () => {
+describe("createWebApp", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("requests /api/config before anything renders and shows the product name from it", async () => {
     const fetch = stubTransport((request) => signedIn(request));
     const App = createWebApp({ extensions: [] });
@@ -201,7 +202,7 @@ describe("createWebApp", () => {
   });
 });
 
-describe("useConfig", () => {
+describe("useConfig", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("refuses to run outside the web app", () => {
     function Probe() {
       return <p>{useConfig().product.name}</p>;

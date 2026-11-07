@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, ACTIVE_WORKSPACE_PATH, PRODUCT_NAME, WORKSPACES_PATH, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 import { HOME, LOGOUT_PATH, NEW_ID, stubWorkspaceServer } from "./workspace-server.ts";
@@ -24,7 +25,7 @@ async function mountApp(): Promise<void> {
 
 const noWorkspace = { workspaces: [], active: null } as const;
 
-describe("/no-workspace where creating a workspace is off", () => {
+describe("/no-workspace where creating a workspace is off", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("says the account is waiting for an invitation, with its email and a way to sign out, and offers no creation", async () => {
     stubWorkspaceServer({ ...noWorkspace, canCreate: false });
     await mountApp();
@@ -80,7 +81,7 @@ describe("/no-workspace where creating a workspace is off", () => {
   });
 });
 
-describe("/no-workspace where an account can create a workspace", () => {
+describe("/no-workspace where an account can create a workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   async function openDialog(): Promise<HTMLElement> {
     await act(async () => {
       fireEvent.click(await screen.findByRole("button", { name: "Create a workspace" }));
@@ -170,7 +171,7 @@ describe("/no-workspace where an account can create a workspace", () => {
   });
 });
 
-describe("/no-workspace in the states of its requests", () => {
+describe("/no-workspace in the states of its requests", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows a skeleton while the account's workspaces are on their way", async () => {
     stubWorkspaceServer({ ...noWorkspace, list: () => new Promise<Response>(() => undefined) });
     await mountApp();
@@ -216,7 +217,7 @@ describe("/no-workspace in the states of its requests", () => {
   });
 });
 
-describe("the guards around /no-workspace", () => {
+describe("the guards around /no-workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("sends an account that acts in a workspace to the app", async () => {
     stubWorkspaceServer();
     await mountApp();

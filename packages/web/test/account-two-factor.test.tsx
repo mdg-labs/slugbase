@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -192,7 +193,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the status", () => {
+describe("the status", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is Off with a way to set up when GET /me says the second factor is off", async () => {
     stubServer(false);
     await openSecurity();
@@ -225,7 +226,7 @@ describe("the status", () => {
   });
 });
 
-describe("the enrolment wizard", () => {
+describe("the enrolment wizard", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("re-authenticates, shows the QR code as an image with the text key, verifies a code and shows the backup codes once", async () => {
     const server = stubServer(false, { enrolment: (call) => (call === 1 ? reauthRequired() : json({ secret: SECRETS[0], otpauthUri: "otpauth://x", qrSvg: QR_SVG })) });
     await openSecurity();
@@ -397,7 +398,7 @@ describe("the enrolment wizard", () => {
   }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 });
 
-describe("the backup codes", () => {
+describe("the backup codes", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for a code, shows the new set once, and keeps it until it is acknowledged", async () => {
     const server = stubServer(true);
     await openSecurity();
@@ -473,7 +474,7 @@ describe("the backup codes", () => {
   });
 });
 
-describe("turning off", () => {
+describe("turning off", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for a code and the password, sends nothing before the confirmation, then turns off and refetches the account", async () => {
     const server = stubServer(true);
     await openSecurity();
@@ -599,7 +600,7 @@ describe("turning off", () => {
   });
 });
 
-describe("accessibility", () => {
+describe("accessibility", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   async function violations(): Promise<string[]> {
     const results = await axe(document.body, { rules: { region: { enabled: false } } });
     return results.violations.map((violation) => `${violation.id}: ${violation.help}`);

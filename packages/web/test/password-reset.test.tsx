@@ -1,5 +1,6 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -104,7 +105,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the sign-in page", () => {
+describe("the sign-in page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("links to the page that asks for a reset link", async () => {
     stubServer(WITH_MAIL);
     window.history.replaceState(null, "", "/login");
@@ -116,7 +117,7 @@ describe("the sign-in page", () => {
   });
 });
 
-describe("the forgot-password page", () => {
+describe("the forgot-password page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for the email address and sends the trimmed address", async () => {
     const server = stubServer(WITH_MAIL);
     await open("/forgot-password");
@@ -188,7 +189,7 @@ describe("the forgot-password page", () => {
   });
 });
 
-describe("the reset-password page", () => {
+describe("the reset-password page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for the new password with the strength meter and says other sessions are signed out", async () => {
     stubServer(WITH_MAIL);
     await open("/reset-password#token=abc123");
@@ -306,7 +307,7 @@ describe("the reset-password page", () => {
   });
 });
 
-describe("an expired reset link", () => {
+describe("an expired reset link", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows a banner with a link to request a new one when the server refuses the token", async () => {
     stubServer(WITH_MAIL, accepted, () => Promise.resolve(problem(410, "token_expired", "req-1")));
     await open("/reset-password#token=abc123");

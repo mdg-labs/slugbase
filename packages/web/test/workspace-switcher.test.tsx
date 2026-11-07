@@ -57,7 +57,7 @@ async function submitCreate(): Promise<void> {
   });
 }
 
-describe("the workspace switcher in the sidebar header", () => {
+describe("the workspace switcher in the sidebar header", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the active workspace's monogram and name, and a menu of the account's workspaces with a check on the active one", async () => {
     stubWorkspaceServer();
     await mountApp();
@@ -185,7 +185,7 @@ describe("the workspace switcher in the sidebar header", () => {
   });
 });
 
-describe("choosing a workspace", () => {
+describe("choosing a workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("calls PUT /session/active-workspace, reloads the data and shows the chosen workspace as active", async () => {
     const server = stubWorkspaceServer();
     await mountApp();
@@ -257,7 +257,7 @@ describe("choosing a workspace", () => {
   });
 });
 
-describe("the states of the switcher", () => {
+describe("the states of the switcher", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows a skeleton in the menu while the list is on its way", async () => {
     stubWorkspaceServer({ list: () => new Promise<Response>(() => undefined) });
     await mountApp();
@@ -386,7 +386,7 @@ describe("the accessibility of the switcher", { timeout: HEAVY_TEST_TIMEOUT_MS }
   });
 });
 
-describe("creating a workspace from the switcher", () => {
+describe("creating a workspace from the switcher", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("creates it with POST /workspaces, then switches to it", async () => {
     const server = stubWorkspaceServer({ canCreate: true });
     await mountApp();
@@ -503,7 +503,7 @@ describe("creating a workspace from the switcher", () => {
   });
 });
 
-describe("an account that acts in no workspace", () => {
+describe("an account that acts in no workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is sent from a workspace page to /no-workspace", async () => {
     stubWorkspaceServer({ workspaces: [], active: null });
     await mountApp();

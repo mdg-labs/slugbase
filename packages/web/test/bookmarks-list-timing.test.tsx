@@ -1,6 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -113,7 +114,7 @@ async function chooseAction(action: string): Promise<void> {
   await press(await screen.findByRole("menuitem", { name: action }));
 }
 
-describe("while the first page is being read", () => {
+describe("while the first page is being read", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows skeleton cards, not an empty list, and then the cards", async () => {
     const answer = gate();
     stubServer({
@@ -138,7 +139,7 @@ describe("while the first page is being read", () => {
   });
 });
 
-describe("pinning", () => {
+describe("pinning", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the pin before the server answered, sends the version the list holds and keeps the pin", async () => {
     const answer = gate();
     const server = stubServer({

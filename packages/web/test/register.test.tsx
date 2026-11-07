@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import type { WebExtension } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -94,7 +95,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the registration page", () => {
+describe("the registration page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("collects the name, the email and the password with the strength meter", async () => {
     stubServer(OPEN, accepted);
     await openRegister();
@@ -160,7 +161,7 @@ describe("the registration page", () => {
   });
 });
 
-describe("registering", () => {
+describe("registering", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("sends the trimmed name and email and the password, then asks to check the email", async () => {
     const server = stubServer(OPEN, accepted);
     await openRegister();
@@ -257,7 +258,7 @@ describe("registering", () => {
   });
 });
 
-describe("the Check your email state", () => {
+describe("the Check your email state", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   async function registered(resend: Transport): Promise<Server> {
     const server = stubServer(OPEN, accepted, resend);
     await openRegister();

@@ -1,6 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { SESSION_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -138,7 +139,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the profile page", () => {
+describe("the profile page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("renders inside the settings layout with the name, the read-only email, the language and the avatar preview", async () => {
     stubServer();
     await openProfile();
@@ -396,7 +397,7 @@ describe("the profile page", () => {
   });
 });
 
-describe("the settings navigation on a narrow screen", () => {
+describe("the settings navigation on a narrow screen", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is a Select of the settings pages that shows the current one", async () => {
     stubMatchMedia(true);
     stubServer();

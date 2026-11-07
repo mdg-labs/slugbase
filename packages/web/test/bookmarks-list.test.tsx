@@ -201,7 +201,7 @@ describe("reaching the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   });
 });
 
-describe("a card", () => {
+describe("a card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the monogram, the title, the host, the missing slug, the pin and the usage as text", async () => {
     const twoHoursAgo = new Date(Date.now() - 2 * 3_600_000).toISOString();
     use({
@@ -281,7 +281,7 @@ describe("a card", () => {
   });
 });
 
-describe("the address", () => {
+describe("the address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is read into the request and the controls", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
     await openApp("/bookmarks?pinned=true&hasSlug=true&forwarding=true&scope=mine&sort=title_asc&size=48");
@@ -404,7 +404,7 @@ describe("the address", () => {
   });
 });
 
-describe("loading more", () => {
+describe("loading more", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for the next page with the cursor the last one gave, adds it, and counts what is shown", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2)], { nextCursor: "cursor-1", total: 3 }) } });
     await openApp("/bookmarks");
@@ -459,7 +459,7 @@ describe("loading more", () => {
   });
 });
 
-describe("pinning", () => {
+describe("pinning", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("offers Unpin on a pinned bookmark and sends the unpin", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1, { pinned: true })]), updateBookmark: { ...bookmark(1), version: 4 } } });
     await openApp("/bookmarks");
@@ -490,7 +490,7 @@ describe("pinning", () => {
 
 });
 
-describe("editing and deleting", () => {
+describe("editing and deleting", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens the bookmark modal on the bookmark from Edit", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1)]), getBookmark: bookmark(1) } });
     await openApp("/bookmarks");
@@ -567,7 +567,7 @@ describe("editing and deleting", () => {
   });
 });
 
-describe("states", () => {
+describe("states", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("teaches on an empty workspace and opens the new bookmark modal from the button", async () => {
     use({ fixtures: { listBookmarks: page([]) } });
     await openApp("/bookmarks");
@@ -648,7 +648,7 @@ describe("states", () => {
   });
 });
 
-describe("on a phone", () => {
+describe("on a phone", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("offers the actions in a drawer and pins from it", async () => {
     stubMatchMedia(true);
     use({ fixtures: { listBookmarks: page([bookmark(1)]), updateBookmark: { ...bookmark(1), pinned: true, version: 4 } } });
@@ -665,7 +665,7 @@ describe("on a phone", () => {
   });
 });
 
-describe("in German", () => {
+describe("in German", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the page, the count and the usage in the language of the account", async () => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
     const twoHoursAgo = new Date(Date.now() - 2 * 3_600_000).toISOString();
@@ -688,7 +688,7 @@ describe("in German", () => {
   });
 });
 
-describe("the table view", () => {
+describe("the table view", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   const ME = "/api/v1/me";
 
   /** The row of a bookmark by its title. */

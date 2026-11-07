@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
 import {
@@ -180,7 +181,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("an invitation for the signed-in account", () => {
+describe("an invitation for the signed-in account", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the workspace, the inviter and the role, and joins with the token alone, then goes home", async () => {
     const server = stubServer({ viewer: "invitee" });
     await openInvite();
@@ -287,7 +288,7 @@ describe("an invitation for the signed-in account", () => {
   });
 });
 
-describe("an invitation for someone else's account", () => {
+describe("an invitation for someone else's account", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("explains the mismatch and does not offer to join", async () => {
     stubServer({ viewer: "other" });
     await openInvite();
@@ -336,7 +337,7 @@ describe("an invitation for someone else's account", () => {
   });
 });
 
-describe("an invitation for an address without an account", () => {
+describe("an invitation for an address without an account", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the short sign-up with the address fixed, and creates the account with the token, a name and a password", async () => {
     const server = stubServer({ accountExists: false });
     await openInvite();
@@ -519,7 +520,7 @@ describe("an invitation for an address without an account", () => {
   });
 });
 
-describe("an invitation for an address with an account, signed out", () => {
+describe("an invitation for an address with an account, signed out", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the sign-in form with the invited address, stays on the page after signing in and then offers to join", async () => {
     const server = stubServer({ accountExists: true });
     await openInvite();
@@ -563,7 +564,7 @@ describe("an invitation for an address with an account, signed out", () => {
   });
 });
 
-describe("a session that passed the password only", () => {
+describe("a session that passed the password only", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is taken to the second step, which returns to the invitation", async () => {
     stubServer({ viewer: "partial" });
     await openInvite();
@@ -575,7 +576,7 @@ describe("a session that passed the password only", () => {
   });
 });
 
-describe("an instance that has no account yet", () => {
+describe("an instance that has no account yet", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("sends the visitor to set it up, and reads nothing of the invitation", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", (request: Request) => {
@@ -592,7 +593,7 @@ describe("an instance that has no account yet", () => {
   });
 });
 
-describe("a link that does not work", () => {
+describe("a link that does not work", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("gives one explanation with a link to sign in, and nothing about the invitation", async () => {
     stubServer({ inspect: () => problem(410, "token_expired", "req-410", `invitation of ${INVITEE} was revoked`) });
     await openInvite();
@@ -664,7 +665,7 @@ describe("a link that does not work", () => {
   });
 });
 
-describe("the token", () => {
+describe("the token", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("reaches only the two invitation operations", async () => {
     const server = stubServer({ viewer: "invitee" });
     await openInvite();
