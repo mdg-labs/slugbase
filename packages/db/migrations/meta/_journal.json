@@ -925,6 +925,13 @@
       "when": 1794039733965,
       "tag": "20261107082213_add_workspace_favicons",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1794045332173,
+      "tag": "20261107095532_add_upgraded_link_invitation_unverified",
+      "breakpoints": true
     }
   ]
 }

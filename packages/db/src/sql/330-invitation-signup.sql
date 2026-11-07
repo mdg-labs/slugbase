@@ -7,8 +7,15 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- sys_invitation_accept_new_account(...): for an invitation that is pending and unexpired, of a workspace that is not
 -- being deleted, creates the account the invitation is for, with the address the invitation names and never one the
 -- caller names, verified when the token that arrived in the mailbox proves it and not verified when the live token is
--- one an admin took as a copyable link (workspace_invitations.link_issued), since its holder need not own the mailbox and
--- only the owner's own verification (sys_email_verify) may then make the address verified; adds it to the workspace with exactly
+-- one an admin took as a copyable link, since its holder need not own the mailbox and only the owner's own verification
+-- (sys_email_verify) may then make the address verified. A link is what workspace_invitations.link_issued records or, for an
+-- invitation that is not instance-issued, a token whose row holds no mail ticket: a mailed invitation always holds the
+-- ticket of its mail job, so a row without one is a link stored before link_issued existed (the column was added with
+-- DEFAULT false and migrations are schema-only, so no backfill set it). An instance-issued invitation is left to
+-- link_issued alone, which sys_instance_create_workspace and sys_instance_reissue_owner_invitation write. The update trigger of the
+-- table (300-workspace-invitations.sql) records the same rule in link_issued when a re-invite gives such a row a ticket without
+-- replacing its token. The account is
+-- added to the workspace with exactly
 -- the invited role; marks the invitation accepted; and signs the account in with a full session whose active workspace
 -- is that one: all in the calling transaction, so a failure at any step leaves nothing. Where the deployment requires a
 -- verified address to sign in (p_verification_required) and the live token is a link an admin took, the account it just
@@ -97,7 +104,8 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT i.id, i.email, i.role, i.team_ids, i.link_issued INTO v_invitation, v_invited_email, v_role, v_team_ids, v_link_issued
+  SELECT i.id, i.email, i.role, i.team_ids, i.link_issued OR (i.mail_ticket IS NULL AND NOT i.instance_issued)
+  INTO v_invitation, v_invited_email, v_role, v_team_ids, v_link_issued
   FROM public.workspace_invitations i
   WHERE i.token_hash = p_token_hash AND i.workspace_id = v_workspace AND i.status = 'pending' AND i.expires_at > clock_timestamp()
   FOR UPDATE;
