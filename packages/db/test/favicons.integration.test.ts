@@ -208,6 +208,77 @@ describe("the favicon of a host", () => {
   });
 });
 
+describe("the favicon of a host, for the member who asked", () => {
+  async function memberOf(workspace: Workspace): Promise<string> {
+    const id = await account();
+    await seedMember(db, { workspaceId: workspace.id, accountId: id, role: "member" });
+    return id;
+  }
+
+  function asMember<T>(workspace: Workspace, accountId: string, work: Parameters<typeof db.tenant.withTenant<T>>[1]): Promise<T> {
+    return db.tenant.withTenant({ accountId, workspaceId: workspace.id, requestId: "favicons-test" }, work);
+  }
+
+  it("is answered to the member a fetch was stored for and not to another member of the workspace who reads the host", async () => {
+    const w = await workspaceOf();
+    const other = await memberOf(w);
+    await inTenant(w, (tx) => faviconRepository(tx).store("example.com", ICON));
+    await inTenant(w, (tx) => faviconRepository(tx).store("none.example.com", { status: "none" }));
+    await seedBookmark(w, "example.com", { ownerId: other });
+    await seedBookmark(w, "none.example.com", { ownerId: other });
+
+    expect(await asMember(w, other, (tx) => faviconRepository(tx).hostReadable("example.com"))).toBe(true);
+    expect(await asMember(w, other, (tx) => faviconRepository(tx).current("example.com", 64))).toBeUndefined();
+    expect(await asMember(w, other, (tx) => faviconRepository(tx).current("example.com", 32))).toBeUndefined();
+    expect(await asMember(w, other, (tx) => faviconRepository(tx).current("none.example.com", 64))).toBeUndefined();
+    expect(await inTenant(w, (tx) => faviconRepository(tx).current("example.com", 64))).toMatchObject({ status: "ok" });
+  });
+
+  it("is answered to each member once a fetch was stored for them, and a fetch of one member renews nothing for another", async () => {
+    const w = await workspaceOf();
+    const other = await memberOf(w);
+    await inTenant(w, (tx) => faviconRepository(tx).store("example.com", ICON));
+
+    await asMember(w, other, (tx) => faviconRepository(tx).store("example.com", ICON));
+    expect(await asMember(w, other, (tx) => faviconRepository(tx).current("example.com", 64))).toMatchObject({ status: "ok" });
+
+    await asSystem(db, (tx) => tx`UPDATE workspace_favicons SET fetched_at = now() - interval '8 days', expires_at = now() - interval '1 second' WHERE account_id = ${other}`);
+    expect(await asMember(w, other, (tx) => faviconRepository(tx).current("example.com", 64))).toBeUndefined();
+    expect(await inTenant(w, (tx) => faviconRepository(tx).current("example.com", 64))).toMatchObject({ status: "ok" });
+  });
+
+  it("is kept apart by row-level security alone: a member reads and writes no row recorded for another member of the workspace", async () => {
+    const w = await workspaceOf();
+    const other = await memberOf(w);
+    await inTenant(w, (tx) => faviconRepository(tx).store("example.com", ICON));
+
+    const asOther = <T,>(work: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> =>
+      db.app
+        .begin(async (tx) => {
+          await tx`SELECT set_config('app.account_id', ${other}, true), set_config('app.workspace_id', ${w.id}, true)`;
+          return { value: await work(tx) };
+        })
+        .then((result) => result.value);
+
+    expect(await asOther((tx) => tx`SELECT * FROM workspace_favicons`)).toHaveLength(0);
+    expect(await asOther((tx) => tx`UPDATE workspace_favicons SET expires_at = now() RETURNING host`)).toHaveLength(0);
+    await expect(
+      asOther((tx) => tx`INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at) VALUES (${w.id}, ${w.owner}, 'planted.example.com', now(), now() + interval '7 days')`),
+    ).rejects.toMatchObject({ code: ROW_LEVEL_SECURITY });
+  });
+
+  it("is forgotten with the account that asked for it", async () => {
+    const w = await workspaceOf();
+    const other = await memberOf(w);
+    await asMember(w, other, (tx) => faviconRepository(tx).store("example.com", ICON));
+
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE account_id = ${other}`);
+    await asSystem(db, (tx) => tx`DELETE FROM accounts WHERE id = ${other}`);
+
+    expect(await fetchesOf(w.id)).toEqual([]);
+  });
+});
+
 describe("the system operation that stores a favicon", () => {
   const BAD: readonly [string, string, string | null, Buffer | null, Buffer | null][] = [
     ["an SVG", "example.com", "ok", Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), png(32)],
@@ -320,13 +391,13 @@ describe("the table of the fetches of a workspace", () => {
 
     expect(await appAs(a, (tx) => tx`SELECT * FROM workspace_favicons`)).toHaveLength(0);
     await expect(
-      appAs(a, (tx) => tx`INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${b.id}, 'planted.example.com', now(), now() + interval '7 days')`),
+      appAs(a, (tx) => tx`INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at) VALUES (${b.id}, ${b.owner}, 'planted.example.com', now(), now() + interval '7 days')`),
     ).rejects.toMatchObject({ code: ROW_LEVEL_SECURITY });
     expect(await appAs(a, (tx) => tx`UPDATE workspace_favicons SET expires_at = now() RETURNING workspace_id`)).toHaveLength(0);
     await expect(
       appAs(
         a,
-        (tx) => tx`INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${b.id}, 'example.com', now(), now()) ON CONFLICT (workspace_id, host) DO UPDATE SET expires_at = now()`,
+        (tx) => tx`INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at) VALUES (${b.id}, ${b.owner}, 'example.com', now(), now()) ON CONFLICT (workspace_id, account_id, host) DO UPDATE SET expires_at = now()`,
       ),
     ).rejects.toMatchObject({ code: ROW_LEVEL_SECURITY });
 
@@ -340,13 +411,14 @@ describe("the table of the fetches of a workspace", () => {
     await expect(appAs(a, (tx) => tx`DELETE FROM workspace_favicons`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
     await expect(appAs(a, (tx) => tx`UPDATE workspace_favicons SET host = 'moved.example.com'`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
     await expect(appAs(a, (tx) => tx`UPDATE workspace_favicons SET workspace_id = ${freshId()}`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
+    await expect(appAs(a, (tx) => tx`UPDATE workspace_favicons SET account_id = ${freshId()}`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
     expect(await appAs(a, (tx) => tx`UPDATE workspace_favicons SET fetched_at = now() RETURNING host`)).toHaveLength(1);
   });
 
   it("refuses a host that is not a lower-case host name, even when slugbase_system writes it", async () => {
     const a = await workspaceOf();
 
-    await expect(asSystem(db, (tx) => tx`INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${a.id}, 'Example.COM', now(), now())`)).rejects.toMatchObject({ code: "23514" });
+    await expect(asSystem(db, (tx) => tx`INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at) VALUES (${a.id}, ${a.owner}, 'Example.COM', now(), now())`)).rejects.toMatchObject({ code: "23514" });
   });
 
   it("is deleted with its workspace", async () => {

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { accounts } from "./accounts.ts";
 import { bytea } from "./types.ts";
 import { workspaces } from "./workspaces.ts";
 
@@ -41,10 +42,11 @@ export const favicons = pgTable(
 );
 
 /**
- * The favicon fetches requested on behalf of a workspace (doc 05 section 2.7): one row for each workspace and host, written when a fetch for the host
- * is stored for the workspace. The shared `favicons` row, stored image bytes included, is answered to a workspace only while it holds an unexpired row
- * here, so what the deployment-wide cache holds tells a workspace nothing about a host no member of it has asked for (doc 10 T1 and section 2.2). A row
- * is current until `expires_at`, seven days after `fetched_at`, and `retention.purge` deletes it after that.
+ * The favicon fetches requested on behalf of a member (doc 05 section 2.7): one row for each workspace, account and host, written when a fetch for the host
+ * is stored for the account. The shared `favicons` row, stored image bytes included, is answered to a member only while the member holds an unexpired row
+ * here, so what the deployment-wide cache holds tells a member nothing about a host that member has not asked for, whether another workspace or another
+ * member of the same one did (doc 10 T1, T2 and section 2.2). A row is current until `expires_at`, seven days after `fetched_at`, and `retention.purge`
+ * deletes it after that.
  */
 export const workspaceFavicons = pgTable(
   "workspace_favicons",
@@ -52,12 +54,15 @@ export const workspaceFavicons = pgTable(
     workspaceId: uuid()
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     host: text().notNull(),
     fetchedAt: timestamp({ withTimezone: true }).notNull(),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
   },
   (table) => [
-    primaryKey({ name: "workspace_favicons_pkey", columns: [table.workspaceId, table.host] }),
+    primaryKey({ name: "workspace_favicons_pkey", columns: [table.workspaceId, table.accountId, table.host] }),
     check("workspace_favicons_host_check", sql`length(${table.host}) BETWEEN 1 AND 253 AND ${table.host} ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$'`),
     index("workspace_favicons_expires_idx").on(table.expiresAt),
   ],

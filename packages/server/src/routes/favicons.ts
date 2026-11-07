@@ -10,8 +10,8 @@ import { route } from "./register.ts";
 // GET /api/v1/favicons/{host} (doc 04 section 10.6, doc 02 section 5.4, doc 10 T1, T6 and T14). The icon of a host from the favicon cache, served from our own origin so a
 // list never makes the browser contact the bookmarked site. The stored images are shared, so nothing of them is answered before `hostReadable` holds: a caller who can read no bookmark on the
 // host in the active workspace gets the placeholder whatever the cache holds, and the cache is not read for it, so a cached icon, a record of none and an unknown host look the same.
-// For a host the caller can read, the cache answers only what a fetch for the active workspace stored (`current`): a host cached for another workspace alone is a miss, answered and
-// queued as one nobody has asked for. The operation needs a session and the host a hostname (the contract validates both); an API token is refused before the
+// For a host the caller can read, the cache answers only what a fetch for the caller in the active workspace stored (`current`): a host cached for another workspace or for
+// another member alone is a miss, answered and queued as one nobody has asked for. The operation needs a session and the host a hostname (the contract validates both); an API token is refused before the
 // handler, since the operation declares no token scope.
 //
 // A stored icon is answered as `image/png` with `nosniff` and a private cache of seven days: the bytes are the PNG the server encoded itself (`sys_favicon_get` returns a column

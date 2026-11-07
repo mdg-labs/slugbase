@@ -6,9 +6,9 @@
 -- policy, and slugbase_app holds no privilege on it. sys_favicon_get and sys_favicon_put are its only users; sys_retention_purge deletes a row once
 -- it has expired (110-retention-purge.sql), and its FOR UPDATE SKIP LOCKED is why slugbase_system holds UPDATE as well.
 --
--- workspace_favicons is the workspace's: the policy names the workspace of the transaction, for reads and writes, so the database itself hides a
--- workspace's rows from every other workspace and refuses a row written for another. A row says that a fetch of the host was stored for the workspace,
--- and the repository answers the shared row to a workspace only while it holds an unexpired one. slugbase_app may read the table, insert a row and
+-- workspace_favicons is the member's: the policy names the workspace and the account of the transaction, for reads and writes, so the database itself
+-- hides a member's rows from every other member, of the workspace or of another, and refuses a row written for another. A row says that a fetch of the host
+-- was stored for the account in the workspace, and the repository answers the shared row to a member only while the member holds an unexpired one. slugbase_app may read the table, insert a row and
 -- replace the dates of one in the same statement (INSERT ... ON CONFLICT DO UPDATE). It cannot delete: an expired row is deleted by
 -- sys_retention_purge (110-retention-purge.sql) and a workspace's rows by sys_workspace_purge_batch (280-workspace-deletion.sql), both of which run
 -- as slugbase_system, which bypasses the policy and holds the privileges they need.
@@ -21,8 +21,8 @@ ALTER TABLE public.workspace_favicons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_favicons FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS workspace_favicons_tenant ON public.workspace_favicons;
 CREATE POLICY workspace_favicons_tenant ON public.workspace_favicons
-  USING (workspace_id = public.app_workspace_id())
-  WITH CHECK (workspace_id = public.app_workspace_id());
+  USING (workspace_id = public.app_workspace_id() AND account_id = public.app_account_id())
+  WITH CHECK (workspace_id = public.app_workspace_id() AND account_id = public.app_account_id());
 REVOKE ALL ON TABLE public.workspace_favicons FROM PUBLIC, slugbase_app;
 GRANT SELECT, INSERT ON TABLE public.workspace_favicons TO slugbase_app;
 GRANT UPDATE (fetched_at, expires_at) ON TABLE public.workspace_favicons TO slugbase_app;

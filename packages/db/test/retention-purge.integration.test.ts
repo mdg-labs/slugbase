@@ -743,10 +743,18 @@ describe("purging expired favicons", () => {
 describe("purging expired favicon fetches of workspaces", () => {
   let workspaceA: string;
   let workspaceB: string;
+  let accountA: string;
+  let accountB: string;
 
   beforeAll(async () => {
     workspaceA = await seedWorkspace(db, { name: "Favicon purge A" });
     workspaceB = await seedWorkspace(db, { name: "Favicon purge B" });
+    accountA = freshId();
+    accountB = freshId();
+    await seedAccount(db, { id: accountA, email: "favicon-purge-a@example.test", passwordHash: "$argon2id$stub", emailVerified: true });
+    await seedAccount(db, { id: accountB, email: "favicon-purge-b@example.test", passwordHash: "$argon2id$stub", emailVerified: true });
+    await seedMember(db, { workspaceId: workspaceA, accountId: accountA, role: "owner" });
+    await seedMember(db, { workspaceId: workspaceB, accountId: accountB, role: "owner" });
   });
 
   /** Seeds a record that expires `expiresIn` milliseconds from now (negative is in the past). */
@@ -754,8 +762,8 @@ describe("purging expired favicon fetches of workspaces", () => {
     await asSystem(
       db,
       (tx) => tx`
-        INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at)
-        VALUES (${workspaceId}, ${host}, now() - interval '8 days', now() + ${expiresIn} * interval '1 millisecond')`,
+        INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at)
+        VALUES (${workspaceId}, ${workspaceId === workspaceA ? accountA : accountB}, ${host}, now() - interval '8 days', now() + ${expiresIn} * interval '1 millisecond')`,
     );
   }
 
@@ -783,8 +791,8 @@ describe("purging expired favicon fetches of workspaces", () => {
     await asSystem(
       db,
       (tx) => tx`
-        INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at)
-        SELECT ${workspaceA}, 'batch' || n || '.example.com', now() - interval '8 days', now() - interval '1 hour'
+        INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at)
+        SELECT ${workspaceA}, ${accountA}, 'batch' || n || '.example.com', now() - interval '8 days', now() - interval '1 hour'
         FROM generate_series(1, ${BATCH + extra}::int) AS n`,
     );
 

@@ -74,7 +74,7 @@ interface Row {
 async function fetchesOf(placed: Placed): Promise<string[]> {
   const found = await database().owner.begin(async (tx) => {
     await tx`SET LOCAL ROLE slugbase_system`;
-    return tx<{ host: string }[]>`SELECT host FROM workspace_favicons WHERE workspace_id = ${placed.workspaceId} ORDER BY host`;
+    return tx<{ host: string }[]>`SELECT host FROM workspace_favicons WHERE workspace_id = ${placed.workspaceId} AND account_id = ${placed.accountId} ORDER BY host`;
   });
   return found.map((row) => row.host);
 }
@@ -294,6 +294,31 @@ describe("the job answers for the workspace that asked", () => {
     await run(b, egress);
     expect(egress.requests).toHaveLength(2);
   });
+
+  it("fetches a host that only another member of the workspace has cached, and records the fetch for the member who asked", async () => {
+    const world = harness.serve();
+    const owner = await harness.person(world);
+    const colleague = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([
+      { person: owner, role: "owner" },
+      { person: colleague, role: "member" },
+    ]);
+    const first = { workspaceId, accountId: owner.account.id };
+    const second = { workspaceId, accountId: colleague.account.id };
+    await bookmarkOn(first, HOST);
+    await bookmarkOn(second, HOST);
+    const egress = new FakeEgress({ [`https://${HOST}/favicon.ico`]: image() });
+    await run(first, egress);
+    expect(await fetchesOf(first)).toEqual([HOST]);
+    expect(await fetchesOf(second)).toEqual([]);
+
+    await run(second, egress);
+
+    expect(egress.requests).toHaveLength(2);
+    expect(await fetchesOf(second)).toEqual([HOST]);
+    await run(second, egress);
+    expect(egress.requests).toHaveLength(2);
+  });
 });
 
 describe("a failure that is the job's", () => {
@@ -388,12 +413,12 @@ describe("a failure that is the job's", () => {
 });
 
 describe("the queued job", () => {
-  it("carries the host and the two identifiers and is keyed by the host and the workspace, so the queue holds one waiting job for the pair", () => {
+  it("carries the host and the two identifiers and is keyed by the host, the workspace and the account, so the queue holds one waiting job for each member", () => {
     const placed = { host: HOST, workspaceId: randomUUID(), accountId: randomUUID() };
     const job = queueFetchFavicon(randomUUID(), placed);
 
-    expect(job).toMatchObject({ queue: "favicon.fetch", data: placed, singletonKey: `${HOST}:${placed.workspaceId}` });
-    expect(queueFetchFavicon(randomUUID(), { ...placed, accountId: randomUUID() }).singletonKey).toBe(job.singletonKey);
+    expect(job).toMatchObject({ queue: "favicon.fetch", data: placed, singletonKey: `${HOST}:${placed.workspaceId}:${placed.accountId}` });
+    expect(queueFetchFavicon(randomUUID(), { ...placed, accountId: randomUUID() }).singletonKey).not.toBe(job.singletonKey);
     expect(queueFetchFavicon(randomUUID(), { ...placed, workspaceId: randomUUID() }).singletonKey).not.toBe(job.singletonKey);
     expect(fetchFaviconJob.dedupe).toBe(true);
   });

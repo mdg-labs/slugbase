@@ -62,22 +62,22 @@ async function bookmarkOn(workspaceId: string, ownerId: string, host: string, ar
   );
 }
 
-/** The icon of a host as a fetch for `workspaceId` leaves it: the shared bytes and that workspace's record of the request. */
-async function storeIcon(host: string, workspaceId: string): Promise<void> {
+/** The icon of a host as a fetch for `accountId` in `workspaceId` leaves it: the shared bytes and that member's record of the request. */
+async function storeIcon(host: string, workspaceId: string, accountId: string): Promise<void> {
   await asSystem((tx) => tx`SELECT sys_favicon_put(${host}::text, 'ok'::text, ${ICON_64}::bytea, ${ICON_32}::bytea)`);
-  await recordFetch(host, workspaceId);
+  await recordFetch(host, workspaceId, accountId);
 }
 
-async function storeNone(host: string, workspaceId: string): Promise<void> {
+async function storeNone(host: string, workspaceId: string, accountId: string): Promise<void> {
   await asSystem((tx) => tx`SELECT sys_favicon_put(${host}::text, 'none'::text, NULL::bytea, NULL::bytea)`);
-  await recordFetch(host, workspaceId);
+  await recordFetch(host, workspaceId, accountId);
 }
 
-async function recordFetch(host: string, workspaceId: string): Promise<void> {
+async function recordFetch(host: string, workspaceId: string, accountId: string): Promise<void> {
   await asSystem(
     (tx) => tx`
-      INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${workspaceId}, ${host}, now(), now() + interval '7 days')
-      ON CONFLICT (workspace_id, host) DO UPDATE SET fetched_at = EXCLUDED.fetched_at, expires_at = EXCLUDED.expires_at`,
+      INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at) VALUES (${workspaceId}, ${accountId}, ${host}, now(), now() + interval '7 days')
+      ON CONFLICT (workspace_id, account_id, host) DO UPDATE SET fetched_at = EXCLUDED.fetched_at, expires_at = EXCLUDED.expires_at`,
   );
 }
 
@@ -101,7 +101,7 @@ describe("an icon that is in the cache", () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
 
     const response = await get(world, owner, HOST);
 
@@ -117,7 +117,7 @@ describe("an icon that is in the cache", () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
 
     expect((await bytes(await get(world, owner, HOST, "?size=64"))).equals(ICON_64)).toBe(true);
     expect((await bytes(await get(world, owner, HOST, "?size=32"))).equals(ICON_32)).toBe(true);
@@ -127,7 +127,7 @@ describe("an icon that is in the cache", () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
 
     const response = await get(world, owner, HOST);
 
@@ -138,10 +138,10 @@ describe("an icon that is in the cache", () => {
 
   it("is not served to a member who can read no bookmark on the host: the answer is the one for an uncached host, whether the cache holds an icon or a record of none", async () => {
     const world = harness.serve();
-    const { stranger, colleague, shared } = await setup(world);
+    const { owner, stranger, colleague, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, colleague.account.id, "colleague.example.test");
-    await storeIcon(HOST, shared.workspaceId);
-    await storeNone("none.example.test", shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
+    await storeNone("none.example.test", shared.workspaceId, owner.account.id);
 
     for (const host of [HOST, "none.example.test", "uncached.example.test"]) {
       for (const query of ["", "?size=32"]) {
@@ -161,20 +161,42 @@ describe("an icon that is in the cache", () => {
     const { owner, colleague, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, colleague.account.id, HOST);
     await bookmarkOn(shared.workspaceId, owner.account.id, "archived.example.test", true);
-    await storeIcon(HOST, shared.workspaceId);
-    await storeIcon("archived.example.test", shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, colleague.account.id);
+    await storeIcon("archived.example.test", shared.workspaceId, owner.account.id);
 
     expect((await get(world, owner, HOST)).status).toBe(202);
     expect((await get(world, owner, "archived.example.test")).status).toBe(202);
     expect((await get(world, colleague, HOST)).status).toBe(200);
   });
 
+  it("is not served to a member who reads the host when only another member of the workspace had it fetched: the answer is the one for an uncached host, and the fetch is queued for the caller", async () => {
+    const world = harness.serve();
+    const { owner, colleague, shared } = await setup(world);
+    await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
+    await bookmarkOn(shared.workspaceId, colleague.account.id, HOST);
+    await bookmarkOn(shared.workspaceId, owner.account.id, "none.example.test");
+    await bookmarkOn(shared.workspaceId, colleague.account.id, "none.example.test");
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
+    await storeNone("none.example.test", shared.workspaceId, owner.account.id);
+    expect((await get(world, owner, HOST)).status).toBe(200);
+
+    const answers = [];
+    for (const host of [HOST, "none.example.test"]) {
+      const response = await get(world, colleague, host);
+      answers.push({ status: response.status, cache: response.headers.get("cache-control"), body: (await bytes(response)).toString("base64") });
+    }
+
+    expect(answers).toEqual([HOST, "none.example.test"].map(() => ({ status: 202, cache: "private, max-age=60", body: Buffer.from(FAVICON_PLACEHOLDER).toString("base64") })));
+    const jobs = await queued();
+    expect(jobs.map((job) => job.data.accountId)).toEqual([colleague.account.id, colleague.account.id]);
+  });
+
   it("is not served to a workspace that never requested the host, whatever another workspace has cached: the answer is the one for a host nobody on the instance requested", async () => {
     const world = harness.serve();
     const { owner, stranger, shared, other } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
-    await storeNone("none.example.test", shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
+    await storeNone("none.example.test", shared.workspaceId, owner.account.id);
     expect((await get(world, owner, HOST)).status).toBe(200);
     await bookmarkOn(other.workspaceId, stranger.account.id, HOST);
     await bookmarkOn(other.workspaceId, stranger.account.id, "none.example.test");
@@ -188,7 +210,7 @@ describe("an icon that is in the cache", () => {
 
     expect(answers.map((answer) => ({ ...answer, host: undefined }))).toEqual(answers.map(() => ({ host: undefined, status: 202, type: "image/png", cache: "private, max-age=60", body: Buffer.from(FAVICON_PLACEHOLDER).toString("base64") })));
     const jobs = await queued();
-    expect(jobs.map((job) => job.singleton_key).sort()).toEqual([HOST, "none.example.test", "uncached.example.test"].map((host) => `${host}:${other.workspaceId}`).sort());
+    expect(jobs.map((job) => job.singleton_key).sort()).toEqual([HOST, "none.example.test", "uncached.example.test"].map((host) => `${host}:${other.workspaceId}:${stranger.account.id}`).sort());
     expect(jobs.every((job) => job.data.workspaceId === other.workspaceId)).toBe(true);
   });
 
@@ -197,10 +219,10 @@ describe("an icon that is in the cache", () => {
     const { owner, stranger, shared, other } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
     await bookmarkOn(other.workspaceId, stranger.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
     expect((await get(world, stranger, HOST)).status).toBe(202);
 
-    await storeIcon(HOST, other.workspaceId);
+    await storeIcon(HOST, other.workspaceId, stranger.account.id);
 
     expect((await get(world, stranger, HOST)).status).toBe(200);
     expect((await get(world, owner, HOST)).status).toBe(200);
@@ -210,7 +232,7 @@ describe("an icon that is in the cache", () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
     await asSystem((tx) => tx`UPDATE workspace_favicons SET fetched_at = now() - interval '8 days', expires_at = now() - interval '1 second'`);
 
     const response = await get(world, owner, HOST);
@@ -223,7 +245,7 @@ describe("an icon that is in the cache", () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
     await asSystem((tx) => tx`UPDATE favicons SET fetched_at = now() - interval '8 days', expires_at = now() - interval '1 second'`);
 
     const response = await get(world, owner, HOST);
@@ -248,11 +270,11 @@ describe("an icon that is not in the cache", () => {
     expect((await bytes(response)).equals(Buffer.from(FAVICON_PLACEHOLDER))).toBe(true);
     const [job, ...rest] = await queued();
     expect(rest).toEqual([]);
-    expect(job).toMatchObject({ state: "created", policy: "short", singleton_key: `${HOST}:${shared.workspaceId}` });
+    expect(job).toMatchObject({ state: "created", policy: "short", singleton_key: `${HOST}:${shared.workspaceId}:${owner.account.id}` });
     expect(job?.data).toEqual({ host: HOST, workspaceId: shared.workspaceId, accountId: owner.account.id });
   });
 
-  it("queues one waiting job for a host however many members and requests ask for it", async () => {
+  it("queues one waiting job for each member for a host however many requests they make", async () => {
     const world = harness.serve();
     const { owner, colleague, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
@@ -262,7 +284,7 @@ describe("an icon that is not in the cache", () => {
       expect((await get(world, person, HOST)).status).toBe(202);
     }
 
-    expect(await queued()).toHaveLength(1);
+    expect((await queued()).map((row) => row.singleton_key).sort()).toEqual([`${HOST}:${shared.workspaceId}:${owner.account.id}`, `${HOST}:${shared.workspaceId}:${colleague.account.id}`].sort());
   });
 
   it("queues nothing, and answers the placeholder, for a host the caller has no bookmark on, so the operation cannot be used as a fetch proxy", async () => {
@@ -297,7 +319,7 @@ describe("an icon that is not in the cache", () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeNone(HOST, shared.workspaceId);
+    await storeNone(HOST, shared.workspaceId, owner.account.id);
 
     const response = await get(world, owner, HOST);
 
@@ -310,7 +332,7 @@ describe("an icon that is not in the cache", () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
 
     expect((await get(world, owner, HOST, "?size=32")).status).toBe(200);
     expect((await get(world, owner, HOST, "?size=16")).status).toBe(422);
@@ -321,8 +343,8 @@ describe("an icon that is not in the cache", () => {
 describe("the request", () => {
   it("needs a session", async () => {
     const world = harness.serve();
-    const { shared } = await setup(world);
-    await storeIcon(HOST, shared.workspaceId);
+    const { owner, shared } = await setup(world);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
 
     const response = await send(world, "GET", `${BASE}/${HOST}`, {});
 
@@ -334,7 +356,7 @@ describe("the request", () => {
   it("is refused to an API token, which no scope admits to this operation", async () => {
     const world = harness.serve();
     const { owner, shared } = await setup(world);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
     const readWrite = await harness.token(shared.workspaceId, owner, "read-write");
 
     const response = await send(world, "GET", `${BASE}/${HOST}`, bearer(readWrite));
@@ -345,9 +367,9 @@ describe("the request", () => {
 
   it("is refused to an account that acts in no workspace", async () => {
     const world = harness.serve();
-    const { shared } = await setup(world);
+    const { owner, shared } = await setup(world);
     const loner = await harness.person(world);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
 
     expect((await get(world, loner, HOST)).status).toBe(404);
   });
@@ -388,8 +410,8 @@ describe("the fetch bucket", () => {
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, "none.example.test");
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
-    await storeNone("none.example.test", shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
+    await storeNone("none.example.test", shared.workspaceId, owner.account.id);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       expect((await get(world, owner, HOST)).status).toBe(200);
@@ -399,7 +421,7 @@ describe("the fetch bucket", () => {
 
     await bookmarkOn(shared.workspaceId, owner.account.id, "miss.example.test");
     expect((await get(world, owner, "miss.example.test")).status).toBe(202);
-    expect((await queued()).map((row) => row.singleton_key)).toEqual([`miss.example.test:${shared.workspaceId}`]);
+    expect((await queued()).map((row) => row.singleton_key)).toEqual([`miss.example.test:${shared.workspaceId}:${owner.account.id}`]);
   });
 
   it("limits a member to the RATE_LIMIT_FETCH_ACCOUNT key across misses, answers 429 with Retry-After and queues nothing for the refused one", async () => {
@@ -416,7 +438,7 @@ describe("the fetch bucket", () => {
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).not.toBeNull();
     expect(await limited.json()).toMatchObject({ code: "rate_limited" });
-    expect((await queued()).map((row) => row.singleton_key).sort()).toEqual([`one.example.test:${shared.workspaceId}`, `two.example.test:${shared.workspaceId}`]);
+    expect((await queued()).map((row) => row.singleton_key).sort()).toEqual([`one.example.test:${shared.workspaceId}:${owner.account.id}`, `two.example.test:${shared.workspaceId}:${owner.account.id}`]);
   });
 
   it("limits a client address to the RATE_LIMIT_FETCH_IP key across accounts", async () => {
@@ -440,7 +462,7 @@ describe("the fetch bucket", () => {
     const world = harness.serve({ env: { RATE_LIMIT_READ_ACCOUNT: "3/min", RATE_LIMIT_READ_IP: "1000/min", RATE_LIMIT_WRITE_ACCOUNT: "1/min", RATE_LIMIT_WRITE_IP: "1/min" } });
     const { owner, shared } = await setup(world);
     await bookmarkOn(shared.workspaceId, owner.account.id, HOST);
-    await storeIcon(HOST, shared.workspaceId);
+    await storeIcon(HOST, shared.workspaceId, owner.account.id);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       expect((await get(world, owner, HOST)).status).toBe(200);

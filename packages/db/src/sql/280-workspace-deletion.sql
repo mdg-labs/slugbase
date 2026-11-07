@@ -128,7 +128,7 @@ BEGIN
     WHERE (workspace_id, url_canonical) IN (SELECT m.workspace_id, m.url_canonical FROM public.url_metadata m WHERE m.workspace_id = p_workspace_id LIMIT p_batch_size);
   ELSIF p_table = 'workspace_favicons' THEN
     DELETE FROM public.workspace_favicons
-    WHERE (workspace_id, host) IN (SELECT f.workspace_id, f.host FROM public.workspace_favicons f WHERE f.workspace_id = p_workspace_id LIMIT p_batch_size);
+    WHERE (workspace_id, account_id, host) IN (SELECT f.workspace_id, f.account_id, f.host FROM public.workspace_favicons f WHERE f.workspace_id = p_workspace_id LIMIT p_batch_size);
   ELSIF p_table = 'workspace_invitations' THEN
     DELETE FROM public.workspace_invitations
     WHERE id IN (SELECT i.id FROM public.workspace_invitations i WHERE i.workspace_id = p_workspace_id LIMIT p_batch_size);
