@@ -5,8 +5,10 @@
 // k6 waits for the first byte of the answer (http_req_waiting): /go p95 under 30 ms, list and search p95 under 100 ms. /go and search
 // include the bookmarks that members share with the account (doc 02 sections 6.3 and 8), and the budgets cover them.
 import http from "k6/http";
+import execution from "k6/execution";
 import { check, fail } from "k6";
-import { PAGES, SORTS, budgetThresholds } from "./budgets.js";
+import { Trend } from "k6/metrics";
+import { MAX_VUS, PAGES, SEARCH_TERMS, SHARED_TERM, SORTS, budgetThresholds, loadThresholds } from "./budgets.js";
 
 const BASE_URL = __ENV.BASE_URL;
 const ORIGIN = __ENV.APP_ORIGIN;
@@ -32,7 +34,7 @@ function scenario(index, exec, tags) {
     duration: `${DURATION_SECONDS}s`,
     startTime: `${index * (DURATION_SECONDS + GAP_SECONDS)}s`,
     preAllocatedVUs: 10,
-    maxVUs: 100,
+    maxVUs: MAX_VUS,
     exec,
     tags,
   };
@@ -42,7 +44,12 @@ const thresholds = {
   // A request that did not answer as asked would be fast and wrong.
   checks: ["rate==1"],
   ...budgetThresholds(),
+  // Not budgets: they only put the load of each scenario in the summary (budgets.js), and no value fails them.
+  ...loadThresholds(),
 };
+
+// The VUs active at the start of each iteration, by scenario: its maximum is the most the scenario needed.
+const activeVus = new Trend("active_vus");
 
 export const options = {
   setupTimeout: "600s",
@@ -59,6 +66,10 @@ function get(path, headers, tags, redirects) {
 }
 
 export function setup() {
+  // A term of the instance that budgets.js does not list would be measured under no budget and reported by none.
+  if (JSON.stringify(fixtures.searchTerms) !== JSON.stringify(SEARCH_TERMS)) {
+    fail(`the search terms of the instance (${fixtures.searchTerms.join(", ")}) are not those of budgets.js (${SEARCH_TERMS.join(", ")})`);
+  }
   const login = http.post(`${BASE_URL}/api/v1/auth/login`, JSON.stringify({ email: EMAIL, password: PASSWORD }), {
     headers: { "Content-Type": "application/json", Origin: ORIGIN },
     tags: { kind: "setup" },
@@ -122,12 +133,14 @@ const GO_CHECKS = {
 };
 
 export function go(data) {
+  activeVus.add(execution.instance.vusActive, { kind: "go" });
   const entry = goKind();
   const response = get(`/go/${pick(entry.slugs())}`, data.headers, { kind: "go", hit: String(entry.kind !== "missing"), route: entry.kind }, 0);
   check(response, GO_CHECKS[entry.kind]);
 }
 
 export function list(data) {
+  activeVus.add(execution.instance.vusActive, { kind: "list" });
   const sort = SORTS[Math.floor(Math.random() * SORTS.length)];
   const page = PAGES[Math.floor(Math.random() * PAGES.length)];
   const cursor = page === "deep" ? `&cursor=${encodeURIComponent(data.cursors[sort])}` : "";
@@ -136,11 +149,12 @@ export function list(data) {
 }
 
 export function search(data) {
+  activeVus.add(execution.instance.vusActive, { kind: "search" });
   // Some of the terms only bookmarks that members share with the account match, so the search reads the shares as well as the account's own bookmarks.
   const shared = fixtures.sharedSearchTerms || [];
   const useShared = shared.length > 0 && Math.random() < 0.2;
   const term = useShared ? pick(shared) : pick(fixtures.searchTerms);
-  const response = get(`/api/v1/search?q=${encodeURIComponent(term)}`, data.headers, { kind: "search", shared: String(useShared) });
+  const response = get(`/api/v1/search?q=${encodeURIComponent(term)}`, data.headers, { kind: "search", term: useShared ? SHARED_TERM : term });
   check(response, {
     "search results": (r) => r.status === 200 && Array.isArray(r.json("bookmarks")),
     "a shared bookmark is found": (r) => !useShared || (r.status === 200 && r.json("bookmarks").length > 0),

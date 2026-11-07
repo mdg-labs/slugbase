@@ -30,7 +30,12 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- which the library is loaded, and a session that upgrades a database in which pg_trgm is installed has not loaded it; the call of similarity() loads it. The function also turns
 -- sequential scans, index scans and index-only scans off for its own run, so that every branch is read by a bitmap scan of its own index: without it a branch that is cut after 300 rows could
 -- be planned as a walk of the workspace's bookmarks (by a btree, with the search condition as a filter) that stops only when it has found 300, which for a query that few bookmarks resemble
--- reads them all, and for the window of host and description matches the planner chose exactly that. The slug-prefix branches of both forms and the title-prefix branch of the short form sort by
+-- reads them all, and for the window of host and description matches the planner chose exactly that. The function also plans each of its statements with the values of the call (plan_cache_mode = force_custom_plan): PL/pgSQL
+-- plans a statement with its values for the first five runs in a connection and from the sixth keeps one plan that does not know them if its estimated cost is below the average of those five, and
+-- for the operators of the search (`@@`, `<%`, `LIKE`) on a value it does not know the estimate is a single row, so the choice is between a GIN scan, whose cost includes the pending list of the index (the opens
+-- of /go leave entries there: they change indexed columns of bookmarks, so no update is HOT), and a walk of the workspace's rows through the btree bookmarks_owner_url_idx or the slug index with the search condition
+-- as a filter. When the walk is cheaper the plan reads every bookmark of the workspace for a search that finds few (a slug such as perf-shared-one touched 12 327 blocks in place of 381, and took about 200 ms in place of 5), and it
+-- then serves every later query of that connection, whatever its words. The slug-prefix branches of both forms and the title-prefix branch of the short form sort by
 -- `lower(b.title) || ''`, which is not the expression of bookmarks_owner_title_idx: a sort by it would let the planner walk the titles in order and filter every bookmark before the first
 -- match (on some samples of ANALYZE it did, reading tens of thousands of rows for a slug prefix few slugs have), and the trigram indexes, which hold the prefix of a slug and of a title,
 -- are what serve the branch.
@@ -49,6 +54,7 @@ CREATE OR REPLACE FUNCTION public.sys_search(p_query text, p_limit integer)
   SET enable_seqscan = off
   SET enable_indexscan = off
   SET enable_indexonlyscan = off
+  SET plan_cache_mode = force_custom_plan
   AS $$
 #variable_conflict use_column
 DECLARE

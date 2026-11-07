@@ -16,7 +16,7 @@ import { createServer } from "node:net";
 import { constants, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { budgets as budgetList } from "./budgets.js";
+import { MAX_VUS, SCENARIOS, budgets as budgetList, loadMetrics } from "./budgets.js";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 // The k6 image is pinned by tag and by digest, so a re-run measures the same tool.
@@ -138,14 +138,30 @@ async function waitReady(port, server) {
   throw new Error(`the server was not ready within ${String(READY_SECONDS)} seconds`);
 }
 
+// What a scenario's load did, from the sub-metrics budgets.js names. A scenario that dropped no arrival has no `dropped_iterations` sample and so no entry:
+// that is 0. The other two always have samples when the scenario ran, so a missing one is an error and not a 0. A scenario is saturated when it dropped an
+// arrival or used every VU it may: then the time of its requests includes the wait for a server that could not keep up, and a p95 is not the time of a statement.
+function loadOf(summary, scenario) {
+  const metrics = loadMetrics(scenario);
+  const completed = summary.metrics[metrics.completed]?.count;
+  const peakVus = summary.metrics[metrics.activeVus]?.max;
+  if (typeof completed !== "number" || typeof peakVus !== "number") {
+    throw new Error(`k6 reported no requests or VUs for the scenario ${scenario}`);
+  }
+  const dropped = summary.metrics[metrics.dropped]?.count ?? 0;
+  return { completed, dropped, peakVus, maxVus: MAX_VUS, saturated: dropped > 0 || peakVus >= MAX_VUS };
+}
+
 function evaluate(summary) {
-  return BUDGETS.map(({ name, metric, limitMs }) => {
+  const scenarios = Object.fromEntries(SCENARIOS.map((scenario) => [scenario, loadOf(summary, scenario)]));
+  const rows = BUDGETS.map(({ name, scenario, metric, limitMs }) => {
     const p95 = summary.metrics[metric]?.["p(95)"];
     if (typeof p95 !== "number") {
       throw new Error(`k6 reported no p(95) for ${metric}`);
     }
-    return { name, metric, limitMs, p95Ms: Math.round(p95 * 100) / 100, ok: p95 < limitMs };
+    return { name, scenario, metric, limitMs, p95Ms: Math.round(p95 * 100) / 100, ok: p95 < limitMs, saturated: scenarios[scenario].saturated };
   });
+  return { budgets: rows, scenarios };
 }
 
 async function main() {
@@ -257,11 +273,25 @@ async function main() {
   if (k6 !== 0 && k6 !== 99) {
     throw new Error(`k6 ended with status ${String(k6)}`);
   }
-  const budgets = evaluate(JSON.parse(readFileSync(join(outDir, "k6-summary.json"), "utf8")));
+  const { budgets, scenarios } = evaluate(JSON.parse(readFileSync(join(outDir, "k6-summary.json"), "utf8")));
   const failedChecks = k6 === 99 && budgets.every((budget) => budget.ok);
-  const result = { database: instance.counts, rate: Number(args.rate), durationSeconds: Number(args.duration), image: K6_IMAGE, budgets, k6Status: k6 };
+  const result = { database: instance.counts, rate: Number(args.rate), durationSeconds: Number(args.duration), image: K6_IMAGE, scenarios, budgets, k6Status: k6 };
   writeFileSync(join(outDir, "result.json"), `${JSON.stringify(result, null, 2)}\n`);
-  log(["budgets (p95 of the server time, k6 http_req_waiting):", ...budgets.map((b) => `  ${b.name}: ${String(b.p95Ms)} ms, budget ${String(b.limitMs)} ms, ${b.ok ? "ok" : "EXCEEDED"}`)].join("\n"));
+  log(
+    [
+      "load of each scenario:",
+      ...SCENARIOS.map((name) => {
+        const load = scenarios[name];
+        return `  ${name}: ${String(load.completed)} requests completed, ${String(load.dropped)} arrivals dropped, at most ${String(load.peakVus)} of ${String(load.maxVus)} VUs active${load.saturated ? ", SATURATED" : ""}`;
+      }),
+    ].join("\n"),
+  );
+  log(
+    [
+      "budgets (p95 of the server time, k6 http_req_waiting):",
+      ...budgets.map((b) => `  ${b.name}: ${String(b.p95Ms)} ms, budget ${String(b.limitMs)} ms, ${b.ok ? "ok" : "EXCEEDED"}${b.saturated ? " (the scenario was saturated: the time includes the queue)" : ""}`),
+    ].join("\n"),
+  );
   if (failedChecks) {
     throw new Error("a response was not what a scenario asked for; see the k6 output above");
   }

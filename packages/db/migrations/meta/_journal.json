@@ -939,6 +939,13 @@
       "when": 1794051928048,
       "tag": "20261107114528_index_sessions_absolute_expires_at",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1794057778421,
+      "tag": "20261107132258_add_search_custom_plans",
+      "breakpoints": true
     }
   ]
 }

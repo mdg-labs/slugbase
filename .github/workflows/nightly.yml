@@ -96,9 +96,15 @@ jobs:
             echo
             jq -r '"Database: \(.database.bookmarks) bookmarks, \(.database.workspaces) workspaces, the largest with \(.database.largestWorkspace). Load: \(.rate) requests a second for \(.durationSeconds) s per scenario."' perf-results/result.json
             echo
+            echo "| Scenario | Requests completed | Dropped iterations | Peak VUs | |"
+            echo "|---|---|---|---|---|"
+            jq -r '.scenarios | to_entries[] | "| \(.key) | \(.value.completed) | \(.value.dropped) | \(.value.peakVus) of \(.value.maxVus) | \(if .value.saturated then "saturated" else "" end) |"' perf-results/result.json
+            echo
+            jq -r 'if ([.scenarios[] | select(.saturated)] | length) > 0 then "A saturated scenario dropped arrivals or used every VU it may, so its requests waited for a server that could not keep up: its p95 includes that queue and is not the time of one statement." else empty end' perf-results/result.json
+            echo
             echo "| Scenario | p95 server time | Budget | |"
             echo "|---|---|---|---|"
-            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end) |"' perf-results/result.json
+            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Open an issue for an exceeded budget
         if: ${{ steps.measure.outputs.status == '10' }}
@@ -114,9 +120,15 @@ jobs:
           {
             echo "The performance run exceeded a budget of doc 08 section 5.3 (${exceeded}) on \`${EVENT}\` at \`${REF}\`."
             echo
+            echo "| Scenario | Requests completed | Dropped iterations | Peak VUs | |"
+            echo "|---|---|---|---|---|"
+            jq -r '.scenarios | to_entries[] | "| \(.key) | \(.value.completed) | \(.value.dropped) | \(.value.peakVus) of \(.value.maxVus) | \(if .value.saturated then "saturated" else "" end) |"' perf-results/result.json
+            echo
+            jq -r 'if ([.scenarios[] | select(.saturated)] | length) > 0 then "A saturated scenario dropped arrivals or used every VU it may, so its requests waited for a server that could not keep up: its p95 includes that queue and is not the time of one statement." else empty end' perf-results/result.json
+            echo
             echo "| Scenario | p95 server time | Budget | |"
             echo "|---|---|---|---|"
-            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end) |"' perf-results/result.json
+            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
             echo
             echo "Run: ${RUN_URL}"
             echo

@@ -4,7 +4,7 @@ import { searchRepository } from "../src/index.ts";
 import { bookmarkSearchStatement } from "../src/repositories/search.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
-import { blocksOfStatement } from "./support/plan-work.ts";
+import { blocksOfStatement, STATEMENT_TIMEOUT_MS } from "./support/plan-work.ts";
 import { vacuumUntilAllVisible, visibilityOf } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
@@ -184,7 +184,7 @@ async function planOfSearch(text: string, form: "short" | "long", limit = 8): Pr
     throw new Error("the system operation is not defined");
   }
   // The settings applied below are the ones the function runs with.
-  expect(row.proconfig).toEqual(expect.arrayContaining(["enable_seqscan=off", "enable_indexscan=off", "enable_indexonlyscan=off"]));
+  expect(row.proconfig).toEqual(expect.arrayContaining(["enable_seqscan=off", "enable_indexscan=off", "enable_indexonlyscan=off", "plan_cache_mode=force_custom_plan"]));
   const statements = row.prosrc.split("RETURN QUERY");
   const statement = statements[form === "short" ? 1 : 2];
   const body = statement?.slice(0, statement.indexOf(";"));
@@ -294,34 +294,35 @@ const QUERIES = ["github", "docs", "kubernetes", "kubernetes guide", "api refere
 
 // The work and the time. The search through the repository took at most 21 ms for any of these queries and 9.8 to 11.5 ms at the 95th percentile in 12 runs of this file, but a time measured in a suite moves with what else runs on
 // the host while the plan does not, so what is asserted is the work of the plan: `Shared Hit Blocks` plus `Shared Read Blocks` of `EXPLAIN (ANALYZE, BUFFERS)` (`support/plan-work.ts`) of the statement of `SearchRepository.bookmarks`
-// as slugbase_app in a tenant transaction, the function it calls included. Each bound is 5 % and 16 blocks over the most that query touched in 12 runs of this file on PostgreSQL 17 and 18, which touched the same to within
-// a few blocks, rounded up to ten. The 95th percentile of the time is reported and not asserted. What this does not hold: the 100 ms. A regression that costs CPU and reads no more blocks passes; the k6 run requests
+// as slugbase_app in a tenant transaction, the function it calls included. Each bound is 5 % and 16 blocks over the most that query touched in repeated runs of this file, rounded up to ten: in 12 runs on PostgreSQL 17 and 18, which touched the same to within a few
+// blocks, before the function planned each statement for the values of its call, and, for the ten queries that took it over their bounds (it plans the statement on every call: 25 to 45 blocks
+// more for the queries of a few hundred), in 6 runs on PostgreSQL 18, where each touched the same to within 5 blocks. The 95th percentile of the time is reported and not asserted. What this does not hold: the 100 ms. A regression that costs CPU and reads no more blocks passes; the k6 run requests
 // `GET /api/v1/search?q=` (doc 08 section 5.3).
 const BLOCKS: Readonly<Record<string, number>> = {
-  github: 260,
+  github: 310,
   docs: 1020,
   kubernetes: 1390,
-  "kubernetes guide": 300,
-  "api reference": 260,
-  "typescript tutorial": 250,
-  gh: 50,
+  "kubernetes guide": 350,
+  "api reference": 300,
+  "typescript tutorial": 300,
+  gh: 80,
   ma: 1900,
   a: 2870,
   re: 3650,
-  git: 260,
+  git: 300,
   mail: 1330,
   postgrs: 2310,
   kuberentes: 2340,
   "www.docs": 850,
-  www: 220,
+  www: 270,
   com: 2250,
-  "github.com": 260,
+  "github.com": 310,
   rele: 1360,
   dashbaord: 2320,
   notes: 1390,
-  "the team": 240,
+  "the team": 280,
   "www.zzzzzz": 1210,
-  xyzzyx: 100,
+  xyzzyx: 140,
 };
 
 describe("the search on a workspace of 50 000 bookmarks", () => {
@@ -515,5 +516,80 @@ describe("the plan of the search on a workspace of 50 000 bookmarks seeded again
       await db.owner.unsafe("ANALYZE bookmarks");
       await expectLongFormPlan(text);
     });
+  });
+});
+
+// The statements of `sys_search` are PL/pgSQL statements, which a connection plans with the values of the call for its first five runs and from the sixth runs with one plan that does not know them if that plan's
+// estimated cost is no worse. For `@@`, `<%` and `LIKE` on a value it does not know the estimate is a single row, so that plan reads the btree of the workspace (`bookmarks_owner_url_idx` or `bookmarks_slug_idx`) and
+// filters every bookmark of it, and it then serves every later query of the connection, whatever its words: the plan tests above plan with the values bound as constants, and `blocksOfStatement` repeats one text,
+// so neither sees it. The function therefore plans with the values of each call (`plan_cache_mode = force_custom_plan`); what is held here is the work of the calls of one connection, which does not depend on
+// what the connection ran before, on a library in which a term is in a tenth of the titles (`caching`, as in the large instance of the performance run, doc 08 section 5.3) and the opens of `/go` have been flushed into its rows.
+describe("the search on a workspace in which a tenth of the titles hold one word", () => {
+  const FREQUENT = "caching";
+  // The texts of the performance run's mix (a word in a tenth of the titles, words in a twentieth, a slug, a short text), then the ones of the plan tests above, in an order that mixes them.
+  const SEQUENCE = [FREQUENT, "docs", "notes", "kubernetes guide", FREQUENT, "gh", "github", "mail", "docs", FREQUENT, "re", "www", "the team", "notes", "mail", FREQUENT, "docs", "gh", "kubernetes guide", "github", FREQUENT, "mail", "notes", "docs"];
+
+  beforeAll(async () => {
+    await asSystem(
+      db,
+      (tx) => tx`UPDATE bookmarks SET title = title || ${` ${FREQUENT}`} WHERE workspace_id = ${workspaceId} AND abs(hashtext(id::text)) % 10 = 0`,
+    );
+    await vacuumUntilAllVisible(db, FIXTURE_TABLES);
+    await db.owner.unsafe("ANALYZE bookmarks");
+    // The opens of `/go` reach `bookmarks` through `sys_flush_open_counts`, which changes columns that have indexes, so each is a new row version with an entry in every index: those of the GIN indexes wait in their
+    // pending lists until a vacuum, and the planner adds the pages of a pending list to the cost of each scan of its index. No vacuum follows here, so the lists are as a running instance has them.
+    await asSystem(
+      db,
+      (tx) => tx`UPDATE bookmarks SET open_count = open_count + 1, last_opened_at = now() WHERE workspace_id = ${workspaceId} AND abs(hashtext(id::text)) % 20 = 1`,
+    );
+  }, HOOK_TIMEOUT_MS);
+
+  it("has a word in a tenth of the titles", async () => {
+    const [row] = await asSystem(
+      db,
+      (tx) => tx<{ share: number }[]>`SELECT (count(*) FILTER (WHERE to_tsvector('simple', title) @@ ${`'${FREQUENT}'`}::tsquery))::float / count(*) AS share FROM bookmarks WHERE workspace_id = ${workspaceId}`,
+    );
+
+    expect(row?.share).toBeGreaterThan(0.09);
+    expect(row?.share).toBeLessThan(0.16);
+  });
+
+  /**
+   * The shared blocks of each call of `texts`, in order, on one connection, so that what the connection planned for the first calls is what the later ones run. The connection first runs one other search, which is not
+   * counted: a backend's first call loads its catalogs and touches thousands of blocks more than the next. `customPlans` sets the plan cache mode of the transaction, which the function's own setting overrides while it has one.
+   */
+  async function blocksOfCalls(texts: readonly string[], customPlans = false): Promise<Map<string, number[]>> {
+    return db.app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true), set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MS)}, true)`;
+      if (customPlans) {
+        await tx`SELECT set_config('plan_cache_mode', 'force_custom_plan', true)`;
+      }
+      const byText = new Map<string, number[]>();
+      for (const [index, text] of ["xyzzyx", ...texts].entries()) {
+        const { sql, params } = dialect.sqlToQuery(bookmarkSearchStatement(text, 8));
+        const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: { "Shared Hit Blocks"?: number; "Shared Read Blocks"?: number } }[] }[]>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`, params as never[]);
+        const plan = rows[0]?.["QUERY PLAN"][0]?.Plan;
+        if (plan === undefined) {
+          throw new Error("EXPLAIN returned no plan");
+        }
+        if (index > 0) {
+          byText.set(text, [...(byText.get(text) ?? []), (plan["Shared Hit Blocks"] ?? 0) + (plan["Shared Read Blocks"] ?? 0)]);
+        }
+      }
+      return byText;
+    });
+  }
+
+  it("touches no more blocks for a text on a connection that has run other queries than the plan made for the values of the call", async () => {
+    // The reference: every text planned with its own values, whatever the function says. The calls: the mix, on one connection, with the plan cache mode left to the function.
+    const reference = await blocksOfCalls([...new Set(SEQUENCE)], true);
+    const calls = await blocksOfCalls(SEQUENCE);
+    process.stdout.write(`search work in one connection (buffers of each call, in order): ${JSON.stringify(Object.fromEntries(calls))}, planned for the values: ${JSON.stringify(Object.fromEntries(reference))}\n`);
+
+    for (const [text, blocks] of calls) {
+      const planned = reference.get(text)?.[0] ?? Number.NaN;
+      // The same plan touches nearly the same blocks run after run (a first run touches a few more); a plan that has stopped using the indexes of the search touches several times as many.
+      expect(Math.max(...blocks), text).toBeLessThan(planned * 1.5 + 100);
+    }
   });
 });

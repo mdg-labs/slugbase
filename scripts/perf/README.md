@@ -41,11 +41,25 @@ a second, for `--duration` seconds each):
 - `go`: `GET /go/<slug>` for a slug of the admin (six in ten), for a slug the admin has and a member shares as well (the admin's own is followed), for the slug only one
   member shares (followed), for the slug several members share (the single-page app, status 200, which asks to choose), and for a slug nobody has (not found).
 - `list`: `GET /api/v1/bookmarks` for each of the six sorts, the first page and a deep page (the 400th of 48).
-- `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders, and for the slugs of the shared bookmarks, which only the shares let the admin find.
+- `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders, and for the slugs of the shared bookmarks, which only the shares let the admin find. Each request is tagged with its
+  term (`budgets.js` lists the seven of the seed, which `tooling/test/perf-budgets.test.ts` holds to `searchTerms` of `large.ts`) or with `shared` for those slugs, and the run reports the p95 of each, so a regression names the term.
 
-The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape has a threshold of its own, so a
-regression names the sort and the page. `budgets.js` holds the sorts, the pages and the limits once: `scenarios.js` makes the thresholds from it and
+The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape and every search term has a threshold of its own, so a
+regression names the sort and the page or the term. `budgets.js` holds the sorts, the pages, the terms and the limits once: `scenarios.js` makes the thresholds from it and
 `run.mjs` reports every one of them, so a threshold that is crossed is always an exceeded budget (exit status 10); only a failed `checks`
 threshold, a response that was not what a scenario asked for, ends the run as failed. The server runs with its rate limits raised to the highest value, so that the run measures the server
 and not its limiter; a token is still taken on every request. It runs with `NODE_ENV=development` because the harness's databases use the
 development role passwords that production refuses.
+
+## Reading a saturated run
+
+The scenarios are open-loop: k6 starts `--rate` requests a second whether or not the server has answered the last ones. A server that serves fewer than that a second makes the rest wait, in k6's connection queue
+and in the server's, and `http_req_waiting` counts the wait: the p95 of such a scenario grows with its length and is the queue, not the time of a statement. So the run reports the load of each scenario beside its budgets, in `result.json` (`scenarios`), the job summary and the issue body of `nightly.yml`:
+
+- `completed`: the requests that were answered (`http_reqs` of the scenario);
+- `dropped`: the arrivals k6 dropped (`dropped_iterations`) because all `maxVUs` VUs were busy; k6 leaves the metric out when it dropped none, which reads as 0;
+- `peakVus`: the most VUs active at the start of an iteration, of `maxVus` (100).
+
+A scenario is `saturated` when it dropped an arrival or used all its VUs, and every budget row of it is then marked saturated. Read the budget of a saturated scenario as "the server did not keep up with this rate", not as the cost
+of one request: take the per-term (or per-sort) p95 from a run at a rate where nothing queues (`--rate 5`), and find the highest rate with no dropped arrival by raising `--rate`. These are not thresholds: they put the load in the summary and
+no value fails them, so they cannot end k6 with 99.
