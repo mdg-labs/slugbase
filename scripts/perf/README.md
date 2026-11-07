@@ -3,7 +3,7 @@
 The measurement of doc 08 section 5.3 and doc 01 section 9.3: against a database filled with the large instance, with PostgreSQL on
 the same machine, `/go` has a p95 server time under 30 ms and the bookmark list and search under 100 ms. It is opt-in: it is not part of
 `pnpm test:*` or `pnpm gate`, and an exceeded budget never fails a developer's gate. `.github/workflows/nightly.yml` runs it every week
-and on a pull request to `main`, against the CE image built from the commit under test, and opens an issue when a budget is exceeded or `/go` writes more than the usage buffer allows. The older, narrower measurement of the `/go` query alone
+and on a pull request to `main`, against the CE image built from the commit under test, and files an issue when a budget is exceeded or `/go` writes more than the usage buffer allows (see "What is filed"). The older, narrower measurement of the `/go` query alone
 under row-level security and transaction pooling is `packages/db/test/perf/` (`pnpm --filter @slugbase/db perf:go`).
 
 ## Run it
@@ -25,6 +25,7 @@ stops the server and removes the k6 containers when it ends or is interrupted. W
 is stopped, so that it flushes the usage buffer, and removed with the rest; `nightly.yml` builds the image from the commit under test and never pulls one. The variables go to
 `docker run` by name, so no value is in its arguments.
 `--out <dir>` keeps `k6-summary.json` and `result.json` there; without it they go to a new directory under the temporary directory.
+`--commit <sha>` names the commit measured (a full hash); without it `result.json` records the `HEAD` of the checkout, or `null` outside one. `nightly.yml` passes the head of a pull request, otherwise `github.sha`.
 The exit status is 0 when every budget holds and the write load is within its limit, 10 when one is exceeded and 1 when the run itself failed.
 
 ## The instance
@@ -81,3 +82,23 @@ and in the server's, and `http_req_waiting` counts the wait: the p95 of such a s
 A scenario is `saturated` when it dropped an arrival or used all its VUs, and every budget row of it is then marked saturated. Read the budget of a saturated scenario as "the server did not keep up with this rate", not as the cost
 of one request: take the per-term (or per-sort) p95 from a run at a rate where nothing queues (`--rate 5`), and find the highest rate with no dropped arrival by raising `--rate`. These are not thresholds: they put the load in the summary and
 no value fails them, so they cannot end k6 with 99.
+
+## What is filed
+
+`report.mjs` decides what `nightly.yml` files when a run exits with status 10, and the job only executes its actions. It reads `result.json` and the open issues (`gh issue list --state open --json number,title`) and prints
+the actions as JSON: `create` with a title, or `comment` on an issue number, each with its body. Nothing in it calls GitHub, so
+`node scripts/perf/report.mjs --result <result.json> --issues <issues.json> --run-url <https address>` is a dry run (add `--body-dir <dir>` to write the bodies to files, as the job does, and `--expect-action` to fail when nothing is exceeded).
+
+Each exceeded budget is filed under one issue, titled exactly `Performance budget exceeded: <name>`:
+
+| Issue | What it holds |
+|---|---|
+| `go` | the `go` budget |
+| `list` | the `list` budget and its sorts and pages, and the list narrowed by a text (`list q first`, `list q deep`) and under a filter (`list filter tag`, `list filter folder`): they are all the bookmark list |
+| `search` | the `search` budget and each of its terms |
+| `write load` | the write-load check of `/go` (`writeLoad` in `result.json`), which is a count of updates and no p95, so it has an issue of its own and not a place under `go` |
+
+A run that exceeds a budget whose issue is open comments on the issue with exactly that title (the lowest number when it is on several); otherwise it creates the issue, labelled `area:ci`. It never creates a second open issue for a name and never comments on another name's:
+an issue that names several scenarios (the one the job opened before it knew the scenarios, `go, search`) is not extended. The body lists every exceeded shape with its p95, its limit and its saturation flag, the load of the scenarios of the issue, the commit, the dataset and the link to the run.
+A result that cannot be read, a budget of a scenario with no issue, a list of issues that is not one and a `gh` call that failed all fail the step, and every action is tried before it does, so one issue that cannot be filed does not hide the others.
+`tooling/test/perf-report.test.ts` holds this.

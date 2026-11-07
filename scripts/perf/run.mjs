@@ -6,12 +6,14 @@
 // become write load (doc 01 section 8.1). Everything this run starts, the server or its container, the k6 containers and the
 // database, is removed however it ends.
 //
-//   node scripts/perf/run.mjs [--image <ref>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>]
+//   node scripts/perf/run.mjs [--image <ref>] [--commit <sha>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>]
 //
 // Needs `pnpm turbo run build --filter=slugbase --filter=@slugbase/testing` first (`--filter=@slugbase/testing` alone with --image),
 // `psql` and Docker (k6 runs from a pinned image on the host network, as does the server image), and the server the test harness
 // uses: SLUGBASE_TEST_PG_URL, the development Postgres of compose.dev.yml when unset. Exit status: 0 when every budget holds and
 // the write load is within its limit, 10 when one is exceeded (a regression, not a failure of the run), 1 when the run itself failed.
+// `result.json` names the commit that was measured: --commit, or the HEAD of this checkout, or null when neither is known. scripts/perf/report.mjs files
+// what a result exceeds.
 import { spawn } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { randomBytes } from "node:crypto";
@@ -38,6 +40,7 @@ const BUDGETS = budgetList();
 const { values: args } = parseArgs({
   options: {
     image: { type: "string" },
+    commit: { type: "string" },
     out: { type: "string" },
     bookmarks: { type: "string" },
     workspaces: { type: "string" },
@@ -48,6 +51,11 @@ const { values: args } = parseArgs({
 // The image reference goes to `docker run` as an argument, so it may not read as an option of it.
 if (args.image !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._/:@-]*$/.test(args.image)) {
   process.stderr.write("perf: --image takes an image reference such as slugbase:perf\n");
+  process.exit(1);
+}
+// The commit is written into the result and from there into an issue, so it is a full hash and nothing else.
+if (args.commit !== undefined && !/^[0-9a-f]{40}$/.test(args.commit)) {
+  process.stderr.write("perf: --commit takes a full commit hash of 40 hex digits\n");
   process.exit(1);
 }
 // Where the k6 summary and the result are written; a directory of its own under the temporary directory unless one is given.
@@ -196,6 +204,21 @@ function evaluate(summary) {
   return { budgets: rows, scenarios };
 }
 
+// The commit measured: the one given, or the HEAD of the checkout the run is in, or null (a copy of the sources that is not a checkout).
+async function measuredCommit() {
+  if (args.commit !== undefined) {
+    return args.commit;
+  }
+  try {
+    const { status, stdout } = await capture("git", ["rev-parse", "HEAD"], { cwd: ROOT });
+    const hash = stdout.trim();
+    return status === 0 && /^[0-9a-f]{40}$/.test(hash) ? hash : null;
+  } catch {
+    // no git on the machine
+    return null;
+  }
+}
+
 async function main() {
   const { preparePerfInstance } = await import(join(ROOT, "packages/testing/dist/seed/index.js"));
   const serverUrl = process.env.SLUGBASE_TEST_PG_URL ?? DEFAULT_SERVER_URL;
@@ -315,6 +338,7 @@ async function main() {
   const { budgets, scenarios } = evaluate(JSON.parse(readFileSync(join(outDir, "k6-summary.json"), "utf8")));
   const failedChecks = k6 === 99 && budgets.every((budget) => budget.ok);
   const result = {
+    commit: await measuredCommit(),
     database: instance.counts,
     rate: Number(args.rate),
     durationSeconds: Number(args.duration),
@@ -326,6 +350,7 @@ async function main() {
     k6Status: k6,
   };
   writeFileSync(join(outDir, "result.json"), `${JSON.stringify(result, null, 2)}\n`);
+  log(`commit measured: ${result.commit ?? "unknown"}`);
   log(
     [
       "load of each scenario:",
