@@ -132,7 +132,18 @@ jobs:
           work="$(mktemp -d)"
           gh issue list --repo "$REPOSITORY" --state open --search 'in:title "Performance budget exceeded"' --limit 200 --json number,title > "$work/issues.json"
           node scripts/perf/report.mjs --result perf-results/result.json --issues "$work/issues.json" --run-url "$RUN_URL" --event "$EVENT" --body-dir "$work/bodies" --expect-action > "$work/actions.json"
-          jq -r '.[] | [.kind, (.number // "-"), .bodyFile, .title] | @tsv' "$work/actions.json" > "$work/actions.tsv"
+          # One line an action: kind, issue number (or "-"), body file, title. Node reads the JSON (the unit job that tests this step has no jq); a field with a tab or a line break would
+          # shift the fields of its line or add a line, so the step stops on one instead of reading it.
+          node -e '
+            const fs = require("node:fs");
+            const actions = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const lines = actions.map((a) => {
+              const fields = [String(a.kind), a.number == null ? "-" : String(a.number), String(a.bodyFile), String(a.title)];
+              if (fields.some((f) => /[\t\r\n]/.test(f))) throw new Error("an action field holds a tab or a line break");
+              return fields.join("\t") + "\n";
+            });
+            fs.writeFileSync(process.argv[2], lines.join(""));
+          ' "$work/actions.json" "$work/actions.tsv"
           # Every action is tried, and the step fails at the end if one did not succeed; an action is reported done only when it was.
           failed=0
           while IFS=$'\t' read -r kind number body_file title; do

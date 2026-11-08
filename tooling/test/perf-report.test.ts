@@ -370,6 +370,9 @@ describe("the script and the job that run it", () => {
       ].join("\n"),
     );
     chmodSync(join(dir, "bin", "gh"), 0o755);
+    // The `unit` job runs in an image without jq, so the step must not use it: a jq that is not found stands first on the PATH, on a machine that has one too.
+    writeFileSync(join(dir, "bin", "jq"), ["#!/bin/bash", 'echo "jq: command not found" >&2', "exit 127", ""].join("\n"));
+    chmodSync(join(dir, "bin", "jq"), 0o755);
     const run = spawnSync("bash", ["-c", script], {
       cwd: dir,
       encoding: "utf8",
