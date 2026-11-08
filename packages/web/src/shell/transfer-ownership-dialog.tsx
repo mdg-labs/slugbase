@@ -28,6 +28,8 @@ export function TransferOwnershipDialog({ member, onClose }: { member: Member; o
         return t("settings.members.transfer.error.lastOwner");
       case "forbidden":
         return t("settings.members.transfer.error.forbidden");
+      case "unverified":
+        return t("settings.members.transfer.error.unverified");
       case "notAMember":
         return t("settings.members.transfer.error.notAMember");
     }

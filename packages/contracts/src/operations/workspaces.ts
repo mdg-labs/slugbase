@@ -312,7 +312,7 @@ export const transferWorkspaceOwnership = defineOperation({
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
-    403: problemResponse("The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden)"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden), or the caller made the workspace for itself and its address is not verified (email_unverified); nothing is written"),
     404: problemResponse("The request acts in no workspace, or the account is not a member of it, whichever workspace it belongs to"),
     409: problemResponse("The change would leave the workspace without an owner (last_owner); nothing is written"),
     422: problemResponse("The body did not pass validation (an identifier that is not a UUID, a `demoteSelf` that is not a boolean, or a field the operation does not declare), or `accountId` names the caller (the errors name accountId)"),

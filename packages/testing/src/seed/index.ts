@@ -8,6 +8,8 @@ export { createIds, createRandom } from "./random.ts";
 export type { Random } from "./random.ts";
 export { buildLargeInstance, LARGE_INSTANCE_SEED, PERF_BOOKMARK_COUNT, PERF_EXTRA_WORKSPACES } from "./large.ts";
 export type { LargeInstance, LargeInstanceOptions, LargeShare, LargeTeam, LargeWorkspace, PerfFixtures } from "./large.ts";
+export { IMPORT_FILE_MAX_BOOKMARKS, IMPORT_FILE_MAX_BYTES, buildImportFiles, buildJsonFile, buildNetscapeFile } from "./import-files.ts";
+export type { ImportFile, ImportFileOptions, ImportFiles, JsonImportFileOptions } from "./import-files.ts";
 export { largeSeedScript } from "./large-script.ts";
 export { PerfSeedError, assertHarnessDatabase, perfServer, preparePerfInstance, seedLargeInstance } from "./perf.ts";
 export type { PerfInstance, PerfServer, PrepareOptions, SeededCounts } from "./perf.ts";

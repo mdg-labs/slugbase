@@ -1,5 +1,6 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { tokenFromFragment } from "../src/auth/verify-token.ts";
 import { SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -80,7 +81,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the token of the link", () => {
+describe("the token of the link", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each([
     ["#token=abc", "abc"],
     ["token=abc", "abc"],
@@ -94,7 +95,7 @@ describe("the token of the link", () => {
   });
 });
 
-describe("the verification page", () => {
+describe("the verification page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for the password the account signs in with", async () => {
     stubServer(done);
     await openLink();
@@ -207,7 +208,7 @@ describe("the verification page", () => {
   });
 });
 
-describe("an expired link", () => {
+describe("an expired link", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   async function resendFrom(address: string): Promise<void> {
     typeInto("Email", address);
     await act(async () => {

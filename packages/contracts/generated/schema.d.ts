@@ -11991,7 +11991,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace, or the caller is an admin and the change promotes to owner or touches an owner (forbidden) */
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace, or the caller is an admin and the change promotes to owner or touches an owner (forbidden), or the caller made the workspace for itself, its address is not verified and the change promotes a member to owner or removes the caller's own owner role (email_unverified) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -14175,7 +14175,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden) */
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden), or the caller made the workspace for itself and its address is not verified (email_unverified); nothing is written */
             403: {
                 headers: {
                     [name: string]: unknown;

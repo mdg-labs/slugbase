@@ -190,6 +190,7 @@ describe("the sessions table", () => {
     const indexes = await db.owner<{ name: string }[]>`
       SELECT indexname AS name FROM pg_indexes WHERE tablename = 'sessions' ORDER BY indexname`;
     expect(indexes.map((index) => index.name)).toEqual([
+      "sessions_absolute_expires_at_idx",
       "sessions_account_id_idx",
       "sessions_expires_at_idx",
       "sessions_pkey",

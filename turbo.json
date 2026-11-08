@@ -69,6 +69,8 @@
         "$TURBO_ROOT$/.claude/skills/customer-docs/**",
         "$TURBO_ROOT$/packages/**/*.ts",
         "$TURBO_ROOT$/packages/**/*.tsx",
+        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/packages/db/src/sql/**",
         "$TURBO_ROOT$/apps/**/*.ts",
         "$TURBO_ROOT$/apps/**/*.tsx",
         "$TURBO_ROOT$/e2e/**/*.ts",

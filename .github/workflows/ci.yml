@@ -2,8 +2,8 @@ name: CI
 
 # The jobs of doc 08 §6.2 run in parallel, each inside node:24-bookworm with
 # the same setup, so the file can move to other runners unchanged (doc 08
-# §6.1); `build` and `image-scan` are the exceptions, because they need Docker
-# (see there). No job references a secret, and the workflow never runs on
+# §6.1); `build`, `image-scan` and `integration-pooled` are the exceptions,
+# because they need Docker (see there). No job references a secret, and the workflow never runs on
 # pull_request_target, so a run for a fork pull request holds nothing but a
 # read-only token (doc 10 T16). Job names are required by branch protection;
 # rename one only together with that rule.
@@ -232,6 +232,33 @@ jobs:
       - run: pnpm db:check
       - run: pnpm test:integration
 
+  # The tenant context behind PgBouncer in transaction mode with a server pool of
+  # one connection (doc 08 §3.2, T1). On the runner like `build`: the Postgres of
+  # compose.dev.yml and the PgBouncer in front of it (its `pooler` profile) start
+  # on the runner's own Docker daemon, which the node container does not have.
+  # `pnpm test:integration:pooled` starts them, builds what the three test files
+  # import and runs the files with SLUGBASE_TEST_POOLER_URL set; the harness
+  # fails a file whose database the pooler does not serve.
+  integration-pooled:
+    name: integration-pooled
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: integration-pooled
+      - name: Run the tenancy tests through PgBouncer
+        run: pnpm test:integration:pooled
+      - name: Remove the services
+        if: always()
+        run: docker compose -f compose.dev.yml --profile pooler down --volumes
+
   # One of the two jobs that are not in the node container (`image-scan` is the
   # other): it builds the image and starts it with Docker Compose
   # (scripts/smoke-image.sh), which needs the runner's own
@@ -305,8 +332,13 @@ jobs:
           set -euo pipefail
           bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary.spdx.json
           bash scripts/scan-image.sh --canary scripts/fixtures/image-scan/canary-debian.spdx.json
+      # The builder and the SBOM generator are named by digest, as in release.yml;
+      # Renovate keeps the tags and digests current.
       - name: Create the builder
-        run: docker buildx create --name image-scan --driver docker-container --use
+        run: |
+          docker buildx create --name image-scan --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe \
+            --use
       - name: Build the image and its SBOM
         env:
           BUILD_COMMIT: ${{ github.sha }}
@@ -315,7 +347,7 @@ jobs:
           docker buildx build \
             --file apps/slugbase/Dockerfile \
             --build-arg "BUILD_COMMIT=$BUILD_COMMIT" \
-            --sbom=true \
+            --sbom=generator=docker/buildkit-syft-scanner:1.12.1@sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315 \
             --output "type=local,dest=$RUNNER_TEMP/image" \
             .
       - name: Scan the SBOM

@@ -100,6 +100,10 @@ export interface TestDatabase {
     drop(): Promise<void>;
     readonly name: string;
     readonly owner: TestSql;
+    readonly pooler: {
+        readonly host: string;
+        readonly port: number;
+    } | undefined;
     // (undocumented)
     readonly template: {
         readonly name: string;

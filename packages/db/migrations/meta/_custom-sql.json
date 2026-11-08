@@ -1,4 +1,4 @@
 {
-  "sha256": "7b984f26abdf03600fb423d8d851a3366c114317a8441de84ca6d8d4837027c4",
-  "migration": "20261106171710_add_verification_lock_indexes"
+  "sha256": "2aa735ac6bd139defb25d8cd481b50ee7e7fa12583e534c948e053b4c9cd8f64",
+  "migration": "20261107172700_add_account_deletion_lock_indexes"
 }

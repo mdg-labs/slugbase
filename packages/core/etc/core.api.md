@@ -5795,6 +5795,10 @@ export type MemberRoleOutcome =
 | {
     readonly kind: "forbidden";
 }
+/** The account that asks made the workspace for itself and its address is not verified, and the change grants the owner role or removes its own; nothing was written. */
+| {
+    readonly kind: "unverified";
+}
 /** The workspace has no such member, or cannot be reached. */
 | {
     readonly kind: "not_found";
@@ -5803,6 +5807,7 @@ export type MemberRoleOutcome =
 // @public
 export interface MemberRoles {
     readonly actor: WorkspaceRole | undefined;
+    readonly actorUnverifiedFounder: boolean;
     readonly target: WorkspaceRole | undefined;
 }
 
@@ -6195,6 +6200,10 @@ export type OwnershipTransferOutcome =
 /** The account that asks is not an owner; nothing was written. */
 | {
     readonly kind: "forbidden";
+}
+/** The account that asks made the workspace for itself and its address is not verified; nothing was written. */
+| {
+    readonly kind: "unverified";
 }
 /** The recipient is the account that asks; nothing was written. */
 | {

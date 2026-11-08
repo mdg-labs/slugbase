@@ -911,6 +911,55 @@
       "when": 1793985430313,
       "tag": "20261106171710_add_verification_lock_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1794039724456,
+      "tag": "20261107082204_drop_workspace_favicons",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1794039733965,
+      "tag": "20261107082213_add_workspace_favicons",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1794045332173,
+      "tag": "20261107095532_add_upgraded_link_invitation_unverified",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1794051928048,
+      "tag": "20261107114528_index_sessions_absolute_expires_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1794057778421,
+      "tag": "20261107132258_add_search_custom_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1794063145243,
+      "tag": "20261107145225_add_bookmark_title_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1794072420265,
+      "tag": "20261107172700_add_account_deletion_lock_indexes",
+      "breakpoints": true
     }
   ]
 }

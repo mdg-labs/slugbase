@@ -1,5 +1,6 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, json, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -29,7 +30,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the app shell around the Home route", () => {
+describe("the app shell around the Home route", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("renders the header, navigation and main landmarks with the Home empty state in main", async () => {
     stubConfig();
     const App = createWebApp({ extensions: [] });
@@ -118,7 +119,7 @@ describe("the app shell around the Home route", () => {
   });
 });
 
-describe("the app shell while the configuration loads", () => {
+describe("the app shell while the configuration loads", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the loading skeleton as a status until /api/config answers", async () => {
     let answer: (response: Response) => void = () => undefined;
     stubTransport((request) =>
@@ -149,7 +150,7 @@ describe("the app shell while the configuration loads", () => {
   });
 });
 
-describe("the app shell in German", () => {
+describe("the app shell in German", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   beforeEach(() => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
   });

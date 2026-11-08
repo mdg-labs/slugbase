@@ -1,6 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp, type WebExtension } from "../src/index.ts";
 import { CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -143,7 +144,7 @@ async function pasteOnto(target: Element | Document, text: string): Promise<bool
   return notPrevented;
 }
 
-describe("a refused save", () => {
+describe("a refused save", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("renders the bookmark limit through the entitlement.upgradeAction slot, and keeps the form", async () => {
     stubServer({ create: () => problem(422, "bookmark_limit_reached", "req-limit") });
     await openApp("/?new=1", [UPGRADE]);
@@ -208,7 +209,7 @@ describe("a refused save", () => {
 
 const TOAST_TITLE = "The change was not saved";
 
-describe("the error toast of a refused save", () => {
+describe("the error toast of a refused save", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is not raised for a field refusal the modal shows on the field", async () => {
     const refused = stubServer({ create: () => withErrors(422, "validation_failed", [{ path: "url", code: "invalid_url" }]) });
     await openApp("/?new=1");
@@ -296,7 +297,7 @@ describe("the error toast of a refused save", () => {
   });
 });
 
-describe("the keyboard", () => {
+describe("the keyboard", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("saves with Ctrl+Enter and with Cmd+Enter, and not with a plain Enter in the description", async () => {
     const server = stubServer();
     await openApp("/?new=1");
@@ -339,7 +340,7 @@ describe("the keyboard", () => {
   });
 });
 
-describe("the description", () => {
+describe("the description", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is collapsed under More, counts up to 1,000, and is sent trimmed", async () => {
     const server = stubServer();
     await openApp("/?new=1");
@@ -381,7 +382,7 @@ describe("the description", () => {
   });
 });
 
-describe("pasting an address on /bookmarks", () => {
+describe("pasting an address on /bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens the modal prefilled with an address pasted outside a field", async () => {
     stubServer();
     await openApp("/bookmarks");

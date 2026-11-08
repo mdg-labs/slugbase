@@ -2099,6 +2099,7 @@
       "error": {
         "lastOwner": "Ein Workspace braucht mindestens einen Eigentümer. Mache zuerst jemand anderen zum Eigentümer.",
         "forbidden": "Du darfst diese Rolle nicht ändern.",
+        "unverified": "Bestätige zuerst deine E-Mail-Adresse, bevor du in einem Workspace, den du erstellt hast, jemanden zum Eigentümer machst oder deine eigene Eigentümerrolle abgibst.",
         "notAMember": "Diese Person ist kein Mitglied des Workspace mehr."
       },
       "loadFailed": {
@@ -2134,6 +2135,7 @@
           "reauthCancelled": "Bestätige, dass du es bist, um das Eigentum zu übertragen.",
           "lastOwner": "Ein Workspace braucht mindestens einen Eigentümer. Das Eigentum wurde nicht geändert.",
           "forbidden": "Nur ein Eigentümer kann das Eigentum übertragen. Die Seite wurde neu geladen.",
+          "unverified": "Bestätige zuerst deine E-Mail-Adresse, bevor du das Eigentum an einem Workspace überträgst, den du erstellt hast. Das Eigentum wurde nicht geändert.",
           "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen."
         }
       },

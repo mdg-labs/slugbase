@@ -507,10 +507,72 @@ async function recordsOf(tx: TenantTx, viewerId: string, rows: readonly Bookmark
   });
 }
 
+/**
+ * The place a page resumes after when `sys_bookmark_title_page` (src/sql/720-bookmark-title-page.sql) reads it: a page after a cursor of a sort by title, of the account's own bookmarks with no filter but the owner,
+ * in the scope `scope`: `mine` for the list of the index of the sort (`listQuery`), `all` for the own leg of `pageStatement`, whose other leg is the shared bookmarks and stays the statement it is.
+ * The keyset condition on `lower(title)` is a filter for `slugbase_app`, because `lower()` is not leakproof and the policy of `bookmarks` is FORCEd, so a deep page would read every entry before the cursor; the
+ * function reads it as an index condition. It states the scope and the archive rule itself, so a filter that narrows the page further (a pin, a slug, a folder, a tag) is not one it applies, and that page, like the
+ * first one, is read by the statement as it is.
+ */
+function titlePageCursor(tx: TenantTx, { filter, sort, after, limit }: BookmarkListRequest, scope: "mine" | "all"): { readonly key: string; readonly id: string } | undefined {
+  const own =
+    limit >= 1 &&
+    filter.q === undefined &&
+    filter.ownerId.toLowerCase() === tx.accountId.toLowerCase() &&
+    (filter.scope ?? "mine") === scope &&
+    filter.pinned === undefined &&
+    filter.hasSlug === undefined &&
+    filter.forwarding === undefined &&
+    filter.urlCanonical === undefined &&
+    filter.folderId === undefined &&
+    (filter.tagIds ?? []).length === 0;
+  return (sort === "title_asc" || sort === "title_desc") && own && after?.key != null ? { key: after.key, id: after.id } : undefined;
+}
+
+/** A column of a record as read from the rows of `sys_bookmark_title_page`, which names its columns as `bookmarks` does, and decoded as that column is. */
+function pageColumn<K extends keyof typeof RECORD_COLUMNS>(key: K, name: string): SQL<BookmarkRecordRow[K]> {
+  const read = sql<BookmarkRecordRow[K]>`${sql.identifier(name)}`;
+  read.mapWith(RECORD_COLUMNS[key]);
+  return read;
+}
+
+const PAGE_COLUMNS = {
+  id: pageColumn("id", "id"),
+  ownerId: pageColumn("ownerId", "owner_id"),
+  url: pageColumn("url", "url"),
+  host: pageColumn("host", "host"),
+  title: pageColumn("title", "title"),
+  description: pageColumn("description", "description"),
+  slug: pageColumn("slug", "slug"),
+  forwarding: pageColumn("forwarding", "forwarding"),
+  pinnedAt: pageColumn("pinnedAt", "pinned_at"),
+  openCount: pageColumn("openCount", "open_count"),
+  lastOpenedAt: pageColumn("lastOpenedAt", "last_opened_at"),
+  version: pageColumn("version", "version"),
+  createdAt: pageColumn("createdAt", "created_at"),
+  updatedAt: pageColumn("updatedAt", "updated_at"),
+} as const;
+
+/** The statement of a page that `titlePageCursor` names: the rows of the function in the order of the sort, cut at the limit. */
+function titlePageQuery(tx: TenantTx, { sort, limit }: BookmarkListRequest, after: { readonly key: string; readonly id: string }) {
+  const placed = sql.raw(sort === "title_desc" ? "DESC" : "ASC");
+  const title = sql`lower(${sql.identifier("title")})`;
+  return tenantHandle(tx)
+    .select({ ...PAGE_COLUMNS, sortKey: sql<string | null>`${title}`.as("sort_key") })
+    .from(sql`sys_bookmark_title_page(${sort === "title_desc"}::boolean, ${after.key}::text, ${after.id}::uuid, ${limit}::integer)`)
+    .orderBy(sql`${title} ${placed}, ${sql.identifier("id")} ${placed}`)
+    .limit(limit);
+}
+
 /** The statement of `BookmarkRepository.list`, exported for the test that plans it. Needs a transaction opened with a workspace. */
-export function listQuery(tx: TenantTx, { filter, sort, after, limit }: BookmarkListRequest) {
+export function listQuery(tx: TenantTx, request: BookmarkListRequest) {
+  const { filter, sort, after, limit } = request;
   const workspaceId = requireListWorkspace(tx, "listing bookmarks");
   const { key, order } = SORT_ORDERS[sort];
+  const resumed = titlePageCursor(tx, request, "mine");
+  if (resumed !== undefined) {
+    return titlePageQuery(tx, request, resumed);
+  }
   const predicate = after === undefined ? listPredicate(workspaceId, filter) : and(listPredicate(workspaceId, filter), afterPosition(sort, after));
   return tenantHandle(tx)
     .select({ ...RECORD_COLUMNS, sortKey: sql<string | null>`${key}`.as("sort_key") })
@@ -745,7 +807,14 @@ export function pageStatement(tx: TenantTx, { filter, sort, after, limit }: Book
     return undefined;
   }
   const { column, key, order, dir } = SORT_ORDERS[sort];
+  const resumed = titlePageCursor(tx, { filter, sort, after, limit }, "all");
   const legs = branches.map((branch) => {
+    if (branch === "own" && resumed !== undefined) {
+      // The own leg of a deep title page: the function states the same rows (this workspace, this account, not plan-archived) and reads them as an index condition. The shared leg below is not its business.
+      return sql`(SELECT p.id AS id, lower(p.title) AS ord, lower(p.title) AS sort_key
+        FROM sys_bookmark_title_page(${sort === "title_desc"}::boolean, ${resumed.key}::text, ${resumed.id}::uuid, ${limit}::integer) p
+        ORDER BY lower(p.title) ${dir}, p.id ${dir} LIMIT ${limit}::integer)`;
+    }
     const base = branchPredicate(workspaceId, filter, branch, branch === "shared");
     const predicate = after === undefined ? base : and(base, afterPosition(sort, after));
     if (branch !== "shared") {

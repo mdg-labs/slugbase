@@ -3,6 +3,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { use, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createApiClient } from "../src/api/client.ts";
 import { createWebApp, type WebExtension } from "../src/index.ts";
 import { PRODUCT_NAME, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -43,7 +44,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the 404 page", () => {
+describe("the 404 page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is the catch-all inside the shell, with the way home", async () => {
     stubApi();
     await open("/no/such/page");
@@ -78,7 +79,7 @@ describe("the 404 page", () => {
   });
 });
 
-describe("the 403 page", () => {
+describe("the 403 page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("explains itself inside the shell, with the way home", async () => {
     stubApi();
     await open("/403");
@@ -118,7 +119,7 @@ function failWithProblem(detail: string, requestId: string): void {
   pendingCall.catch(() => undefined);
 }
 
-describe("the 500 page", () => {
+describe("the 500 page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("replaces the app when a page throws, and renders none of the error", async () => {
     stubApi();
     await open("/boom", [pageAt("/boom", Throws)]);
@@ -191,7 +192,7 @@ describe("the 500 page", () => {
   });
 });
 
-describe("the route pending state", () => {
+describe("the route pending state", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the loading skeleton while a page is on its way", async () => {
     stubApi();
     await open("/slow", [pageAt("/slow", () => use(new Promise<never>(() => undefined)))]);
@@ -201,7 +202,7 @@ describe("the route pending state", () => {
   });
 });
 
-describe("the offline banner", () => {
+describe("the offline banner", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   function setOnline(value: boolean): void {
     vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(value);
   }
@@ -254,7 +255,7 @@ function SaveButton(): ReactElement {
   );
 }
 
-describe("a failed mutation", () => {
+describe("a failed mutation", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   const savePage = pageAt("/save", SaveButton);
 
   async function save(): Promise<void> {

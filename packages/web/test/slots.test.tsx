@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { AuthPage } from "../src/auth/auth-page.tsx";
 import { ExtensionsProvider, Slot, type WebExtension } from "../src/extensions/index.ts";
@@ -19,7 +20,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("Slot", () => {
+describe("Slot", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("renders the components of the extensions in registration order, without a wrapper element", () => {
     const { container } = render(
       <ExtensionsProvider extensions={[secondFooter("first"), { id: "other" }, secondFooter("second")]}>
@@ -46,7 +47,7 @@ describe("Slot", () => {
   });
 });
 
-describe("the mounted slots without extensions", () => {
+describe("the mounted slots without extensions", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("leave the shell and Home exactly as the app renders them", async () => {
     const App = createWebApp({ extensions: [] });
 
@@ -63,7 +64,7 @@ describe("the mounted slots without extensions", () => {
   });
 });
 
-describe("a fixture extension", () => {
+describe("a fixture extension", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("fills sidebar.footer above Help & docs", async () => {
     const App = createWebApp({ extensions: [fixtureExtension] });
 
@@ -151,7 +152,7 @@ const LEGAL_LINKS: WebExtension = {
 
 const authFooter = (container: HTMLElement): HTMLElement | null => container.querySelector("[data-slot='auth-card-footer']");
 
-describe("auth.footer", () => {
+describe("auth.footer", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows an extension's links in the footer of the sign-in page", async () => {
     vi.stubGlobal("fetch", (request: Request) =>
       new URL(request.url).pathname === SESSION_PATH ? Promise.resolve(problem(401, "unauthenticated", "req-session")) : signedIn(request),

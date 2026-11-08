@@ -67,7 +67,12 @@ interface Invitation {
   readonly hash: Buffer;
 }
 
-async function invite(workspaceId: string, options: { email?: string; role?: Role; expiresInSeconds?: number } = {}): Promise<Invitation> {
+// A mailed invitation holds the identifier of its mail job as the mail ticket; `mailed: false` is a row no mail job wrote, the shape
+// of a copyable link an earlier release stored before workspace_invitations.link_issued existed.
+async function invite(
+  workspaceId: string,
+  options: { email?: string; role?: Role; expiresInSeconds?: number; mailed?: boolean } = {},
+): Promise<Invitation> {
   emailNumber += 1;
   const id = freshId();
   const email = options.email ?? `Invitee${String(emailNumber)}@Example.test`;
@@ -75,8 +80,9 @@ async function invite(workspaceId: string, options: { email?: string; role?: Rol
   await asSystem(
     db,
     (tx) => tx`
-      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at)
-      VALUES (${id}, ${workspaceId}, ${email}, ${options.role ?? "member"}, ${hash}, now() + ${options.expiresInSeconds ?? 7 * 24 * 60 * 60} * interval '1 second')`,
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, mail_ticket, expires_at)
+      VALUES (${id}, ${workspaceId}, ${email}, ${options.role ?? "member"}, ${hash}, ${options.mailed === false ? null : id},
+              now() + ${options.expiresInSeconds ?? 7 * 24 * 60 * 60} * interval '1 second')`,
   );
   return { id, workspaceId, email, token, hash };
 }
@@ -167,10 +173,12 @@ interface InvitationRow {
   status: string;
   accepted_by: string | null;
   closed_at: Date | null;
+  link_issued: boolean;
+  mail_ticket: string | null;
 }
 
 async function invitationRow(id: string): Promise<InvitationRow> {
-  const rows = await asSystem(db, (tx) => tx<InvitationRow[]>`SELECT status, accepted_by, closed_at FROM workspace_invitations WHERE id = ${id}`);
+  const rows = await asSystem(db, (tx) => tx<InvitationRow[]>`SELECT status, accepted_by, closed_at, link_issued, mail_ticket FROM workspace_invitations WHERE id = ${id}`);
   const row = rows[0];
   if (row === undefined) {
     throw new Error("no such invitation");
@@ -260,6 +268,71 @@ describe("sys_invitation_accept_new_account", () => {
     expect(await sessionsOf(input.accountId)).toEqual([]);
     expect(await sessionsOf(bystander)).toHaveLength(1);
     expect((await jobs()).filter((job) => job.data.accountId === input.accountId)).toHaveLength(1);
+  });
+
+  it("treats a pending invitation with no mail ticket and link_issued false, as an upgraded copyable link is, as a link an admin took", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const upgraded = await invite(workspaceId, { role: "admin", mailed: false });
+    expect(await invitationRow(upgraded.id)).toMatchObject({ link_issued: false, mail_ticket: null });
+    const required = acceptance(upgraded.hash, { emailVerificationRequired: true }).input;
+
+    expect(await store.acceptInvitationWithNewAccount(required)).toEqual({
+      kind: "accepted",
+      workspaceId,
+      invitationId: upgraded.id,
+      role: "admin",
+      sessionCreated: false,
+    });
+
+    expect((await accountsWithEmail(upgraded.email))[0]?.email_verified_at).toBeNull();
+    expect(await sessionsOf(required.accountId)).toEqual([]);
+    expect((await members(workspaceId))[required.accountId]).toBe("admin");
+
+    const optional = await invite(workspaceId, { mailed: false });
+    const notRequired = acceptance(optional.hash, { emailVerificationRequired: false }).input;
+    expect(await store.acceptInvitationWithNewAccount(notRequired)).toMatchObject({ kind: "accepted", sessionCreated: true });
+    expect((await accountsWithEmail(optional.email))[0]?.email_verified_at).toBeNull();
+  });
+
+  it("keeps a link an admin took link-issued after a re-invite gives the row a mail ticket without replacing the token", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const held = await invite(workspaceId);
+    const link = freshToken();
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET token_hash = ${link.hash}, mail_ticket = NULL WHERE id = ${held.id}`);
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET mail_ticket = ${freshId()} WHERE id = ${held.id}`);
+    expect(await invitationRow(held.id)).toMatchObject({ link_issued: true });
+    const input = acceptance(link.hash, { emailVerificationRequired: true }).input;
+
+    expect(await store.acceptInvitationWithNewAccount(input)).toMatchObject({ kind: "accepted", sessionCreated: false });
+    expect((await accountsWithEmail(held.email))[0]?.email_verified_at).toBeNull();
+  });
+
+  it("keeps an upgraded link, whose row held no mail ticket, a link after a re-invite where no mail can be sent gives it one and keeps the token", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const upgraded = await invite(workspaceId, { role: "admin", mailed: false });
+    expect(await invitationRow(upgraded.id)).toMatchObject({ link_issued: false, mail_ticket: null });
+    // The write of POST /invitations for a pending address on an instance without mail: a new ticket, the stored hash kept.
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET role = 'member', mail_ticket = ${freshId()} WHERE id = ${upgraded.id}`);
+    expect(await invitationRow(upgraded.id)).toMatchObject({ link_issued: true });
+    const input = acceptance(upgraded.hash, { emailVerificationRequired: true }).input;
+
+    expect(await store.acceptInvitationWithNewAccount(input)).toMatchObject({ kind: "accepted", role: "member", sessionCreated: false });
+
+    expect((await accountsWithEmail(upgraded.email))[0]?.email_verified_at).toBeNull();
+    expect(await sessionsOf(input.accountId)).toEqual([]);
+  });
+
+  it("keeps a mailed invitation mailed when a re-invite where no mail can be sent gives it a new ticket and keeps the token", async () => {
+    const workspaceId = await workspaceWithOwner();
+    const mailed = await invite(workspaceId);
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET role = 'admin', mail_ticket = ${freshId()} WHERE id = ${mailed.id}`);
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET expires_at = expires_at + interval '1 day' WHERE id = ${mailed.id}`);
+    expect(await invitationRow(mailed.id)).toMatchObject({ link_issued: false });
+    const input = acceptance(mailed.hash, { emailVerificationRequired: true }).input;
+
+    expect(await store.acceptInvitationWithNewAccount(input)).toMatchObject({ kind: "accepted", role: "admin", sessionCreated: true });
+
+    expect((await accountsWithEmail(mailed.email))[0]?.email_verified_at).not.toBeNull();
   });
 
   it("signs the account of a link an admin took in where verification is not required, and the account of a mailed token under either setting", async () => {

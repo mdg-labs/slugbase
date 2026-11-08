@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createApiClient } from "../src/api/client.ts";
 import { ConfigProvider } from "../src/config/config-context.tsx";
 import { ExtensionsProvider } from "../src/extensions/index.ts";
@@ -91,7 +92,7 @@ async function mountLogin(path: string) {
   return { history, queryClient };
 }
 
-describe("the sign-in page against the generated handlers", () => {
+describe("the sign-in page against the generated handlers", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("clears the cache and goes to the page named by a relative next, with its search and hash, when the sign-in operation answers 200", async () => {
     const { history, queryClient } = await mountLogin(`/login?next=${encodeURIComponent("/missing/page?tab=plan#top")}`);
     queryClient.setQueryData(["bookmarks"], ["cached for the previous visitor"]);

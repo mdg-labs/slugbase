@@ -1197,6 +1197,38 @@ describe("an upgrade from the level before the workspace creator index", () => {
   }, 120_000);
 });
 
+describe("an upgrade from the level before the session absolute expiry index", () => {
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000053";
+
+  it("builds the index concurrently on a table that holds sessions, in a step of its own, and it is valid", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const expiryIndex = journal.entries.filter((entry) => entry.tag.includes("index_sessions_absolute_expires_at"));
+    expect(expiryIndex).toHaveLength(1);
+    for (const entry of expiryIndex) {
+      expect(readFileSync(join(CE_CHAIN.folder, `${entry.tag}.sql`), "utf8").startsWith("-- slugbase:non-transactional\n")).toBe(true);
+    }
+    await owner.unsafe("DROP INDEX public.sessions_absolute_expires_at_idx");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${expiryIndex.map((entry) => String(entry.when)).join(", ")})`);
+    await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SELECT set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${ACCOUNT}, 'session-index@example.test', 'Session index')`;
+      await tx`
+        INSERT INTO sessions (id, token_hash, account_id, level, remember, expires_at, absolute_expires_at)
+        VALUES ('0190a000-0000-7000-8000-000000000054', sha256('session-index'::bytea), ${ACCOUNT}, 'full', false, now() + interval '1 day', now() + interval '2 days')`;
+    });
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(expiryIndex.map((entry) => entry.tag));
+    expect((await indexes(owner, ["sessions_absolute_expires_at_idx"])).map((index) => [index.name, index.valid])).toEqual([["sessions_absolute_expires_at_idx", true]]);
+    const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.sessions_absolute_expires_at_idx'::regclass) AS definition`;
+    expect(definition?.definition).toContain("(absolute_expires_at)");
+  }, 120_000);
+});
+
 describe("an upgrade from the level before the bookmark match migration", () => {
   const WORKSPACE = "0190a000-0000-7000-8000-000000000031";
   const ACCOUNT = "0190a000-0000-7000-8000-000000000032";

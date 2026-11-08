@@ -110,7 +110,7 @@ export const updateMember = defineOperation({
       "There is no session, its second factor is not complete, or the change grants or removes the owner role and the session has not re-authenticated within the last ten minutes (reauth_required); nothing is written",
     ),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace, or the caller is an admin and the change promotes to owner or touches an owner (forbidden)",
+      "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace, or the caller is an admin and the change promotes to owner or touches an owner (forbidden), or the caller made the workspace for itself, its address is not verified and the change promotes a member to owner or removes the caller's own owner role (email_unverified)",
     ),
     404: problemResponse("The request acts in no workspace, or the account is not a member of it"),
     409: problemResponse("The change would leave the workspace without an owner (last_owner); nothing is written"),

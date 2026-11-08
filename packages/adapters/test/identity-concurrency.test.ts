@@ -79,8 +79,12 @@ class CappedEgress implements EgressPort {
 }
 
 function setup(egress: CappedEgress, ...slugs: string[]) {
+  return setupWith(egress, {}, ...slugs);
+}
+
+function setupWith(egress: CappedEgress, extra: { maxConcurrentRequests?: number }, ...slugs: string[]) {
   const lines: { message: string; fields: Readonly<Record<string, unknown>> | undefined }[] = [];
-  const identity = createOidcIdentity({ providers: providers(...slugs), egress, logger: { warn: (message, fields) => void lines.push({ message, fields }) }, now: () => NOW });
+  const identity = createOidcIdentity({ providers: providers(...slugs), egress, logger: { warn: (message, fields) => void lines.push({ message, fields }) }, now: () => NOW, ...extra });
   return { identity, lines };
 }
 
@@ -93,6 +97,20 @@ describe("the egress requests of the OIDC adapter", () => {
     expect(egress.refused).toBe(0);
     expect(egress.maxRunning).toBe(3);
     expect(egress.started).toHaveLength(10);
+  });
+
+  it("runs only as many requests at once as the composition says its egress instance is guaranteed", async () => {
+    const egress = new CappedEgress();
+    const { identity } = setupWith(egress, { maxConcurrentRequests: 1 }, "a", "b", "c");
+    expect((await identity.listProviders()).map((info) => info.id)).toEqual(["a", "b", "c"]);
+    expect(egress.maxRunning).toBe(1);
+    expect(egress.refused).toBe(0);
+  });
+
+  it("refuses a limit that is not a positive whole number", () => {
+    for (const maxConcurrentRequests of [0, -1, 1.5, Number.NaN]) {
+      expect(() => setupWith(new CappedEgress(), { maxConcurrentRequests }, "a")).toThrow(RangeError);
+    }
   });
 
   it("exchanges a code while a listing holds every slot", async () => {

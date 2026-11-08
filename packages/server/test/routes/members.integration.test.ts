@@ -96,8 +96,8 @@ interface Person {
   readonly sessionId: string;
 }
 
-async function person(world: World): Promise<Person> {
-  const account = await seedAccount(database(), { emailVerified: true });
+async function person(world: World, emailVerified = true): Promise<Person> {
+  const account = await seedAccount(database(), { emailVerified });
   const response = await send(world, "POST", "/api/v1/auth/login", {}, { email: account.email, password: account.password, remember: false });
   const token = new RegExp(`^${SESSION_COOKIE}=([A-Za-z0-9_-]{43});`).exec(response.headers.get("set-cookie") ?? "")?.[1];
   if (response.status !== 200 || token === undefined) {
@@ -319,7 +319,49 @@ describe("GET /api/v1/members", () => {
   });
 });
 
+/** A workspace its owner made for itself (`created_by`, `self_created`) with a member; the owner's address is verified or not as told. */
+async function foundedWorkspace(world: World, ownerVerified: boolean): Promise<{ readonly workspaceId: string; readonly owner: Person; readonly member: Person }> {
+  const workspaceId = await workspaceWith("Founded");
+  const owner = await person(world, ownerVerified);
+  const member = await person(world);
+  await seedMembership(database(), { workspaceId, accountId: owner.account.id, role: "owner" });
+  await seedMembership(database(), { workspaceId, accountId: member.account.id, role: "member" });
+  await setActiveWorkspace(database(), owner.sessionId, workspaceId);
+  await setActiveWorkspace(database(), member.sessionId, workspaceId);
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE workspaces SET created_by = ${owner.account.id}, self_created = true WHERE id = ${workspaceId}`;
+  });
+  return { workspaceId, owner, member };
+}
+
 describe("PATCH /api/v1/members/{accountId}", () => {
+  it("answers 403 email_unverified and writes nothing when the owner made the workspace for itself and has not verified its address and promotes a member to owner", async () => {
+    const world = serve();
+    const { workspaceId, owner, member } = await foundedWorkspace(world, false);
+
+    const response = await send(world, "PATCH", `${MEMBERS}/${member.account.id}`, { cookie: owner.cookie }, { role: "owner" });
+
+    expect(response.status).toBe(403);
+    expect(await problem(response)).toMatchObject({ code: "email_unverified" });
+    expect(await rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [member.account.id]: "member" });
+    expect(await auditOf(workspaceId)).toEqual([]);
+  });
+
+  it("lets the same owner switch the member between admin and member, and lets an owner whose address is verified promote the member", async () => {
+    const world = serve();
+    const unverified = await foundedWorkspace(world, false);
+    const verified = await foundedWorkspace(world, true);
+
+    const toAdmin = await send(world, "PATCH", `${MEMBERS}/${unverified.member.account.id}`, { cookie: unverified.owner.cookie }, { role: "admin" });
+    const promoted = await send(world, "PATCH", `${MEMBERS}/${verified.member.account.id}`, { cookie: verified.owner.cookie }, { role: "owner" });
+
+    expect(toAdmin.status).toBe(200);
+    expect(promoted.status).toBe(200);
+    expect(await rolesOf(unverified.workspaceId)).toEqual({ [unverified.owner.account.id]: "owner", [unverified.member.account.id]: "admin" });
+    expect(await rolesOf(verified.workspaceId)).toEqual({ [verified.owner.account.id]: "owner", [verified.member.account.id]: "owner" });
+  });
+
   it("lets an owner promote a member to admin and an admin to owner and demote them again, and writes member.role_changed with the old and the new role each time", async () => {
     const world = serve();
     const { workspaceId, people } = await workspaceOf(world, "owner", "member");

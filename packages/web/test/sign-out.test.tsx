@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createApiClient } from "../src/api/client.ts";
 import { ConfigProvider } from "../src/config/config-context.tsx";
 import { ExtensionsProvider } from "../src/extensions/index.ts";
@@ -89,7 +90,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Sign out in the account menu", () => {
+describe("Sign out in the account menu", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("posts to /auth/logout, clears the cached queries and routes to /login", async () => {
     const { fetch, history, queryClient, ui } = mount(() => Promise.resolve(new Response(null, { status: 204 })));
     await renderApp(ui);

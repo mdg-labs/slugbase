@@ -14,6 +14,7 @@ import {
   type EgressResponse,
 } from "@slugbase/core";
 import { formatAddress, isOperatorPrivateAddress, isPublicAddress, parseAddress, type ParsedAddress } from "./address.ts";
+import { createLookupBudget, type LookupShare } from "./lookup-budget.ts";
 
 /** Resolves a host name to the addresses a connection to it could use. */
 export type EgressResolver = (hostname: string) => Promise<readonly string[]>;
@@ -31,6 +32,12 @@ export interface CreateEgressOptions {
    * sets it, on an instance that is handed to the AI adapter alone.
    */
   readonly privateOrigin?: string;
+  /**
+   * The share of the process's host-name lookup budget this instance draws on. The instances built for one process are
+   * given shares of one budget, so that together they stay within the threadpool; without it the instance has a budget
+   * of its own.
+   */
+  readonly lookups?: LookupShare;
   /**
    * Allowances for tests that talk to a local server. The constructor throws when
    * any is given and `nodeEnv` is `production`.
@@ -69,11 +76,6 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 // The redirects followed for one request; the sixth is refused.
 const MAX_REDIRECTS = 5;
-
-// The host-name lookups one instance has running at once. The system resolver runs each on a libuv threadpool thread, four by
-// default and shared with password hashing, and a lookup cannot be cancelled, so one slot stays taken until its lookup settles
-// even when the request that started it has timed out. Three leaves a thread to everything else; a lookup past the cap is refused.
-const MAX_CONCURRENT_LOOKUPS = 3;
 
 // The content encodings the adapter undoes, so that the size cap applies to the decoded body.
 const ACCEPT_ENCODING = "gzip, deflate, br";
@@ -275,8 +277,9 @@ function decodersFor(header: string | undefined): Readable[] | undefined {
  * origin carries only a few named headers, and is refused when it would carry
  * the request body. One deadline covers every
  * hop's resolving, connecting and reading, and the decoded body is cut off at
- * `maxBytes`. An instance runs at most three host-name lookups at a time, counted until each lookup itself settles
- * and not until the request's deadline, and refuses a further one at once. A response outside the caller's content-type allowlist is refused
+ * `maxBytes`. An instance runs host-name lookups only within its share of the process's lookup budget (three in all, with
+ * a reserve for each instance of the process), counted until each lookup itself settles and not until the request's
+ * deadline, and refuses a further one at once. A response outside the caller's content-type allowlist is refused
  * once its headers arrive. An instance built with `privateOrigin` also connects to
  * the loopback, private, CGNAT and unique-local addresses of that one origin.
  */
@@ -287,7 +290,7 @@ export class HttpEgress implements EgressPort {
   readonly #allowedAddresses: ReadonlySet<string>;
   readonly #privateOrigin: string | undefined;
   readonly #ca: string | Buffer | undefined;
-  #lookupsRunning = 0;
+  readonly #lookups: LookupShare;
 
   constructor(options: CreateEgressOptions) {
     if (options.testOnly !== undefined && options.nodeEnv === "production") {
@@ -310,6 +313,7 @@ export class HttpEgress implements EgressPort {
     );
     this.#privateOrigin = options.privateOrigin === undefined ? undefined : parsePrivateOrigin(options.privateOrigin);
     this.#ca = options.testOnly?.ca;
+    this.#lookups = options.lookups ?? createLookupBudget().share(0);
   }
 
   async request(request: EgressRequest): Promise<EgressResponse> {
@@ -398,11 +402,11 @@ export class HttpEgress implements EgressPort {
   async #validatedAddresses(target: Target): Promise<string[]> {
     let answers: readonly ParsedAddress[];
     if (target.literal === undefined) {
-      if (this.#lookupsRunning >= MAX_CONCURRENT_LOOKUPS) {
+      const release = this.#lookups.acquire();
+      if (release === undefined) {
         throw new EgressError();
       }
       let texts: readonly string[];
-      this.#lookupsRunning += 1;
       try {
         texts = await this.#resolve(target.hostname);
       } catch {
@@ -410,7 +414,7 @@ export class HttpEgress implements EgressPort {
         // so the two cannot be told apart.
         throw new EgressBlocked();
       } finally {
-        this.#lookupsRunning -= 1;
+        release();
       }
       const parsed = texts.map(parseAddress);
       if (parsed.length === 0 || parsed.some((address) => address === undefined)) {

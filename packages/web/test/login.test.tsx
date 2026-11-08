@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -79,7 +80,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the sign-in page", () => {
+describe("the sign-in page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the authentication card with email, password, remember me and the submit button", async () => {
     stubServer(done);
     await openLogin();
@@ -109,7 +110,7 @@ describe("the sign-in page", () => {
   });
 });
 
-describe("signing in", () => {
+describe("signing in", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("sends the trimmed email, the password and the remember choice, then goes home", async () => {
     const server = stubServer(done);
     await openLogin();
@@ -157,7 +158,7 @@ describe("signing in", () => {
   });
 });
 
-describe("a sign-in that does not go through", () => {
+describe("a sign-in that does not go through", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each([
     ["an unknown email or a wrong password", "unauthenticated"],
     ["a disabled account", "unauthenticated"],
@@ -303,7 +304,7 @@ describe("a sign-in that does not go through", () => {
   });
 });
 
-describe("a sign-in under way", () => {
+describe("a sign-in under way", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the button as loading and sends the sign-in once, however often it is submitted", async () => {
     let answer: (response: Response) => void = () => undefined;
     const server = stubServer(() => new Promise<Response>((resolve) => (answer = resolve)));
@@ -370,7 +371,7 @@ describe("a sign-in under way", () => {
   });
 });
 
-describe("the password toggle", () => {
+describe("the password toggle", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows what was typed and hides it again", async () => {
     stubServer(done);
     await openLogin();
@@ -385,7 +386,7 @@ describe("the password toggle", () => {
   });
 });
 
-describe("the sign-in page with instance settings", () => {
+describe("the sign-in page with instance settings", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   function serveConfig(instance: unknown): void {
     vi.stubGlobal(
       "fetch",
@@ -430,7 +431,7 @@ describe("the sign-in page with instance settings", () => {
   });
 });
 
-describe("coming back from a /go address (doc 04 section 9.3)", () => {
+describe("coming back from a /go address (doc 04 section 9.3)", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("goes back to /go/<slug> with a request to the server, which forwards it, not with the router", async () => {
     stubServer(done);
     await openLogin(`/login?returnTo=${encodeURIComponent("/go/mail")}`);

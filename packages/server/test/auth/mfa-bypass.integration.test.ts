@@ -137,8 +137,8 @@ function tokenOf(response: Response): string | undefined {
 }
 
 /** A same-origin request from `from`, as a proxy one hop in front of the server reports it. */
-function send({ server, origin }: World, method: string, path: string, token: string | null, body?: unknown, from = DEFAULT_ADDRESS): Promise<Response> {
-  const headers = new Headers({ origin, "content-type": "application/json", "x-forwarded-for": from });
+function send({ server, origin }: World, method: string, path: string, token: string | null, body?: unknown, from = DEFAULT_ADDRESS, extra: Record<string, string> = {}): Promise<Response> {
+  const headers = new Headers({ origin, "content-type": "application/json", "x-forwarded-for": from, ...extra });
   if (token !== null) {
     headers.set("cookie", `${SESSION_COOKIE}=${token}`);
   }
@@ -352,6 +352,84 @@ describe("what is never written down (T7)", () => {
     return [...own, ...strings(error), route ?? ""];
   }
 
+  interface Place {
+    readonly where: string;
+    readonly text: string;
+  }
+
+  /** Every string the servers wrote or answered, each with the kind of place it came from. */
+  function placesOf(worlds: readonly World[], answers: readonly string[]): Place[] {
+    return [
+      ...worlds.flatMap((each) => [
+        ...strings(each.logs.entries).map((text) => ({ where: "a log line", text })),
+        ...strings(each.logs.requests).map((text) => ({ where: "a request log line", text })),
+        ...each.reports.flatMap(reported).map((text) => ({ where: "an error report", text })),
+      ]),
+      ...answers.map((text) => ({ where: "an error answer", text })),
+    ];
+  }
+
+  // The request id of every log line and every problem answer is a random UUID, whose hex groups can hold a
+  // six-digit run by chance. It is never a place a code is written, so it is taken out before looking.
+  const REQUEST_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+  /** Where the value is written, as a kind of place, or undefined when no place holds it outside a request id. */
+  function writtenIn(value: string, places: readonly Place[]): string | undefined {
+    return places.find(({ text }) => text.replace(REQUEST_ID, "<request id>").includes(value))?.where;
+  }
+
+  /** Only a six-digit probe is named in a failure: a secret, a backup code or a password never is. */
+  function describeFound(value: string, index: number, where: string): string {
+    return /^\d{6}$/.test(value) ? `the code ${value} is written in ${where}` : `probe ${String(index)}, which is not a six-digit code, is written in ${where}`;
+  }
+
+  describe("the check", () => {
+    const place = (where: string, text: string): Place => ({ where, text });
+
+    it("does not find a six-digit probe inside a request id, wherever the id stands", () => {
+      const id = "a1b2c3d4-0000-4000-8000-1234560000ff";
+      const places = [place("a request log line", `{"requestId":"${id}"}`), place("an error answer", `{"requestId":"${id.toUpperCase()}","detail":"x"}`)];
+      expect(places.some(({ text }) => text.includes("123456"))).toBe(true);
+      expect(writtenIn("123456", places)).toBeUndefined();
+    });
+
+    it("finds a probe written in a log line or an answer, also beside a request id, and names the place", () => {
+      const id = "a1b2c3d4-0000-4000-8000-0000000000ff";
+      expect(writtenIn("123456", [place("a log line", "code 123456 was refused")])).toBe("a log line");
+      expect(writtenIn("123456", [place("a request log line", `${id} 123456`)])).toBe("a request log line");
+      expect(writtenIn("123456", [place("an error answer", "a1b2c3d4-0000-4000-8000-1234560000ff 123456")])).toBe("an error answer");
+      expect(writtenIn("hunter2-password", [place("an error report", `failed for hunter2-password at ${id}`)])).toBe("an error report");
+    });
+
+    it("names a six-digit code and never any other value", () => {
+      expect(describeFound("123456", 0, "a log line")).toBe("the code 123456 is written in a log line");
+      const message = describeFound("correct horse battery", 7, "an error answer");
+      expect(message).not.toContain("correct");
+      expect(message).toContain("an error answer");
+    });
+
+    it("passes a run whose request ids hold the probes, and still fails when a probe is really written", async () => {
+      const world = serve();
+      const { account } = await enrol(world);
+      const probe = wrongCode(await codeAt(world, account.id, 1));
+      const forced = `a1b2c3d4-0000-4000-8000-${probe}0000ff`;
+      const refused = await send(world, "POST", VERIFY, await startSignIn(world, account), { code: probe }, undefined, { "x-request-id": forced });
+      expect(refused.status).toBe(422);
+      const answers = [await refused.text()];
+      const places = placesOf([world], answers);
+
+      // The forced id is on the log line and in the answer, so the probe is in the text searched.
+      expect(world.logs.requests.some((line) => line.fields["requestId"] === forced)).toBe(true);
+      expect(answers[0]).toContain(forced);
+      expect(places.some(({ text }) => text.includes(probe))).toBe(true);
+      expect(writtenIn(probe, places)).toBeUndefined();
+
+      world.logs.info("sign-in refused", { code: probe });
+      expect(writtenIn(probe, placesOf([world], answers))).toBe("a log line");
+      expect(writtenIn(probe, placesOf([], [...answers, `{"detail":"${probe} is wrong"}`]))).toBe("an error answer");
+    });
+  });
+
   it("keeps secrets, codes, backup codes and QR payloads out of every log line, error report and error answer of the MFA operations", async () => {
     const key = testKey("key-1");
     const world = serve({ keys: [key] });
@@ -417,17 +495,13 @@ describe("what is never written down (T7)", () => {
     expect(lost.reports.map((report) => report.route)).toContain("POST /api/v1/auth/mfa/verify");
 
     const secret = Buffer.from(await testSecretBox(key).open((await store.mfaStateOf(account.id))?.secret ?? { ciphertext: new Uint8Array(), keyId: "" }, mfaSecretOptions(account.id)));
-    const everywhere = [
-      ...[world, lost].flatMap((each) => [...strings([...each.logs.entries, ...each.logs.requests]), ...each.reports.flatMap(reported)]),
-      ...answers,
-    ];
+    const places = placesOf([world, lost], answers);
     expect(world.logs.requests.length).toBeGreaterThan(0);
-    for (const value of [...presented, ...backupCodes, ...newBackupCodes, ...shown, again.secret, again.otpauthUri, again.qrSvg, secret.toString("hex"), secret.toString("base64"), account.password]) {
+    const values = [...presented, ...backupCodes, ...newBackupCodes, ...shown, again.secret, again.otpauthUri, again.qrSvg, secret.toString("hex"), secret.toString("base64"), account.password];
+    for (const [index, value] of values.entries()) {
       expect(value.length, "a value to look for").toBeGreaterThan(0);
-      expect(
-        everywhere.some((written) => written.includes(value)),
-        `${value.slice(0, 12)} is written down`,
-      ).toBe(false);
+      const where = writtenIn(value, places);
+      expect(where === undefined ? undefined : describeFound(value, index, where)).toBeUndefined();
     }
   });
 });

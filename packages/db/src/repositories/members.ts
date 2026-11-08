@@ -140,6 +140,10 @@ interface RoleRow extends Record<string, unknown> {
   role: string;
 }
 
+interface FounderRow extends Record<string, unknown> {
+  unverified_founder: boolean;
+}
+
 interface OwnerRow extends Record<string, unknown> {
   account_id: string;
 }
@@ -238,7 +242,16 @@ export function memberRepository(tx: TenantTx): MemberRepository {
         const row = rows.find((candidate) => candidate.account_id === accountId.toLowerCase());
         return row === undefined ? undefined : roleOf(row.role);
       };
-      return { actor: roleOfAccount(tx.accountId), target: roleOfAccount(targetAccountId) };
+      // The row of the workspace is locked above, and the account of the transaction is the only account row this reads: its own.
+      const founder = await handle.execute<FounderRow>(sql`
+        SELECT coalesce(w.created_by = ${tx.accountId}::uuid AND w.self_created AND a.email_verified_at IS NULL, false) AS unverified_founder
+        FROM public.workspaces w JOIN public.accounts a ON a.id = ${tx.accountId}::uuid
+        WHERE w.id = ${workspaceId}::uuid`);
+      const [founderRow] = founder;
+      if (founder.length !== 1 || founderRow === undefined) {
+        throw new Error("the account and the workspace of a role change could not both be read");
+      }
+      return { actor: roleOfAccount(tx.accountId), target: roleOfAccount(targetAccountId), actorUnverifiedFounder: founderRow.unverified_founder };
     },
 
     async setRole(targetAccountId, role) {

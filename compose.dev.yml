@@ -66,5 +66,30 @@ services:
       timeout: 3s
       retries: 15
 
+  # PgBouncer in transaction mode with a server pool of one connection, in front
+  # of the postgres service above, for the pooled run of the tenancy tests
+  # (doc 08 section 3.2). It starts only under its profile, so pnpm dev:services
+  # is unchanged:
+  #   pnpm test:integration:pooled
+  # PgBouncer 1.26.0, pinned by tag and digest like the performance rig's.
+  pgbouncer:
+    profiles: ["pooler"]
+    image: edoburu/pgbouncer:v1.26.0-p0@sha256:b17551c776ef7e5769ef80b956d20f85e2fd25dd8912d31d58f782aad495b711
+    entrypoint: ["/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
+    command: []
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./packages/db/test/pooler/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./packages/db/test/pooler/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "127.0.0.1:64329:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
 volumes:
   postgres-data:

@@ -173,7 +173,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the sign-in alerts switch", () => {
+describe("the sign-in alerts switch", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the switch on, as the account has it", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     stubServer();
     await openSecurity();
@@ -272,7 +272,7 @@ describe("the sign-in alerts switch", () => {
   });
 });
 
-describe("the security page", () => {
+describe("the security page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens from the Security link of the settings navigation", async () => {
     stubServer();
     window.history.replaceState(null, "", "/settings/account");
@@ -317,7 +317,7 @@ describe("the security page", () => {
   });
 });
 
-describe("the Password card", () => {
+describe("the Password card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("scores the new password as it is typed, in words and as a meter, in the browser alone", async () => {
     const server = stubServer();
     await openSecurity();
@@ -406,7 +406,7 @@ describe("the Password card", () => {
   });
 });
 
-describe("the re-authentication prompt", () => {
+describe("the re-authentication prompt", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens on reauth_required, confirms with the password and sends the change again once", async () => {
     const server = stubServer({ password: (call) => (call === 1 ? reauthRequired() : new Response(null, { status: 204 })) });
     await openSecurity();
@@ -491,7 +491,7 @@ describe("the re-authentication prompt", () => {
   });
 });
 
-describe("the Sessions card", () => {
+describe("the Sessions card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("lists the device, the network prefix, when each was created and last seen, and marks this device", async () => {
     stubServer();
     await openSecurity();

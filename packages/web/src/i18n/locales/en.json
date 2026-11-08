@@ -2099,6 +2099,7 @@
       "error": {
         "lastOwner": "A workspace needs at least one owner. Make someone else an owner first.",
         "forbidden": "You are not allowed to change this role.",
+        "unverified": "Verify your email address before you make someone an owner or give up your own owner role in a workspace you made.",
         "notAMember": "This person is no longer a member of the workspace."
       },
       "loadFailed": {
@@ -2134,6 +2135,7 @@
           "reauthCancelled": "Confirm it is you to transfer ownership.",
           "lastOwner": "A workspace needs at least one owner. The ownership was not changed.",
           "forbidden": "Only an owner can transfer ownership. The page has been reloaded.",
+          "unverified": "Verify your email address before you transfer ownership of a workspace you made. The ownership was not changed.",
           "notAMember": "This person is no longer a member of the workspace. The list has been reloaded."
         }
       },

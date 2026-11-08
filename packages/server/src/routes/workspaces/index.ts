@@ -113,6 +113,7 @@ const AT_LIMIT = "Your plan allows no more workspaces owned by one account.";
 const NO_WORKSPACE = "No such resource.";
 const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
 const NOT_AN_OWNER = "Only an owner can transfer the ownership of the workspace.";
+const TRANSFER_UNVERIFIED = "Verify your email address before you transfer the ownership of a workspace you made.";
 const NO_SUCH_MEMBER = "There is no such member.";
 const OWN_ACCOUNT = "Ownership cannot be transferred to yourself.";
 const LAST_OWNER = "A workspace always has an owner; make another member an owner first.";
@@ -370,7 +371,7 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail, own
             { store: repository, audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
             { workspaceId: tenant.workspaceId, actor: actorOf(context, profile.displayName), actorAccountId: accountId, targetAccountId, demoteSelf: body.demoteSelf, ipPrefix },
           );
-          if (outcome.kind === "forbidden" || outcome.kind === "not_found" || outcome.kind === "invalid_recipient") {
+          if (outcome.kind === "forbidden" || outcome.kind === "unverified" || outcome.kind === "not_found" || outcome.kind === "invalid_recipient") {
             return outcome;
           }
           const rotated = outcome.kind === "transferred" && outcome.demoted;
@@ -396,6 +397,8 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail, own
       switch (result.kind) {
         case "forbidden":
           throw new ProblemError("forbidden", NOT_AN_OWNER);
+        case "unverified":
+          throw new ProblemError("email_unverified", TRANSFER_UNVERIFIED);
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_MEMBER);
         case "invalid_recipient":

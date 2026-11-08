@@ -39,6 +39,7 @@ export interface BucketLimit {
 
 // @public (undocumented)
 export interface CreateEgressOptions {
+    readonly lookups?: LookupShare;
     readonly nodeEnv: string;
     readonly privateOrigin?: string;
     readonly resolve?: EgressResolver;
@@ -59,6 +60,9 @@ export function createLogOnlyMail(options: {
 }): MailPort;
 
 // @public
+export function createLookupBudget(total?: number): LookupBudget;
+
+// @public
 export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIdentity;
 
 // @public (undocumented)
@@ -69,6 +73,7 @@ export interface CreateOidcIdentityOptions {
     readonly failureTtlMs?: number;
     // (undocumented)
     readonly logger: OidcIdentityLogger;
+    readonly maxConcurrentRequests?: number;
     readonly now?: () => number;
     readonly providers: readonly IdentityProviderConfig[];
 }
@@ -151,6 +156,16 @@ export class HttpEgress implements EgressPort {
 }
 
 // @public
+export interface LookupBudget {
+    share(reserved: number): LookupShare;
+}
+
+// @public
+export interface LookupShare {
+    acquire(): (() => void) | undefined;
+}
+
+// @public
 export class MailError extends Error {
     constructor(reason: MailErrorReason);
     // (undocumented)
@@ -211,6 +226,9 @@ export type OidcTokenAuthMethod = "client_secret_basic" | "client_secret_post";
 
 // @public
 export type OidcUnavailableReason = "discovery_failed" | "issuer_mismatch" | "invalid_discovery" | "keys_failed" | "invalid_keys";
+
+// @public
+export const PROCESS_LOOKUP_BUDGET = 3;
 
 // @public
 export class RateLimitError extends Error {

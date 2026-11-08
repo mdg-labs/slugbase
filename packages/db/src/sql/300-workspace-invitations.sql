@@ -63,7 +63,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.workspace_invitations TO sl
 -- hash reaches a person: a replacement written with no mail ticket is a link returned to an admin (the one place a token is
 -- handed to a request, doc 02 section 3.4), and any other (a resend, a new invite, the mail job's own token) reaches the
 -- mailbox of the invited address or is held by nobody yet. An update that keeps the hash keeps the flag, so a re-invite where
--- no mail can be sent does not turn a link an admin holds into a mailed one. slugbase_app has no privilege on the column, so
+-- no mail can be sent does not turn a link an admin holds into a mailed one. A row that is not instance-issued and holds no
+-- mail ticket while the hash is kept is a link stored before the column existed (migrations are schema-only and the column was
+-- added with DEFAULT false, so no backfill set it): the update records it as a link, since the same update may give the row a
+-- ticket without replacing the token and the flag is then the only record left. A mailed row always holds the ticket of its
+-- mail job and no update clears a ticket without replacing the hash, so this never marks a mailed invitation. slugbase_app has no privilege on the column, so
 -- the trigger is the only writer of it for the invitations slugbase_app writes. The one insert that sets it is the owner invitation
 -- of sys_instance_create_workspace and sys_instance_reissue_owner_invitation (380-instance-workspaces.sql), which a BEFORE INSERT
 -- trigger cannot serve (doc 05 section 5): they write it from their p_link_issued argument.
@@ -75,7 +79,7 @@ BEGIN
   IF NEW.token_hash IS DISTINCT FROM OLD.token_hash THEN
     NEW.link_issued := NEW.mail_ticket IS NULL;
   ELSE
-    NEW.link_issued := OLD.link_issued;
+    NEW.link_issued := OLD.link_issued OR (OLD.mail_ticket IS NULL AND NOT OLD.instance_issued);
   END IF;
   RETURN NEW;
 END

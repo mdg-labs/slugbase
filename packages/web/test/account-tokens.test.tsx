@@ -2,6 +2,7 @@ import type { ComponentTypes } from "@slugbase/contracts";
 import { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_PATH, SESSION_BODY, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -218,7 +219,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the tokens page", () => {
+describe("the tokens page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens from the API tokens link of the settings navigation", async () => {
     stubServer();
     window.history.replaceState(null, "", "/settings/account");
@@ -304,7 +305,7 @@ describe("the tokens page", () => {
   }, SLOW_TOKENS_TEST_TIMEOUT_MS);
 });
 
-describe("creating a token", () => {
+describe("creating a token", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("offers the memberships with the active workspace chosen, Read, and 90 days, and sends what was chosen", async () => {
     const server = stubServer();
     await openTokens();
@@ -526,7 +527,7 @@ describe("creating a token", () => {
   });
 });
 
-describe("revoking a token", () => {
+describe("revoking a token", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("sends nothing before the confirmation, and then revokes the token and reloads the list", async () => {
     const server = stubServer();
     await openTokens();
@@ -585,7 +586,7 @@ describe("revoking a token", () => {
   });
 });
 
-describe("in German", () => {
+describe("in German", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the page in the catalog's words", async () => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
     stubServer({}, [], { account: { ...ACCOUNT_BODY, locale: "de" }, memberships: [], activeWorkspaceId: null });

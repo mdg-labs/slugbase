@@ -5,6 +5,7 @@ import { RouterProvider, createMemoryHistory, useRouter } from "@tanstack/react-
 import { act, screen, waitFor } from "@testing-library/react";
 import { useEffect, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createApiClient } from "../src/api/client.ts";
 import { ConfigProvider } from "../src/config/config-context.tsx";
 import { ExtensionsProvider, type WebExtension } from "../src/extensions/index.ts";
@@ -81,7 +82,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("an API call answered 401", () => {
+describe("an API call answered 401", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("takes the member to /login?next=<current path> and says why in an info toast", async () => {
     stubApi(() => Promise.resolve(problem(401, "unauthenticated", "req-1")));
 
@@ -146,7 +147,7 @@ describe("an API call answered 401", () => {
   });
 });
 
-describe("a visitor who is not signed in", () => {
+describe("a visitor who is not signed in", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is sent to /login?next=<the page they asked for> before the page is shown", async () => {
     stubSessionCheck("unauthenticated", 401);
 
@@ -182,7 +183,7 @@ describe("a visitor who is not signed in", () => {
   });
 });
 
-describe("a 401 from /api/config", () => {
+describe("a 401 from /api/config", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the failure view and does not navigate", async () => {
     vi.stubGlobal("fetch", vi.fn<Transport>(() => Promise.resolve(problem(401, "unauthenticated", "req-1"))));
     window.history.replaceState(null, "", "/protected");
@@ -195,7 +196,7 @@ describe("a 401 from /api/config", () => {
   });
 });
 
-describe("the session expiry handler with a memory history", () => {
+describe("the session expiry handler with a memory history", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   function mount(entry: string, session: "in" | "out" = "in") {
     stubSessionCheck(session === "in" ? "ok" : "unauthenticated", session === "in" ? 200 : 401);
     const history = createMemoryHistory({ initialEntries: [entry] });

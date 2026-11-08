@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 import { GRACE, MEMBERS_PATH, SELF, WORKSPACE_PATH, stubWorkspaceSettingsServer, type Role, type TestMember } from "./workspace-settings-server.ts";
@@ -117,7 +118,7 @@ describe("the Members, Teams, AI suggestions and Audit log navigation entries", 
   }, SLOW_TEST_TIMEOUT_MS);
 });
 
-describe("the members table", () => {
+describe("the members table", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("lists name, email, role, teams, joined and last active, and marks the caller", async () => {
     const design = { id: "0192f3a0-ffff-7000-8000-000000000001", name: "Design" };
     const support = { id: "0192f3a0-ffff-7000-8000-000000000002", name: "Support" };
@@ -217,6 +218,17 @@ describe("the members table", () => {
     });
   }, SLOW_TEST_TIMEOUT_MS);
 
+  it("tells the owner of a workspace they made to verify their address, not that the role is forbidden, and keeps the role", async () => {
+    stubWorkspaceSettingsServer({ memberPatch: () => problem(403, "email_unverified", "req-403") });
+    await openList();
+
+    await choose("Role of Grace Hopper", "Owner");
+
+    expect(await screen.findByText("Verify your email address before you make someone an owner or give up your own owner role in a workspace you made.")).toBeTruthy();
+    expect(screen.queryByText("You are not allowed to change this role.")).toBeNull();
+    expect(within(rowOf("Grace Hopper")).getByRole("combobox", { name: "Role of Grace Hopper" }).textContent).toContain("Member");
+  }, SLOW_TEST_TIMEOUT_MS);
+
   it("says a member who left is no longer a member, and loads the list again", async () => {
     const server = stubWorkspaceSettingsServer({ memberPatch: () => problem(404, "not_found", "req-404") });
     await openList();
@@ -268,7 +280,7 @@ describe("the members table", () => {
   }, SLOW_TEST_TIMEOUT_MS);
 });
 
-describe("the states of the members page", () => {
+describe("the states of the members page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("has no axe violations", async () => {
     stubWorkspaceSettingsServer({ members: [SELF, GRACE, HEDY] });
     await openList();

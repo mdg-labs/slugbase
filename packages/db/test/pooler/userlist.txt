@@ -1,0 +1,2 @@
+"slugbase_app" "slugbase_app_dev_only"
+"slugbase_pooler_admin" "slugbase_pooler_admin_dev_only"

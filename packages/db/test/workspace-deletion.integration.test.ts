@@ -88,6 +88,7 @@ async function workspaceOf(...roles: Role[]): Promise<Workspace> {
       VALUES (${bookmarkId}, ${workspaceId}, ${members[0]?.accountId ?? null}, 'https://example.com/', 'https://example.com', 'example.com', 'Deletion test bookmark', 'deletion-test', true)`;
     if (members[0] !== undefined) {
       await tx`INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id) VALUES (${workspaceId}, ${members[0].accountId}, 'deletion-test', ${bookmarkId})`;
+      await tx`INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at) VALUES (${workspaceId}, ${members[0].accountId}, 'example.com', now(), now() + interval '7 days')`;
       await tx`INSERT INTO ai_suggestions (workspace_id, account_id, url_canonical, locale, result, provider, model, expires_at) VALUES (${workspaceId}, ${members[0].accountId}, 'https://example.com', 'en', '{}'::jsonb, 'Example AI', 'model-1', now() + interval '30 days')`;
       await tx`INSERT INTO ai_suggestion_usage (id, workspace_id, account_id, bookmark_id, fields_used) VALUES (${freshId()}, ${workspaceId}, ${members[0].accountId}, ${bookmarkId}, ARRAY['title', 'tags'])`;
     }
@@ -105,7 +106,6 @@ async function workspaceOf(...roles: Role[]): Promise<Workspace> {
     await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_team_id) VALUES (${freshId()}, ${workspaceId}, ${bookmarkId}, ${teamId})`;
     await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_team_id) VALUES (${freshId()}, ${workspaceId}, ${folderId}, ${teamId})`;
     await tx`INSERT INTO url_metadata (workspace_id, url_canonical, status, fetched_at, expires_at) VALUES (${workspaceId}, 'https://example.com', 'failed', now(), now() + interval '7 days')`;
-    await tx`INSERT INTO workspace_favicons (workspace_id, host, fetched_at, expires_at) VALUES (${workspaceId}, 'example.com', now(), now() + interval '7 days')`;
   });
   return { workspaceId, members, tokenHashes };
 }

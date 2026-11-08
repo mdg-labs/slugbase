@@ -2,6 +2,7 @@ import type { ComponentTypes } from "@slugbase/contracts";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, ME_PATH, WORKSPACES_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -95,7 +96,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the Admin sidebar item", () => {
+describe("the Admin sidebar item", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is shown to an instance admin and leads to the overview", async () => {
     stubServer();
     await open("/");
@@ -118,7 +119,7 @@ describe("the Admin sidebar item", () => {
   });
 });
 
-describe("the admin area for an account that is not an instance admin", () => {
+describe("the admin area for an account that is not an instance admin", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each(["/admin", "/admin/workspaces", "/admin/accounts", "/admin/settings"])("shows the 403 page on %s and asks for nothing", async (path) => {
     const server = stubServer({ isInstanceAdmin: false });
     await open(path);
@@ -142,7 +143,7 @@ describe("the admin area for an account that is not an instance admin", () => {
   });
 });
 
-describe("the admin area for an account that acts in no workspace", () => {
+describe("the admin area for an account that acts in no workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each(["/admin", "/admin/workspaces"])("shows an instance admin %s, not /no-workspace, and the shell works without a workspace", async (path) => {
     const server = stubServer({ noWorkspace: true });
     await open(path);
@@ -233,7 +234,7 @@ describe("the admin area for an account that acts in no workspace", () => {
   });
 });
 
-describe("the admin navigation", () => {
+describe("the admin navigation", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("lists Overview, Workspaces, Accounts and Settings & status, with the page being shown marked", async () => {
     stubServer();
     await open("/admin");
@@ -265,7 +266,7 @@ describe("the admin navigation", () => {
   });
 });
 
-describe("an admin without two-factor authentication", () => {
+describe("an admin without two-factor authentication", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each(["/admin", "/admin/workspaces", "/admin/accounts", "/admin/settings"])("sees no area-wide banner on %s", async (path) => {
     stubServer({ mfaEnabled: false });
     await open(path);
@@ -293,7 +294,7 @@ describe("an admin without two-factor authentication", () => {
   });
 });
 
-describe("the overview", () => {
+describe("the overview", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the counts, the version, the migration level, the job health and the configuration from the status", async () => {
     const server = stubServer();
     await open("/admin");

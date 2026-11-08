@@ -114,6 +114,8 @@ function MembersTable({ viewerRole, viewerId, workspaceId }: { viewerRole: Works
         return t("settings.members.error.lastOwner");
       case "forbidden":
         return t("settings.members.error.forbidden");
+      case "unverified":
+        return t("settings.members.error.unverified");
       case "notAMember":
         return t("settings.members.error.notAMember");
     }

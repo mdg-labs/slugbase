@@ -42,5 +42,8 @@ export const sessions = pgTable(
     check("sessions_mfa_failures_check", sql`${table.mfaFailures} >= 0`),
     index("sessions_account_id_idx").on(table.accountId),
     index("sessions_expires_at_idx").on(table.expiresAt),
+    // The other arm of the retention purge's predicate (sys_retention_purge deletes a session past expires_at or absolute_expires_at), so the hourly
+    // purge reads both arms through an index and not the whole table (doc 05 section 2.1).
+    index("sessions_absolute_expires_at_idx").on(table.absoluteExpiresAt),
   ],
 );

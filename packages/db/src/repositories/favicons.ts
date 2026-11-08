@@ -7,8 +7,9 @@ import { bookmarkReadableBy } from "./bookmark-access.ts";
 
 // The favicon cache (doc 05 sections 2.7 and 3.3, doc 02 section 5.4, doc 10 T1, T6 and T14). The stored images are deployment-wide, one row for each host, and the
 // application role reaches that table only through the system operations `sys_favicon_get` and `sys_favicon_put` (src/sql/630-favicons.sql), which this
-// repository calls. What a workspace may be answered is its own: `workspace_favicons` holds a row for each host a fetch was stored for in the workspace, under a
-// tenant policy, and `current` answers the shared row only while the workspace holds an unexpired one, so what another workspace has cached tells a caller nothing.
+// repository calls. What a workspace may be answered is its own: `workspace_favicons` holds a row for each host a fetch was stored for the account in the workspace,
+// under a tenant policy that names the account too, and `current` answers the shared row only while the account holds an unexpired one, so what another workspace
+// or another member of the workspace has cached tells a caller nothing.
 // A second question is tenant-scoped too: whether a fetch may be started for a host, only for a host of a bookmark the account of the transaction can read in the
 // workspace of the transaction (`hostReadable`), so the favicon operation cannot be used to make the server fetch a host the caller has no bookmark on.
 
@@ -31,12 +32,13 @@ export interface FaviconRepository {
    */
   hostReadable(host: string): Promise<boolean>;
   /**
-   * The shared row of the host when it has not expired by the database clock and a fetch of the host was stored for the workspace of the transaction and has not
-   * expired either; undefined otherwise, whatever another workspace has stored. Needs a transaction opened with a workspace.
+   * The shared row of the host when it has not expired by the database clock and a fetch of the host was stored for the account of the transaction in the
+   * workspace of the transaction and has not expired either; undefined otherwise, whatever another workspace or another member has stored. Needs a
+   * transaction opened with a workspace.
    */
   current(host: string, size: FaviconSize): Promise<FaviconRecord | undefined>;
   /**
-   * Stores the result for the host, replacing an earlier row, and records the fetch for the workspace of the transaction in the same transaction, with
+   * Stores the result for the host, replacing an earlier row, and records the fetch for the account and workspace of the transaction in the same transaction, with
    * `fetched_at` and `expires_at` from the database clock. Needs a transaction opened with a workspace.
    */
   store(host: string, result: FaviconResult): Promise<void>;
@@ -73,7 +75,14 @@ export function faviconRepository(tx: TenantTx): FaviconRepository {
       const [requested] = await tenantHandle(tx)
         .select({ host: workspaceFavicons.host })
         .from(workspaceFavicons)
-        .where(and(eq(workspaceFavicons.workspaceId, workspaceId), eq(workspaceFavicons.host, host), gt(workspaceFavicons.expiresAt, sql`clock_timestamp()`)))
+        .where(
+          and(
+            eq(workspaceFavicons.workspaceId, workspaceId),
+            eq(workspaceFavicons.accountId, tx.accountId),
+            eq(workspaceFavicons.host, host),
+            gt(workspaceFavicons.expiresAt, sql`clock_timestamp()`),
+          ),
+        )
         .limit(1);
       if (requested === undefined) {
         return undefined;
@@ -99,8 +108,8 @@ export function faviconRepository(tx: TenantTx): FaviconRepository {
       const written = { fetchedAt: sql`clock_timestamp()`, expiresAt: sql`clock_timestamp() + ${FAVICON_LIFETIME_DAYS}::integer * interval '1 day'` };
       await tenantHandle(tx)
         .insert(workspaceFavicons)
-        .values({ workspaceId, host, ...written })
-        .onConflictDoUpdate({ target: [workspaceFavicons.workspaceId, workspaceFavicons.host], set: written });
+        .values({ workspaceId, accountId: tx.accountId, host, ...written })
+        .onConflictDoUpdate({ target: [workspaceFavicons.workspaceId, workspaceFavicons.accountId, workspaceFavicons.host], set: written });
     },
 
     async enqueue(job) {

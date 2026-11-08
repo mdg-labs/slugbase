@@ -91,9 +91,15 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$REGISTRY_TOKEN" | docker login "${IMAGE%%/*}" --username "$REGISTRY_USER" --password-stdin
-      # SBOM and provenance attestations need BuildKit's container driver.
+      # SBOM and provenance attestations need BuildKit's container driver. The
+      # builder and the SBOM generator are named by digest: the builder writes the
+      # layers, the SBOM and the provenance, and receives the registry credential.
+      # Renovate keeps the tags and digests current.
       - name: Create the builder
-        run: docker buildx create --name release --driver docker-container --use
+        run: |
+          docker buildx create --name release --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe \
+            --use
       # The image is scanned before anything is pushed. The same builder builds it
       # again below from its cache, so the SBOM scanned is the one of the image
       # pushed. A High or Critical finding with a fix, or a scanner that fails,
@@ -118,7 +124,7 @@ jobs:
             --file apps/slugbase/Dockerfile \
             --build-arg "VERSION=$VERSION" \
             --build-arg "BUILD_COMMIT=$BUILD_COMMIT" \
-            --sbom=true \
+            --sbom=generator=docker/buildkit-syft-scanner:1.12.1@sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315 \
             --output "type=local,dest=$RUNNER_TEMP/image" \
             .
           bash scripts/scan-image.sh "$RUNNER_TEMP/image/sbom.spdx.json"
@@ -140,7 +146,7 @@ jobs:
             --file apps/slugbase/Dockerfile \
             --build-arg "VERSION=$VERSION" \
             --build-arg "BUILD_COMMIT=$BUILD_COMMIT" \
-            --sbom=true \
+            --sbom=generator=docker/buildkit-syft-scanner:1.12.1@sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315 \
             --provenance=mode=max \
             --metadata-file "$RUNNER_TEMP/build-metadata.json" \
             --push \

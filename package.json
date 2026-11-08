@@ -25,6 +25,8 @@
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
     "test:integration": "sh -c 'turbo run test:integration \"$@\" && pnpm --filter @slugbase/db run test:integration:quiet' sh",
+    "test:integration:pooled": "docker compose -f compose.dev.yml --profile pooler up -d --wait postgres pgbouncer && turbo run build --filter=@slugbase/db^... --filter=@slugbase/testing^... --filter=@slugbase/server^... && pnpm run test:integration:pooled:files",
+    "test:integration:pooled:files": "SLUGBASE_TEST_POOLER_URL=127.0.0.1:64329 sh -c 'pnpm --filter @slugbase/db exec vitest run --project integration test/pooler.integration.test.ts && pnpm --filter @slugbase/testing exec vitest run --project integration test/tenancy-matrix.integration.test.ts && pnpm --filter @slugbase/server exec vitest run --project integration test/contract/contract.integration.test.ts'",
     "contracts:check": "turbo run contracts:check --continue",
     "db:check": "turbo run db:check",
     "i18n:check": "turbo run i18n:check",

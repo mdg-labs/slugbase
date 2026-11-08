@@ -18,7 +18,21 @@
     "npm",
     "github-actions",
     "dockerfile",
-    "docker-compose"
+    "docker-compose",
+    "custom.regex"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The BuildKit builder image and the SBOM generator image that the workflows name on a docker buildx command line, by tag and digest",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "(?:image|generator)=(?<depName>[^\\s:@=,\"']+/[^\\s:@=,\"']+):(?<currentValue>[^\\s@,\"']+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    }
   ],
   "lockFileMaintenance": {
     "enabled": true,

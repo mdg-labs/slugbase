@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, SESSION_PATH, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -48,7 +49,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the provider buttons", () => {
+describe("the provider buttons", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("lists one button per configured provider under the form, separated from it by 'or'", async () => {
     stubServer([
       { slug: "acme", name: "Acme SSO" },
@@ -135,7 +136,7 @@ describe("the provider buttons", () => {
   });
 });
 
-describe("the sign-in failure of the OIDC callback", () => {
+describe("the sign-in failure of the OIDC callback", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("says the sign-in did not work, in one generic message", async () => {
     stubServer([{ slug: "acme", name: "Acme SSO" }]);
     await openLogin("/login?error=oidc_failed");

@@ -1592,3 +1592,86 @@ describe("the member lock and the cache write across workspaces", () => {
     });
   });
 });
+
+// The page after a cursor of a sort by title is read by `sys_bookmark_title_page`, a system operation that runs without the policy of `bookmarks`, so the workspace and the owner are the function's own terms (doc 05 section 3.3, doc 10
+// T1 and T2). The account below belongs to both workspaces and has bookmarks in both, and another member of A has bookmarks in A, all titled after the cursor. From a transaction acting in A, through the repository and by
+// calling the function, the page holds the account's own bookmarks of A and nothing of B or of the other member; in B the same call holds B's, so the rows of B are real and the refusal in A is the workspace's. The list of the scope
+// `all` (the default of the route) reads its own leg from the function and its shared leg from the grants: with nothing shared with the account, its page holds the same bookmarks, and none of the other member's.
+describe("the page by title across workspaces", () => {
+  const MEMBER_OF_BOTH = "0192f3a0-3333-7000-8000-00000000a0b1";
+  const OTHER_OF_A = "0192f3a0-3333-7000-8000-00000000a0b2";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0c1";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0c1";
+  const OWN_IN_A = ["0192f3a0-2222-7000-8000-00000000a0d1", "0192f3a0-2222-7000-8000-00000000a0d2"] as const;
+  const OWN_IN_B = ["0192f3a0-2222-7000-8000-00000000b0d1", "0192f3a0-2222-7000-8000-00000000b0d2"] as const;
+  const OTHER_IN_A = "0192f3a0-2222-7000-8000-00000000a0d3";
+  const CURSOR = { key: "title-page-0", id: "0192f3a0-2222-7000-8000-000000000000" };
+
+  it("holds the account's own bookmarks of the workspace of the transaction, through the repository (scope mine and scope all) and through the function, and nothing of the other workspace or of another member", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    for (const [accountId, email] of [
+      [MEMBER_OF_BOTH, "title-page-both@example.test"],
+      [OTHER_OF_A, "title-page-other@example.test"],
+    ] as const) {
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+        await tx`INSERT INTO accounts (id, email, display_name) VALUES (${accountId}, ${email}, 'Matrix member') ON CONFLICT DO NOTHING`;
+      });
+    }
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_BOTH}, 'owner'), (${PROBE_WORKSPACE_A}, ${OTHER_OF_A}, 'member'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_BOTH}, 'owner') ON CONFLICT DO NOTHING`;
+      const rows = [
+        ...OWN_IN_A.map((id, n) => ({ id, workspace: PROBE_WORKSPACE_A, owner: MEMBER_OF_BOTH, title: `title-page-${String(n + 1)}` })),
+        ...OWN_IN_B.map((id, n) => ({ id, workspace: PROBE_WORKSPACE_B, owner: MEMBER_OF_BOTH, title: `title-page-${String(n + 1)}` })),
+        { id: OTHER_IN_A, workspace: PROBE_WORKSPACE_A, owner: OTHER_OF_A, title: "title-page-1" },
+      ];
+      for (const row of rows) {
+        await tx`
+          INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+          VALUES (${row.id}, ${row.workspace}, ${row.owner}, 'https://example.com/title-page', 'https://example.com/title-page', 'example.com', ${row.title}) ON CONFLICT DO NOTHING`;
+      }
+    });
+
+    const page = async (workspaceId: string, sort: "title_asc" | "title_desc") => ({
+      listedAll: (
+        await database().tenant.withTenant({ accountId: MEMBER_OF_BOTH, workspaceId, requestId: "matrix-title-page" }, (tx) =>
+          bookmarkRepository(tx).list({ filter: { ownerId: MEMBER_OF_BOTH, scope: "all" }, sort, after: CURSOR, limit: 10 }),
+        )
+      ).map((row) => row.bookmark.id),
+      listed: (
+        await database().tenant.withTenant({ accountId: MEMBER_OF_BOTH, workspaceId, requestId: "matrix-title-page" }, (tx) =>
+          bookmarkRepository(tx).list({ filter: { ownerId: MEMBER_OF_BOTH }, sort, after: CURSOR, limit: 10 }),
+        )
+      ).map((row) => row.bookmark.id),
+      called: (
+        await database().app.begin(async (tx) => {
+          await tx`SELECT set_config('app.account_id', ${MEMBER_OF_BOTH}, true), set_config('app.workspace_id', ${workspaceId}, true)`;
+          return tx<{ id: string }[]>`SELECT id FROM sys_bookmark_title_page(${sort === "title_desc"}, ${CURSOR.key}, ${CURSOR.id}::uuid, 10) ORDER BY lower(title), id`;
+        })
+      ).map((row) => row.id),
+    });
+
+    const inA = await page(PROBE_WORKSPACE_A, "title_asc");
+    const inB = await page(PROBE_WORKSPACE_B, "title_asc");
+
+    // The rows are real in B (an empty answer in A is the workspace's), and the other member's bookmark of A, titled alike, is in neither page.
+    expect(inB.listed).toEqual([...OWN_IN_B]);
+    expect(inB.called).toEqual([...OWN_IN_B]);
+    expect(inA.listed).toEqual([...OWN_IN_A]);
+    expect(inA.called).toEqual([...OWN_IN_A]);
+    expect([...inA.listed, ...inA.called]).not.toContain(OTHER_IN_A);
+    expect([...inA.listed, ...inA.called].filter((id) => (OWN_IN_B as readonly string[]).includes(id))).toEqual([]);
+    expect((await page(PROBE_WORKSPACE_A, "title_desc")).listed).toEqual([]);
+    // The scope `all` holds the same: the other member's bookmark of A is not shared with the account, so it is in neither workspace's page.
+    expect(inA.listedAll).toEqual([...OWN_IN_A]);
+    expect(inB.listedAll).toEqual([...OWN_IN_B]);
+    expect(inA.listedAll).not.toContain(OTHER_IN_A);
+    expect((await page(PROBE_WORKSPACE_A, "title_desc")).listedAll).toEqual([]);
+  });
+});
