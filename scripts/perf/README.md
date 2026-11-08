@@ -129,3 +129,17 @@ A run that exceeds a budget whose issue is open comments on the issue with exact
 an issue that names several scenarios (the one the job opened before it knew the scenarios, `go, search`) is not extended. The body lists every exceeded shape with its p95, its limit and its saturation flag, the load of the scenarios of the issue, the commit, the dataset and the link to the run.
 A result that cannot be read, a budget of a scenario with no issue, a list of issues that is not one and a `gh` call that failed all fail the step, and every action is tried before it does, so one issue that cannot be filed does not hide the others.
 `tooling/test/perf-report.test.ts` holds this.
+
+## Migration timing
+
+`migrations.mjs` is the measurement of doc 08 section 5.4: the large instance is built in a database of the test harness at the migration level of the latest release tag (raised, one migration at a time, to the first level at which the large instance's tables, columns and system operations exist, which today is the level that adds the last of the instance's tables, as `v0.1.0` has no `bookmarks` table), and every later migration of the CE chain is applied with `migrate`, one `migrate()` call each (stopped after it by its `until` option), under its advisory lock and with its `lock_timeout` and `statement_timeout`. It never uses `drizzle-kit push`.
+
+```sh
+pnpm dev:services       # the development Postgres of compose.dev.yml
+pnpm perf:migrations    # builds the seed, then runs scripts/perf/migrations.mjs
+node scripts/perf/migrations.mjs --bookmarks 5000 --workspaces 20 --out /tmp/migrations   # a small instance, for trying the script
+```
+
+It needs `psql` and a complete clone with its tags: the latest release and the migrations it held are read from git, as `pnpm db:check` reads them, and a shallow clone or a clone without tags is an error. `nightly.yml` runs it as the job `migration timing` on the schedule, by dispatch and on a pull request to `main`, with `fetch-depth: 0`.
+
+`result.json` (in `--out`, `perf-results/migrations` by default) names the commit, the database, the baseline (`release`, `releaseLevel`, `level`, `raised` and what the release's level lacked) and, per migration file, `wallMs`, `nonTransactional`, and the longest `ACCESS EXCLUSIVE` lock (`lockHeldMs`) with its relation (`lockRelation`); `violations` lists the files over the limit (`lockLimitMs`, 1 000 ms). A lock is sampled every 50 ms, on the server's clock, and is the longest run of polls that saw it. Backfills are worker jobs and not migrations, and a non-transactional `CREATE INDEX CONCURRENTLY` step takes no `ACCESS EXCLUSIVE` lock on the table it indexes: it is reported with its duration only. The exit status is 0 when no migration holds the lock for more than 1 s, 10 when one does (the failure names the file and the relation) and 1 when the run itself failed.

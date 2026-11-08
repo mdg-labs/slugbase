@@ -1,13 +1,18 @@
 name: Nightly
 
-# The scheduled checks of doc 08 section 5.3 and 6.2 that no developer's gate waits for. Today that is the performance budgets: the
-# CE image, built here from the commit under test and never pulled, and k6 (scripts/perf/run.mjs) against a database that the test
+# The scheduled checks of doc 08 section 5.3, 5.4 and 6.2 that no developer's gate waits for: the performance budgets and the migration
+# timing. The performance budgets: the CE image, built here from the commit under test and never pulled, and k6 (scripts/perf/run.mjs) against a database that the test
 # harness made and filled with the large instance (50 000 bookmarks in one workspace, 2 000 further workspaces), with PostgreSQL on
 # the same runner. It runs every week and on a pull request to `main`, which is the promotion. A budget that is exceeded, or a /go
 # that writes more than the usage buffer allows, is filed under an issue of its scenario (go, go suggest, list, dashboard, search, import, write load; scripts/perf/report.mjs), a new one
 # or a comment on the one that is open, and does not fail the job; a run that could not measure fails it, and so does a filing that did not succeed, so that a
-# regression is never dropped silently. The job holds the workflow token with `issues: write` and nothing else, references no
+# regression is never dropped silently. The performance job holds the workflow token with `issues: write` and nothing else, references no
 # secret, and the workflow never runs on pull_request_target (doc 10 T16).
+#
+# The migration timing (scripts/perf/migrations.mjs, doc 08 section 5.4) builds the large instance at the migration level of the latest
+# release tag, raised to the first level at which it can be written, applies every later migration with `migrate` and fails the job when one
+# holds an ACCESS EXCLUSIVE lock for more than 1 s. It reads the release from git, so it checks out the full history and the tags. It
+# needs no image and holds `contents: read` only.
 
 on:
   schedule:
@@ -175,5 +180,73 @@ jobs:
         with:
           name: perf-results
           path: perf-results/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  migrations:
+    name: migration timing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+        env:
+          POSTGRES_USER: slugbase_ci
+          POSTGRES_PASSWORD: slugbase_ci
+          POSTGRES_DB: postgres
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase_ci -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      # The release tag and the migrations it held are read from git, so the clone is complete.
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: nightly
+      - name: Check the tools the run needs
+        run: |
+          set -euo pipefail
+          command -v psql
+      - name: Build the seed
+        run: pnpm turbo run build --filter=@slugbase/testing
+      # Exit status 10 is a migration that held ACCESS EXCLUSIVE for more than 1 s; any other status is a run that could not measure. Both fail the job.
+      - name: Time the migrations
+        env:
+          SLUGBASE_TEST_PG_URL: postgres://slugbase_ci:slugbase_ci@127.0.0.1:5432/postgres
+          MEASURED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/perf/migrations.mjs --commit "$MEASURED_COMMIT" --out perf-results/migrations
+      - name: Report the result
+        if: ${{ always() && hashFiles('perf-results/migrations/result.json') != '' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Migration timing"
+            echo
+            jq -r '"Commit: `\(.commit // "unknown")`. Baseline: `\(.baseline.level)`, \(if .baseline.raised then "raised from the latest release \(.baseline.release // "(none)") (`\(.baseline.releaseLevel // "none")`), which lacks " + (.baseline.missingAtRelease | join(", ")) else "the latest release \(.baseline.release // "(none)")" end). Database: \(.database.bookmarks) bookmarks, \(.database.workspaces) workspaces, the largest with \(.database.largestWorkspace)."' perf-results/migrations/result.json
+            echo
+            echo "| Migration | Wall time | Longest ACCESS EXCLUSIVE lock | Relation | |"
+            echo "|---|---|---|---|---|"
+            jq -r --argjson limit "$(jq '.lockLimitMs' perf-results/migrations/result.json)" '.migrations[] | "| \(.file) | \(.wallMs) ms | \(if .nonTransactional then "non-transactional" elif .lockHeldMs == null then "none seen" else "\(.lockHeldMs) ms" end) | \(.lockRelation // "") | \(if (.nonTransactional | not) and .lockHeldMs != null and .lockHeldMs > $limit then "exceeds \($limit) ms" else "" end) |"' perf-results/migrations/result.json
+            echo
+            jq -r '.notes[] | "- " + .' perf-results/migrations/result.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: migration-timing
+          path: perf-results/migrations/
           if-no-files-found: ignore
           retention-days: 30

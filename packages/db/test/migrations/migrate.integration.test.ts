@@ -217,11 +217,12 @@ interface Journal {
   entries: { tag: string }[];
 }
 
-function journalLength(folder: string): number {
-  return (JSON.parse(readFileSync(join(folder, "meta", "_journal.json"), "utf8")) as Journal).entries.length;
+function journalTags(folder: string): string[] {
+  return (JSON.parse(readFileSync(join(folder, "meta", "_journal.json"), "utf8")) as Journal).entries.map((entry) => entry.tag);
 }
 
-const CE_MIGRATIONS = journalLength(CE_CHAIN.folder);
+const CE_TAGS = journalTags(CE_CHAIN.folder);
+const CE_MIGRATIONS = CE_TAGS.length;
 
 // The CE chain builds indexes concurrently too, so a test that holds a snapshot to make the build of a fixture wait applies the CE chain first:
 // the build it waits for is then the fixture's, the first one after the snapshot is taken.
@@ -505,6 +506,50 @@ describe("the session of a run", () => {
     expect(error.message).toContain("connection was replaced");
     expect(["57P01", "CONNECTION_CLOSED"]).toContain(error.code);
   }, 60_000);
+});
+
+describe("until", () => {
+  it("applies the chains up to the named migration only, and a later run applies the rest", async () => {
+    const { name, owner } = await createDatabase();
+    const chains = [fixture("restored")];
+    const stop = CE_TAGS[4] ?? "";
+
+    const first = await migrate({ url: migratorUrl(name), chains, until: { chain: "core", tag: stop } });
+
+    expect(first.applied).toEqual(CE_TAGS.slice(0, 5).map((tag) => ({ chain: "core", tag })));
+    expect(await recordedRows(owner, "migrations_core")).toBe(5);
+    expect(await tableExists(owner, "drizzle.migrations_restored")).toBe(false);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+
+    const next = CE_TAGS[5] ?? "";
+    const second = await migrate({ url: migratorUrl(name), chains, until: { chain: "core", tag: next } });
+    expect(second.applied).toEqual([{ chain: "core", tag: next }]);
+
+    const rest = await migrate({ url: migratorUrl(name), chains });
+    expect(rest.applied).toHaveLength(CE_MIGRATIONS - 6 + 3);
+    expect(await recordedRows(owner, "migrations_core")).toBe(CE_MIGRATIONS);
+    expect(await recordedRows(owner, "migrations_restored")).toBe(3);
+  }, 60_000);
+
+  it("applies a later chain one migration at a time, after the whole CE chain", async () => {
+    const { name, owner } = await createDatabase();
+    const chains = [fixture("restored")];
+
+    const first = await migrate({ url: migratorUrl(name), chains, until: { chain: "restored", tag: "20300101000001_create_restored_target" } });
+
+    expect(first.applied.filter(({ chain }) => chain === "restored").map(({ tag }) => tag)).toEqual(["20300101000001_create_restored_target"]);
+    expect(await recordedRows(owner, "migrations_core")).toBe(CE_MIGRATIONS);
+    expect(await recordedRows(owner, "migrations_restored")).toBe(1);
+    expect(await tableExists(owner, "restored_target")).toBe(true);
+  }, 60_000);
+
+  it("refuses a chain or a migration the run does not have, before it connects", async () => {
+    const unreachable = "postgres://slugbase_migrator:x@127.0.0.1:1/none";
+    const noChain = await rejection(migrate({ url: unreachable, until: { chain: "absent", tag: "x" } }));
+    expect(noChain.message).toContain('there is no chain "absent"');
+    const noTag = await rejection(migrate({ url: unreachable, until: { chain: "core", tag: "20300101000009_absent" } }));
+    expect(noTag.message).toContain("has no migration 20300101000009_absent");
+  });
 });
 
 describe("a failing migration", () => {

@@ -53,11 +53,23 @@ export const CE_CHAIN: MigrationChain = {
   bookkeepingTable: "migrations_core",
 };
 
+/** A migration of one chain, named by the chain's name and the migration's tag. */
+export interface MigrationStop {
+  chain: string;
+  tag: string;
+}
+
 export interface MigrateOptions {
   /** Connection URL of the migrator role (`DATABASE_MIGRATE_URL`). */
   url: string;
   /** Chains applied after the CE chain, in order, each with its own bookkeeping table. */
   chains?: readonly MigrationChain[];
+  /**
+   * Applies the chains only up to and including this migration: the migrations after it in its chain and every chain
+   * after that chain are left alone, even when the database has recorded some of them. It must name a chain of this run
+   * and a migration of that chain. The measurement of one migration at a time (doc 08 section 5.4) is its use.
+   */
+  until?: MigrationStop;
 }
 
 export interface MigrateResult {
@@ -271,6 +283,19 @@ function loadChains(extra: readonly MigrationChain[] | undefined, load: (chain: 
     tables.add(chain.bookkeepingTable);
   }
   return chains.map((chain) => load(chain));
+}
+
+function stopAfter(loaded: readonly LoadedChain[], until: MigrationStop): LoadedChain[] {
+  const index = loaded.findIndex(({ chain }) => chain.name === until.chain);
+  const target = loaded[index];
+  if (target === undefined) {
+    throw new MigrationError(`until: there is no chain "${until.chain}" in this run`);
+  }
+  const position = target.migrations.findIndex((migration) => migration.tag === until.tag);
+  if (position === -1) {
+    throw new MigrationError(`until: chain "${until.chain}" has no migration ${until.tag}`);
+  }
+  return [...loaded.slice(0, index), { chain: target.chain, migrations: target.migrations.slice(0, position + 1) }];
 }
 
 function connect(connection: ConnectionSecrets, name: string): postgres.Sql {
@@ -665,7 +690,7 @@ async function applyChain(sql: postgres.Sql, pid: number, loaded: LoadedChain): 
  * and the `tcp_keepalives_*` settings set for the session (a non-transactional step runs with `lock_timeout` off)
  * and DDL done as `slugbase_owner`. A second concurrent call polls
  * `pg_try_advisory_lock`, so it holds no snapshot a concurrent index build
- * would wait on, and finds nothing left to do. The lock lives in the session: it is released when the
+ * would wait on, and finds nothing left to do. With `until` the run stops after that migration. The lock lives in the session: it is released when the
  * run ends, on success or failure, because the connection is closed.
  */
 export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
@@ -673,6 +698,9 @@ export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
   let loaded: LoadedChain[];
   try {
     loaded = loadChains(options.chains);
+    if (options.until !== undefined) {
+      loaded = stopAfter(loaded, options.until);
+    }
   } catch (error) {
     throw sanitize(error, connection);
   }

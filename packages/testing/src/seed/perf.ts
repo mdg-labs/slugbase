@@ -15,8 +15,8 @@ import { runSeedScript } from "./run.ts";
 const HARNESS_DATABASE = /^test_[0-9a-f]{16}$/;
 const LOOPBACK_HOSTS: readonly string[] = ["127.0.0.1", "localhost", "[::1]", "::1"];
 // The development passwords the harness gives the login roles when it provisions them.
-const APP_PASSWORD = "slugbase_app_dev_only";
-const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";
+export const APP_PASSWORD = "slugbase_app_dev_only";
+export const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";
 const SEED_TIMEOUT_MS = 600_000;
 
 export class PerfSeedError extends Error {

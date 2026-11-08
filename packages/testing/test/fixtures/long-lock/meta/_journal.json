@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1893456000000,
+      "tag": "20300101000001_add_note_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1893456001000,
+      "tag": "20300101000002_rewrite_rows",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1893456002000,
+      "tag": "20300101000003_index_rows",
+      "breakpoints": true
+    }
+  ]
+}

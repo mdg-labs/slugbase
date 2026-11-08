@@ -1127,6 +1127,7 @@ export function migrate(options: MigrateOptions): Promise<MigrateResult>;
 // @public (undocumented)
 export interface MigrateOptions {
     chains?: readonly MigrationChain[];
+    until?: MigrationStop;
     url: string;
 }
 
@@ -1166,6 +1167,14 @@ export function migrationLevel(options: MigrationLevelOptions): Promise<Migratio
 export interface MigrationLevelOptions {
     chains?: readonly MigrationChain[];
     url: string;
+}
+
+// @public
+export interface MigrationStop {
+    // (undocumented)
+    chain: string;
+    // (undocumented)
+    tag: string;
 }
 
 // @public (undocumented)
