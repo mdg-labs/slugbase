@@ -13,7 +13,8 @@
 // Needs `pnpm turbo run build --filter=slugbase --filter=@slugbase/testing` first (`--filter=@slugbase/testing` alone with --image),
 // `psql` and Docker (k6 runs from a pinned image on the host network, as does the server image), and the server the test harness
 // uses: SLUGBASE_TEST_PG_URL, the development Postgres of compose.dev.yml when unset. Exit status: 0 when every budget holds and
-// the write load is within its limit, 10 when one is exceeded (a regression, not a failure of the run), 1 when the run itself failed.
+// the write load is within its limit, 10 when one is exceeded (a regression, not a failure of the run),
+// 128 + n when a SIGINT, SIGTERM or SIGHUP (signal number n) interrupts the run, after it drops the database, stops the server and removes the k6 containers, 1 when the run failed in any other way.
 // `result.json` names the commit that was measured: --commit, or the HEAD of this checkout, or null when neither is known. scripts/perf/report.mjs files
 // what a result exceeds.
 import { spawn } from "node:child_process";

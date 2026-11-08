@@ -8,7 +8,8 @@
 //
 // Needs `pnpm turbo run build --filter=@slugbase/testing` first, `psql`, a full clone with its tags (the release is read from git, as
 // `pnpm db:check` reads it), and the server the test harness uses: SLUGBASE_TEST_PG_URL, the development Postgres of compose.dev.yml when
-// unset. Exit status: 0 when no migration holds the lock for more than 1 s, 10 when one does, 1 when the run itself failed.
+// unset. Exit status: 0 when no migration holds the lock for more than 1 s, 10 when one does,
+// 128 + n when a SIGINT, SIGTERM or SIGHUP (signal number n) interrupts the run, which drops its database first, 1 when the run failed in any other way.
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { constants } from "node:os";
 import { join, resolve } from "node:path";

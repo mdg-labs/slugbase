@@ -28,7 +28,7 @@ is stopped, so that it flushes the usage buffer, and removed with the rest; `nig
 `--out <dir>` keeps `k6-summary.json` and `result.json` there; without it they go to a new directory under the temporary directory.
 Before the server starts, the run applies `migrate` (the same command the image runs before every start) to the database, because the harness's database has the schema and not the pg-boss queues that a create and an import enqueue their events to; as the harness's own role for the database, with the connection string handed to the command by name.
 `--commit <sha>` names the commit measured (a full hash); without it `result.json` records the `HEAD` of the checkout, or `null` outside one. `nightly.yml` passes the head of a pull request, otherwise `github.sha`.
-The exit status is 0 when every budget holds and the write load is within its limit, 10 when one is exceeded and 1 when the run itself failed.
+The exit status is 0 when every budget holds and the write load is within its limit, 10 when one is exceeded, `128 + n` when a `SIGINT`, `SIGTERM` or `SIGHUP` (signal number `n`) interrupts the run, after it drops the database, stops the server and removes the k6 containers, and 1 when the run failed in any other way.
 
 ## The instance
 
