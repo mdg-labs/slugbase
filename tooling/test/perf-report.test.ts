@@ -138,11 +138,11 @@ describe("the issues a performance run files", () => {
   });
 
   it("lists every exceeded shape of the list under one issue: a sort and page, a text, a filter", () => {
-    const result = exceeding(withinBudgets(), "list title_asc deep", "list q deep", "list filter tag");
+    const result = exceeding(withinBudgets(), "list title_asc deep", "list q deep", "list filter tag first", "list filter folder deep");
     const actions = plain(result);
     expect(summary(actions)).toEqual(["create: Performance budget exceeded: list"]);
     const body = actions[0]?.body ?? "";
-    for (const shape of ["list title_asc deep", "list q deep", "list filter tag"]) {
+    for (const shape of ["list title_asc deep", "list q deep", "list filter tag first", "list filter folder deep"]) {
       expect(body, shape).toContain(`| ${shape} | 200 ms | 100 ms | exceeded |`);
     }
     expect(body).not.toContain("| list oldest first |");
@@ -152,6 +152,21 @@ describe("the issues a performance run files", () => {
     }
     expect(body).not.toContain("| search |");
     expect(body).not.toContain("R3");
+  });
+
+  it("files the slug suggestions and the dashboard under an issue each, and not under go or list, whose budgets they do not share", () => {
+    const suggest = exceeding(withinBudgets(), "go suggest", "go suggest short");
+    const actions = plain(suggest, [{ number: 640, title: "Performance budget exceeded: go" }]);
+    expect(summary(actions)).toEqual(["create: Performance budget exceeded: go suggest"]);
+    const body = actions[0]?.body ?? "";
+    expect(body).toContain("| go suggest | 100 ms | 50 ms | exceeded |");
+    expect(body).toContain("| go suggest short | 100 ms | 50 ms | exceeded |");
+    expect(body).toContain("| go_suggest |");
+    expect(body).not.toContain("R3");
+    expect(summary(plain(suggest, [{ number: 650, title: "Performance budget exceeded: go suggest" }]))).toEqual(["comment #650: Performance budget exceeded: go suggest"]);
+    const dashboard = plain(exceeding(withinBudgets(), "dashboard"), [{ number: 641, title: "Performance budget exceeded: list" }]);
+    expect(summary(dashboard)).toEqual(["create: Performance budget exceeded: dashboard"]);
+    expect(dashboard[0]?.body).toContain("| dashboard | 200 ms | 100 ms | exceeded |");
   });
 
   it("names a saturated scenario and its flag in the body, and explains the queue", () => {
@@ -222,7 +237,7 @@ describe("the issues a performance run files", () => {
 
   it("files every scenario of budgets.js under an issue, and nothing else", () => {
     expect(Object.keys(ISSUE_OF).sort()).toEqual([...SCENARIOS].sort());
-    expect(new Set(Object.values(ISSUE_OF))).toEqual(new Set(["go", "list", "search", "import"]));
+    expect(new Set(Object.values(ISSUE_OF))).toEqual(new Set(["go", "go suggest", "list", "search", "dashboard", "import"]));
     expect(TITLE_PREFIX).toBe("Performance budget exceeded: ");
     // Whatever shape a scenario has, an exceeded budget of it is filed under the issue of ISSUE_OF.
     for (const row of budgets()) {

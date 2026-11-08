@@ -15,6 +15,7 @@ interface BudgetsModule {
   SORTS: string[];
   PAGES: string[];
   FILTERS: string[];
+  SUGGEST_PREFIXES: string[];
   SCENARIOS: string[];
   STEADY_SCENARIOS: string[];
   IMPORT_SCENARIOS: string[];
@@ -47,6 +48,7 @@ const {
   SORTS,
   PAGES,
   FILTERS,
+  SUGGEST_PREFIXES,
   SCENARIOS,
   STEADY_SCENARIOS,
   IMPORT_SCENARIOS,
@@ -85,15 +87,20 @@ function seedSearchTerms(): string[] {
 }
 
 describe("performance budgets", () => {
-  it("has a budget for each scenario, for each list sort on each page, for each page of the list narrowed by a text, for each filter of the list and for each search term", () => {
+  it("has a budget for each scenario, for each list sort on each page, for each page of the list narrowed by a text, for each filter of the list on each page, for each prefix of the slug suggestions and for each search term", () => {
     const metrics = budgets().map((budget) => budget.metric);
-    expect(metrics).toHaveLength(SCENARIOS.length + SORTS.length * PAGES.length + PAGES.length + FILTERS.length + SEARCH_TERMS.length + 1);
+    expect(metrics).toHaveLength(SCENARIOS.length + SORTS.length * PAGES.length + PAGES.length + FILTERS.length * PAGES.length + SUGGEST_PREFIXES.length + SEARCH_TERMS.length + 1);
     expect(new Set(metrics).size).toBe(metrics.length);
     expect(metrics).toContain("http_req_waiting{kind:go}");
     expect(metrics).toContain("http_req_waiting{kind:list_q,page:first}");
     expect(metrics).toContain("http_req_waiting{kind:list_q,page:deep}");
-    expect(metrics).toContain("http_req_waiting{kind:list_filter,filter:tag}");
-    expect(metrics).toContain("http_req_waiting{kind:list_filter,filter:folder}");
+    expect(metrics).toContain("http_req_waiting{kind:list_filter,filter:tag,page:first}");
+    expect(metrics).toContain("http_req_waiting{kind:list_filter,filter:tag,page:deep}");
+    expect(metrics).toContain("http_req_waiting{kind:list_filter,filter:folder,page:first}");
+    expect(metrics).toContain("http_req_waiting{kind:list_filter,filter:folder,page:deep}");
+    expect(metrics).toContain("http_req_waiting{kind:go_suggest}");
+    expect(metrics).toContain("http_req_waiting{kind:go_suggest,prefix:short}");
+    expect(metrics).toContain("http_req_waiting{kind:dashboard}");
     expect(metrics).toContain("http_req_waiting{kind:list,sort:title_desc,page:deep}");
     expect(metrics).toContain("http_req_waiting{kind:search,term:release notes}");
     expect(metrics).toContain(`http_req_waiting{kind:search,term:${SHARED_TERM}}`);
@@ -107,10 +114,80 @@ describe("performance budgets", () => {
 
   it("names the list narrowed by a text and the list under a filter by shape and page, each with the 100 ms of the list", () => {
     const named = budgets().filter((budget) => budget.scenario === "list_q" || budget.scenario === "list_filter");
-    expect(named.map((budget) => budget.name)).toEqual(["list q", "list filter", "list q first", "list q deep", "list filter tag", "list filter folder"]);
+    expect(named.map((budget) => budget.name)).toEqual([
+      "list q",
+      "list filter",
+      "list q first",
+      "list q deep",
+      "list filter tag first",
+      "list filter tag deep",
+      "list filter folder first",
+      "list filter folder deep",
+    ]);
     for (const budget of named) {
       expect(budget.limitMs, budget.name).toBe(100);
     }
+  });
+
+  it("holds the slug suggestions to 50 ms, by prefix, and the dashboard to the 100 ms of a page, each in a scenario of its own that runs after the others", () => {
+    expect(SUGGEST_PREFIXES).toEqual(["short", "word", "full"]);
+    expect(BUDGETS_MS.go_suggest).toBe(50);
+    expect(BUDGETS_MS.dashboard).toBe(100);
+    const named = budgets().filter((budget) => budget.scenario === "go_suggest" || budget.scenario === "dashboard");
+    expect(named.map((budget) => [budget.name, budget.limitMs])).toEqual([
+      ["go suggest", 50],
+      ["dashboard", 100],
+      ["go suggest short", 50],
+      ["go suggest word", 50],
+      ["go suggest full", 50],
+    ]);
+    // The scenarios that were there keep their place (and so their start) in the run.
+    expect(STEADY_SCENARIOS).toEqual(["go", "list", "search", "list_q", "list_filter", "go_suggest", "dashboard"]);
+    expect(budgetThresholds(["go_suggest"])).toEqual({
+      "http_req_waiting{kind:go_suggest}": ["p(95)<50"],
+      "http_req_waiting{kind:go_suggest,prefix:short}": ["p(95)<50"],
+      "http_req_waiting{kind:go_suggest,prefix:word}": ["p(95)<50"],
+      "http_req_waiting{kind:go_suggest,prefix:full}": ["p(95)<50"],
+    });
+  });
+
+  it("requests the suggestions, the dashboard and the pages under a filter as the web app and the seed have them, and takes the shape of each arrival in turn so that none is left out of a run", () => {
+    const scenarios = read("scenarios.js");
+    const seed = readFileSync(resolve(ROOT, "packages/testing/src/seed/large.ts"), "utf8");
+    const contracts = ["go.ts", "dashboard.ts"].map((file) => readFileSync(resolve(ROOT, "packages/contracts/src/operations", file), "utf8")).join("\n");
+    const web = readFileSync(resolve(ROOT, "packages/web/src/dashboard/dashboard.ts"), "utf8");
+    // The operations exist, and the dashboard is the one the web app calls.
+    expect(contracts).toContain('path: "/api/v1/go/suggest"');
+    expect(contracts).toContain('path: "/api/v1/dashboard"');
+    expect(web).toContain('api.GET("/api/v1/dashboard"');
+    expect(scenarios).toMatch(/\/api\/v1\/go\/suggest\?prefix=\$\{encodeURIComponent\(text\)\}/);
+    expect(scenarios).toContain('get("/api/v1/dashboard"');
+    // The prefixes are made of the seed's own forwarding slugs, which are a word of the seed's list with or without a number (`docs`, `docs-12`), and the filters of its tags and folders of the admin's.
+    expect(seed).toMatch(/slugs: forwarding\.filter\(/);
+    expect(seed).toMatch(/return count === 1 \? word : `\$\{word\}-\$\{String\(count\)\}`;/);
+    expect(seed).toMatch(/tagIds: large\.tags\.filter\(\(tag\) => tag\.ownerId === admin\.id\)/);
+    expect(seed).toMatch(/folderIds: large\.folders\.filter\(\(folder\) => folder\.ownerId === admin\.id\)/);
+    expect(scenarios).toMatch(/fixtures\.slugs\[Math\.floor\(arrival \/ SUGGEST_PREFIXES\.length\) % fixtures\.slugs\.length\]/);
+    expect(scenarios).toMatch(/kind: "go_suggest", prefix \}/);
+    expect(scenarios).toMatch(/kind: "list_filter", filter, page \}/);
+    expect(scenarios).toMatch(/fixtures\.tagIds/);
+    expect(scenarios).toMatch(/fixtures\.folderIds/);
+    // Each arrival takes its shape from its number and not by chance, so that a short run requests every shape.
+    expect(scenarios).toMatch(/SUGGEST_PREFIXES\[arrival % SUGGEST_PREFIXES\.length\]/);
+    expect(scenarios).toMatch(/FILTER_SHAPES\[arrival % FILTER_SHAPES\.length\]/);
+    const shapes = scenarios.slice(scenarios.indexOf("export function listFilter"), scenarios.indexOf("export function dashboard"));
+    expect(shapes).not.toContain("Math.random");
+    // A deep page is requested with a cursor that setup() found under the same filter, and a filter with none ends the run.
+    expect(scenarios).toMatch(/data\.filterCursors\[filter\]\[turn % data\.filterCursors\[filter\]\.length\]/);
+    expect(scenarios).toMatch(/no \$\{filter\} of the instance holds enough bookmarks for a deep page/);
+    // The limits are not touched: the suggestions take a token of the go bucket and the dashboard one of the read bucket, which the run raises like the others.
+    expect(contracts).toMatch(/operationId: "suggestSlugs"[^}]*rate: "go"/s);
+    expect(contracts).toMatch(/operationId: "getDashboard"[^}]*rate: "read"/s);
+    const runner = read("run.mjs");
+    for (const key of ["RATE_LIMIT_GO_IP", "RATE_LIMIT_GO_ACCOUNT", "RATE_LIMIT_READ_IP", "RATE_LIMIT_READ_ACCOUNT"]) {
+      expect(runner, key).toMatch(new RegExp(`${key}: UNLIMITED`));
+    }
+    expect(scenarios).toMatch(/maxVUs: MAX_VUS/);
   });
 
   it("limits each budget to its scenario's", () => {

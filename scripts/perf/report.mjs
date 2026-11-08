@@ -3,8 +3,10 @@
 //
 // Every exceeded budget is filed under one issue of its scenario, titled `Performance budget exceeded: <name>`:
 //   go           the `go` scenario
+//   go suggest   the `go_suggest` scenario (the slugs the palette's go mode suggests) and each of its prefixes
 //   list         the `list` scenario and the shapes of the list narrowed by a text (`list_q`) and filtered (`list_filter`), which are
 //                the bookmark list and cost what the list costs
+//   dashboard    the `dashboard` scenario
 //   search       the `search` scenario and each of its terms
 //   import       `go_import` and `list_import`, the /go and list budgets while an import is in flight: their cause is the import (its lock, its load), not /go or the list on their own,
 //                so they are not filed under `go` or `list`, whose budgets hold with no import
@@ -28,7 +30,17 @@ import { SCENARIOS } from "./budgets.js";
 export const TITLE_PREFIX = "Performance budget exceeded: ";
 export const WRITE_LOAD = "write load";
 // The issue each scenario of budgets.js is filed under.
-export const ISSUE_OF = { go: "go", list: "list", list_q: "list", list_filter: "list", search: "search", go_import: "import", list_import: "import" };
+export const ISSUE_OF = {
+  go: "go",
+  go_suggest: "go suggest",
+  list: "list",
+  list_q: "list",
+  list_filter: "list",
+  search: "search",
+  dashboard: "dashboard",
+  go_import: "import",
+  list_import: "import",
+};
 
 // Every scenario of budgets.js has an issue; a scenario added there without one is refused here at once.
 for (const scenario of SCENARIOS) {

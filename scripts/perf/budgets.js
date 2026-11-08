@@ -5,14 +5,18 @@
 // Scenario ids are the `kind` tag of their requests and the k6 scenario names; a budget's name is the id with a space for the underscore (NAMES below for the two that are named otherwise).
 export const SORTS = ["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"];
 export const PAGES = ["first", "deep"];
-// The list narrowed by a text (`list_q`, the first page and a deep one) and the list under a filter (`list_filter`, a tag of the account's and a folder of its) are
-// shapes of their own, so that a regression names the shape and the page.
+// The list narrowed by a text (`list_q`, the first page and a deep one) and the list under a filter (`list_filter`, a tag of the account's and a folder of its, the first page
+// and a deep one) are shapes of their own, so that a regression names the shape and the page.
 export const FILTERS = ["tag", "folder"];
-// The scenarios of the budgets run, one after the other, and the two of the import run (below), which run last: /go and the list while one member imports the largest files.
-export const STEADY_SCENARIOS = ["go", "list", "search", "list_q", "list_filter"];
+// The slug suggestions of the palette's go mode (`go_suggest`, doc 02 section 6.2) are requested with three prefixes of a slug of the seed, so that a regression names the one:
+// its first character (the prefix that matches the most slugs), its leading word (`docs` of `docs-12`) and the whole slug.
+export const SUGGEST_PREFIXES = ["short", "word", "full"];
+// The scenarios of the budgets run, one after the other (a scenario added is added last, so that the others keep their place in the run), and the two of the import run (below), which run last:
+// /go and the list while one member imports the largest files.
+export const STEADY_SCENARIOS = ["go", "list", "search", "list_q", "list_filter", "go_suggest", "dashboard"];
 export const IMPORT_SCENARIOS = ["go_import", "list_import"];
 export const SCENARIOS = [...STEADY_SCENARIOS, ...IMPORT_SCENARIOS];
-export const BUDGETS_MS = { go: 30, list: 100, search: 100, list_q: 100, list_filter: 100, go_import: 30, list_import: 100 };
+export const BUDGETS_MS = { go: 30, go_suggest: 50, list: 100, search: 100, list_q: 100, list_filter: 100, dashboard: 100, go_import: 30, list_import: 100 };
 // A budget is named for its scenario with a space for the underscore, unless the scenario is named here.
 const NAMES = { go_import: "go during import", list_import: "list during import" };
 
@@ -49,7 +53,7 @@ export const SHARED_TERM = "shared";
 export const MAX_VUS = 100;
 
 // Every p(95) budget of the server time (k6 http_req_waiting): the scenarios, then each list sort on each page, each page of the list narrowed by a text, each
-// filter of the list and each search term, so that a regression names the sort and the page, the shape or the term. `scenario` is the scenario the request
+// filter of the list on each page, each prefix of the slug suggestions and each search term, so that a regression names the sort and the page, the shape or the term. `scenario` is the scenario the request
 // belongs to, `metric` is the k6 threshold key and the key of the summary.
 export function budgets(scenarios = SCENARIOS) {
   const all = SCENARIOS.map((scenario) => ({ name: NAMES[scenario] ?? scenario.replace("_", " "), scenario, metric: `http_req_waiting{kind:${scenario}}`, limitMs: BUDGETS_MS[scenario] }));
@@ -62,7 +66,12 @@ export function budgets(scenarios = SCENARIOS) {
     all.push({ name: `list q ${page}`, scenario: "list_q", metric: `http_req_waiting{kind:list_q,page:${page}}`, limitMs: BUDGETS_MS.list_q });
   }
   for (const filter of FILTERS) {
-    all.push({ name: `list filter ${filter}`, scenario: "list_filter", metric: `http_req_waiting{kind:list_filter,filter:${filter}}`, limitMs: BUDGETS_MS.list_filter });
+    for (const page of PAGES) {
+      all.push({ name: `list filter ${filter} ${page}`, scenario: "list_filter", metric: `http_req_waiting{kind:list_filter,filter:${filter},page:${page}}`, limitMs: BUDGETS_MS.list_filter });
+    }
+  }
+  for (const prefix of SUGGEST_PREFIXES) {
+    all.push({ name: `go suggest ${prefix}`, scenario: "go_suggest", metric: `http_req_waiting{kind:go_suggest,prefix:${prefix}}`, limitMs: BUDGETS_MS.go_suggest });
   }
   for (const term of [...SEARCH_TERMS, SHARED_TERM]) {
     all.push({ name: `search ${term}`, scenario: "search", metric: `http_req_waiting{kind:search,term:${term}}`, limitMs: BUDGETS_MS.search });

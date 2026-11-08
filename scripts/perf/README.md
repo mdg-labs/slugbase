@@ -1,7 +1,7 @@
 # Performance budgets
 
 The measurement of doc 08 section 5.3 and doc 01 section 9.3: against a database filled with the large instance, with PostgreSQL on
-the same machine, `/go` has a p95 server time under 30 ms and the bookmark list and search under 100 ms. It is opt-in: it is not part of
+the same machine, `/go` has a p95 server time under 30 ms and the slug suggestions of the palette's go mode under 50 ms and the dashboard, the bookmark list and search under 100 ms. It is opt-in: it is not part of
 `pnpm test:*` or `pnpm gate`, and an exceeded budget never fails a developer's gate. `.github/workflows/nightly.yml` runs it every week
 and on a pull request to `main`, against the CE image built from the commit under test, and files an issue when a budget is exceeded or `/go` writes more than the usage buffer allows (see "What is filed"). The last phase of the run imports the largest files while `/go` and the list are requested, and has `/go` and list budgets of its own (see "The import phase"). The older, narrower measurement of the `/go` query alone
 under row-level security and transaction pooling is `packages/db/test/perf/` (`pnpm --filter @slugbase/db perf:go`).
@@ -55,7 +55,11 @@ a second, for `--duration` seconds each):
 - `list`: `GET /api/v1/bookmarks` for each of the six sorts, the first page and a deep page (the 400th of 48).
 - `list_q`: `GET /api/v1/bookmarks?q=<term>` for the seven terms of the seed, the first page and a deep page (the 20th of 48, or the last page a term has when it matches fewer; a cursor is valid only
   for the text it was issued for, so `setup()` follows each term's pages on its own).
-- `list_filter`: `GET /api/v1/bookmarks?tag=<id>` and `?folderId=<id>` for the admin's own tags and folders (`tagIds` and `folderIds` of `fixtures.json`), the first page.
+- `list_filter`: `GET /api/v1/bookmarks?tag=<id>` and `?folderId=<id>` for the admin's own tags and folders (`tagIds` and `folderIds` of `fixtures.json`), the first page and a deep page (the 10th of 48, or the last page the tag or folder has when it holds fewer; a cursor is valid only for the filter it was issued for, so `setup()` follows the pages of each tag and folder on its own and the deep requests go to those that have one).
+- `go_suggest`: `GET /api/v1/go/suggest?prefix=` for a prefix of one of the admin's own forwarding slugs (`slugs` of `fixtures.json`), in three shapes: its first character (the prefix that matches the most slugs), its leading word (`docs` of `docs-12`) and the whole slug (which the answer must hold). The budget is 50 ms.
+- `dashboard`: `GET /api/v1/dashboard`, the call the web app makes for its home screen (`dashboardQuery`), for the admin in the large workspace.
+
+The shapes of `list_filter` (a tag or a folder, the first or a deep page) and of `go_suggest` (the three prefixes) are taken by the number of the arrival, in turn, and not by chance, so that every shape is requested in every run, however short: a shape with no request would be reported by k6 as a p95 of 0 ms. The slugs and the tags and folders are taken in turn as well.
 - `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders, and for the slugs of the shared bookmarks, which only the shares let the admin find. Each request is tagged with its
   term (`budgets.js` lists the seven of the seed, which `tooling/test/perf-budgets.test.ts` holds to `searchTerms` of `large.ts`) or with `shared` for those slugs, and the run reports the p95 of each, so a regression names the term.
 
@@ -81,7 +85,7 @@ there is no job whose queue could be measured: the phase measures what the impor
   workspace row lock, with the number of requests of each and the arrivals k6 dropped (a create that was not measured).
 - Fail closed: an import that is not answered 200, is replayed from an earlier answer, is not over within `--import-window` seconds of the load, creates fewer than the bookmarks of its file or skips or refuses any, or a JSON file that drops no slug, ends the run as failed (status 1), never a time. So does a scenario that made no request (a `/go` or list request during an import included, which k6 would otherwise report as a p95 of 0), a phase without a create, or a missing p95.
 
-The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape and every search term has a threshold of its own (`list q first`, `list q deep`, `list filter tag`, `list filter folder`, each sort on each page, each term), so a
+The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape, every prefix of the suggestions and every search term has a threshold of its own (`list q first`, `list q deep`, `list filter tag first`, `list filter tag deep`, `list filter folder first`, `list filter folder deep`, `go suggest short`, `go suggest word`, `go suggest full`, each sort on each page, each term), so a
 regression names the shape and the page, the sort or the term. `budgets.js` holds the sorts, the pages, the terms and the limits once: `scenarios.js` makes the thresholds from it and
 `run.mjs` reports every one of them, so a threshold that is crossed is always an exceeded budget (exit status 10); only a failed `checks`
 threshold, a response that was not what a scenario asked for, ends the run as failed. The server runs with its rate limits raised to the highest value, so that the run measures the server
@@ -112,7 +116,9 @@ Each exceeded budget is filed under one issue, titled exactly `Performance budge
 | Issue | What it holds |
 |---|---|
 | `go` | the `go` budget |
-| `list` | the `list` budget and its sorts and pages, and the list narrowed by a text (`list q first`, `list q deep`) and under a filter (`list filter tag`, `list filter folder`): they are all the bookmark list |
+| `go suggest` | the `go suggest` budget and each of its prefixes (`go suggest short`, `go suggest word`, `go suggest full`) |
+| `list` | the `list` budget and its sorts and pages, and the list narrowed by a text (`list q first`, `list q deep`) and under a filter (`list filter tag first`, `list filter tag deep`, `list filter folder first`, `list filter folder deep`): they are all the bookmark list |
+| `dashboard` | the `dashboard` budget |
 | `search` | the `search` budget and each of its terms |
 | `import` | the `go during import` and `list during import` budgets: `/go` and the list while an import is in flight (see "The import phase") |
 | `write load` | the write-load check of `/go` (`writeLoad` in `result.json`), which is a count of updates and no p95, so it has an issue of its own and not a place under `go` |

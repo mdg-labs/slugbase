@@ -4,7 +4,9 @@
 // The scenarios run one after the other, so each budget is measured without the load of the others. "Server time" is the time
 // k6 waits for the first byte of the answer (http_req_waiting): /go p95 under 30 ms, list and search p95 under 100 ms. /go and search
 // include the bookmarks that members share with the account (doc 02 sections 6.3 and 8), and the budgets cover them. The list is measured in three
-// shapes: with no text and no filter (every sort, first and deep page), narrowed by a text (first and deep page) and under a tag and under a folder of the account's.
+// shapes: with no text and no filter (every sort, first and deep page), narrowed by a text (first and deep page) and under a tag and under a folder of the account's (first and deep page).
+// The slug suggestions of the palette's go mode (GET /api/v1/go/suggest, p95 under 50 ms) and the dashboard (p95 under 100 ms) have a scenario each. A scenario whose budgets are of several shapes
+// (the suggestions' prefixes, the filters and their pages) takes the shape of an arrival from its number, in turn, so that each shape is requested in every run however short.
 // A second set of one scenario, `go-hot`, requests one forwarding slug 10 000 times for the write-load check of run.mjs (doc 01 section 8.1).
 // A third set, `import`, runs last (a run of its own, after the budgets, so that the bookmarks it adds change none of their measurements): one member imports the largest Netscape
 // file and the largest SlugBase JSON file into the large workspace while the admin's /go and list traffic goes on at the run's rate and another member creates bookmarks.
@@ -17,6 +19,7 @@ import {
   CREATES_SCENARIO,
   CREATE_RATE,
   CREATOR_EMAIL,
+  FILTERS,
   GO_HOT_METRIC,
   GO_HOT_REQUESTS,
   IMPORTER_EMAIL,
@@ -27,6 +30,7 @@ import {
   SHARED_TERM,
   SORTS,
   STEADY_SCENARIOS,
+  SUGGEST_PREFIXES,
   budgetThresholds,
   createThresholds,
   loadThresholds,
@@ -44,6 +48,8 @@ const PAGE_SIZE = 48;
 const DEEP_PAGE = Number(__ENV.DEEP_PAGE || 400);
 // The deep page of a list narrowed by a text is the 20th of them, or the last one a term has when it matches fewer; a term of one page has none.
 const DEEP_TEXT_PAGE = Number(__ENV.DEEP_TEXT_PAGE || 20);
+// The deep page of a list under a tag or a folder is the 10th of them, or the last one the filter has when it holds fewer; one of a single page has none. A tag or a folder of the seed holds about 25 pages at 50 000 bookmarks.
+const DEEP_FILTER_PAGE = Number(__ENV.DEEP_FILTER_PAGE || 10);
 const GO_HOT_VUS = 20;
 const GO_HOT = __ENV.SCENARIO_SET === "go-hot";
 const IMPORT = __ENV.SCENARIO_SET === "import";
@@ -136,6 +142,8 @@ export const options = {
         search: scenario(2, "search", { kind: "search" }),
         list_q: scenario(3, "listText", { kind: "list_q" }),
         list_filter: scenario(4, "listFilter", { kind: "list_filter" }),
+        go_suggest: scenario(5, "goSuggest", { kind: "go_suggest" }),
+        dashboard: scenario(6, "dashboard", { kind: "dashboard" }),
       },
   thresholds,
 };
@@ -219,7 +227,41 @@ export function setup() {
   if (Object.keys(textCursors).length === 0) {
     fail("no search term of the instance matches enough bookmarks for a deep page of the list narrowed by a text");
   }
-  return { headers, cursors, textCursors };
+  // A cursor is valid only for the filter it was issued for, so each tag and each folder is followed on its own; the ones with a deep page are the ones the deep requests go to.
+  const filterCursors = {};
+  for (const filter of FILTERS) {
+    filterCursors[filter] = [];
+    for (const id of filterIds(filter)) {
+      let cursor = null;
+      for (let page = 1; page < DEEP_FILTER_PAGE; page += 1) {
+        const response = get(`/api/v1/bookmarks?${filterQuery(filter, id, cursor)}`, headers, { kind: "setup" });
+        if (response.status !== 200) {
+          fail(`the list under the ${filter} ${id} answered ${response.status}`);
+        }
+        const next = response.json("nextCursor");
+        if (next === null) {
+          break;
+        }
+        cursor = next;
+      }
+      if (cursor !== null) {
+        filterCursors[filter].push({ id, cursor });
+      }
+    }
+    if (filterCursors[filter].length === 0) {
+      fail(`no ${filter} of the instance holds enough bookmarks for a deep page of the list under it`);
+    }
+  }
+  return { headers, cursors, textCursors, filterCursors };
+}
+
+// The tags and the folders of the account's that the list is narrowed to, and the query of a page under one of them.
+function filterIds(filter) {
+  return filter === "tag" ? fixtures.tagIds : fixtures.folderIds;
+}
+
+function filterQuery(filter, id, cursor) {
+  return `${filter === "tag" ? "tag" : "folderId"}=${id}&limit=${PAGE_SIZE}${cursor === null ? "" : `&cursor=${encodeURIComponent(cursor)}`}`;
 }
 
 function textQuery(term, cursor) {
@@ -311,12 +353,43 @@ export function listText(data) {
   check(response, { "a page of the bookmarks a text finds": (r) => r.status === 200 && r.json("items").length > 0 });
 }
 
+// The filter and the page of an arrival are the next of the four in turn, and the tag or the folder is the next of those with the page, so that no shape is left out of a run.
+const FILTER_SHAPES = FILTERS.flatMap((filter) => PAGES.map((page) => ({ filter, page })));
+
 export function listFilter(data) {
   activeVus.add(execution.instance.vusActive, { kind: "list_filter" });
-  const filter = Math.random() < 0.5 ? "tag" : "folder";
-  const id = pick(filter === "tag" ? fixtures.tagIds : fixtures.folderIds);
-  const response = get(`/api/v1/bookmarks?${filter === "tag" ? "tag" : "folderId"}=${id}&limit=${PAGE_SIZE}`, data.headers, { kind: "list_filter", filter });
+  const arrival = execution.scenario.iterationInTest;
+  const { filter, page } = FILTER_SHAPES[arrival % FILTER_SHAPES.length];
+  const turn = Math.floor(arrival / FILTER_SHAPES.length);
+  const target = page === "deep" ? data.filterCursors[filter][turn % data.filterCursors[filter].length] : { id: filterIds(filter)[turn % filterIds(filter).length], cursor: null };
+  const response = get(`/api/v1/bookmarks?${filterQuery(filter, target.id, target.cursor)}`, data.headers, { kind: "list_filter", filter, page });
   check(response, { "a page of the bookmarks under a filter": (r) => r.status === 200 && r.json("items").length > 0 });
+}
+
+// The prefix of a slug that each shape of the suggestions asks for: its first character, its leading word (the part before the first hyphen) and the whole slug.
+function suggestPrefix(shape, slug) {
+  return shape === "short" ? slug.slice(0, 1) : shape === "word" ? slug.split("-")[0] : slug;
+}
+
+// The palette's go mode (doc 02 section 6.2): the slugs that start with a prefix of one of the admin's own forwarding slugs. The shape is the next of the three in turn and the slug the next of the seed's with it.
+export function goSuggest(data) {
+  activeVus.add(execution.instance.vusActive, { kind: "go_suggest" });
+  const arrival = execution.scenario.iterationInTest;
+  const prefix = SUGGEST_PREFIXES[arrival % SUGGEST_PREFIXES.length];
+  const slug = fixtures.slugs[Math.floor(arrival / SUGGEST_PREFIXES.length) % fixtures.slugs.length];
+  const text = suggestPrefix(prefix, slug);
+  const response = get(`/api/v1/go/suggest?prefix=${encodeURIComponent(text)}`, data.headers, { kind: "go_suggest", prefix });
+  check(response, {
+    "slugs that start with the prefix": (r) => r.status === 200 && r.json("suggestions").length > 0 && r.json("suggestions").every((suggestion) => suggestion.slug.startsWith(text)),
+    "the slug itself is suggested for the whole slug": (r) => prefix !== "full" || (r.status === 200 && r.json("suggestions").some((suggestion) => suggestion.slug === text)),
+  });
+}
+
+// The dashboard the web app reads for its home screen (dashboardQuery in packages/web/src/dashboard/dashboard.ts): the admin's counts, quick access, pinned bookmarks and top tags in one call.
+export function dashboard(data) {
+  activeVus.add(execution.instance.vusActive, { kind: "dashboard" });
+  const response = get("/api/v1/dashboard", data.headers, { kind: "dashboard" });
+  check(response, { "the dashboard counts the bookmarks": (r) => r.status === 200 && r.json("counts.bookmarks") > 0 });
 }
 
 // One forwarding slug, requested GO_HOT_REQUESTS times: the opens it records must not become a write for each request (run.mjs reads the writes).
