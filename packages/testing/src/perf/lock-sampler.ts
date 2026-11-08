@@ -7,7 +7,7 @@ import type { SeedConnection } from "../seed/target.ts";
 // was seen for does not depend on how fast this process reads the output. The longest run of consecutive polls that see a relation
 // is the time its lock was held, to the resolution of the interval.
 
-/** The seconds between two polls (`\watch` takes seconds). */
+/** The milliseconds between two polls. `\watch` takes seconds, so it receives this value divided by 1000 (0.05). */
 export const SAMPLE_INTERVAL_MS = 50;
 const STARTUP_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 10_000;
