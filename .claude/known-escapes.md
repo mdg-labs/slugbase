@@ -26,6 +26,7 @@ existing line by adding its PR number.
 - **new branch skips the gate** — a handler gates some branches of a state-changing request with a cross-site check (Fetch Metadata) and a newly added branch that also changes state (an OIDC start intent that accepts an invitation) is left out, so a hostile page can drive that branch — PR 520
 - **allow list by operation, purpose by intent** — a restricted mode's allow list is keyed by operation, and an operation that serves several intents (an OIDC start for sign-in, re-authentication, link and invite) is left off whole, so a step the mode promises (re-authenticating to delete the account) is refused; admitting it means the handler must refuse the other intents itself — PR 716
 - **one scheme for many** — a check for a script address (in a guard or a test's injection detector) matches `javascript:` only, so `vbscript:` and `data:` addresses pass — PR 577, 612
+- **missing read as zero** — a fail-closed reader of a tool's summary treats a missing entry as an error for some metrics but defaults a sibling metric to 0 (`?? 0`), so a measurement that was never exported reads as a clean zero — PR 791
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
 - **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422, 641
