@@ -555,8 +555,22 @@ describe("the search on a workspace in which a tenth of the titles hold one word
   });
 
   /**
-   * The shared blocks of each call of `texts`, in order, on one connection, so that what the connection planned for the first calls is what the later ones run. The connection first runs one other search, which is not
-   * counted: a backend's first call loads its catalogs and touches thousands of blocks more than the next. `customPlans` sets the plan cache mode of the transaction, which the function's own setting overrides while it has one.
+   * The blocks of the application's relations (tables and indexes of the `public` schema, with their TOAST tables) that the transaction has touched so far, hit or read, from the per-relation counters of the backend. The
+   * system catalogs are not among them: a backend that has lost its caches (its first call, or any call after the invalidation queue of the cluster overflowed or a DDL commit elsewhere reset them) reloads the catalogs
+   * inside the next call, which touched about 1 900 catalog blocks more in the same call on the same plan (3 451 against 1 557 of its own relations, measured by letting the queue overflow while a call was in flight) and
+   * which the host's load makes likely on a shared cluster. Those blocks are not the work of a plan, so they are left out of the count of both sides of the comparison; the blocks a regressed plan touches (the btree of the
+   * workspace, the heap) are the application's relations.
+   */
+  async function blocksOfApplicationRelations(tx: Pick<TestDatabase["app"], "unsafe">): Promise<number> {
+    const [row] = await tx.unsafe<{ blocks: number }[]>(`
+      SELECT coalesce(sum(pg_stat_get_xact_blocks_fetched(c.oid)), 0)::int AS blocks FROM pg_class c
+      WHERE c.relnamespace = 'public'::regnamespace OR c.oid IN (SELECT reltoastrelid FROM pg_class WHERE relnamespace = 'public'::regnamespace)`);
+    return row?.blocks ?? Number.NaN;
+  }
+
+  /**
+   * The blocks of the application's relations that each call of `texts` touches, in order, on one connection, so that what the connection planned for the first calls is what the later ones run. The connection first runs
+   * one other search, which is not counted. `customPlans` sets the plan cache mode of the transaction, which the function's own setting overrides while it has one.
    */
   async function blocksOfCalls(texts: readonly string[], customPlans = false): Promise<Map<string, number[]>> {
     return db.app.begin(async (tx) => {
@@ -567,13 +581,11 @@ describe("the search on a workspace in which a tenth of the titles hold one word
       const byText = new Map<string, number[]>();
       for (const [index, text] of ["xyzzyx", ...texts].entries()) {
         const { sql, params } = dialect.sqlToQuery(bookmarkSearchStatement(text, 8));
-        const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: { "Shared Hit Blocks"?: number; "Shared Read Blocks"?: number } }[] }[]>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`, params as never[]);
-        const plan = rows[0]?.["QUERY PLAN"][0]?.Plan;
-        if (plan === undefined) {
-          throw new Error("EXPLAIN returned no plan");
-        }
+        const before = await blocksOfApplicationRelations(tx);
+        await tx.unsafe(sql, params as never[]);
+        const blocks = (await blocksOfApplicationRelations(tx)) - before;
         if (index > 0) {
-          byText.set(text, [...(byText.get(text) ?? []), (plan["Shared Hit Blocks"] ?? 0) + (plan["Shared Read Blocks"] ?? 0)]);
+          byText.set(text, [...(byText.get(text) ?? []), blocks]);
         }
       }
       return byText;
