@@ -4,7 +4,7 @@ name: Nightly
 # CE image, built here from the commit under test and never pulled, and k6 (scripts/perf/run.mjs) against a database that the test
 # harness made and filled with the large instance (50 000 bookmarks in one workspace, 2 000 further workspaces), with PostgreSQL on
 # the same runner. It runs every week and on a pull request to `main`, which is the promotion. A budget that is exceeded, or a /go
-# that writes more than the usage buffer allows, is filed under an issue of its scenario (go, list, search, write load; scripts/perf/report.mjs), a new one
+# that writes more than the usage buffer allows, is filed under an issue of its scenario (go, list, search, import, write load; scripts/perf/report.mjs), a new one
 # or a comment on the one that is open, and does not fail the job; a run that could not measure fails it, and so does a filing that did not succeed, so that a
 # regression is never dropped silently. The job holds the workflow token with `issues: write` and nothing else, references no
 # secret, and the workflow never runs on pull_request_target (doc 10 T16).
@@ -115,10 +115,12 @@ jobs:
             echo "|---|---|---|---|"
             jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
             echo
+            jq -r '.importPhase | "Import phase (no budget; the /go and list budgets during an import are in the table above): the load of /go and the list lasted \(.windowSeconds) s from the start of the first import.\n\n| Import | Size | Duration | Created | Skipped | Failed | Slugs dropped (taken, invalid) | Folders created | Tags created |\n|---|---|---|---|---|---|---|---|---|\n" + ([.imports[] | "| \(.import) | \(.bytes) bytes | \(.durationMs) ms | \(.created) | \(.skipped) | \(.failed) | \(.slugsDropped) (\(.slugsDroppedConflict), \(.slugsDroppedInvalid)) | \(.foldersCreated) | \(.tagsCreated) |"] | join("\n")) + "\n\nCreates by another member, \(.creates.rate) a second: p95 server time \(.creates.without.p95Ms) ms without an import (\(.creates.without.completed) requests), \(.creates.during.p95Ms) ms while an import holds the workspace row lock (\(.creates.during.completed) requests, \(.creates.dropped) arrivals dropped)."' perf-results/result.json
+            echo
             jq -r '"Write load: \(.writeLoad.requests) requests for one slug updated \(.writeLoad.updates) rows of bookmarks in \(.writeLoad.elapsedSeconds) s (at most \(.writeLoad.limit): one for each flush interval of \(.writeLoad.flushIntervalSeconds) s, and one more), \(if .writeLoad.ok then "ok" else "exceeded" end)."' perf-results/result.json
           } >> "$GITHUB_STEP_SUMMARY"
       # What to file is decided by scripts/perf/report.mjs (tested in tooling/test/perf-report.test.ts) from the result and the open issues; this step only runs
-      # its actions. Each exceeded scenario (go, list, search) and the write load of /go has one issue titled "Performance budget exceeded: <name>", which a later
+      # its actions. Each exceeded scenario (go, list, search, import: /go and the list during an import) and the write load of /go has one issue titled "Performance budget exceeded: <name>", which a later
       # run extends with a comment. Nothing of the result or of an issue reaches the shell as code: the titles and bodies come from files and the arguments are quoted.
       - name: Open an issue for an exceeded budget
         if: ${{ steps.measure.outputs.status == '10' }}

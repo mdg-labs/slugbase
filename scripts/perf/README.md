@@ -3,7 +3,7 @@
 The measurement of doc 08 section 5.3 and doc 01 section 9.3: against a database filled with the large instance, with PostgreSQL on
 the same machine, `/go` has a p95 server time under 30 ms and the bookmark list and search under 100 ms. It is opt-in: it is not part of
 `pnpm test:*` or `pnpm gate`, and an exceeded budget never fails a developer's gate. `.github/workflows/nightly.yml` runs it every week
-and on a pull request to `main`, against the CE image built from the commit under test, and files an issue when a budget is exceeded or `/go` writes more than the usage buffer allows (see "What is filed"). The older, narrower measurement of the `/go` query alone
+and on a pull request to `main`, against the CE image built from the commit under test, and files an issue when a budget is exceeded or `/go` writes more than the usage buffer allows (see "What is filed"). The last phase of the run imports the largest files while `/go` and the list are requested, and has `/go` and list budgets of its own (see "The import phase"). The older, narrower measurement of the `/go` query alone
 under row-level security and transaction pooling is `packages/db/test/perf/` (`pnpm --filter @slugbase/db perf:go`).
 
 ## Run it
@@ -12,6 +12,7 @@ under row-level security and transaction pooling is `packages/db/test/perf/` (`p
 pnpm dev:services     # the development Postgres of compose.dev.yml, which the test harness builds its databases on
 pnpm perf             # builds the server and the seed, then runs scripts/perf/run.mjs against the built server
 node scripts/perf/run.mjs --bookmarks 5000 --workspaces 20 --duration 10   # a small instance, for trying the scripts
+node scripts/perf/run.mjs --import-window 90   # the seconds of /go and list load the two imports have to end in (default 60)
 
 docker build -f apps/slugbase/Dockerfile --build-arg BUILD_COMMIT="$(git rev-parse HEAD)" -t slugbase:perf .
 pnpm turbo run build --filter=@slugbase/testing
@@ -25,6 +26,7 @@ stops the server and removes the k6 containers when it ends or is interrupted. W
 is stopped, so that it flushes the usage buffer, and removed with the rest; `nightly.yml` builds the image from the commit under test and never pulls one. The variables go to
 `docker run` by name, so no value is in its arguments.
 `--out <dir>` keeps `k6-summary.json` and `result.json` there; without it they go to a new directory under the temporary directory.
+Before the server starts, the run applies `migrate` (the same command the image runs before every start) to the database, because the harness's database has the schema and not the pg-boss queues that a create and an import enqueue their events to; as the harness's own role for the database, with the connection string handed to the command by name.
 `--commit <sha>` names the commit measured (a full hash); without it `result.json` records the `HEAD` of the checkout, or `null` outside one. `nightly.yml` passes the head of a pull request, otherwise `github.sha`.
 The exit status is 0 when every budget holds and the write load is within its limit, 10 when one is exceeded and 1 when the run itself failed.
 
@@ -63,6 +65,22 @@ every 10 s (doc 01 section 8.1), so the one bookmark may be updated once for eac
 requests, the updates, the time and the limit in `result.json` (`writeLoad`) and the job summary. More updates than the limit are reported like an exceeded budget (exit status 10); a reading that fails, or no update at all
 after 10 000 requests, is a failed run (status 1), never a zero. It runs before the budgets so that the flush of the `go` scenario's many slugs does not fall in its window.
 
+## The import phase
+
+The import phase (doc 02 section 13.1, doc 08 section 5.3) is the `import` set of `scenarios.js`, a k6 run of its own that comes last, after the budgets, so that the 10 000 bookmarks it adds change none of their measurements. An import is synchronous, one transaction in batches of at most 5 000 bookmarks and 5 MiB, under the workspace row lock, and it queues no metadata job, so
+there is no job whose queue could be measured: the phase measures what the import costs the requests beside it.
+
+- The files come from `packages/testing/src/seed/import-files.ts` (unit test `packages/testing/test/import-files.test.ts`): a Netscape file of 5 000 links in 40 folders, tagged, of 5 MiB less 1 KiB, and a SlugBase JSON file of 5 000 bookmarks with folders, tags and slugs. Every address is its own, so nothing is skipped or refused. Some slugs of the JSON file are ones the importer already has or the file repeats or that are
+  outside the grammar, so that the import drops them. `tooling/test/perf-budgets.test.ts` holds the two caps to those of `@slugbase/contracts`.
+- `scenarios.js` signs in as `perf-member-1` (the importer), `perf-member-2` (the member that creates) and the admin in `setup()`. After `--duration` seconds of creates by `perf-member-2` with no import (5 a second, the baseline), `perf-member-1` imports the Netscape file and then the JSON file, each with an `Idempotency-Key` of its own, while the admin's `/go` (the `go` mix) and list traffic goes on at `--rate`.
+  The rate limits of the `bulk` bucket (20 imports an hour) and of the `write` bucket are raised through `RATE_LIMIT_BULK_*` and `RATE_LIMIT_WRITE_*` like the others; every request still takes a token.
+- k6 VUs cannot share a variable, so `run.mjs` holds the state of the import (`before`, `importing`, `between`, `after`, `failed`) at a loopback address that lives as long as the run: the importer sets it, and the other scenarios read it at every arrival and make, and tag, their request by it. So `/go` and the list are requested only while an import is in flight, and the creates are
+  tagged `without` (before the first import) or `during` (while one is in flight); a request that arrives between the imports or after them is not made.
+- Budgets: `go during import` under 30 ms and `list during import` under 100 ms (p95 of the server time of the requests made while an import is in flight), like the others in `budgets.js`; crossing one is an exceeded budget (exit status 10). Both are filed under the `import` issue, not `go` or `list`: the cause is the import and its load, and `go` and `list` hold with no import (see "What is filed").
+- Reported without a threshold (`importPhase` of `result.json`, the job summary and the log): each import's size, duration (the time to the answer), created, skipped and failed counts, slugs dropped (taken by the importer or the file, and outside the grammar), and folders and tags created, all from the response; and the p95 of `POST /api/v1/bookmarks` by `perf-member-2` without an import and while an import holds the
+  workspace row lock, with the number of requests of each and the arrivals k6 dropped (a create that was not measured).
+- Fail closed: an import that is not answered 200, is replayed from an earlier answer, is not over within `--import-window` seconds of the load, creates fewer than the bookmarks of its file or skips or refuses any, or a JSON file that drops no slug, ends the run as failed (status 1), never a time. So does a scenario that made no request (a `/go` or list request during an import included, which k6 would otherwise report as a p95 of 0), a phase without a create, or a missing p95.
+
 The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape and every search term has a threshold of its own (`list q first`, `list q deep`, `list filter tag`, `list filter folder`, each sort on each page, each term), so a
 regression names the shape and the page, the sort or the term. `budgets.js` holds the sorts, the pages, the terms and the limits once: `scenarios.js` makes the thresholds from it and
 `run.mjs` reports every one of them, so a threshold that is crossed is always an exceeded budget (exit status 10); only a failed `checks`
@@ -96,6 +114,7 @@ Each exceeded budget is filed under one issue, titled exactly `Performance budge
 | `go` | the `go` budget |
 | `list` | the `list` budget and its sorts and pages, and the list narrowed by a text (`list q first`, `list q deep`) and under a filter (`list filter tag`, `list filter folder`): they are all the bookmark list |
 | `search` | the `search` budget and each of its terms |
+| `import` | the `go during import` and `list during import` budgets: `/go` and the list while an import is in flight (see "The import phase") |
 | `write load` | the write-load check of `/go` (`writeLoad` in `result.json`), which is a count of updates and no p95, so it has an issue of its own and not a place under `go` |
 
 A run that exceeds a budget whose issue is open comments on the issue with exactly that title (the lowest number when it is on several); otherwise it creates the issue, labelled `area:ci`. It never creates a second open issue for a name and never comments on another name's:

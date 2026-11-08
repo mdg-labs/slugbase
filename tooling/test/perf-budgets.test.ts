@@ -16,6 +16,16 @@ interface BudgetsModule {
   PAGES: string[];
   FILTERS: string[];
   SCENARIOS: string[];
+  STEADY_SCENARIOS: string[];
+  IMPORT_SCENARIOS: string[];
+  CREATES_SCENARIO: string;
+  CREATE_PHASES: string[];
+  CREATE_RATE: number;
+  IMPORTER_EMAIL: string;
+  CREATOR_EMAIL: string;
+  IMPORT_STATES: string[];
+  createMetrics: (phase: string) => { p95: string; completed: string };
+  createThresholds: () => Record<string, string[]>;
   SEARCH_TERMS: string[];
   SHARED_TERM: string;
   MAX_VUS: number;
@@ -24,17 +34,43 @@ interface BudgetsModule {
   GO_HOT_METRIC: string;
   FLUSH_INTERVAL_SECONDS: number;
   writeLoadLimit: (elapsedSeconds: number) => number;
-  budgets: () => Budget[];
-  budgetThresholds: () => Record<string, string[]>;
+  budgets: (scenarios?: string[]) => Budget[];
+  budgetThresholds: (scenarios?: string[]) => Record<string, string[]>;
   loadMetrics: (scenario: string) => { completed: string; dropped: string; activeVus: string };
-  loadThresholds: () => Record<string, string[]>;
+  loadThresholds: (scenarios?: string[]) => Record<string, string[]>;
 }
 
 // The module is plain JavaScript that k6 and node both load, so it has no declaration file; a computed specifier keeps
 // tsc from resolving it.
 const specifier = pathToFileURL(resolve(ROOT, "scripts/perf/budgets.js")).href;
-const { SORTS, PAGES, FILTERS, SCENARIOS, SEARCH_TERMS, SHARED_TERM, MAX_VUS, BUDGETS_MS, GO_HOT_REQUESTS, GO_HOT_METRIC, FLUSH_INTERVAL_SECONDS, budgets, budgetThresholds, loadMetrics, loadThresholds, writeLoadLimit } =
-  (await import(specifier)) as BudgetsModule;
+const {
+  SORTS,
+  PAGES,
+  FILTERS,
+  SCENARIOS,
+  STEADY_SCENARIOS,
+  IMPORT_SCENARIOS,
+  CREATES_SCENARIO,
+  CREATE_PHASES,
+  CREATE_RATE,
+  IMPORTER_EMAIL,
+  CREATOR_EMAIL,
+  IMPORT_STATES,
+  createMetrics,
+  createThresholds,
+  SEARCH_TERMS,
+  SHARED_TERM,
+  MAX_VUS,
+  BUDGETS_MS,
+  GO_HOT_REQUESTS,
+  GO_HOT_METRIC,
+  FLUSH_INTERVAL_SECONDS,
+  budgets,
+  budgetThresholds,
+  loadMetrics,
+  loadThresholds,
+  writeLoadLimit,
+} = (await import(specifier)) as BudgetsModule;
 
 const read = (file: string): string => readFileSync(resolve(ROOT, "scripts/perf", file), "utf8");
 
@@ -92,6 +128,82 @@ describe("performance budgets", () => {
     for (const { metric, limitMs } of budgets()) {
       expect(thresholds[metric], metric).toEqual([`p(95)<${String(limitMs)}`]);
     }
+    // The budgets run and the import run each set the thresholds of their own scenarios, and together they are all of them.
+    expect([...STEADY_SCENARIOS, ...IMPORT_SCENARIOS]).toEqual(SCENARIOS);
+    expect(new Set(SCENARIOS).size).toBe(SCENARIOS.length);
+    const steady = Object.keys(budgetThresholds(STEADY_SCENARIOS));
+    const imported = Object.keys(budgetThresholds(IMPORT_SCENARIOS));
+    expect(steady.filter((metric) => imported.includes(metric))).toEqual([]);
+    expect([...steady, ...imported].sort()).toEqual(Object.keys(thresholds).sort());
+  });
+
+  it("has the /go and list budgets during an import, named for it, at the limits of /go and of the list", () => {
+    expect(IMPORT_SCENARIOS).toEqual(["go_import", "list_import"]);
+    expect(budgets(IMPORT_SCENARIOS)).toEqual([
+      { name: "go during import", scenario: "go_import", metric: "http_req_waiting{kind:go_import}", limitMs: 30 },
+      { name: "list during import", scenario: "list_import", metric: "http_req_waiting{kind:list_import}", limitMs: 100 },
+    ]);
+    expect(BUDGETS_MS.go_import).toBe(BUDGETS_MS.go);
+    expect(BUDGETS_MS.list_import).toBe(BUDGETS_MS.list);
+    expect(budgetThresholds(IMPORT_SCENARIOS)).toEqual({ "http_req_waiting{kind:go_import}": ["p(95)<30"], "http_req_waiting{kind:list_import}": ["p(95)<100"] });
+    expect(budgets(STEADY_SCENARIOS).map((budget) => budget.scenario)).not.toContain("go_import");
+  });
+
+  it("reports the creates beside an import, with and without it, by thresholds that no value can fail and that are no budget", () => {
+    expect(CREATE_PHASES).toEqual(["without", "during"]);
+    expect(CREATE_RATE).toBeGreaterThan(0);
+    expect(createMetrics("during")).toEqual({ p95: "http_req_waiting{kind:create,phase:during}", completed: "http_reqs{kind:create,phase:during}" });
+    const thresholds = createThresholds();
+    expect(Object.keys(thresholds).sort()).toEqual(
+      [...CREATE_PHASES.flatMap((phase) => Object.values(createMetrics(phase))), `dropped_iterations{scenario:${CREATES_SCENARIO}}`].sort(),
+    );
+    for (const [metric, rules] of Object.entries(thresholds)) {
+      // A count and a percentile are never negative: these hold for any run, with samples or without.
+      expect(rules, metric).toEqual([metric.startsWith("http_req_waiting") ? "p(95)>=0" : "count>=0"]);
+      expect(Object.keys(budgetThresholds()), metric).not.toContain(metric);
+      expect(Object.keys(loadThresholds()), metric).not.toContain(metric);
+    }
+  });
+
+  it("signs in as the members of the large instance's seed, and keeps the state of the import in the states the scenarios read", () => {
+    const seed = readFileSync(resolve(ROOT, "packages/testing/src/seed/large.ts"), "utf8");
+    expect(seed).toContain(`account("${IMPORTER_EMAIL}", "Perf Member 1")`);
+    expect(seed).toContain(`account("${CREATOR_EMAIL}", "Perf Member 2")`);
+    expect(IMPORTER_EMAIL).not.toBe(CREATOR_EMAIL);
+    expect(IMPORT_STATES).toEqual(["before", "importing", "between", "after", "failed"]);
+  });
+
+  it("builds files of the caps that the contracts declare, so that a change of a cap leaves no stale file", () => {
+    const contract = readFileSync(resolve(ROOT, "packages/contracts/src/operations/import.ts"), "utf8");
+    const files = readFileSync(resolve(ROOT, "packages/testing/src/seed/import-files.ts"), "utf8");
+    expect(/export const IMPORT_MAX_BOOKMARKS = (\d+);/.exec(contract)?.[1]).toBe(/export const IMPORT_FILE_MAX_BOOKMARKS = (\d+);/.exec(files)?.[1]);
+    expect(/export const IMPORT_MAX_BYTES = ([^;]+);/.exec(contract)?.[1]).toBe(/export const IMPORT_FILE_MAX_BYTES = ([^;]+);/.exec(files)?.[1]);
+  });
+
+  it("imports last, after the budgets, with the limits of the bulk and write buckets raised and a key on each import, and ends the run on an import that was not a success", () => {
+    const runner = read("run.mjs");
+    expect(runner.indexOf('k6Run("budgets"')).toBeGreaterThan(0);
+    expect(runner.indexOf("await measureImports(")).toBeGreaterThan(runner.indexOf('k6Run("budgets"'));
+    for (const key of ["RATE_LIMIT_BULK_IP", "RATE_LIMIT_BULK_ACCOUNT", "RATE_LIMIT_WRITE_IP", "RATE_LIMIT_WRITE_ACCOUNT"]) {
+      expect(runner, key).toMatch(new RegExp(`${key}: UNLIMITED`));
+    }
+    // An import that was answered with anything else than the success of the whole file is an error of the run, never a time.
+    expect(runner).toMatch(/answered\.status !== 200 \|\| answered\.replayed !== false/);
+    expect(runner).toMatch(/answered\.created !== file\.bookmarks \|\| answered\.skipped !== 0 \|\| answered\.failed !== 0/);
+    expect(runner).toMatch(/held\.state !== "after"/);
+    expect(runner).toMatch(/k6 reported no creates in the phase/);
+    // k6 exports a sub-metric with a threshold and no sample as zeros: a scenario that made no request (no /go or list arrival fell in an import) must end the run, not read as 0 ms.
+    expect(runner).toMatch(/if \(completed < 1\) \{\s*throw new Error\(`the scenario \$\{scenario\} made no request/);
+    const scenarios = read("scenarios.js");
+    expect(scenarios).toMatch(/\/api\/v1\/import\/netscape/);
+    expect(scenarios).toMatch(/\/api\/v1\/import\/json/);
+    expect(scenarios.match(/"Idempotency-Key": key/g)).toHaveLength(2);
+    expect(scenarios).toMatch(/record\.status !== 200 \|\| record\.replayed \|\| ended > deadline/);
+    expect(scenarios).toMatch(/execution\.test\.abort\(/);
+    // The load is requested, and the creates are made, only in the state they measure.
+    expect(scenarios).toMatch(/importState\(\) === "importing"\) \{\s*goRequest\(data, "go_import"\)/);
+    expect(scenarios).toMatch(/importState\(\) === "importing"\) \{\s*listRequest\(data, "list_import"\)/);
+    expect(scenarios).toMatch(/state === "before" \? "without" : state === "importing" \? "during" : null/);
   });
 
   it("reports the load of each scenario by thresholds that no value can fail, so a saturated run is reported and never ends k6 with 99", () => {
@@ -141,7 +253,8 @@ describe("performance budgets", () => {
 
   it("tags each search request by its term, and by the shared tag for the slugs members share, with the load reported from the same module", () => {
     const scenarios = read("scenarios.js");
-    expect(scenarios).toMatch(/\.\.\.loadThresholds\(\)/);
+    expect(scenarios).toMatch(/\.\.\.loadThresholds\(IMPORT \? IMPORT_SCENARIOS : STEADY_SCENARIOS\)/);
+    expect(scenarios).toMatch(/\.\.\.\(IMPORT \? createThresholds\(\) : \{\}\)/);
     expect(scenarios).toMatch(/term: useShared \? SHARED_TERM : term/);
     expect(scenarios).toMatch(/maxVUs: MAX_VUS/);
     expect(scenarios).not.toMatch(/shared: String\(useShared\)/);
@@ -155,7 +268,7 @@ describe("performance budgets", () => {
     const scenarios = read("scenarios.js");
     const runner = read("run.mjs");
     expect(scenarios).toMatch(/import \{[^}]*\bbudgetThresholds\b[^}]*\} from "\.\/budgets\.js"/);
-    expect(scenarios).toMatch(/\.\.\.budgetThresholds\(\)/);
+    expect(scenarios).toMatch(/\.\.\.budgetThresholds\(IMPORT \? IMPORT_SCENARIOS : STEADY_SCENARIOS\)/);
     expect(scenarios).not.toMatch(/http_req_waiting\{/);
     expect(scenarios).not.toMatch(/const (SORTS|PAGES|BUDGETS_MS)\b/);
     expect(runner).toMatch(/import \{[^}]*\bbudgets as \w+\b[^}]*\} from "\.\/budgets\.js"/);

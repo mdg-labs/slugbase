@@ -195,13 +195,34 @@ describe("the issues a performance run files", () => {
     expect(summary(plain(goAt230(), issues))).toEqual(["comment #31: Performance budget exceeded: go"]);
   });
 
+  it("files the /go and list budgets during an import under an issue of their own, and not under go or list, whose budgets hold with no import", () => {
+    const only = exceeding(withinBudgets(), "go during import");
+    expect(summary(plain(only))).toEqual(["create: Performance budget exceeded: import"]);
+    const body = plain(only)[0]?.body ?? "";
+    expect(body).toContain("the `import` budget");
+    expect(body).toContain("| go during import | 60 ms | 30 ms | exceeded |");
+    expect(body).toContain("| go_import |");
+    expect(body).toContain("| list_import |");
+    // Both of them at once are one issue, and an open issue of go or list is never extended with them.
+    const both = exceeding(withinBudgets(), "go during import", "list during import");
+    const issues = [
+      { number: 640, title: "Performance budget exceeded: go" },
+      { number: 641, title: "Performance budget exceeded: list" },
+      { number: 650, title: "Performance budget exceeded: import" },
+    ];
+    expect(summary(plain(both, issues))).toEqual(["comment #650: Performance budget exceeded: import"]);
+    expect(summary(plain(both, issues.slice(0, 2)))).toEqual(["create: Performance budget exceeded: import"]);
+    // A go budget and the go budget during an import are two issues.
+    expect(summary(plain(exceeding(withinBudgets(), "go", "go during import")))).toEqual(["create: Performance budget exceeded: go", "create: Performance budget exceeded: import"]);
+  });
+
   it("names the commit measured, or says that it is unknown", () => {
     expect(plain({ ...goAt230(), commit: null })[0]?.body).toContain("an unknown commit");
   });
 
   it("files every scenario of budgets.js under an issue, and nothing else", () => {
     expect(Object.keys(ISSUE_OF).sort()).toEqual([...SCENARIOS].sort());
-    expect(new Set(Object.values(ISSUE_OF))).toEqual(new Set(["go", "list", "search"]));
+    expect(new Set(Object.values(ISSUE_OF))).toEqual(new Set(["go", "list", "search", "import"]));
     expect(TITLE_PREFIX).toBe("Performance budget exceeded: ");
     // Whatever shape a scenario has, an exceeded budget of it is filed under the issue of ISSUE_OF.
     for (const row of budgets()) {

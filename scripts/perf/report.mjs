@@ -6,6 +6,8 @@
 //   list         the `list` scenario and the shapes of the list narrowed by a text (`list_q`) and filtered (`list_filter`), which are
 //                the bookmark list and cost what the list costs
 //   search       the `search` scenario and each of its terms
+//   import       `go_import` and `list_import`, the /go and list budgets while an import is in flight: their cause is the import (its lock, its load), not /go or the list on their own,
+//                so they are not filed under `go` or `list`, whose budgets hold with no import
 //   write load   the write-load check of /go (doc 01 section 8.1), which is not a p95 and has its own issue
 // A run that exceeds a budget whose issue is open comments on that issue (the lowest number when the title is on several), and one whose issue is not open creates
 // it. The title must match exactly: an issue of another scenario, or one that names several, is never extended. A result that cannot be read, a budget of a scenario
@@ -26,7 +28,7 @@ import { SCENARIOS } from "./budgets.js";
 export const TITLE_PREFIX = "Performance budget exceeded: ";
 export const WRITE_LOAD = "write load";
 // The issue each scenario of budgets.js is filed under.
-export const ISSUE_OF = { go: "go", list: "list", list_q: "list", list_filter: "list", search: "search" };
+export const ISSUE_OF = { go: "go", list: "list", list_q: "list", list_filter: "list", search: "search", go_import: "import", list_import: "import" };
 
 // Every scenario of budgets.js has an issue; a scenario added there without one is refused here at once.
 for (const scenario of SCENARIOS) {
