@@ -59,7 +59,7 @@ a second, for `--duration` seconds each):
 - `go_suggest`: `GET /api/v1/go/suggest?prefix=` for a prefix of one of the admin's own forwarding slugs (`slugs` of `fixtures.json`), in three shapes: its first character (the prefix that matches the most slugs), its leading word (`docs` of `docs-12`) and the whole slug (which the answer must hold). The budget is 50 ms.
 - `dashboard`: `GET /api/v1/dashboard`, the call the web app makes for its home screen (`dashboardQuery`), for the admin in the large workspace.
 
-The shapes of `list_filter` (a tag or a folder, the first or a deep page) and of `go_suggest` (the three prefixes) are taken by the number of the arrival, in turn, and not by chance, so that every shape is requested in every run, however short: a shape with no request would be reported by k6 as a p95 of 0 ms. The slugs and the tags and folders are taken in turn as well.
+The shapes of a scenario (the sort and the page of `list`, the page of `list_q`, a tag or a folder and the page of `list_filter`, the three prefixes of `go_suggest`, the terms and the shared slugs of `search`) are taken by the number of the arrival, in turn, and not by chance. So every shape is requested in a run that has at least as many arrivals per scenario (`--rate` times `--duration`) as the scenario has shapes: 12 for `list`, the most, 8 for `search`, 4 for `list_filter`, 3 for `go_suggest` and 2 for `list_q`. A run with fewer, such as `--rate 1 --duration 5`, leaves a shape with no request, and the run fails (status 1) naming it (see "Fail closed"). The slugs, the terms of the seed, and the tags and folders are taken in turn as well.
 - `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders, and for the slugs of the shared bookmarks, which only the shares let the admin find. Each request is tagged with its
   term (`budgets.js` lists the seven of the seed, which `tooling/test/perf-budgets.test.ts` holds to `searchTerms` of `large.ts`) or with `shared` for those slugs, and the run reports the p95 of each, so a regression names the term.
 
@@ -71,7 +71,7 @@ after 10 000 requests, is a failed run (status 1), never a zero. It runs before 
 
 ## The import phase
 
-The import phase (doc 02 section 13.1, doc 08 section 5.3) is the `import` set of `scenarios.js`, a k6 run of its own that comes last, after the budgets, so that the 10 000 bookmarks it adds change none of their measurements. An import is synchronous, one transaction in batches of at most 5 000 bookmarks and 5 MiB, under the workspace row lock, and it queues no metadata job, so
+The import phase (doc 02 section 13.1, doc 08 section 5.3) is the `import` set of `scenarios.js`, a k6 run of its own that comes last, after the budgets, so that the 10 000 bookmarks it adds change none of their measurements. An import is synchronous, one transaction that writes its bookmarks in batches of 500 (`IMPORT_BATCH_SIZE` of `@slugbase/core`; a file may hold up to 5 000 bookmarks and 5 MiB), under the workspace row lock, and it queues no metadata job, so
 there is no job whose queue could be measured: the phase measures what the import costs the requests beside it.
 
 - The files come from `packages/testing/src/seed/import-files.ts` (unit test `packages/testing/test/import-files.test.ts`): a Netscape file of 5 000 links in 40 folders, tagged, of 5 MiB less 1 KiB, and a SlugBase JSON file of 5 000 bookmarks with folders, tags and slugs. Every address is its own, so nothing is skipped or refused. Some slugs of the JSON file are ones the importer already has or the file repeats or that are
@@ -88,7 +88,9 @@ there is no job whose queue could be measured: the phase measures what the impor
 The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape, every prefix of the suggestions and every search term has a threshold of its own (`list q first`, `list q deep`, `list filter tag first`, `list filter tag deep`, `list filter folder first`, `list filter folder deep`, `go suggest short`, `go suggest word`, `go suggest full`, each sort on each page, each term), so a
 regression names the shape and the page, the sort or the term. `budgets.js` holds the sorts, the pages, the terms and the limits once: `scenarios.js` makes the thresholds from it and
 `run.mjs` reports every one of them, so a threshold that is crossed is always an exceeded budget (exit status 10); only a failed `checks`
-threshold, a response that was not what a scenario asked for, ends the run as failed. The server runs with its rate limits raised to the highest value, so that the run measures the server
+threshold, a response that was not what a scenario asked for, ends the run as failed.
+
+Fail closed: k6 1.3.0 writes a sub-metric that a threshold names and that has no sample as zeros and does not leave it out (`"p(95)": 0`, `"count": 0`). So `scenarios.js` also names the count of requests behind every budget (`http_reqs` with the tags of its `http_req_waiting`), and `run.mjs` ends the run as failed (status 1), in the budgets run and in the import run, when that count is 0, with a message that names each budget with no request, and when a count, a p(95), a scenario's requests, its dropped arrivals or its VUs is missing: a p95 that has no sample is never reported as 0 ms or ok. A `dropped_iterations` of `"count": 0` is a real zero, because k6 writes it for a scenario that dropped nothing. The server runs with its rate limits raised to the highest value, so that the run measures the server
 and not its limiter; a token is still taken on every request. It runs with `NODE_ENV=development` because the harness's databases use the
 development role passwords that production refuses.
 
@@ -98,10 +100,10 @@ The scenarios are open-loop: k6 starts `--rate` requests a second whether or not
 and in the server's, and `http_req_waiting` counts the wait: the p95 of such a scenario grows with its length and is the queue, not the time of a statement. So the run reports the load of each scenario beside its budgets, in `result.json` (`scenarios`), the job summary and the issue body of `nightly.yml`:
 
 - `completed`: the requests that were answered (`http_reqs` of the scenario);
-- `dropped`: the arrivals k6 dropped (`dropped_iterations`) because all `maxVUs` VUs were busy; k6 leaves the metric out when it dropped none, which reads as 0;
-- `peakVus`: the most VUs active at the start of an iteration, of `maxVus` (100).
+- `dropped`: the arrivals k6 dropped (`dropped_iterations`) because all `maxVUs` VUs were busy; k6 1.3.0 writes `"count": 0` when it dropped none, and a missing entry is an error of the run;
+- `peakVus`: the most VUs active at the start of an iteration, of `maxVus`. k6 counts the active VUs of the whole run, so this is a scenario's own only when it runs alone, as the scenarios of the budgets run do (`maxVus` 100, `vusOf` `scenario` in `result.json`). The scenarios of the import phase run at the same time (the creates, `go_import`, `list_import` and the importer), so each of them reports the peak of the run against the VUs the run may use (`maxVus` 301, `vusOf` `run`, "in the run" in the log), the same figure for all.
 
-A scenario is `saturated` when it dropped an arrival or used all its VUs, and every budget row of it is then marked saturated. Read the budget of a saturated scenario as "the server did not keep up with this rate", not as the cost
+A scenario is `saturated` when it dropped an arrival or the VUs active reached `maxVus`, and every budget row of it is then marked saturated. Read the budget of a saturated scenario as "the server did not keep up with this rate", not as the cost
 of one request: take the per-term (or per-sort) p95 from a run at a rate where nothing queues (`--rate 5`), and find the highest rate with no dropped arrival by raising `--rate`. These are not thresholds: they put the load in the summary and
 no value fails them, so they cannot end k6 with 99.
 

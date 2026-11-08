@@ -19,11 +19,12 @@
 import { spawn } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { randomBytes } from "node:crypto";
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { constants, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
   CREATE_PHASES,
@@ -55,34 +56,39 @@ const UNLIMITED = "9999999/sec";
 // The seconds the load of the import run lasts from the start of the import, which must end within them.
 const DEFAULT_IMPORT_WINDOW_SECONDS = "60";
 
-const { values: args } = parseArgs({
-  options: {
-    image: { type: "string" },
-    commit: { type: "string" },
-    out: { type: "string" },
-    bookmarks: { type: "string" },
-    workspaces: { type: "string" },
-    rate: { type: "string", default: "40" },
-    duration: { type: "string", default: "30" },
-    "import-window": { type: "string", default: DEFAULT_IMPORT_WINDOW_SECONDS },
-  },
-});
+// Run as a script, not when a test imports `evaluate`: nothing below that reads the command line, makes a directory or takes a signal happens then.
+const isMain = process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+
+const { values: args } = isMain
+  ? parseArgs({
+      options: {
+        image: { type: "string" },
+        commit: { type: "string" },
+        out: { type: "string" },
+        bookmarks: { type: "string" },
+        workspaces: { type: "string" },
+        rate: { type: "string", default: "40" },
+        duration: { type: "string", default: "30" },
+        "import-window": { type: "string", default: DEFAULT_IMPORT_WINDOW_SECONDS },
+      },
+    })
+  : { values: {} };
 // The image reference goes to `docker run` as an argument, so it may not read as an option of it.
-if (args.image !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._/:@-]*$/.test(args.image)) {
+if (isMain && args.image !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._/:@-]*$/.test(args.image)) {
   process.stderr.write("perf: --image takes an image reference such as slugbase:perf\n");
   process.exit(1);
 }
-if (!/^[1-9][0-9]{0,3}$/.test(args["import-window"])) {
+if (isMain && !/^[1-9][0-9]{0,3}$/.test(args["import-window"])) {
   process.stderr.write("perf: --import-window takes a number of seconds, 1 to 9999\n");
   process.exit(1);
 }
 // The commit is written into the result and from there into an issue, so it is a full hash and nothing else.
-if (args.commit !== undefined && !/^[0-9a-f]{40}$/.test(args.commit)) {
+if (isMain && args.commit !== undefined && !/^[0-9a-f]{40}$/.test(args.commit)) {
   process.stderr.write("perf: --commit takes a full commit hash of 40 hex digits\n");
   process.exit(1);
 }
 // Where the k6 summary and the result are written; a directory of its own under the temporary directory unless one is given.
-const outDir = args.out === undefined ? mkdtempSync(join(tmpdir(), "slugbase-perf-results-")) : resolve(args.out);
+const outDir = !isMain ? undefined : args.out === undefined ? mkdtempSync(join(tmpdir(), "slugbase-perf-results-")) : resolve(args.out);
 
 function log(message) {
   process.stdout.write(`perf: ${message}\n`);
@@ -163,7 +169,7 @@ let interruptStatus;
 // for it, so that the database the seeding is making is dropped too.
 let preparing = Promise.resolve();
 const abort = new AbortController();
-for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+for (const signal of isMain ? ["SIGINT", "SIGTERM", "SIGHUP"] : []) {
   process.once(signal, () => {
     interrupted = true;
     interruptStatus = 128 + constants.signals[signal];
@@ -201,34 +207,46 @@ async function waitReady(port, server) {
   throw new Error(`the server was not ready within ${String(READY_SECONDS)} seconds`);
 }
 
-// What a scenario's load did, from the sub-metrics budgets.js names. A scenario that dropped no arrival has no `dropped_iterations` sample and so no entry:
-// that is 0. The other two always have samples when the scenario ran, so a missing one is an error and not a 0. A scenario that made no request is an error too: k6 writes
-// a sub-metric that has a threshold and no sample as zeros, so its p(95) would read as 0 ms and be ok. A scenario is saturated when it dropped an
-// arrival or used every VU it may: then the time of its requests includes the wait for a server that could not keep up, and a p95 is not the time of a statement.
-function loadOf(summary, scenario) {
+// What a scenario's load did, from the sub-metrics budgets.js names. k6 1.3.0 writes a sub-metric that a threshold names and that has no sample as zeros and does not leave it out:
+// `dropped_iterations` of a scenario that dropped no arrival is `"count": 0`, and the p(95) of a shape that was never requested is `"p(95)": 0`. So a count of 0 is a real 0 only
+// for the dropped arrivals; a missing entry of any of the three is an error, and so is a scenario that made no request, whose p(95) would read as 0 ms and be ok. A scenario is
+// saturated when it dropped an arrival or used every VU it may: then the time of its requests includes the wait for a server that could not keep up, and a p95 is not the time of a statement.
+// `active_vus` is the VUs active in the whole k6 run, which is the scenario's own only when it runs alone (the budgets run); `vus` says how many VUs the run may use, and so what the peak is of.
+function loadOf(summary, scenario, vus) {
   const metrics = loadMetrics(scenario);
   const completed = summary.metrics[metrics.completed]?.count;
   const peakVus = summary.metrics[metrics.activeVus]?.max;
-  if (typeof completed !== "number" || typeof peakVus !== "number") {
-    throw new Error(`k6 reported no requests or VUs for the scenario ${scenario}`);
+  const dropped = summary.metrics[metrics.dropped]?.count;
+  if (!isNumber(completed) || !isNumber(peakVus) || !isNumber(dropped)) {
+    throw new Error(`k6 reported no requests, dropped arrivals or VUs for the scenario ${scenario}`);
   }
   if (completed < 1) {
     throw new Error(`the scenario ${scenario} made no request, so it measured nothing`);
   }
-  const dropped = summary.metrics[metrics.dropped]?.count ?? 0;
-  return { completed, dropped, peakVus, maxVus: MAX_VUS, saturated: dropped > 0 || peakVus >= MAX_VUS };
+  return { completed, dropped, peakVus, maxVus: vus.capacity, vusOf: vus.of, saturated: dropped > 0 || peakVus >= vus.capacity };
 }
 
-// The scenarios of one k6 run and the budgets on them, from its summary.
-function evaluate(summary, ids) {
-  const scenarios = Object.fromEntries(ids.map((scenario) => [scenario, loadOf(summary, scenario)]));
+// The count of the requests behind a budget's p(95): the `http_reqs` sub-metric of the same tags as its `http_req_waiting` one. k6 writes a p(95) of 0 for a shape with no request.
+const requestsMetric = (metric) => metric.replace(/^http_req_waiting/u, "http_reqs");
+
+// The scenarios of one k6 run and the budgets on them, from its summary. A budget whose shape had no request has no p(95) to report and fails the run, naming each such shape.
+function evaluate(summary, ids, vus = { capacity: MAX_VUS, of: "scenario" }) {
+  const scenarios = Object.fromEntries(ids.map((scenario) => [scenario, loadOf(summary, scenario, vus)]));
+  const unrequested = [];
   const rows = budgetList(ids).map(({ name, scenario, metric, limitMs }) => {
+    const requests = summary.metrics[requestsMetric(metric)]?.count;
     const p95 = summary.metrics[metric]?.["p(95)"];
-    if (typeof p95 !== "number") {
-      throw new Error(`k6 reported no p(95) for ${metric}`);
+    if (!isNumber(requests) || !isNumber(p95)) {
+      throw new Error(`k6 reported no request count or p(95) for ${metric}`);
+    }
+    if (requests < 1) {
+      unrequested.push(name);
     }
     return { name, scenario, metric, limitMs, p95Ms: Math.round(p95 * 100) / 100, ok: p95 < limitMs, saturated: scenarios[scenario].saturated };
   });
+  if (unrequested.length > 0) {
+    throw new Error(`no request was made for ${unrequested.map((name) => `"${name}"`).join(", ")}, so its p(95) is not a measurement (k6 writes 0 for it); the scenario needs at least as many arrivals (rate x duration) as it has shapes`);
+  }
   return { budgets: rows, scenarios };
 }
 
@@ -397,7 +415,7 @@ async function main() {
       "load of each scenario:",
       ...Object.keys(scenarios).map((name) => {
         const load = scenarios[name];
-        return `  ${name}: ${String(load.completed)} requests completed, ${String(load.dropped)} arrivals dropped, at most ${String(load.peakVus)} of ${String(load.maxVus)} VUs active${load.saturated ? ", SATURATED" : ""}`;
+        return `  ${name}: ${String(load.completed)} requests completed, ${String(load.dropped)} arrivals dropped, at most ${String(load.peakVus)} of ${String(load.maxVus)} VUs active${load.vusOf === "run" ? " in the run" : ""}${load.saturated ? ", SATURATED" : ""}`;
       }),
     ].join("\n"),
   );
@@ -662,16 +680,21 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
   }
   const imports = judgeImports(held.imports, files);
   const summary = JSON.parse(readFileSync(join(outDir, summaryFile("import")), "utf8"));
-  const { budgets, scenarios } = evaluate(summary, IMPORT_SCENARIOS);
+  // The creates, /go, the list and the importer run at the same time, and `active_vus` counts them all: the peak is of the run and not of one scenario, against the VUs the run may use.
+  const { budgets, scenarios } = evaluate(summary, IMPORT_SCENARIOS, { capacity: MAX_VUS * (IMPORT_SCENARIOS.length + 1) + 1, of: "run" });
   return { status, budgets, scenarios, phase: { windowSeconds: Number(args["import-window"]), k6Status: status, imports, creates: createsOf(summary) } };
 }
 
-let status = 1;
-try {
-  status = await main();
-} catch (error) {
-  process.stderr.write(`perf: ${error instanceof Error ? error.message : "failed"}\n`);
-} finally {
-  await cleanup();
+export { evaluate, loadOf };
+
+if (isMain) {
+  let status = 1;
+  try {
+    status = await main();
+  } catch (error) {
+    process.stderr.write(`perf: ${error instanceof Error ? error.message : "failed"}\n`);
+  } finally {
+    await cleanup();
+  }
+  process.exit(interruptStatus ?? status);
 }
-process.exit(interruptStatus ?? status);

@@ -4,7 +4,7 @@ name: Nightly
 # CE image, built here from the commit under test and never pulled, and k6 (scripts/perf/run.mjs) against a database that the test
 # harness made and filled with the large instance (50 000 bookmarks in one workspace, 2 000 further workspaces), with PostgreSQL on
 # the same runner. It runs every week and on a pull request to `main`, which is the promotion. A budget that is exceeded, or a /go
-# that writes more than the usage buffer allows, is filed under an issue of its scenario (go, list, search, import, write load; scripts/perf/report.mjs), a new one
+# that writes more than the usage buffer allows, is filed under an issue of its scenario (go, go suggest, list, dashboard, search, import, write load; scripts/perf/report.mjs), a new one
 # or a comment on the one that is open, and does not fail the job; a run that could not measure fails it, and so does a filing that did not succeed, so that a
 # regression is never dropped silently. The job holds the workflow token with `issues: write` and nothing else, references no
 # secret, and the workflow never runs on pull_request_target (doc 10 T16).

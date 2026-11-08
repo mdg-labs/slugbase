@@ -74,6 +74,52 @@ const {
   writeLoadLimit,
 } = (await import(specifier)) as BudgetsModule;
 
+interface Summary {
+  metrics: Record<string, Record<string, number>>;
+}
+
+interface Load {
+  completed: number;
+  dropped: number;
+  peakVus: number;
+  maxVus: number;
+  vusOf: string;
+  saturated: boolean;
+}
+
+interface Evaluated {
+  budgets: { name: string; p95Ms: number; ok: boolean; saturated: boolean }[];
+  scenarios: Record<string, Load>;
+}
+
+// The runner is a script that does nothing but export `evaluate` and `loadOf` when it is imported rather than run.
+const runnerSpecifier = pathToFileURL(resolve(ROOT, "scripts/perf/run.mjs")).href;
+const { evaluate, loadOf } = (await import(runnerSpecifier)) as {
+  evaluate: (summary: Summary, ids: string[], vus?: { capacity: number; of: string }) => Evaluated;
+  loadOf: (summary: Summary, scenario: string, vus: { capacity: number; of: string }) => Load;
+};
+
+// The k6 summary of a run in which every shape of `ids` was requested `requests` times: the p(95) of each budget (half its limit), the count of its requests, and the load of each scenario.
+// `without` names the budget metrics whose requests are left out, which k6 1.3.0 writes as zeros.
+function summaryOf(ids: string[], { requests = 20, without = [], peakVus = 3 }: { requests?: number; without?: string[]; peakVus?: number } = {}): Summary {
+  const metrics: Summary["metrics"] = {};
+  for (const { metric, limitMs } of budgets(ids)) {
+    const none = without.includes(metric);
+    metrics[metric] = { "p(95)": none ? 0 : limitMs / 2 };
+    metrics[metric.replace(/^http_req_waiting/, "http_reqs")] = { count: none ? 0 : requests };
+  }
+  for (const scenario of ids) {
+    const load = loadMetrics(scenario);
+    metrics[load.completed] = { count: without.includes(`http_req_waiting{kind:${scenario}}`) ? 0 : requests };
+    metrics[load.dropped] = { count: 0 };
+    metrics[load.activeVus] = { max: peakVus };
+  }
+  return { metrics };
+}
+
+// The summary with one entry left out, as when k6 writes none.
+const omitting = (summary: Summary, key: string): Summary => ({ metrics: Object.fromEntries(Object.entries(summary.metrics).filter(([name]) => name !== key)) });
+
 const read = (file: string): string => readFileSync(resolve(ROOT, "scripts/perf", file), "utf8");
 
 // The terms the seed of the large instance puts in `fixtures.searchTerms`, read from its source (the module is TypeScript for another build, which tooling does not run).
@@ -177,6 +223,15 @@ describe("performance budgets", () => {
     expect(scenarios).toMatch(/FILTER_SHAPES\[arrival % FILTER_SHAPES\.length\]/);
     const shapes = scenarios.slice(scenarios.indexOf("export function listFilter"), scenarios.indexOf("export function dashboard"));
     expect(shapes).not.toContain("Math.random");
+    // So do the list, the list narrowed by a text and the search: the twelve shapes of the list, the two pages of the text and the terms of the search with the shared slugs.
+    expect(scenarios).toMatch(/LIST_SHAPES\[execution\.scenario\.iterationInTest % LIST_SHAPES\.length\]/);
+    expect(scenarios).toMatch(/PAGES\[arrival % PAGES\.length\]/);
+    expect(scenarios).toMatch(/terms\[arrival % terms\.length\]/);
+    const listShapes = scenarios.slice(scenarios.indexOf("const LIST_SHAPES"), scenarios.indexOf("export function listFilter"));
+    expect(listShapes).not.toContain("Math.random");
+    expect(SORTS.length * PAGES.length).toBe(12);
+    expect(read("README.md")).toMatch(/12 for `list`, the most, 8 for `search`/);
+    expect(SEARCH_TERMS.length + 1).toBe(8);
     // A deep page is requested with a cursor that setup() found under the same filter, and a filter with none ends the run.
     expect(scenarios).toMatch(/data\.filterCursors\[filter\]\[turn % data\.filterCursors\[filter\]\.length\]/);
     expect(scenarios).toMatch(/no \$\{filter\} of the instance holds enough bookmarks for a deep page/);
@@ -188,6 +243,80 @@ describe("performance budgets", () => {
       expect(runner, key).toMatch(new RegExp(`${key}: UNLIMITED`));
     }
     expect(scenarios).toMatch(/maxVUs: MAX_VUS/);
+  });
+
+  it("fails the run on a budget with no request, in the budgets run and in the import run, never reading k6's zero as 0 ms and ok", () => {
+    for (const ids of [STEADY_SCENARIOS, IMPORT_SCENARIOS]) {
+      // Every shape requested: the budgets are judged, and the p(95) is the one k6 wrote.
+      const healthy = evaluate(summaryOf(ids), ids);
+      expect(healthy.budgets.map((budget) => budget.name)).toEqual(budgets(ids).map((budget) => budget.name));
+      expect(healthy.budgets.every((budget) => budget.ok && budget.p95Ms > 0)).toBe(true);
+      // One shape with no request at all, whichever it is: k6 wrote a p(95) of 0 for it, which would be ok, and the run fails by its name instead.
+      for (const { name, scenario, metric, limitMs } of budgets(ids)) {
+        const summary = summaryOf(ids, { without: [metric] });
+        expect(summary.metrics[metric], metric).toEqual({ "p(95)": 0 });
+        expect(0 < limitMs).toBe(true);
+        // A scenario with no request at all is caught by its load, one shape of it by the budget's own count.
+        const wholeScenario = metric === `http_req_waiting{kind:${scenario}}`;
+        expect(() => evaluate(summary, ids), metric).toThrow(wholeScenario ? /made no request/ : `no request was made for "${name}"`);
+      }
+    }
+    // Several shapes with none are all named.
+    const some = budgets(STEADY_SCENARIOS).filter((budget) => budget.name === "search do" || budget.name === "go suggest word");
+    expect(some).toHaveLength(2);
+    expect(() => evaluate(summaryOf(STEADY_SCENARIOS, { without: some.map((budget) => budget.metric) }), STEADY_SCENARIOS)).toThrow(/"search do", "go suggest word"|"go suggest word", "search do"/);
+    // The count is missing, or is not a number: an error as well, never a pass.
+    const search = budgets(STEADY_SCENARIOS).find((budget) => budget.name === "search do");
+    const summary = omitting(summaryOf(STEADY_SCENARIOS), (search?.metric ?? "").replace(/^http_req_waiting/, "http_reqs"));
+    expect(() => evaluate(summary, STEADY_SCENARIOS)).toThrow(/no request count or p\(95\)/);
+  });
+
+  it("asks k6 for the count of the requests behind every budget, from the tags of the budget", () => {
+    const scenarios = read("scenarios.js");
+    expect(scenarios).toMatch(/for \(const \{ metric \} of budgets\(scenarios\)\)/);
+    expect(scenarios).toContain('samples[metric.replace(/^http_req_waiting/, "http_reqs")] = ["count>=0"];');
+    expect(scenarios).toMatch(/\.\.\.sampleThresholds\(IMPORT \? IMPORT_SCENARIOS : STEADY_SCENARIOS\)/);
+    expect(read("run.mjs")).toContain('metric.replace(/^http_req_waiting/u, "http_reqs")');
+  });
+
+  it("fails the run on a scenario with no request or no entry for its load, and reads a dropped count of 0 as 0", () => {
+    const vus = { capacity: MAX_VUS, of: "scenario" };
+    const ok = summaryOf(["go"]);
+    expect(loadOf(ok, "go", vus)).toEqual({ completed: 20, dropped: 0, peakVus: 3, maxVus: MAX_VUS, vusOf: "scenario", saturated: false });
+    const { completed, dropped, activeVus } = loadMetrics("go");
+    for (const metric of [completed, dropped, activeVus]) {
+      expect(() => loadOf(omitting(summaryOf(["go"]), metric), "go", vus), metric).toThrow(/no requests, dropped arrivals or VUs/);
+    }
+    const none = summaryOf(["go"]);
+    none.metrics[completed] = { count: 0 };
+    expect(() => loadOf(none, "go", vus)).toThrow(/made no request/);
+    const dropping = summaryOf(["go"]);
+    dropping.metrics[dropped] = { count: 3 };
+    expect(loadOf(dropping, "go", vus).saturated).toBe(true);
+  });
+
+  it("reports the VUs of the import run as the run's, against the VUs the run may use, so no figure claims more than that and no scenario is saturated by the others", () => {
+    // The creates, /go, the list and the importer are active together: 221 VUs are more than a scenario's 100 and fewer than the 301 the run may use.
+    const together = { capacity: MAX_VUS * (IMPORT_SCENARIOS.length + 1) + 1, of: "run" };
+    expect(together.capacity).toBe(301);
+    const summary = summaryOf(IMPORT_SCENARIOS, { peakVus: 221 });
+    const imported = evaluate(summary, IMPORT_SCENARIOS, together);
+    for (const scenario of IMPORT_SCENARIOS) {
+      expect(imported.scenarios[scenario], scenario).toMatchObject({ peakVus: 221, maxVus: 301, vusOf: "run", saturated: false });
+    }
+    expect(imported.budgets.every((budget) => !budget.saturated)).toBe(true);
+    // The runner passes it for the import run only; the scenarios of the budgets run are alone, so their peak is theirs, against the 100 of one.
+    expect(read("run.mjs")).toMatch(/evaluate\(summary, IMPORT_SCENARIOS, \{ capacity: MAX_VUS \* \(IMPORT_SCENARIOS\.length \+ 1\) \+ 1, of: "run" \}\)/);
+    const alone = evaluate(summaryOf(STEADY_SCENARIOS, { peakVus: MAX_VUS }), STEADY_SCENARIOS);
+    expect(Object.values(alone.scenarios).every((load) => load.maxVus === MAX_VUS && load.vusOf === "scenario" && load.saturated)).toBe(true);
+    // Four scenarios of the import run in k6: the three that overlap and the importer.
+    const scenarios = read("scenarios.js");
+    const set = scenarios.slice(scenarios.indexOf("function importScenarios"), scenarios.indexOf("// The VUs active at the start"));
+    expect(set.match(/maxVUs: MAX_VUS/g)).toHaveLength(2);
+    expect(set).toMatch(/\[CREATES_SCENARIO\]: \{/);
+    expect(set).toMatch(/importer: \{ executor: "per-vu-iterations", vus: 1,/);
+    expect(set).toMatch(/go_import: load\(/);
+    expect(set).toMatch(/list_import: load\(/);
   });
 
   it("limits each budget to its scenario's", () => {

@@ -91,7 +91,7 @@ export function budgetThresholds(scenarios = SCENARIOS) {
 // What a run says about its own load, per scenario: the requests that completed, the arrivals k6 dropped because every VU was busy and could not
 // start another, and the most VUs active at an arrival. k6 puts a sub-metric in its summary only when a threshold names it, so each is named by a
 // threshold that no value can fail (a count or a maximum is never below 0): they report and never end k6 with 99. A scenario that dropped nothing has
-// no `dropped_iterations` sample, which the runner reads as 0.
+// `"count": 0` for `dropped_iterations` in the summary, which is a real 0; the runner reads an entry that is missing as an error, not as 0.
 export function loadMetrics(scenario) {
   return {
     completed: `http_reqs{kind:${scenario}}`,

@@ -6,7 +6,9 @@
 // include the bookmarks that members share with the account (doc 02 sections 6.3 and 8), and the budgets cover them. The list is measured in three
 // shapes: with no text and no filter (every sort, first and deep page), narrowed by a text (first and deep page) and under a tag and under a folder of the account's (first and deep page).
 // The slug suggestions of the palette's go mode (GET /api/v1/go/suggest, p95 under 50 ms) and the dashboard (p95 under 100 ms) have a scenario each. A scenario whose budgets are of several shapes
-// (the suggestions' prefixes, the filters and their pages) takes the shape of an arrival from its number, in turn, so that each shape is requested in every run however short.
+// (the list's sorts and pages, the text's pages, the filters and their pages, the suggestions' prefixes, the search terms) takes the shape of an arrival from its number, in turn, so that each shape is
+// requested in every run that has as many arrivals (RATE x DURATION_SECONDS) as the scenario has shapes: 12 for the list, the most. A run with fewer leaves a shape with no request, which run.mjs
+// fails by name: k6 would write a p(95) of 0 for it.
 // A second set of one scenario, `go-hot`, requests one forwarding slug 10 000 times for the write-load check of run.mjs (doc 01 section 8.1).
 // A third set, `import`, runs last (a run of its own, after the budgets, so that the bookmarks it adds change none of their measurements): one member imports the largest Netscape
 // file and the largest SlugBase JSON file into the large workspace while the admin's /go and list traffic goes on at the run's rate and another member creates bookmarks.
@@ -32,6 +34,7 @@ import {
   STEADY_SCENARIOS,
   SUGGEST_PREFIXES,
   budgetThresholds,
+  budgets,
   createThresholds,
   loadThresholds,
 } from "./budgets.js";
@@ -80,6 +83,15 @@ function scenario(index, exec, tags) {
   };
 }
 
+// The requests behind each budget (`http_reqs` of the tags of its `http_req_waiting`), so that the summary says whether a p(95) has a sample: k6 writes 0 for a sub-metric with none (run.mjs fails the run on it).
+function sampleThresholds(scenarios) {
+  const samples = {};
+  for (const { metric } of budgets(scenarios)) {
+    samples[metric.replace(/^http_req_waiting/, "http_reqs")] = ["count>=0"];
+  }
+  return samples;
+}
+
 const thresholds = GO_HOT
   ? {
       checks: ["rate==1"],
@@ -92,6 +104,7 @@ const thresholds = GO_HOT
       ...budgetThresholds(IMPORT ? IMPORT_SCENARIOS : STEADY_SCENARIOS),
       // Not budgets: they only put the load of each scenario in the summary (budgets.js), and no value fails them.
       ...loadThresholds(IMPORT ? IMPORT_SCENARIOS : STEADY_SCENARIOS),
+      ...sampleThresholds(IMPORT ? IMPORT_SCENARIOS : STEADY_SCENARIOS),
       ...(IMPORT ? createThresholds() : {}),
     };
 
@@ -318,10 +331,12 @@ export function go(data) {
   goRequest(data, "go");
 }
 
+// The sort and the page of an arrival are the next of the twelve in turn, so that no shape is left out of a run of twelve arrivals or more.
+const LIST_SHAPES = SORTS.flatMap((sort) => PAGES.map((page) => ({ sort, page })));
+
 function listRequest(data, kind) {
   activeVus.add(execution.instance.vusActive, { kind });
-  const sort = SORTS[Math.floor(Math.random() * SORTS.length)];
-  const page = PAGES[Math.floor(Math.random() * PAGES.length)];
+  const { sort, page } = LIST_SHAPES[execution.scenario.iterationInTest % LIST_SHAPES.length];
   const cursor = page === "deep" ? `&cursor=${encodeURIComponent(data.cursors[sort])}` : "";
   const response = get(`/api/v1/bookmarks?sort=${sort}&limit=${PAGE_SIZE}${cursor}`, data.headers, { kind, sort, page });
   check(response, { "a page of bookmarks": (r) => r.status === 200 && r.json("items").length === PAGE_SIZE });
@@ -333,10 +348,13 @@ export function list(data) {
 
 export function search(data) {
   activeVus.add(execution.instance.vusActive, { kind: "search" });
-  // Some of the terms only bookmarks that members share with the account match, so the search reads the shares as well as the account's own bookmarks.
+  // Some of the terms only bookmarks that members share with the account match, so the search reads the shares as well as the account's own bookmarks. The term of an arrival is the next of the
+  // terms in turn, the slugs of the shares being one more, and the slug or the term of the seed is the next of its own with it.
   const shared = fixtures.sharedSearchTerms || [];
-  const useShared = shared.length > 0 && Math.random() < 0.2;
-  const term = useShared ? pick(shared) : pick(fixtures.searchTerms);
+  const terms = shared.length > 0 ? [...fixtures.searchTerms, SHARED_TERM] : fixtures.searchTerms;
+  const arrival = execution.scenario.iterationInTest;
+  const useShared = shared.length > 0 && arrival % terms.length === terms.length - 1;
+  const term = useShared ? shared[Math.floor(arrival / terms.length) % shared.length] : terms[arrival % terms.length];
   const response = get(`/api/v1/search?q=${encodeURIComponent(term)}`, data.headers, { kind: "search", term: useShared ? SHARED_TERM : term });
   check(response, {
     "search results": (r) => r.status === 200 && Array.isArray(r.json("bookmarks")),
@@ -347,8 +365,11 @@ export function search(data) {
 export function listText(data) {
   activeVus.add(execution.instance.vusActive, { kind: "list_q" });
   const deep = Object.keys(data.textCursors);
-  const page = PAGES[Math.floor(Math.random() * PAGES.length)];
-  const term = page === "deep" ? pick(deep) : pick(fixtures.searchTerms);
+  // The page of an arrival is the next of the two in turn, and the term the next of the seed's (of those with a deep page, for a deep one) with it.
+  const arrival = execution.scenario.iterationInTest;
+  const page = PAGES[arrival % PAGES.length];
+  const turn = Math.floor(arrival / PAGES.length);
+  const term = page === "deep" ? deep[turn % deep.length] : fixtures.searchTerms[turn % fixtures.searchTerms.length];
   const response = get(`/api/v1/bookmarks?${textQuery(term, page === "deep" ? data.textCursors[term] : null)}`, data.headers, { kind: "list_q", page });
   check(response, { "a page of the bookmarks a text finds": (r) => r.status === 200 && r.json("items").length > 0 });
 }
