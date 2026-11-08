@@ -92,11 +92,12 @@ interface Evaluated {
   scenarios: Record<string, Load>;
 }
 
-// The runner is a script that does nothing but export `evaluate` and `loadOf` when it is imported rather than run.
+// The runner is a script that does nothing but export `evaluate`, `loadOf` and `createsOf` when it is imported rather than run.
 const runnerSpecifier = pathToFileURL(resolve(ROOT, "scripts/perf/run.mjs")).href;
-const { evaluate, loadOf } = (await import(runnerSpecifier)) as {
+const { evaluate, loadOf, createsOf } = (await import(runnerSpecifier)) as {
   evaluate: (summary: Summary, ids: string[], vus?: { capacity: number; of: string }) => Evaluated;
   loadOf: (summary: Summary, scenario: string, vus: { capacity: number; of: string }) => Load;
+  createsOf: (summary: Summary) => Record<string, unknown> & { dropped: number };
 };
 
 // The k6 summary of a run in which every shape of `ids` was requested `requests` times: the p(95) of each budget (half its limit), the count of its requests, and the load of each scenario.
@@ -293,6 +294,21 @@ describe("performance budgets", () => {
     const dropping = summaryOf(["go"]);
     dropping.metrics[dropped] = { count: 3 };
     expect(loadOf(dropping, "go", vus).saturated).toBe(true);
+  });
+
+  it("fails the run on creates with no entry for their dropped arrivals, and reads a dropped count of 0 as 0", () => {
+    const metrics: Summary["metrics"] = {};
+    for (const phase of CREATE_PHASES) {
+      const { p95, completed } = createMetrics(phase);
+      metrics[p95] = { "p(95)": 12 };
+      metrics[completed] = { count: 40 };
+    }
+    const dropped = `dropped_iterations{scenario:${CREATES_SCENARIO}}`;
+    metrics[dropped] = { count: 0 };
+    expect(createsOf({ metrics }).dropped).toBe(0);
+    metrics[dropped] = { count: 2 };
+    expect(createsOf({ metrics }).dropped).toBe(2);
+    expect(() => createsOf(omitting({ metrics }, dropped))).toThrow(/no dropped arrivals for the creates/);
   });
 
   it("reports the VUs of the import run as the run's, against the VUs the run may use, so no figure claims more than that and no scenario is saturated by the others", () => {

@@ -640,7 +640,8 @@ function judgeImports(imports, files) {
   });
 }
 
-// The p95 of the creates in each phase, their number and the arrivals dropped. A phase with no create has no p95, which is an error and not a 0.
+// The p95 of the creates in each phase, their number and the arrivals dropped. A phase with no create has no p95, which is an error and not a 0. The dropped arrivals have an entry
+// of their own (`"count": 0` when none was dropped, budgets.js), so a missing entry is an error too, as in `loadOf`, and never a 0.
 function createsOf(summary) {
   const creates = {};
   for (const phase of CREATE_PHASES) {
@@ -652,7 +653,11 @@ function createsOf(summary) {
     }
     creates[phase] = { p95Ms: Math.round(value * 100) / 100, completed: count };
   }
-  return { ...creates, rate: CREATE_RATE, dropped: summary.metrics[CREATES_DROPPED_METRIC]?.count ?? 0 };
+  const dropped = summary.metrics[CREATES_DROPPED_METRIC]?.count;
+  if (!isNumber(dropped)) {
+    throw new Error("k6 reported no dropped arrivals for the creates");
+  }
+  return { ...creates, rate: CREATE_RATE, dropped };
 }
 
 // The import phase: perf-member-1 imports the largest Netscape file and the largest JSON file, one after the other, while the admin's /go and list traffic goes on at the run's rate and
@@ -685,7 +690,7 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
   return { status, budgets, scenarios, phase: { windowSeconds: Number(args["import-window"]), k6Status: status, imports, creates: createsOf(summary) } };
 }
 
-export { evaluate, loadOf };
+export { createsOf, evaluate, loadOf };
 
 if (isMain) {
   let status = 1;
