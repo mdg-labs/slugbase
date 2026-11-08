@@ -475,7 +475,7 @@ function middle(values: readonly number[]): number {
 // the number of buffers the page and its count touch, `Shared Hit Blocks` plus `Shared Read Blocks` of `EXPLAIN (ANALYZE, BUFFERS)`, which is the same whether a block is found in the cache or read, for the same plan, data and
 // visibility map. A plan that regresses (an index that is not used, a scan of the table) touches more, and `BLOCKS` holds each text to the work of the plan it is meant to have.
 //
-// What this does not hold: the 100 ms. The time is reported, not asserted, and no scenario of the k6 run requests this list with a text (doc 08 section 5.3), so nothing holds that time today. A regression that costs CPU and reads
+// What this does not hold: the 100 ms. The time is reported, not asserted; the `list q` scenario of the k6 run requests this list with a text, the first page and a deep one, and holds that time (doc 08 section 5.3). A regression that costs CPU and reads
 // no more blocks (hashing every row of the walk, ranking every match) passes this file.
 interface WorkCase {
   text: string;

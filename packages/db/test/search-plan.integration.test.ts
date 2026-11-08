@@ -296,8 +296,8 @@ const QUERIES = ["github", "docs", "kubernetes", "kubernetes guide", "api refere
 // the host while the plan does not, so what is asserted is the work of the plan: `Shared Hit Blocks` plus `Shared Read Blocks` of `EXPLAIN (ANALYZE, BUFFERS)` (`support/plan-work.ts`) of the statement of `SearchRepository.bookmarks`
 // as slugbase_app in a tenant transaction, the function it calls included. Each bound is 5 % and 16 blocks over the most that query touched in repeated runs of this file, rounded up to ten: in 12 runs on PostgreSQL 17 and 18, which touched the same to within a few
 // blocks, before the function planned each statement for the values of its call, and, for the ten queries that took it over their bounds (it plans the statement on every call: 25 to 45 blocks
-// more for the queries of a few hundred), in 6 runs on PostgreSQL 18, where each touched the same to within 5 blocks. The 95th percentile of the time is reported and not asserted. What this does not hold: the 100 ms. A regression that costs CPU and reads no more blocks passes; the k6 run requests
-// `GET /api/v1/search?q=` (doc 08 section 5.3).
+// more for the queries of a few hundred), in 6 runs on PostgreSQL 18, where each touched the same to within 5 blocks. The 95th percentile of the time is reported and not asserted. What this does not hold: the 100 ms. A regression that costs CPU and reads no more blocks passes; the `search` scenario of the k6 run requests
+// `GET /api/v1/search?q=` and holds that time (doc 08 section 5.3).
 const BLOCKS: Readonly<Record<string, number>> = {
   github: 310,
   docs: 1020,
