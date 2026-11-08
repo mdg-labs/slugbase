@@ -21,6 +21,11 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- The plan is pinned for the function's own run. Sequential scans, index scans and index-only scans are off, so that the prefix is read by a bitmap scan of bookmarks_slug_trgm_idx, where `LIKE`
 -- is an index condition beside the workspace. Without it the planner may choose a walk of bookmarks_slug_idx, which holds the slug and the columns of the candidate rule, with the prefix as a
 -- filter: it reads every slug of the workspace and its cost is close enough to the trigram scan's for the choice to change with the statistics of the table.
+-- The function also plans its statement with the values of the call (plan_cache_mode = force_custom_plan): PL/pgSQL plans a statement with its values for the first five runs in a connection and from the
+-- sixth keeps one plan that does not know them if its estimated cost is below the average of those five. For `LIKE` on a value it does not know the estimate is a single row, and the pages of the pending
+-- list of a GIN index are added to the cost of every scan of it; the opens of /go leave entries in those lists (they change indexed columns of bookmarks, so no update is HOT) until a vacuum. With the
+-- lists pending the scan of bookmarks_slug_trgm_idx costs more than the walk of bookmarks_owner_slug_key and bookmarks_slug_idx with the prefix as a filter, so the connection keeps that walk for every later
+-- prefix, which reads thousands of blocks for a prefix that few slugs have and, for the shared candidates, tests each of the grants against each candidate.
 CREATE OR REPLACE FUNCTION public.sys_go_suggest(p_prefix text)
   RETURNS TABLE (id uuid, slug text, title text, host text, owner_id uuid, owner_name text, access text)
   LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -28,6 +33,7 @@ CREATE OR REPLACE FUNCTION public.sys_go_suggest(p_prefix text)
   SET enable_seqscan = off
   SET enable_indexscan = off
   SET enable_indexonlyscan = off
+  SET plan_cache_mode = force_custom_plan
   AS $$
 #variable_conflict use_column
 DECLARE

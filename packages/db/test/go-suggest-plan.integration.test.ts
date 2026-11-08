@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { goRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
-import { blocksOfStatement } from "./support/plan-work.ts";
+import { blocksOfStatement, STATEMENT_TIMEOUT_MS } from "./support/plan-work.ts";
 import { vacuumUntilAllVisible, visibilityOf } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
@@ -19,24 +19,32 @@ const SMALL_WORKSPACES = 1_000;
 const P95_BUDGET_MS = 50;
 const PREFIXES = ["s", "d", "m", "g", "n", "-", "slug", "slug-1", "slug-12", "docs-", "mail", "gh", "zz", "a", "9"];
 
-// The most buffers the statement of `suggest` may touch for each prefix on this fixture: 5 % and 16 blocks over the most it touched in 4 runs on each of PostgreSQL 17 and 18 (the two differ by at most 2 blocks), rounded up to ten.
-// A prefix that matches thousands of slugs reads about 3 400 blocks, one with a few hundred matches a few hundred, and the answer is cut to 10 by the Limit nodes the plan test above names.
+// The statement of `suggest` in goRepository, as the application runs it.
+const statementOf = (prefix: string) => ({
+  sql: `SELECT id, slug, title, host, owner_id, owner_name, access FROM sys_go_suggest($1::text) ORDER BY access <> 'owner', slug COLLATE "C", id LIMIT $2::integer`,
+  params: [prefix, 10],
+});
+
+// The most buffers the statement of `suggest` may touch for each prefix on this fixture: 5 % and 16 blocks over the most it touched in the runs measured on PostgreSQL 18 (4 runs for the prefixes other than the two below; 972 to 980 for `slug-1` and 324 to 332 for `slug-12` over freshly seeded fixtures, whose random identifiers move the two together), rounded up to ten. The function plans each call for its values
+// (`plan_cache_mode = force_custom_plan`), so a prefix that matches thousands of slugs reads about 16 800 blocks (the grants of the caller, 5 000 on this fixture, are probed by primary key for the shared candidates),
+// one with a few hundred matches about 980 and the rest 160 to 332, and the answer is cut to 10 by the Limit nodes the plan test above names. Before the setting the large ones read about 3 400 blocks through a plan
+// made for no value, which a connection kept from its sixth call on and which, with pending lists in the GIN indexes, read 3 600 blocks for a prefix that few slugs have (the last case of this file).
 const BLOCKS: Readonly<Record<string, number>> = {
-  s: 3610,
-  d: 3610,
-  m: 3610,
-  g: 3610,
-  n: 3610,
-  "-": 3680,
-  slug: 3630,
-  "slug-1": 1010,
-  "slug-12": 330,
-  "docs-": 3640,
-  mail: 3630,
-  gh: 170,
-  zz: 160,
-  a: 160,
-  "9": 250,
+  s: 17680,
+  d: 17680,
+  m: 17680,
+  g: 17690,
+  n: 17680,
+  "-": 17700,
+  slug: 17690,
+  "slug-1": 1050,
+  "slug-12": 370,
+  "docs-": 17700,
+  mail: 17690,
+  gh: 210,
+  zz: 200,
+  a: 200,
+  "9": 280,
 };
 
 let db: TestDatabase;
@@ -214,11 +222,6 @@ describe("the suggestions on a workspace of 50 000 bookmarks", () => {
     expect((await suggest("gh")).map((record) => record.slug)).toEqual(["gh"]);
   });
 
-  // The statement of `suggest` in goRepository, as the application runs it.
-  const statementOf = (prefix: string) => ({
-    sql: `SELECT id, slug, title, host, owner_id, owner_name, access FROM sys_go_suggest($1::text) ORDER BY access <> 'owner', slug COLLATE "C", id LIMIT $2::integer`,
-    params: [prefix, 10],
-  });
   const measured = new Map<string, number>();
 
   afterAll(() => {
@@ -257,4 +260,77 @@ describe("the suggestions on a workspace of 50 000 bookmarks", () => {
       `go suggest p95 ${p95.toFixed(1)} ms (reported, not asserted; the budget is ${String(P95_BUDGET_MS)} ms), slowest ${JSON.stringify(Object.fromEntries([...slowest].map(([prefix, ms]) => [prefix, Math.round(ms)])))}\n`,
     );
   });
+});
+
+// The statement of `sys_go_suggest` is a PL/pgSQL statement, which a connection plans with the values of the call for its first five runs and from the sixth runs with one plan that does not know them if that plan's
+// estimated cost is no worse. For `LIKE` on a value it does not know the estimate is a single row, so the walk of the workspace's slugs through `bookmarks_owner_slug_key` and `bookmarks_slug_idx` with the prefix as
+// a filter costs about 5 and the scan of `bookmarks_slug_trgm_idx` costs 160 or more, because the pages of the pending list of a GIN index are added to the cost of every scan of it. The opens of `/go` reach `bookmarks`
+// through `sys_flush_open_counts` and change columns that have indexes, so none of those updates is HOT and the entries of the GIN indexes wait in their pending lists until a vacuum. The plan tests above plan with the
+// values as constants and `blocksOfStatement` repeats one text on a vacuumed fixture, so neither sees it. The function therefore plans each call for its values (`plan_cache_mode = force_custom_plan`); what is held here
+// is the work of the calls of one connection, which does not depend on what the connection ran before, after the opens of `/go` have been flushed into a tenth of the slugged bookmarks.
+describe("the suggestions on a workspace whose GIN indexes hold pending lists", () => {
+  // The first call of a connection is not counted (it loads the catalogs) and is the first of the five that are planned for their values; four broad prefixes follow, then every call from the sixth on is made with
+  // the plan the connection keeps, in an order that puts the prefixes that few slugs have among those that thousands have.
+  const WARM_UP = "zzz";
+  const SEQUENCE = ["s", "d", "m", "g", "gh", "zz", "docs-", "a", "9", "slug-1", "gh", "mail", "slug-12", "zz", "a", "9", "slug-12", "slug-1", "s"];
+
+  beforeAll(async () => {
+    // The opens of `/go` as `sys_flush_open_counts` writes them. No vacuum follows, so the pending lists are as a running instance has them.
+    await asSystem(
+      db,
+      (tx) => tx`UPDATE bookmarks SET open_count = open_count + 1, last_opened_at = now() WHERE workspace_id = ${workspaceId} AND slug IS NOT NULL AND abs(hashtext(id::text)) % 10 = 1`,
+    );
+  }, HOOK_TIMEOUT_MS);
+
+  interface Call {
+    readonly blocks: number;
+    readonly ms: number;
+  }
+
+  /**
+   * The shared blocks of each call of `prefixes`, in order, on one connection, so that what the connection planned for the first calls is what the later ones run. `customPlans` sets the plan cache mode of the
+   * transaction, which the function's own setting overrides while it has one.
+   */
+  async function callsOf(prefixes: readonly string[], customPlans = false): Promise<Map<string, Call[]>> {
+    return db.app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true), set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MS)}, true)`;
+      if (customPlans) {
+        await tx`SELECT set_config('plan_cache_mode', 'force_custom_plan', true)`;
+      }
+      const byPrefix = new Map<string, Call[]>();
+      for (const [index, prefix] of [WARM_UP, ...prefixes].entries()) {
+        const { sql, params } = statementOf(prefix);
+        const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: { "Shared Hit Blocks"?: number; "Shared Read Blocks"?: number }; "Execution Time": number }[] }[]>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`, params as never[]);
+        const explained = rows[0]?.["QUERY PLAN"][0];
+        if (explained === undefined) {
+          throw new Error("EXPLAIN returned no plan");
+        }
+        if (index > 0) {
+          byPrefix.set(prefix, [...(byPrefix.get(prefix) ?? []), { blocks: (explained.Plan["Shared Hit Blocks"] ?? 0) + (explained.Plan["Shared Read Blocks"] ?? 0), ms: explained["Execution Time"] }]);
+        }
+      }
+      return byPrefix;
+    });
+  }
+
+  it("is planned for the values of each call, whatever the connection ran before", async () => {
+    const [row] = await db.owner<{ proconfig: string[] | null }[]>`SELECT proconfig FROM pg_proc WHERE oid = 'public.sys_go_suggest(text)'::regprocedure`;
+
+    expect(row?.proconfig).toEqual(expect.arrayContaining(["enable_seqscan=off", "enable_indexscan=off", "enable_indexonlyscan=off", "plan_cache_mode=force_custom_plan"]));
+  });
+
+  it("touches no more blocks for a prefix on a connection that has run other suggestions than the plan made for the values of the call", async () => {
+    // The reference: every prefix planned with its own values, whatever the function says. The calls: the mix, on one connection, with the plan cache mode left to the function.
+    const calls = await callsOf(SEQUENCE);
+    const reference = await callsOf([...new Set(SEQUENCE), ...new Set(SEQUENCE)], true);
+    const report = (byPrefix: Map<string, Call[]>) => Object.fromEntries([...byPrefix].map(([prefix, runs]) => [prefix, runs.map((run) => `${String(run.blocks)} blocks ${run.ms.toFixed(1)} ms`)]));
+    process.stdout.write(`go suggest work in one connection with pending lists (each call, in order): ${JSON.stringify(report(calls))}, planned for the values: ${JSON.stringify(report(reference))}\n`);
+
+    for (const [prefix, runs] of calls) {
+      const planned = Math.min(...(reference.get(prefix) ?? []).map((run) => run.blocks));
+      // The same plan touches nearly the same blocks run after run, apart from a call that meets a backend whose caches were reset (the first call of `a` touched 1 683 blocks and the next 230); a plan that has
+      // stopped using the trigram index touches several times as many in every call for a prefix that few slugs have, so the least of the calls of a prefix is what is held.
+      expect(Math.min(...runs.map((run) => run.blocks)), prefix).toBeLessThan(planned * 1.5 + 100);
+    }
+  }, HOOK_TIMEOUT_MS);
 });

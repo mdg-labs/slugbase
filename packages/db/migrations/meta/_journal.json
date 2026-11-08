@@ -960,6 +960,13 @@
       "when": 1794072420265,
       "tag": "20261107172700_add_account_deletion_lock_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1794088786706,
+      "tag": "20261107215946_add_slug_suggest_custom_plans",
+      "breakpoints": true
     }
   ]
 }
