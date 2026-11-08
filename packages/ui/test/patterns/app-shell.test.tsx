@@ -155,10 +155,16 @@ describe("AppShell at 375 px", () => {
     expect(within(drawer).getByRole("link", { name: "Start" })).toBeTruthy();
   });
 
-  it.each(["light", "dark"] as const)("has no accessibility violations, closed and open, in the %s theme", async (theme) => {
+  it.each(["light", "dark"] as const)("has no accessibility violations while closed in the %s theme", async (theme) => {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     const { baseElement } = render(<Shell />);
+
     await expectNoViolations(baseElement);
+  });
+
+  it.each(["light", "dark"] as const)("has no accessibility violations with the drawer open in the %s theme", async (theme) => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    const { baseElement } = render(<Shell />);
 
     fireEvent.click(screen.getByRole("button", { name: "Seitenleiste umschalten" }));
     await screen.findByRole("dialog", { name: "Navigation" });
