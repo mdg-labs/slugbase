@@ -1,3 +1,4 @@
+import type { ComponentTypes } from "@slugbase/contracts";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
@@ -23,6 +24,49 @@ const TAGLINE_EN = "Bookmarks with short, private slugs.";
 const TAGLINE_DE = "Lesezeichen mit kurzen, privaten Slugs.";
 
 type Transport = (request: Request) => Promise<Response>;
+
+const DASHBOARD_PATH = "/api/v1/dashboard";
+const ENTITLEMENTS_PATH = "/api/v1/entitlements";
+const FOLDERS_PATH = "/api/v1/folders";
+
+const DASHBOARD_BODY: ComponentTypes["schemas"]["Dashboard"] = {
+  counts: { bookmarks: 0, folders: 0, tags: 0, sharedWithYou: null },
+  quickAccess: [],
+  pinned: [],
+  topTags: [],
+  sharing: null,
+  onboarding: { bookmarkAdded: false, slugGiven: false, browserSetupDone: false, folderCreated: false, importDone: false, dismissed: false },
+};
+
+const ENTITLEMENTS_BODY: ComponentTypes["schemas"]["Entitlements"] = {
+  entitlements: {
+    "bookmarks.max": "unlimited",
+    "seats.max": "unlimited",
+    "workspaces.ownMax": "unlimited",
+    "ai.suggestions": false,
+    "sharing.members": true,
+    "sharing.teams": true,
+    "members.invite": true,
+    "teams.manage": true,
+    "audit.log": true,
+  },
+  usage: { "bookmarks.used": 0, "seats.used": 1, "workspaces.owned": 1 },
+  upgradeAvailable: false,
+};
+
+/** What the shell and the Home screen read once the account is known, each answered, so that no read fails and is tried again after a delay. */
+function answerReads(request: Request): Promise<Response> {
+  switch (new URL(request.url).pathname) {
+    case DASHBOARD_PATH:
+      return Promise.resolve(json(DASHBOARD_BODY));
+    case ENTITLEMENTS_PATH:
+      return Promise.resolve(json(ENTITLEMENTS_BODY));
+    case FOLDERS_PATH:
+      return Promise.resolve(json({ items: [], nextCursor: null, total: 0 }));
+    default:
+      return Promise.reject(new Error("unexpected call"));
+  }
+}
 
 function stubTransport(handler: Transport) {
   const fetch = vi.fn<Transport>(handler);
@@ -61,7 +105,7 @@ afterEach(() => {
 
 describe("createWebApp", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("requests /api/config before anything renders and shows the product name from it", async () => {
-    const fetch = stubTransport((request) => signedIn(request));
+    const fetch = stubTransport((request) => signedIn(request, answerReads));
     const App = createWebApp({ extensions: [] });
     // The client's request handling runs before the transport is called, so the call follows within the turn.
     await vi.waitFor(() => {
@@ -72,10 +116,17 @@ describe("createWebApp", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await renderApp(<App />);
 
     expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
-    const paths = fetch.mock.calls.map(([request]) => new URL(request.url).pathname);
-    // The configuration, the session and the account come first and in this order; the shell and the Home screen then ask for what they show, side by side.
+    const requested = () => fetch.mock.calls.map(([request]) => new URL(request.url).pathname);
+    // The shell and the Home screen ask for what they show, side by side: the workspaces, the dashboard, the entitlements, the member's
+    // folders and, where the workspace grants sharing, the folders shared with them. Each is read once; every read is answered, so none is tried again.
+    const expected = [DASHBOARD_PATH, ENTITLEMENTS_PATH, FOLDERS_PATH, FOLDERS_PATH, WORKSPACES_PATH];
+    await vi.waitFor(() => {
+      expect(requested().slice(3)).toHaveLength(expected.length);
+    });
+    const paths = requested();
+    // The configuration, the session and the account come first and in this order.
     expect(paths.slice(0, 3)).toEqual(["/api/config", SESSION_PATH, ME_PATH]);
-    expect(paths.slice(3).sort()).toEqual(["/api/v1/dashboard", "/api/v1/entitlements", "/api/v1/folders", WORKSPACES_PATH].sort());
+    expect(paths.slice(3).sort()).toEqual(expected);
   });
 
   it("renders nothing of the product while the configuration is on its way", async () => {
