@@ -134,6 +134,16 @@ export const SOCKET_EXEMPTIONS: readonly SocketExemption[] = [
     names: ["child_process"],
     why: "development seed command that pipes its SQL to psql; it makes no request",
   },
+  {
+    path: "packages/server/src/import-worker/client.ts",
+    names: ["worker_threads"],
+    why: "starts the one worker thread that decodes, parses and validates an import file; it runs the server's own import-worker module and opens no connection",
+  },
+  {
+    path: "packages/server/src/import-worker/worker.ts",
+    names: ["worker_threads"],
+    why: "the entry of that thread: reads the bytes of a file from its parent and answers plain data; it opens no connection",
+  },
 ];
 
 // The database drivers and the query builder. Only packages/db may hold a raw

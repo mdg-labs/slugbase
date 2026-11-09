@@ -1,6 +1,7 @@
 import { IMPORT_MAX_DISTINCT_NAMES, ImportResultSchema } from "@slugbase/contracts";
 import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { importWorker, ImportWorker } from "../../src/import-worker/client.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 import { NETSCAPE, bookmarkFile, multipart, upload, uploadRequest, type FileLink } from "./netscape-upload.ts";
 
@@ -17,7 +18,10 @@ const harness = workspaceHarness(database);
 
 beforeAll(() => harness.start(), HOOK_TIMEOUT_MS);
 
-afterAll(() => harness.stop());
+afterAll(async () => {
+  importWorker().terminate();
+  await harness.stop();
+});
 
 beforeEach(async () => {
   await database().owner`TRUNCATE accounts CASCADE`;
@@ -314,7 +318,7 @@ describe("POST /import/netscape", { timeout: TEST_TIMEOUT_MS }, () => {
     it.each<{ name: string; headers: Record<string, string> }>([
       { name: "with a key", headers: { [KEY_HEADER]: crypto.randomUUID() } },
       { name: "without one", headers: {} },
-    ])("decodes the upload once per request, $name, the first request and the repeat of it alike", async ({ headers }) => {
+    ])("reads the upload once per request, on the import worker and never on the request thread, $name, the first request and the repeat of it alike", async ({ headers }) => {
       const world = harness.serve({ env: RELAXED });
       const { a } = await setup(world);
       const html = bookmarkFile(LINKS);
@@ -322,19 +326,18 @@ describe("POST /import/netscape", { timeout: TEST_TIMEOUT_MS }, () => {
       const requests = [await uploadRequest(world, a, html, { headers }), await uploadRequest(world, a, html, { headers })];
       const decodes = [vi.spyOn(Request.prototype, "formData"), vi.spyOn(Response.prototype, "formData")];
       const decoded = (): number => decodes.reduce((total, spy) => total + spy.mock.calls.length, 0);
+      const jobs = vi.spyOn(ImportWorker.prototype, "run");
 
       try {
-        const first = await world.server.fetch(requests[0] as Request);
-        expect(first.status).toBe(200);
-        expect(decoded()).toBe(1);
-        for (const spy of decodes) {
-          spy.mockClear();
+        for (const request of requests) {
+          const answered = await world.server.fetch(request);
+          expect(answered.status).toBe(200);
+          expect(jobs).toHaveBeenCalledTimes(1);
+          jobs.mockClear();
         }
-
-        const again = await world.server.fetch(requests[1] as Request);
-        expect(again.status).toBe(200);
-        expect(decoded()).toBe(1);
+        expect(decoded()).toBe(0);
       } finally {
+        jobs.mockRestore();
         for (const spy of decodes) {
           spy.mockRestore();
         }

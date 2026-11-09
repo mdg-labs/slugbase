@@ -20,6 +20,7 @@ import { normalizeBookmarkUrl, type BookmarkUrlRefusal } from "../bookmarks/url.
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import { parseSlug } from "../go/slug.ts";
 import { cleanDescription, cleanText } from "./text.ts";
+import { yieldToEventLoop } from "./yield.ts";
 
 // The preview of a SlugBase JSON import (doc 02 section 13.1, doc 04 section 10.9, doc 10 T13): what an import of the file would do, answered without writing anything. The file has passed the
 // contract's strict schemas, so its shape is known and its depth is bounded; what is left to judge here is each bookmark's content, which is untrusted: its URL goes through the bookmark URL
@@ -183,7 +184,9 @@ export function entry(read: ImportBookmark | ImportRefusal): { position: number;
 /** A folder the import makes sure the caller has. */
 export interface WantedFolder {
   readonly name: string;
+  /** The icon a folder created for it takes. */
   readonly icon: string;
+  /** The colour (1 to 8) a folder created for it takes. */
   readonly color: number;
 }
 
@@ -281,11 +284,20 @@ export interface NamePlan {
   readonly detected: { readonly folders: number; readonly tags: number };
 }
 
-/**
- * The folders and tags the import makes sure the caller has, one for each name the database tells apart (`firstSameNames`), the first spelling standing: those the file lists, then those of the bookmarks that are created. A name is plain text cut
- * to its limit and an empty one is none; a name is not split at a slash. Preview and import ask the store the same questions, so they count alike.
- */
-export async function planNames(store: ImportPreviewStore, file: ImportRequest, created: readonly ImportBookmark[]): Promise<NamePlan> {
+/** The spellings the import deals with, read from the file once: the document's own lists (folders with their icon and colour, tags) and the names the bookmarks of the file give. */
+export interface PreparedNames {
+  /** The folders the document lists, by name as plain text cut to its limit, each once, with the icon and colour a folder created for it takes. */
+  readonly listedFolders: readonly WantedFolder[];
+  /** The tags the document lists, plain and cut, each spelling once. */
+  readonly listedTags: readonly string[];
+  /** The folder spellings of every bookmark of the file, created or not, plain and cut, each once, in the order of the file. */
+  readonly folders: readonly string[];
+  /** The tag spellings of every bookmark of the file, by the same rules. */
+  readonly tags: readonly string[];
+}
+
+/** The names of the file as `planPreparedNames` reads them. */
+export function namesOfFile(file: ImportRequest): PreparedNames {
   const listedFolders = new Map<string, WantedFolder>();
   for (const folder of Array.isArray(file) ? [] : (file.folders ?? [])) {
     const name = cleanText(folder.name, FOLDER_NAME_MAX_LENGTH);
@@ -293,19 +305,37 @@ export async function planNames(store: ImportPreviewStore, file: ImportRequest, 
       listedFolders.set(name, { name, icon: iconOf(folder.icon), color: colorOf(folder.color) });
     }
   }
-  const listedTags = [...new Set((Array.isArray(file) ? [] : (file.tags ?? [])).map((tag) => cleanText(tag, TAG_NAME_MAX_LENGTH)).filter((tag) => tag !== ""))];
   const entries = bookmarksOfFile(file);
+  return {
+    listedFolders: [...listedFolders.values()],
+    listedTags: [...new Set((Array.isArray(file) ? [] : (file.tags ?? [])).map((tag) => cleanText(tag, TAG_NAME_MAX_LENGTH)).filter((tag) => tag !== ""))],
+    folders: [...new Set(entries.flatMap((entry) => cleanNames(entry.folders, FOLDER_NAME_MAX_LENGTH)))],
+    tags: [...new Set(entries.flatMap((entry) => cleanNames(entry.tags, TAG_NAME_MAX_LENGTH)))],
+  };
+}
+
+/**
+ * The folders and tags the import makes sure the caller has, one for each name the database tells apart (`firstSameNames`), the first spelling standing: those the file lists, then those of the bookmarks that are created. A name is plain text cut
+ * to its limit and an empty one is none; a name is not split at a slash. Preview and import ask the store the same questions, so they count alike.
+ */
+export async function planNames(store: ImportPreviewStore, file: ImportRequest, created: readonly ImportBookmark[]): Promise<NamePlan> {
+  return planPreparedNames(store, namesOfFile(file), created);
+}
+
+/** `planNames` over the names of a file that has been read already (`namesOfFile`). */
+export async function planPreparedNames(store: ImportPreviewStore, names: PreparedNames, created: readonly ImportBookmark[]): Promise<NamePlan> {
+  const listedFolders = new Map(names.listedFolders.map((folder) => [folder.name, folder]));
   const folders = await nameSet(
     store,
     [...listedFolders.keys()],
     created.flatMap((bookmark) => bookmark.folders),
-    entries.flatMap((entry) => cleanNames(entry.folders, FOLDER_NAME_MAX_LENGTH)),
+    names.folders,
   );
   const tags = await nameSet(
     store,
-    listedTags,
+    names.listedTags,
     created.flatMap((bookmark) => bookmark.tags),
-    entries.flatMap((entry) => cleanNames(entry.tags, TAG_NAME_MAX_LENGTH)),
+    names.tags,
   );
   return {
     folders: folders.wanted.map((name) => listedFolders.get(name) ?? { name, icon: FOLDER_DEFAULT_ICON, color: FOLDER_DEFAULT_COLOR }),
@@ -378,21 +408,115 @@ export function planSlugs(created: readonly ImportBookmark[], existing: Readonly
   return { kept, dropped };
 }
 
+/** The remembered slug choices of the document, read from the file once. */
+export interface PreparedChoices {
+  /** The ref of each bookmark that gives one, with the place in the file (from 1) of the one bookmark that has it, or null for a ref more than one bookmark has. */
+  readonly refs: readonly { readonly ref: string; readonly place: number | null }[];
+  /** The document's `goPreferences`, as the file gives them and in its order. */
+  readonly preferences: readonly { readonly slug: string; readonly bookmarkRef: string }[];
+}
+
+/** The choices of the file as `importPrepared` restores them. */
+function choicesOfFile(file: ImportRequest): PreparedChoices {
+  if (Array.isArray(file) || file.goPreferences === undefined) {
+    return { refs: [], preferences: [] };
+  }
+  const placeOfRef = new Map<string, number | null>();
+  file.bookmarks.forEach((bookmark, index) => {
+    if (bookmark.ref !== undefined) {
+      placeOfRef.set(bookmark.ref, placeOfRef.has(bookmark.ref) ? null : index + 1);
+    }
+  });
+  return {
+    refs: [...placeOfRef].map(([ref, place]) => ({ ref, place })),
+    preferences: file.goPreferences.map((preference) => ({ slug: preference.slug, bookmarkRef: preference.bookmarkRef })),
+  };
+}
+
+/**
+ * Everything the preview and the import need to know of a file that does not depend on the database: each bookmark read (`readImportBookmark`), the names it gives and the slug choices it carries. It is plain data, so it can be made on another
+ * thread and handed over (`readPreparedImport` checks it on the way in); a file that names too many distinct folder and tag spellings (`overDistinctNames`) is prepared as that refusal and nothing else, before any bookmark is read.
+ */
+export type PreparedImport =
+  | { readonly kind: "too_many_distinct_names"; readonly names: number }
+  | {
+      readonly kind: "ready";
+      /** One read for each bookmark of the file, in its order; the position of a read is its place in this list, from 1. */
+      readonly reads: readonly (ImportBookmark | ImportRefusal)[];
+      readonly names: PreparedNames;
+      readonly choices: PreparedChoices;
+    };
+
+/** The most bookmarks of a file read before the event loop is let go: a file of 5 000 bookmarks is read in a few milliseconds of work each, never in one run that holds every other request of the process back. */
+const READ_CHUNK_SIZE = 500;
+
+function prepared(file: ImportRequest, reads: (ImportBookmark | ImportRefusal)[]): PreparedImport {
+  return { kind: "ready", reads, names: namesOfFile(file), choices: choicesOfFile(file) };
+}
+
+/** Prepares the file in one run of work (`PreparedImport`). */
+export function prepareImport(file: ImportRequest): PreparedImport {
+  const distinct = overDistinctNames(file);
+  if (distinct !== undefined) {
+    return { kind: "too_many_distinct_names", names: distinct };
+  }
+  return prepared(
+    file,
+    bookmarksOfFile(file).map((entryOfFile, index) => readImportBookmark(entryOfFile, index + 1)),
+  );
+}
+
+/** The same as `prepareImport`, with the event loop let go between chunks of the bookmarks, so that the process's other requests are served while a large file is read. */
+export async function prepareImportInSlices(file: ImportRequest): Promise<PreparedImport> {
+  const distinct = overDistinctNames(file);
+  if (distinct !== undefined) {
+    return { kind: "too_many_distinct_names", names: distinct };
+  }
+  const entries = bookmarksOfFile(file);
+  const reads: (ImportBookmark | ImportRefusal)[] = [];
+  for (let from = 0; from < entries.length; from += READ_CHUNK_SIZE) {
+    entries.slice(from, from + READ_CHUNK_SIZE).forEach((entryOfFile, index) => {
+      reads.push(readImportBookmark(entryOfFile, from + index + 1));
+    });
+    await yieldToEventLoop();
+  }
+  return prepared(file, reads);
+}
+
+/** The canonical URLs of the bookmarks among `reads`, once each in the order of the file. */
+export function canonicalsOf(reads: readonly (ImportBookmark | ImportRefusal)[]): string[] {
+  return [...new Set(reads.flatMap((read) => (isRefusal(read) ? [] : [read.canonical])))];
+}
+
+/** What `previewPrepared` is asked: the same as `ImportPreviewAsk`, with the file already prepared in place of the file. */
+export interface ImportPreviewPreparedAsk {
+  /** The file, prepared (`prepareImport`). */
+  readonly prepared: PreparedImport;
+  /** True skips a bookmark that is a duplicate; false imports it. */
+  readonly skipDuplicates: boolean;
+  /** The workspace's `bookmarks.max`. */
+  readonly ceiling: EntitlementLimit;
+}
+
 /**
  * What an import of the file would do, and nothing written. The room under the workspace's ceiling is read from its counter in the same
  * transaction; a ceiling of `unlimited` leaves no limit.
  */
 export async function previewImport({ store }: ImportPreviewDependencies, ask: ImportPreviewAsk): Promise<ImportPreviewOutcome> {
-  const distinct = overDistinctNames(ask.file);
-  if (distinct !== undefined) {
-    return { kind: "too_many_distinct_names", names: distinct };
+  return previewPrepared({ store }, { prepared: prepareImport(ask.file), skipDuplicates: ask.skipDuplicates, ceiling: ask.ceiling });
+}
+
+/** `previewImport` over a file that has been prepared already (`prepareImport`). */
+export async function previewPrepared({ store }: ImportPreviewDependencies, ask: ImportPreviewPreparedAsk): Promise<ImportPreviewOutcome> {
+  if (ask.prepared.kind === "too_many_distinct_names") {
+    return { kind: "too_many_distinct_names", names: ask.prepared.names };
   }
+  const { reads, names: fileNames } = ask.prepared;
   const used = await store.bookmarkCount();
   if (used === undefined) {
     return { kind: "unavailable" };
   }
-  const reads = bookmarksOfFile(ask.file).map((bookmark, index) => readImportBookmark(bookmark, index + 1));
-  const canonicals = [...new Set(reads.flatMap((read) => (isRefusal(read) ? [] : [read.canonical])))];
+  const canonicals = canonicalsOf(reads);
   const existing = ask.skipDuplicates && canonicals.length > 0 ? await store.existingCanonicalUrls(canonicals) : new Set<string>();
 
   let room = roomUnder(ask.ceiling, used);
@@ -418,7 +542,7 @@ export async function previewImport({ store }: ImportPreviewDependencies, ask: I
   }
   const slugs = slugsToCheck(created);
   const plan = planSlugs(created, slugs.length > 0 ? await store.existingSlugs(slugs) : new Set<string>());
-  const names = await planNames(store, ask.file, created);
+  const names = await planPreparedNames(store, fileNames, created);
   const missing = await missingNames(store, names);
   const over = overNewNames(missing);
   if (over !== undefined) {

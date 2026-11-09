@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import { refuseUncallableToken } from "./authorize.ts";
-import { parsedBody } from "./body-limits.ts";
+import { importRead, wantsDigest } from "../import-worker/request.ts";
+import { isImportOperation } from "../import-worker/operations.ts";
+import { heldBody, parsedBody } from "./body-limits.ts";
 import type { ChainContext, MatchedRoute, RequestStage, ValidatedInput } from "./chain.ts";
 import { MAX_FIELD_ERRORS, ProblemError, VALIDATION_FAILED_DETAIL, fieldErrors, type ProblemFieldError } from "./problem.ts";
 
@@ -65,6 +67,29 @@ async function bodyOf(context: ChainContext): Promise<unknown> {
   }
 }
 
+/**
+ * The body of an import operation, which the import worker thread reads (`import-worker/request.ts`): the body-limits stage has held its bytes and parsed nothing, so this hands them over and takes the worker's answer.
+ * The rules are those of `bodyOf` and of the schema check: a body that is not JSON is `415` and one that is not well-formed JSON is `400`, as the body-limits stage answers them for the other routes, and a body that is not the
+ * format adds its field errors to the others. The file the worker read is kept for the idempotency stage and the handler, which ask for it again.
+ */
+async function checkImportBody(context: ChainContext, route: MatchedRoute, errors: ProblemFieldError[]): Promise<void> {
+  // The import is for a member, so the authorization stage refuses a request nobody is signed in for (`401`) right after this one. Its body is not given to the one worker thread that the members' imports queue for.
+  if (context.get("principal") === undefined) {
+    return;
+  }
+  const raw = context.req.raw;
+  if (heldBody(raw) !== undefined && raw.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== JSON_MEDIA_TYPE) {
+    throw new ProblemError("unsupported_media_type", DETAILS.unsupported_media_type);
+  }
+  const read = await importRead(raw, "json", wantsDigest(raw, route.operation));
+  if (read.kind === "malformed") {
+    throw new ProblemError("bad_request", DETAILS.bad_request);
+  }
+  if (read.kind === "invalid") {
+    errors.push(...read.errors);
+  }
+}
+
 async function validate(context: ChainContext, route: MatchedRoute): Promise<ValidatedInput> {
   const request = route.operation.request;
   const errors: ProblemFieldError[] = [];
@@ -85,9 +110,13 @@ async function validate(context: ChainContext, route: MatchedRoute): Promise<Val
   if (request?.query !== undefined) {
     check("query", strict(request.query), queryOf(context.req.url));
   }
-  // A multipart route (the import upload) reads its own body.
+  // A multipart route (the import upload) reads its own body; the body of a JSON import is read by the import worker.
   if (request?.body !== undefined && route.acceptsMultipart !== true) {
-    check("body", request.body, await bodyOf(context));
+    if (isImportOperation(route.operation)) {
+      await checkImportBody(context, route, errors);
+    } else {
+      check("body", request.body, await bodyOf(context));
+    }
   }
 
   if (errors.length > 0) {

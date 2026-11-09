@@ -1,4 +1,5 @@
 import type { ChainContext, RequestStage } from "./chain.ts";
+import { isImportOperation } from "../import-worker/operations.ts";
 import { problemDocument, requestIdOf } from "./problem.ts";
 
 // Stage 3 of the chain (doc 01 section 4): the request body is read here, counted
@@ -18,6 +19,14 @@ import { problemDocument, requestIdOf } from "./problem.ts";
 // What the stage decodes it keeps for the stages after it, for the request it hands on: the parsed JSON of a
 // route that declares a JSON body (`parsedBody`), and the decoded form of an upload (`decodedForm`), so that a
 // large body is decoded once and not again by each stage that needs its content.
+//
+// The two import operations are the exception: their body is the largest the API reads, and decoding and parsing it
+// would hold this thread for tens of milliseconds, so the stage only counts and holds its bytes (`heldBody`), hands
+// the request on, and the import worker thread reads the held bytes (transferred to it, not copied) when the first stage needs them
+// (`takeHeldBody`, `import-worker/request.ts`). The request still carries the body: the
+// cross-site stage makes a new request without the cookies of a bearer request, which holds nothing of this stage's, and
+// the worker then gets the bytes of that request's body. A malformed JSON import body is therefore answered by the
+// validation stage, with the same problem, and not here.
 
 /** 64 KiB: the limit of a route whose operation declares none. */
 export const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
@@ -101,6 +110,24 @@ export function parsedBody(request: Request): { readonly value: unknown } | unde
   return parsedBodies.get(request);
 }
 
+/** The bytes the stage holds for `request` when it handed that request on with a body, and `undefined` for a request without one. */
+export function heldBody(request: Request): Uint8Array | undefined {
+  return heldBodies.get(request);
+}
+
+/**
+ * The bytes of the body of `request`, to be handed to another thread: the ones the stage holds, which are then no longer held here (the buffer goes to the other thread), or a copy read from the request when the stage did
+ * not hand it on. A request without a body gives no bytes.
+ */
+export async function takeHeldBody(request: Request): Promise<Uint8Array> {
+  const held = heldBodies.get(request);
+  if (held === undefined) {
+    return bodyBytes(request);
+  }
+  heldBodies.delete(request);
+  return held;
+}
+
 /** The bytes of a request body: the ones the stage holds when `request` is the request it handed on, otherwise a copy read from the request, which stays unread. */
 export async function bodyBytes(request: Request): Promise<Uint8Array> {
   return heldBodies.get(request) ?? new Uint8Array(await request.clone().arrayBuffer());
@@ -147,7 +174,9 @@ export const bodyLimits: RequestStage = async (context, next) => {
       return refuse(context, "unsupported_media_type");
     }
   }
-  const declaresJson = bytes.byteLength > 0 && operation?.request?.body !== undefined && isJson(contentType);
+  // The body of an import is read by the worker (`import-worker/request.ts`), not parsed here.
+  const offloaded = operation !== undefined && isImportOperation(operation);
+  const declaresJson = bytes.byteLength > 0 && operation?.request?.body !== undefined && isJson(contentType) && !offloaded;
   const parsed = declaresJson ? parseJson(bytes) : undefined;
   if (declaresJson && parsed === undefined) {
     return refuse(context, "bad_request");

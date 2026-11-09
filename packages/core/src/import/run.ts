@@ -1,10 +1,26 @@
-import type { ImportFileBookmark, ImportResult } from "@slugbase/contracts";
+import type { ImportRequest, ImportResult } from "@slugbase/contracts";
 import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
 import { parseSlug } from "../go/slug.ts";
-import { bookmarksOfFile, entry, isRefusal, missingNames, overDistinctNames, overLinks, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
-import { yieldToEventLoop } from "./yield.ts";
+import {
+  canonicalsOf,
+  entry,
+  isRefusal,
+  missingNames,
+  overLinks,
+  overNewNames,
+  planPreparedNames,
+  planSlugs,
+  prepareImportInSlices,
+  roomUnder,
+  slugsToCheck,
+  type ImportBookmark,
+  type ImportPreviewStore,
+  type ImportRefusal,
+  type PreparedChoices,
+  type PreparedImport,
+} from "./preview.ts";
 
 // The JSON import itself (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), in the one transaction the store and the audit writer are bound to. The file is judged exactly as the preview judges it
 // (`previewImport`): each bookmark's URL goes through the bookmark URL module, its text is made plain and cut, a duplicate by canonical URL is left out unless asked otherwise, and the workspace's room is spent in the order
@@ -35,26 +51,6 @@ import { yieldToEventLoop } from "./yield.ts";
 
 /** The most bookmarks one insert statement writes. */
 export const IMPORT_BATCH_SIZE = 500;
-
-/** The most bookmarks of a file read before the event loop is let go: a file of 5 000 bookmarks is read in a few milliseconds of work each, never in one run that holds every other request of the process back. */
-const READ_CHUNK_SIZE = 500;
-
-/** What reading the bookmarks of a file leaves: each one's read, and the canonical URLs of those that are bookmarks, once each in the order of the file. */
-async function readBookmarks(entries: readonly ImportFileBookmark[]): Promise<{ reads: (ImportBookmark | ImportRefusal)[]; canonicals: string[] }> {
-  const reads: (ImportBookmark | ImportRefusal)[] = [];
-  const canonicals = new Set<string>();
-  for (let from = 0; from < entries.length; from += READ_CHUNK_SIZE) {
-    entries.slice(from, from + READ_CHUNK_SIZE).forEach((entryOfFile, index) => {
-      const read = readImportBookmark(entryOfFile, from + index + 1);
-      reads.push(read);
-      if (!isRefusal(read)) {
-        canonicals.add(read.canonical);
-      }
-    });
-    await yieldToEventLoop();
-  }
-  return { reads, canonicals: [...canonicals] };
-}
 
 /** A bookmark the import creates. */
 export interface ImportNewBookmark {
@@ -142,7 +138,7 @@ export interface ImportDependencies {
 }
 
 export interface ImportAsk {
-  readonly file: Parameters<typeof bookmarksOfFile>[0];
+  readonly file: ImportRequest;
   /** True skips a bookmark that is a duplicate; false imports it. */
   readonly skipDuplicates: boolean;
   /** The workspace's `bookmarks.max`. */
@@ -152,6 +148,9 @@ export interface ImportAsk {
   readonly actor: AuditActor;
   readonly ipPrefix: string | null;
 }
+
+/** What `importPrepared` is asked: the same as `ImportAsk`, with the file already prepared in place of the file. */
+export type ImportPreparedAsk = Omit<ImportAsk, "file"> & { readonly prepared: PreparedImport };
 
 export type ImportOutcome =
   /** The workspace cannot be reached; nothing was written. */
@@ -181,18 +180,13 @@ function idOf(spelledAs: ReadonlyMap<string, string>, ids: ReadonlyMap<string, s
 type Forwarding = ReadonlyMap<number, { readonly id: string; readonly slug: string }>;
 
 /** The choices of the file to restore, one for each slug, in the order of the file: those whose ref names exactly one bookmark of the file, which is in `forwarding` with the slug the choice names. */
-function choicesToRestore(file: ImportAsk["file"], forwarding: Forwarding): { slug: string; bookmarkId: string }[] {
-  if (Array.isArray(file) || file.goPreferences === undefined || forwarding.size === 0) {
+function choicesToRestore(choices: PreparedChoices, forwarding: Forwarding): { slug: string; bookmarkId: string }[] {
+  if (choices.preferences.length === 0 || forwarding.size === 0) {
     return [];
   }
-  const placeOfRef = new Map<string, number | null>();
-  file.bookmarks.forEach((bookmark, index) => {
-    if (bookmark.ref !== undefined) {
-      placeOfRef.set(bookmark.ref, placeOfRef.has(bookmark.ref) ? null : index + 1);
-    }
-  });
+  const placeOfRef = new Map(choices.refs.map(({ ref, place }) => [ref, place]));
   const chosen = new Map<string, string>();
-  for (const preference of file.goPreferences) {
+  for (const preference of choices.preferences) {
     const slug = parseSlug(preference.slug);
     const place = placeOfRef.get(preference.bookmarkRef);
     const bookmark = place === undefined || place === null ? undefined : forwarding.get(place);
@@ -205,12 +199,18 @@ function choicesToRestore(file: ImportAsk["file"], forwarding: Forwarding): { sl
 }
 
 /** Imports the file in the transaction the dependencies are bound to; nothing is written when the workspace cannot be reached. */
-export async function importBookmarks({ store, audit, newBookmarkId, newId }: ImportDependencies, ask: ImportAsk): Promise<ImportOutcome> {
-  const distinct = overDistinctNames(ask.file);
-  if (distinct !== undefined) {
-    return { kind: "too_many_distinct_names", names: distinct };
+export async function importBookmarks(dependencies: ImportDependencies, ask: ImportAsk): Promise<ImportOutcome> {
+  const { file, ...rest } = ask;
+  return importPrepared(dependencies, { ...rest, prepared: await prepareImportInSlices(file) });
+}
+
+/** `importBookmarks` for a file that has been prepared already (`prepareImport`), here or on another thread: the work of reading the file is done, and what is left is the questions to the store and the writes. */
+export async function importPrepared({ store, audit, newBookmarkId, newId }: ImportDependencies, { prepared, ...ask }: ImportPreparedAsk): Promise<ImportOutcome> {
+  if (prepared.kind === "too_many_distinct_names") {
+    return { kind: "too_many_distinct_names", names: prepared.names };
   }
-  const { reads, canonicals } = await readBookmarks(bookmarksOfFile(ask.file));
+  const { reads, names: fileNames, choices: fileChoices } = prepared;
+  const canonicals = canonicalsOf(reads);
   const existing = ask.skipDuplicates && canonicals.length > 0 ? await store.existingCanonicalUrls(canonicals) : new Set<string>();
 
   const seen = new Set<string>();
@@ -230,7 +230,7 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
     return { kind: "unavailable" };
   }
   const assumed = candidates.slice(0, roomUnder(ask.ceiling, used));
-  let names = await planNames(store, ask.file, assumed);
+  let names = await planPreparedNames(store, fileNames, assumed);
   const assumedOver = overNewNames(await missingNames(store, names));
   if (assumedOver !== undefined) {
     return { kind: "too_many_names", newNames: assumedOver };
@@ -264,7 +264,7 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
   }
 
   if (created.length !== assumed.length) {
-    names = await planNames(store, ask.file, created);
+    names = await planPreparedNames(store, fileNames, created);
     const over = overNewNames(await missingNames(store, names));
     if (over !== undefined) {
       return { kind: "too_many_names", newNames: over };
@@ -323,7 +323,7 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
     }
   }
 
-  const choices = choicesToRestore(ask.file, forwarding);
+  const choices = choicesToRestore(fileChoices, forwarding);
   if (choices.length > 0) {
     await store.rememberChoices(choices);
   }
