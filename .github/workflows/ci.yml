@@ -67,25 +67,74 @@ jobs:
           turbo-cache-key: typecheck
       - run: pnpm typecheck
 
-  unit:
-    name: unit
+  # The unit suites run as four shards, each on a runner of its own with the
+  # runner's 4 CPUs to itself. As one job they took 10 to 14 minutes uncached
+  # against the 15-minute bound (run 42664227288: 14m13s): the packages' tasks
+  # shared the 4 CPUs under the two-task cap below, and `@slugbase/web` alone ran
+  # 542 s (106 files) on two vitest workers, the last task to start. Web is split
+  # in two with vitest's `--shard`, each half on 4 workers; `db` and `ui`, the
+  # next two, run side by side; every other package is named by exclusion, so
+  # that a new package is tested by `rest` without an edit here. Each shard keeps
+  # the cap that issue 568 set: at most two package tasks of two vitest workers
+  # each, or one task of four, so the busy workers never exceed the 4 CPUs.
+  # turbo.json passes VITEST_MAX_WORKERS through to the tasks. Measured on 4 CPUs
+  # (taskset), the shards take 0.5 to 0.6 of the time of the one job (see the
+  # commit that introduced them); when the slowest shard of a run on `dev`
+  # takes more than 7 minutes, split it again here.
+  unit-shard:
+    name: unit-shard (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container: node:24-bookworm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: web-1
+            args: --filter=@slugbase/web -- --shard=1/2
+            workers: 4
+          - group: web-2
+            args: --filter=@slugbase/web -- --shard=2/2
+            workers: 4
+          - group: db-ui
+            args: --filter=@slugbase/db --filter=@slugbase/ui
+            workers: 2
+          - group: rest
+            args: --filter=!@slugbase/web --filter=!@slugbase/db --filter=!@slugbase/ui
+            workers: 2
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
-          turbo-cache-key: unit
-      # The runner has 4 CPUs. Turbo runs up to 10 package tasks at once and each
-      # vitest starts up to CPUs - 1 workers (3 here), so uncapped the job could
-      # hold about 30 busy workers. Two package tasks of two workers each keep it at 4.
-      # turbo.json passes VITEST_MAX_WORKERS through to the tasks.
-      - run: pnpm test:unit --concurrency=2
+          turbo-cache-key: unit-${{ matrix.group }}
+      - name: Run the unit suites of the shard
         env:
-          VITEST_MAX_WORKERS: 2
+          VITEST_MAX_WORKERS: ${{ matrix.workers }}
+          TURBO_ARGS: ${{ matrix.args }}
+        run: |
+          read -r -a args <<< "$TURBO_ARGS"
+          pnpm test:unit --concurrency=2 "${args[@]}"
+
+  # Branch protection requires a check named `unit`; this job is that check and
+  # passes only when every shard did, so a shard that fails, is cancelled or is
+  # skipped fails it.
+  unit:
+    name: unit
+    needs: unit-shard
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every unit shard to pass
+        env:
+          SHARDS_RESULT: ${{ needs.unit-shard.result }}
+        run: |
+          if [ "$SHARDS_RESULT" != "success" ]; then
+            echo "The unit shards finished as: $SHARDS_RESULT" >&2
+            exit 1
+          fi
 
   # The breaking-change check compares /api/v1 with the document at the latest
   # release tag reachable from main (doc 04 §1.1), so the checkout fetches the
