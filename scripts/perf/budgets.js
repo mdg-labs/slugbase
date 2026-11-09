@@ -16,12 +16,13 @@ export const SUGGEST_PREFIXES = ["short", "word", "full"];
 export const STEADY_SCENARIOS = ["go", "list", "search", "list_q", "list_filter", "go_suggest", "dashboard"];
 export const IMPORT_SCENARIOS = ["go_import", "list_import"];
 export const SCENARIOS = [...STEADY_SCENARIOS, ...IMPORT_SCENARIOS];
-export const BUDGETS_MS = { go: 30, go_suggest: 50, list: 100, search: 100, list_q: 100, list_filter: 100, dashboard: 100, go_import: 50, list_import: 100 };
+export const BUDGETS_MS = { go: 30, go_suggest: 50, list: 100, search: 100, list_q: 100, list_filter: 100, dashboard: 100, go_import: 55, list_import: 73 };
 // A budget is named for its scenario with a space for the underscore, unless the scenario is named here.
 const NAMES = { go_import: "go during import", list_import: "list during import" };
-// `go_import` is 50 ms and not the 30 ms of steady /go because an import is synchronous and in-process (doc 02 section 13.1): the multipart decode of the 5 MiB body, the copy of the body and
-// the garbage-collection pauses on the large instance's heap stop the event loop for a few milliseconds at a time, and no slice of the import's own code can shorten them. It is the highest
-// p95 of five runs on a quiet host (39.25 ms) plus the spread of those p95 (10.4 ms), rounded up; see "The import phase" in README.md. Steady `go` stays 30 ms and `list_import` 100 ms.
+// `go_import` (55 ms) and `list_import` (73 ms) are not the 30 ms of steady /go and the 100 ms of the steady list: an import is synchronous, and while one is in flight the request thread still
+// checks the answer of the import worker thread and runs its database writes (doc 02 section 13.1), on a runner whose CPUs the server, the worker thread, Postgres and k6 share. They are set from
+// the performance job's runner, the reference host of every budget: the highest p95 of three runs (go 42.17 ms, list 54.94 ms) plus the spread of those p95 (go 11.87 ms, list 17.20 ms), rounded
+// up to a whole millisecond; see "The import phase" in README.md. Steady `go` stays 30 ms.
 
 // The import run (doc 02 section 13.1, doc 08 section 5.3): `perf-member-1` imports the largest Netscape file and then the largest SlugBase JSON file into the large workspace, while the
 // instance admin's /go and list traffic goes on at the run's rate (go_import, list_import: the p95 of the requests made while an import is in flight is a budget) and `perf-member-2`
