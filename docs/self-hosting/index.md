@@ -26,6 +26,7 @@ The people you invite use SlugBase as described in [Get started](../user/getting
 
 | Page | What it covers |
 | ---- | -------------- |
+| [Install SlugBase](install.md) | Start SlugBase from the published compose file and finish first-run setup. |
 | [Back up and restore](backup-restore.md) | Back up the database and your secrets, and restore them into an empty database. |
 | [Put SlugBase behind a reverse proxy](reverse-proxy.md) | Serve SlugBase over HTTPS with nginx or Caddy, and set the origin and the trusted proxy hops. |
 | [Set up mail](mail.md) | Connect an SMTP relay, set up the sending domain, send a test email, and run without mail. |

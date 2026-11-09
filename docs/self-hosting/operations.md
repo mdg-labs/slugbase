@@ -64,6 +64,8 @@ Set `METRICS_PORT` in `.env` to a port that is not `PORT`, and the server and th
 
 The metrics hold request counts and durations for each route template and status, rate-limit rejections, the size of the database pool and the transactions in flight, and the depth and the age of the oldest ready job of each queue (`slugbase_job_queue_depth` and `slugbase_job_queue_oldest_ready_age_seconds`). They hold no member data.
 
+In the one-container mode, `server --with-worker` (see [One container or two](install.md#one-container-or-two)), there is one listener, the server's, and it serves the server's samples only. The request, rate-limit and database series are there. The database series describe the server's pool of 10 connections. The two job queue series are listed, but have no samples, because only the worker reads the queues. Watch the jobs in **Admin**, **Overview**, **Background jobs** instead.
+
 **Do not expose this port to the internet.** `compose.yml` does not publish it. Scrape it from a container on the same Docker network, such as `slugbase:<METRICS_PORT>` and `slugbase-worker:<METRICS_PORT>`. Never add a rule for `/metrics` to your reverse proxy. See [Put SlugBase Behind a Reverse Proxy](reverse-proxy.md).
 
 ## Rotate secrets
@@ -144,6 +146,8 @@ Idle rate-limit counters are deleted every 15 minutes. Bookmarks, folders, tags 
 ## Database connections
 
 Each process keeps a pool of connections. The server's pool for requests has 10 connections, and the worker's has 5. Both open a few more small connections for their own tasks. You cannot change these sizes with an environment key. PostgreSQL's default limit of 100 connections is enough for one server and one worker. Check `max_connections` before you run more.
+
+Under `server --with-worker` (see [One container or two](install.md#one-container-or-two)), one process holds both pools, so that one process uses up to 10 + 5 = 15 connections in these pools, plus the few small connections each side opens for its own tasks.
 
 SlugBase sets the tenant of a request with settings that last for one transaction, so it works behind PgBouncer in transaction mode. Put PgBouncer in front of PostgreSQL before you run more than about 8 processes of the server and the worker in all. The project's test run for pooling, which starts with `pnpm test:integration:pooled`, checks that one request's tenant never reaches another request on a shared connection. It runs PgBouncer 1.26 with these settings, and you should use the same:
 
