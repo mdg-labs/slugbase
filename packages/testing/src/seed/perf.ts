@@ -4,6 +4,7 @@ import { createTestDatabase, type TestDatabase } from "@slugbase/db/testing";
 import { buildLargeInstance, type LargeInstance, type LargeInstanceOptions } from "./large.ts";
 import { largeSeedScript } from "./large-script.ts";
 import { runSeedScript } from "./run.ts";
+import { vacuumUntilAllVisible } from "./vacuum.ts";
 
 // The large instance of the performance suite (doc 08 section 5.3) in a database of its own. The database is created here, by
 // the test harness (doc 08 section 3.2), and the seed takes the harness's handle and nothing else: there is no address to give it,
@@ -100,8 +101,9 @@ async function count(database: Pick<TestDatabase, "owner">): Promise<SeededCount
 
 /**
  * Writes `instance` into `database`, which must be a harness database with no account in it, as every account's password
- * `passwordHash` stands for, then analyzes the tables so that the planner knows the data it will be asked about. Returns what
- * the database holds afterwards. An abort of `signal` ends the seed, which rejects.
+ * `passwordHash` stands for, then vacuums and analyzes the tables until every page is all-visible, so that the planner knows the
+ * data it will be asked about and its indexes answer as they do on a running instance. Rejects, naming the tables, when that is
+ * not reached. Returns what the database holds afterwards. An abort of `signal` ends the seed, which rejects.
  */
 export async function seedLargeInstance(
   database: Pick<TestDatabase, "name" | "owner">,
@@ -124,7 +126,7 @@ export async function seedLargeInstance(
     { path: server.path, secrets: [passwordHash], timeoutMs: SEED_TIMEOUT_MS, ...(signal === undefined ? {} : { signal }) },
   );
   signal?.throwIfAborted();
-  await database.owner.unsafe("VACUUM (ANALYZE)");
+  await vacuumUntilAllVisible(database);
   return count(database);
 }
 
