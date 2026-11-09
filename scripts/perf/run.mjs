@@ -5,7 +5,7 @@
 // built `apps/slugbase/dist/main.js server`. Before the budgets, 10 000 requests for one forwarding slug check that /go does not
 // become write load (doc 01 section 8.1). After them, in a k6 run of its own so that what it adds changes none of their measurements, one member imports the largest
 // Netscape file and the largest SlugBase JSON file into the large workspace while /go and the list are requested and another member creates bookmarks: the p95 of /go and of the
-// list while an import is in flight are budgets, and each import's duration and counts and the p95 of the creates with and without an import are reported (doc 02 section 13.1).
+// list while an import is in flight are budgets (ratios to the same run's steady /go and list, judged here, budgets.js), and each import's duration and counts and the p95 of the creates with and without an import are reported (doc 02 section 13.1).
 // Everything this run starts, the server or its container, the k6 containers, the state of the import and the database, is removed however it ends.
 //
 //   node scripts/perf/run.mjs [--image <ref>] [--commit <sha>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>] [--import-window <seconds>]
@@ -40,6 +40,7 @@ import {
   STEADY_SCENARIOS,
   budgets as budgetList,
   createMetrics,
+  judgeRatios,
   loadMetrics,
   writeLoadLimit,
 } from "./budgets.js";
@@ -234,7 +235,7 @@ const requestsMetric = (metric) => metric.replace(/^http_req_waiting/u, "http_re
 function evaluate(summary, ids, vus = { capacity: MAX_VUS, of: "scenario" }) {
   const scenarios = Object.fromEntries(ids.map((scenario) => [scenario, loadOf(summary, scenario, vus)]));
   const unrequested = [];
-  const rows = budgetList(ids).map(({ name, scenario, metric, limitMs }) => {
+  const rows = budgetList(ids).map(({ name, scenario, metric, limitMs, limitRatio, of }) => {
     const requests = summary.metrics[requestsMetric(metric)]?.count;
     const p95 = summary.metrics[metric]?.["p(95)"];
     if (!isNumber(requests) || !isNumber(p95)) {
@@ -243,7 +244,12 @@ function evaluate(summary, ids, vus = { capacity: MAX_VUS, of: "scenario" }) {
     if (requests < 1) {
       unrequested.push(name);
     }
-    return { name, scenario, metric, limitMs, p95Ms: Math.round(p95 * 100) / 100, ok: p95 < limitMs, saturated: scenarios[scenario].saturated };
+    const p95Ms = Math.round(p95 * 100) / 100;
+    // A ratio budget (budgets.js RATIO_BUDGETS) is judged against the p95 of another k6 run, so `judgeRatios` does it once both are known; until then its row holds only what this run measured.
+    if (limitRatio !== undefined) {
+      return { name, scenario, metric, of, limitRatio, p95Ms, ok: true, saturated: scenarios[scenario].saturated };
+    }
+    return { name, scenario, metric, limitMs, p95Ms, ok: p95 < limitMs, saturated: scenarios[scenario].saturated };
   });
   if (unrequested.length > 0) {
     throw new Error(`no request was made for ${unrequested.map((name) => `"${name}"`).join(", ")}, so its p(95) is not a measurement (k6 writes 0 for it); the scenario needs at least as many arrivals (rate x duration) as it has shapes`);
@@ -392,8 +398,9 @@ async function main() {
   const steady = evaluate(JSON.parse(readFileSync(join(outDir, "k6-summary.json"), "utf8")), STEADY_SCENARIOS);
   // Last, so that the bookmarks the imports add change none of the measurements above.
   const importRun = await measureImports({ k6Run, work, instance, deepPage, buildImportFiles, serverLog });
-  const budgets = [...steady.budgets, ...importRun.budgets];
   const scenarios = { ...steady.scenarios, ...importRun.scenarios };
+  // The import phase's budgets are ratios to the steady scenarios of this same run: judged here, where both runs' p95 are known, and not by k6 (budgets.js budgetThresholds).
+  const budgets = judgeRatios([...steady.budgets, ...importRun.budgets], scenarios);
   // A status of 99 that no budget explains is a check that failed: a response that was not what a scenario asked for.
   const failedChecks = (k6 === 99 && steady.budgets.every((budget) => budget.ok)) || (importRun.status === 99 && importRun.budgets.every((budget) => budget.ok));
   const result = {
@@ -423,12 +430,16 @@ async function main() {
   log(
     [
       "budgets (p95 of the server time, k6 http_req_waiting):",
-      ...budgets.map((b) => `  ${b.name}: ${String(b.p95Ms)} ms, budget ${String(b.limitMs)} ms, ${b.ok ? "ok" : "EXCEEDED"}${b.saturated ? " (the scenario was saturated: the time includes the queue)" : ""}`),
+      ...budgets.map((b) =>
+        b.limitRatio === undefined
+          ? `  ${b.name}: ${String(b.p95Ms)} ms, budget ${String(b.limitMs)} ms, ${b.ok ? "ok" : "EXCEEDED"}${b.saturated ? " (the scenario was saturated: the time includes the queue)" : ""}`
+          : `  ${b.name}: ${String(b.p95Ms)} ms against ${String(b.baselineP95Ms)} ms of ${b.of} in this run, ${b.judged ? `ratio ${String(b.ratio)}, limit ${String(b.limitRatio)}, ${b.ok ? "ok" : "EXCEEDED"}` : `NOT JUDGED (limit ${String(b.limitRatio)}): ${b.notJudged ?? ""}`}`,
+      ),
     ].join("\n"),
   );
   log(
     [
-      "import phase (no budget; the two imports and the creates beside them):",
+      "import phase (no budget of its own; the two imports and the creates beside them):",
       ...importRun.phase.imports.map(
         (i) =>
           `  ${i.import}: ${String(i.bytes)} bytes in ${String(i.durationMs)} ms, created ${String(i.created)}, skipped ${String(i.skipped)}, failed ${String(i.failed)}, slugs dropped ${String(i.slugsDropped)} (${String(i.slugsDroppedConflict)} taken, ${String(i.slugsDroppedInvalid)} invalid), folders created ${String(i.foldersCreated)}, tags created ${String(i.tagsCreated)}`,
@@ -662,7 +673,7 @@ function createsOf(summary) {
 }
 
 // The import phase: perf-member-1 imports the largest Netscape file and the largest JSON file, one after the other, while the admin's /go and list traffic goes on at the run's rate and
-// perf-member-2 creates bookmarks (scripts/perf/scenarios.js). The files are made here and handed to k6 as files. The /go and list requests made while an import is in flight are budgets; the
+// perf-member-2 creates bookmarks (scripts/perf/scenarios.js). The files are made here and handed to k6 as files. The /go and list requests made while an import is in flight are budgets (ratios to the steady ones of the run); the
 // imports' own numbers and the creates' are reported.
 async function measureImports({ k6Run, work, instance, deepPage, buildImportFiles, serverLog }) {
   const { collidingSlugs, slugs } = instance.instance.fixtures;

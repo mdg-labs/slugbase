@@ -118,14 +118,18 @@ jobs:
             echo
             echo "| Scenario | p95 server time | Budget | |"
             echo "|---|---|---|---|"
-            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
+            jq -r '.budgets[] | select(.limitRatio == null) | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
             echo
-            jq -r '.importPhase | "Import phase (no budget; the /go and list budgets during an import are in the table above): the load of /go and the list lasted \(.windowSeconds) s from the start of the first import.\n\n| Import | Size | Duration | Created | Skipped | Failed | Slugs dropped (taken, invalid) | Folders created | Tags created |\n|---|---|---|---|---|---|---|---|---|\n" + ([.imports[] | "| \(.import) | \(.bytes) bytes | \(.durationMs) ms | \(.created) | \(.skipped) | \(.failed) | \(.slugsDropped) (\(.slugsDroppedConflict), \(.slugsDroppedInvalid)) | \(.foldersCreated) | \(.tagsCreated) |"] | join("\n")) + "\n\nCreates by another member, \(.creates.rate) a second: p95 server time \(.creates.without.p95Ms) ms without an import (\(.creates.without.completed) requests), \(.creates.during.p95Ms) ms while an import holds the workspace row lock (\(.creates.during.completed) requests, \(.creates.dropped) arrivals dropped)."' perf-results/result.json
+            echo "| Budget during an import | p95 server time | p95 of the same run's steady scenario | Ratio | Limit | |"
+            echo "|---|---|---|---|---|---|"
+            jq -r '.budgets[] | select(.limitRatio != null) | "| \(.name) | \(.p95Ms) ms | \(.baselineP95Ms) ms (\(.of)) | \(if .judged then (.ratio | tostring) else "not judged" end) | \(.limitRatio) | \(if .judged | not then "not judged: " + .notJudged elif .ok then "ok" else "exceeded" end) |"' perf-results/result.json
+            echo
+            jq -r '.importPhase | "Import phase (no budget; the /go and list budgets during an import are the ratio table above): the load of /go and the list lasted \(.windowSeconds) s from the start of the first import.\n\n| Import | Size | Duration | Created | Skipped | Failed | Slugs dropped (taken, invalid) | Folders created | Tags created |\n|---|---|---|---|---|---|---|---|---|\n" + ([.imports[] | "| \(.import) | \(.bytes) bytes | \(.durationMs) ms | \(.created) | \(.skipped) | \(.failed) | \(.slugsDropped) (\(.slugsDroppedConflict), \(.slugsDroppedInvalid)) | \(.foldersCreated) | \(.tagsCreated) |"] | join("\n")) + "\n\nCreates by another member, \(.creates.rate) a second: p95 server time \(.creates.without.p95Ms) ms without an import (\(.creates.without.completed) requests), \(.creates.during.p95Ms) ms while an import holds the workspace row lock (\(.creates.during.completed) requests, \(.creates.dropped) arrivals dropped)."' perf-results/result.json
             echo
             jq -r '"Write load: \(.writeLoad.requests) requests for one slug updated \(.writeLoad.updates) rows of bookmarks in \(.writeLoad.elapsedSeconds) s (at most \(.writeLoad.limit): one for each flush interval of \(.writeLoad.flushIntervalSeconds) s, and one more), \(if .writeLoad.ok then "ok" else "exceeded" end)."' perf-results/result.json
           } >> "$GITHUB_STEP_SUMMARY"
       # What to file is decided by scripts/perf/report.mjs (tested in tooling/test/perf-report.test.ts) from the result and the open issues; this step only runs
-      # its actions. Each exceeded scenario (go, list, search, import: /go and the list during an import) and the write load of /go has one issue titled "Performance budget exceeded: <name>", which a later
+      # its actions. Each exceeded scenario (go, list, search, import: /go and the list during an import, as ratios to the steady ones of the run) and the write load of /go has one issue titled "Performance budget exceeded: <name>", which a later
       # run extends with a comment. Nothing of the result or of an issue reaches the shell as code: the titles and bodies come from files and the arguments are quoted.
       - name: Open an issue for an exceeded budget
         if: ${{ steps.measure.outputs.status == '10' }}

@@ -16,13 +16,18 @@ export const SUGGEST_PREFIXES = ["short", "word", "full"];
 export const STEADY_SCENARIOS = ["go", "list", "search", "list_q", "list_filter", "go_suggest", "dashboard"];
 export const IMPORT_SCENARIOS = ["go_import", "list_import"];
 export const SCENARIOS = [...STEADY_SCENARIOS, ...IMPORT_SCENARIOS];
-export const BUDGETS_MS = { go: 30, go_suggest: 50, list: 100, search: 100, list_q: 100, list_filter: 100, dashboard: 100, go_import: 55, list_import: 73 };
+// The steady budgets, in milliseconds of the p95 of the server time.
+export const BUDGETS_MS = { go: 30, go_suggest: 50, list: 100, search: 100, list_q: 100, list_filter: 100, dashboard: 100 };
+// The two budgets of the import phase are not in milliseconds but ratios to the same run's steady scenario: the p95 of `go_import` may be at most `ratio` times the p95 of `go` of the run, and
+// that of `list_import` at most `ratio` times the p95 of `list`. A ratio is what another member's import costs /go and the list, and it cancels most of the speed of the runner machine, which a
+// millisecond budget set from a few runs did not (the p95 of go during an import was 30 to 67 ms in four runs, its ratio to steady go 3.0 to 4.4). See `RATIO_BUDGETS` below and "The import phase" in README.md.
+export const RATIO_BUDGETS = { go_import: { of: "go", ratio: 5.9 }, list_import: { of: "list", ratio: 5.8 } };
 // A budget is named for its scenario with a space for the underscore, unless the scenario is named here.
 const NAMES = { go_import: "go during import", list_import: "list during import" };
-// `go_import` (55 ms) and `list_import` (73 ms) are not the 30 ms of steady /go and the 100 ms of the steady list: an import is synchronous, and while one is in flight the request thread still
-// checks the answer of the import worker thread and runs its database writes (doc 02 section 13.1), on a runner whose CPUs the server, the worker thread, Postgres and k6 share. They are set from
-// the performance job's runner, the reference host of every budget: the highest p95 of three runs (go 42.17 ms, list 54.94 ms) plus the spread of those p95 (go 11.87 ms, list 17.20 ms), rounded
-// up to a whole millisecond; see "The import phase" in README.md. Steady `go` stays 30 ms.
+// `go_import` and `list_import` are ratios (RATIO_BUDGETS) because an import is synchronous: while one is in flight the request thread still checks the answer of the import worker thread and runs its
+// database writes (doc 02 section 13.1), on a runner whose CPUs the server, the worker thread, Postgres and k6 share, so the time of a request beside an import follows the speed of that machine
+// as the time of a steady request does. Each is set by the rule of #806 over the nightly runs on the runner (the reference host of every budget), applied to the ratio: the highest ratio plus the
+// spread (highest minus lowest) of the counted runs, rounded up to one decimal; see "The import phase" in README.md. The steady `go` stays 30 ms and the steady list 100 ms.
 
 // The import run (doc 02 section 13.1, doc 08 section 5.3): `perf-member-1` imports the largest Netscape file and then the largest SlugBase JSON file into the large workspace, while the
 // instance admin's /go and list traffic goes on at the run's rate (go_import, list_import: the p95 of the requests made while an import is in flight is a budget) and `perf-member-2`
@@ -56,11 +61,17 @@ export const SHARED_TERM = "shared";
 // The most VUs a scenario may use (`maxVUs` of scenarios.js). A scenario that reached it could not start every arrival on time.
 export const MAX_VUS = 100;
 
+// The limit of a scenario's budget: `limitMs` for a steady scenario, and for one of RATIO_BUDGETS `of` (the steady scenario it is judged against) and `limitRatio`.
+function limitOf(scenario) {
+  const ratio = RATIO_BUDGETS[scenario];
+  return ratio === undefined ? { limitMs: BUDGETS_MS[scenario] } : { of: ratio.of, limitRatio: ratio.ratio };
+}
+
 // Every p(95) budget of the server time (k6 http_req_waiting): the scenarios, then each list sort on each page, each page of the list narrowed by a text, each
 // filter of the list on each page, each prefix of the slug suggestions and each search term, so that a regression names the sort and the page, the shape or the term. `scenario` is the scenario the request
 // belongs to, `metric` is the k6 threshold key and the key of the summary.
 export function budgets(scenarios = SCENARIOS) {
-  const all = SCENARIOS.map((scenario) => ({ name: NAMES[scenario] ?? scenario.replace("_", " "), scenario, metric: `http_req_waiting{kind:${scenario}}`, limitMs: BUDGETS_MS[scenario] }));
+  const all = SCENARIOS.map((scenario) => ({ name: NAMES[scenario] ?? scenario.replace("_", " "), scenario, metric: `http_req_waiting{kind:${scenario}}`, ...limitOf(scenario) }));
   for (const sort of SORTS) {
     for (const page of PAGES) {
       all.push({ name: `list ${sort} ${page}`, scenario: "list", metric: `http_req_waiting{kind:list,sort:${sort},page:${page}}`, limitMs: BUDGETS_MS.list });
@@ -83,13 +94,51 @@ export function budgets(scenarios = SCENARIOS) {
   return all.filter((budget) => scenarios.includes(budget.scenario));
 }
 
-// The k6 thresholds of the budgets of `scenarios`: p(95) under the limit.
+// The k6 thresholds of the budgets of `scenarios`: p(95) under the limit. A ratio budget has no millisecond limit k6 could enforce, because its other side is the p95 of another k6 run (the budgets run, while the
+// import phase is a run of its own) that k6 cannot see: its threshold is one that no value can fail (as the ones of `loadThresholds`), which only puts the p(95) in the summary, and run.mjs judges the ratio.
 export function budgetThresholds(scenarios = SCENARIOS) {
   const thresholds = {};
   for (const { metric, limitMs } of budgets(scenarios)) {
-    thresholds[metric] = [`p(95)<${limitMs}`];
+    thresholds[metric] = [limitMs === undefined ? "p(95)>=0" : `p(95)<${limitMs}`];
   }
   return thresholds;
+}
+
+// The ratio budgets judged. `rows` are the rows of one run's budgets (steady and import together), each with `scenario`, `metric`, `p95Ms` and, for a ratio budget, `of` and `limitRatio`; `loads` is the load of each
+// scenario (`dropped`, `saturated`). A ratio row gets the steady p95 it is judged against (`baselineP95Ms`, `baselineSaturated`), the `ratio` (rounded to two decimals, the figure the report shows and the
+// one the limit is held to) and `judged`. It is not judged, `judged: false` with `ok: true` and the reasons in `notJudged`, when either side is saturated or dropped arrivals: the time of a request that waited for a
+// server that could not keep up is not the time of a statement, so neither side is one to divide by or into. A run with no such row is returned as it is.
+export function judgeRatios(rows, loads) {
+  return rows.map((row) => {
+    if (row.limitRatio === undefined) {
+      return row;
+    }
+    const baseline = rows.find((other) => other.limitMs !== undefined && other.metric === `http_req_waiting{kind:${row.of}}`);
+    if (baseline === undefined) {
+      throw new Error(`the budget ${row.name} is judged against the scenario ${row.of}, which has no budget in the run`);
+    }
+    const notJudged = [];
+    for (const [label, scenario] of [[row.scenario, row.scenario], [`${row.of} (the steady baseline)`, row.of]]) {
+      const load = loads[scenario];
+      if (load === undefined) {
+        throw new Error(`the budget ${row.name} has no load for the scenario ${scenario}`);
+      }
+      if (load.dropped > 0) {
+        notJudged.push(`${label} dropped ${String(load.dropped)} arrivals`);
+      } else if (load.saturated) {
+        notJudged.push(`${label} was saturated`);
+      }
+    }
+    if (!(baseline.p95Ms > 0)) {
+      notJudged.push(`${row.of} (the steady baseline) has a p95 of 0 ms`);
+    }
+    const judged = { ...row, baselineP95Ms: baseline.p95Ms, baselineSaturated: baseline.saturated };
+    if (notJudged.length > 0) {
+      return { ...judged, ratio: null, judged: false, notJudged: notJudged.join("; "), ok: true };
+    }
+    const ratio = Math.round((row.p95Ms / baseline.p95Ms) * 100) / 100;
+    return { ...judged, ratio, judged: true, ok: ratio <= row.limitRatio };
+  });
 }
 
 // What a run says about its own load, per scenario: the requests that completed, the arrivals k6 dropped because every VU was busy and could not
