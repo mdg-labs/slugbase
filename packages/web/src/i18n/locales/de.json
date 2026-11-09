@@ -1061,6 +1061,7 @@
       "build": {
         "title": "Version und Datenbank",
         "version": "Version",
+        "releases": "Releases",
         "migrations": "Migrationen",
         "applied": "{applied} von {expected} angewendet",
         "upToDate": "Aktuell",
