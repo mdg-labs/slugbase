@@ -117,14 +117,24 @@ for file in "${files[@]}"; do
     problem "$file" "uses ${names} and has a run: step, which could fetch or execute pull request code (doc 10 T16)"
   fi
   # Each `uses` value up to a space, comma, brace or quote; a value on the next
-  # line, a block scalar or an alias reads as empty or unpinned and fails.
+  # line, a block scalar or an alias reads as empty or unpinned and fails. The
+  # extraction is captured by plain assignment so that a grep failure (any exit
+  # status above 1) ends the script; exit 1 only means no `uses` value.
   action_pattern="^($(IFS='|'; printf '%s' "${allowed_actions[*]}"))@[0-9a-f]{40}\$"
+  refs=""
+  rc=0
+  refs="$(grep -oE "${key_start}uses${key_end}[[:space:]]*[\"']?[^[:space:],}\"']*" <<<"$body")" || rc=$?
+  if ((rc > 1)); then
+    printf 'workflow-triggers: %s: grep failed extracting uses: (exit %s)\n' "$file" "$rc" >&2
+    exit 2
+  fi
   while IFS= read -r ref; do
+    [[ -n "$ref" ]] || continue
     ref="$(sed -E "s/^.*uses${key_end}[[:space:]]*[\"']?//" <<<"$ref")"
     if [[ ! "$ref" =~ $action_pattern ]]; then
       problem "$file" "uses ${names} and its action is not an allow-listed repository pinned to a full commit SHA: uses: ${ref}"
     fi
-  done < <(grep -oE "${key_start}uses${key_end}[[:space:]]*[\"']?[^[:space:],}\"']*" <<<"$body" || [[ $? -eq 1 ]])
+  done <<<"$refs"
   if has_line "secrets[[:space:]]*:[[:space:]]*inherit" <<<"$body"; then
     problem "$file" "uses ${names} and passes every secret on (secrets: inherit)"
   fi
