@@ -31,6 +31,7 @@ The people you invite use SlugBase as described in [Get started](../user/getting
 | [Set up mail](mail.md) | Connect an SMTP relay, set up the sending domain, send a test email, and run without mail. |
 | [Set up OIDC sign-in](oidc.md) | Add OpenID Connect providers, register the redirect address, and learn how accounts are linked and created. |
 | [Upgrade SlugBase](upgrade.md) | Upgrade to a new release, run migrations yourself, roll back, and see the supported versions. |
+| [Run SlugBase day to day](operations.md) | Check health, read logs, rotate secrets, see what is deleted by itself, and plan connections and size. |
 | [Environment settings](environment.md) | Look up every environment key, its default and what it sets, and see which limits are fixed. |
 | [Check the bookmark counter](check-bookmark-counter.md) | Find workspaces whose bookmark counter differs from the number of their bookmarks, without changing anything. |
 
