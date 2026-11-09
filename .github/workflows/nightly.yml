@@ -13,6 +13,10 @@ name: Nightly
 # release tag, raised to the first level at which it can be written, applies every later migration with `migrate` and fails the job when one
 # holds an ACCESS EXCLUSIVE lock for more than 1 s. It reads the release from git, so it checks out the full history and the tags. It
 # needs no image and holds `contents: read` only.
+#
+# The backup and restore check (scripts/backup-restore-check.sh, doc 08 section 5.1) follows docs/self-hosting/backup-restore.md on a seeded
+# instance of the image built here, once on PostgreSQL 17 and once on 18, and proves that the restored database serves the same data with
+# tenant isolation intact. It starts a stack of its own, which it removes however it ends, holds `contents: read` only and references no secret.
 
 on:
   schedule:
@@ -254,3 +258,56 @@ jobs:
           path: perf-results/migrations/
           if-no-files-found: ignore
           retention-days: 30
+
+  # The procedure of docs/self-hosting/backup-restore.md, run by scripts/backup-restore-check.sh against the image built from the commit under test: the
+  # guide's dump of a seeded instance, a restore into a server without the roles (which must fail with the documented error), a restore into a new
+  # server with the roles and the image started against it (equal rows, /ready, a member's sign-in, a /go slug, RLS enabled and forced on every tenant
+  # table, slugbase_app owning none), and a restore under another ENCRYPTION_KEY (a member with an authenticator app cannot complete the sign-in).
+  # The script starts the stack of its own on the runner's Docker daemon, as the restore drill of e2e.yml does, and removes it on every way out; the last
+  # step removes one that was left behind when the script was killed. A failing check fails the job and so the leg; nothing is filed.
+  backup-restore:
+    name: backup and restore (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["17", "18"]
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: nightly-backup-restore
+      # Built from the checked-out commit and not pushed or pulled: the instance that is backed up and restored is this image.
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:backup-restore .
+      # The helpers of the check, against stand-ins, before it runs against the stack.
+      - name: Test the check
+        run: bash scripts/backup-restore-check.test.sh
+      - name: Back up and restore
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:backup-restore
+          SMOKE_POSTGRES_MAJOR: ${{ matrix.postgres }}
+        run: bash scripts/backup-restore-check.sh
+      - name: Remove any stack left behind
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          docker ps --all --format '{{.ID}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker ps --all --quiet --filter 'name=^slugbase-backup-' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker volume ls --quiet --filter 'label=com.docker.compose.project' --format '{{.Name}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker volume rm --force

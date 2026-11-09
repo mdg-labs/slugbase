@@ -130,6 +130,8 @@ docker compose up -d
 
 You restore into an empty `slugbase` database that already has the four roles of SlugBase. The dump sets the owner of each object to `slugbase_owner`, so the restore fails when that role does not exist.
 
+The steps on this page are tested. Every week and before each release, the script `scripts/backup-restore-check.sh` takes the dump of this page from a seeded installation, restores it into a new database as step 2 and step 3 say, and starts the image against it. It checks that the restored database holds the same accounts, workspaces, bookmarks, folders, tags and shares, that `/ready`, a member's sign-in and a slug link work, that row-level security is still enforced, that a restore without the roles stops with the error named in [Troubleshooting](#troubleshooting), and that a changed `ENCRYPTION_KEY` locks out the members who use two-step verification.
+
 1. Stop the application, so nothing writes while you restore.
 
    ```sh
