@@ -1,8 +1,9 @@
 import type { BookmarkTagName, NewBookmark } from "@slugbase/core";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bookmarkRepository, listRepositoryMethods, tagRepository } from "../src/index.ts";
-import { tagsOfBookmarksQuery } from "../src/repositories/tag-links.ts";
+import { tagsOfBookmarksStatement } from "../src/repositories/tag-links.ts";
 import { listQuery } from "../src/repositories/bookmarks.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
@@ -473,6 +474,13 @@ async function explain(tenant: { accountId: string; workspaceId: string }, state
   });
 }
 
+const dialect = new PgDialect({ casing: "snake_case" });
+
+function planned(statement: Parameters<PgDialect["sqlToQuery"]>[0]): { sql: string; params: unknown[] } {
+  const { sql, params } = dialect.sqlToQuery(statement);
+  return { sql, params };
+}
+
 describe("the plans of the reads of tags", () => {
   const library = { account: "", workspace: "", tags: [] as string[], sample: [] as string[] };
 
@@ -509,7 +517,7 @@ describe("the plans of the reads of tags", () => {
 
   it("reads the tags of the bookmarks of a page through an index of bookmark_tags, not from a scan of the links", async () => {
     const as = { accountId: library.account, workspaceId: library.workspace };
-    const statement = await inTenant(as, (tx) => Promise.resolve(tagsOfBookmarksQuery(tx, library.account, library.sample).toSQL()));
+    const statement = await inTenant(as, (tx) => Promise.resolve(planned(tagsOfBookmarksStatement(tx, library.account, library.sample))));
 
     const nodes = planNodes((await explain(as, statement)).text);
 

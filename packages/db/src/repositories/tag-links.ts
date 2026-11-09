@@ -1,5 +1,5 @@
 import type { BookmarkTagName, BookmarkTagRef } from "@slugbase/core";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -355,15 +355,30 @@ export async function deleteTagLinks(tx: TenantTx, bookmarkId: string, tagIds: r
   return deleted.length;
 }
 
-/** The statement of `tagsOfBookmarks`, exported for the test that plans it. The identifiers are UUIDs, distinct. */
-export function tagsOfBookmarksQuery(tx: TenantTx, ownerId: string, bookmarkIds: readonly string[]) {
+interface TaggedRow extends Record<string, unknown> {
+  bookmarkId: string;
+  id: string;
+  name: string;
+}
+
+/**
+ * The statement of `tagsOfBookmarks`, exported for the test that plans it. The identifiers are UUIDs, distinct.
+ *
+ * The links of the bookmarks are read first, once, by the primary key of `bookmark_tags` (`bookmark_id`), and joined to the owner's tags after. Left as one join the planner drives it from the owner's tags
+ * and reads the links of each tag by `bookmark_tags_tag_idx`, filtering out those of the other bookmarks: with a few tags and bookmarks that carry one or two of them it reads a library's links to find
+ * a page's, which the planner cannot tell from its statistics. The links are a fence the planner cannot see through (`MATERIALIZED`), so their number is the page's and not the tags'.
+ */
+export function tagsOfBookmarksStatement(tx: TenantTx, ownerId: string, bookmarkIds: readonly string[]): SQL {
   const workspaceId = requireWorkspace(tx, "reading the tags of bookmarks");
-  return tenantHandle(tx)
-    .select({ bookmarkId: bookmarkTags.bookmarkId, id: tags.id, name: tags.name })
-    .from(bookmarkTags)
-    .innerJoin(tags, and(eq(tags.workspaceId, bookmarkTags.workspaceId), eq(tags.id, bookmarkTags.tagId)))
-    .where(and(eq(bookmarkTags.workspaceId, workspaceId), eq(tags.ownerId, ownerId), sql`${bookmarkTags.bookmarkId} = ANY (${uuidArray(bookmarkIds)}::uuid[])`))
-    .orderBy(asc(tags.name), asc(tags.id));
+  return sql`
+    WITH links AS MATERIALIZED (
+      SELECT workspace_id, bookmark_id, tag_id FROM ${bookmarkTags}
+      WHERE workspace_id = ${workspaceId}::uuid AND bookmark_id = ANY (${uuidArray(bookmarkIds)}::uuid[]))
+    SELECT links.bookmark_id AS "bookmarkId", ${tags.id} AS id, ${tags.name} AS name
+    FROM links
+    JOIN ${tags} ON ${tags.workspaceId} = links.workspace_id AND ${tags.id} = links.tag_id
+    WHERE ${tags.ownerId} = ${ownerId}::uuid
+    ORDER BY ${tags.name} ASC, ${tags.id} ASC`;
 }
 
 /** The tags `ownerId` has put on each of `bookmarkIds`, by bookmark, in the order of the tags' names (the identifier breaks a tie). Another member's tags are never in it. */
@@ -374,7 +389,7 @@ export async function tagsOfBookmarks(tx: TenantTx, ownerId: string, bookmarkIds
   if (wanted.length === 0) {
     return found;
   }
-  for (const { bookmarkId, ...tag } of await tagsOfBookmarksQuery(tx, ownerId, wanted)) {
+  for (const { bookmarkId, ...tag } of await tenantHandle(tx).execute<TaggedRow>(tagsOfBookmarksStatement(tx, ownerId, wanted))) {
     const list = found.get(bookmarkId);
     if (list === undefined) {
       found.set(bookmarkId, [tag]);
