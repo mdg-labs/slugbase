@@ -6297,6 +6297,9 @@ export function parseDomainEventPayload<Name extends DomainEventName>(name: Name
 export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile;
 
 // @public
+export function parseNetscapeBookmarksInSlices(file: Uint8Array): Promise<NetscapeFile>;
+
+// @public
 export function parsePageIcons(input: PageMetadataInput): readonly string[];
 
 // @public

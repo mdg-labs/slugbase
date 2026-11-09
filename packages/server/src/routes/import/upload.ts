@@ -1,5 +1,5 @@
 import { IMPORT_MAX_BOOKMARKS, IMPORT_NETSCAPE_FIELD, IMPORT_NETSCAPE_MAX_FILE_BYTES, type ImportFileBookmark } from "@slugbase/contracts";
-import { parseNetscapeBookmarks } from "@slugbase/core";
+import { parseNetscapeBookmarksInSlices } from "@slugbase/core";
 import { decodedForm } from "../../http/body-limits.ts";
 import type { ChainContext } from "../../http/chain.ts";
 import { ProblemError, VALIDATION_FAILED_DETAIL } from "../../http/problem.ts";
@@ -8,7 +8,7 @@ import { ProblemError, VALIDATION_FAILED_DETAIL } from "../../http/problem.ts";
 // and the validation stage leaves the body alone; this reads it. The body-limits stage has already counted the request and holds it in memory, so the parse reads bytes it has, never the socket, and decodes the form once for the request (`decodedForm`): the idempotency stage's digest of the parts and this read share it. The
 // request must be `multipart/form-data` (a JSON request, which the cross-site stage also admits on a route that accepts multipart, is `415`), and it holds one part, the file. A body that is not
 // well-formed multipart is `400`; a missing or repeated file part, a part that is text, or another part is `422`; a file over 5 MiB is `413` (the request limit is larger than that by the envelope).
-// The file is read as UTF-8 text by the parser of `@slugbase/core`, which builds no document and runs and follows nothing.
+// The file is read as UTF-8 text by the parser of `@slugbase/core`, which builds no document and runs and follows nothing, and hands the event loop back between slices of a large file.
 
 const MULTIPART = "multipart/form-data";
 
@@ -59,7 +59,7 @@ export async function uploadedBookmarks(context: ChainContext): Promise<ImportFi
     throw new ProblemError("payload_too_large", REFUSALS.file_too_large);
   }
 
-  const read = parseNetscapeBookmarks(new Uint8Array(await file.arrayBuffer()));
+  const read = await parseNetscapeBookmarksInSlices(new Uint8Array(await file.arrayBuffer()));
   if (read.kind === "too_many") {
     throw invalid("too_big", "");
   }

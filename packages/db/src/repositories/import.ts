@@ -32,6 +32,9 @@ import { insertTagLinkPairs } from "./tag-links.ts";
 /** The most choices one statement stores. */
 const IMPORT_CHOICE_BATCH_SIZE = 500;
 
+/** The most canonical URLs one lookup of the caller's existing bookmarks names: the statement of a longer list is built in several short runs of the event loop, and its answers are the same. */
+const CANONICALS_PER_QUERY = 500;
+
 function requireWorkspace(tx: TenantTx): string {
   if (tx.workspaceId === undefined) {
     throw new TenantContextError("workspace_required", "the import needs a tenant transaction opened with a workspace");
@@ -257,11 +260,17 @@ export function importRepository(tx: TenantTx): ImportRepository {
       if (canonicals.length === 0) {
         return new Set<string>();
       }
-      const rows = await tenantHandle(tx)
-        .selectDistinct({ canonical: bookmarks.urlCanonical })
-        .from(bookmarks)
-        .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, tx.accountId), isNull(bookmarks.planArchivedAt), inArray(bookmarks.urlCanonical, [...canonicals])));
-      return new Set(rows.map((row) => row.canonical));
+      const existing = new Set<string>();
+      for (let from = 0; from < canonicals.length; from += CANONICALS_PER_QUERY) {
+        const rows = await tenantHandle(tx)
+          .selectDistinct({ canonical: bookmarks.urlCanonical })
+          .from(bookmarks)
+          .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, tx.accountId), isNull(bookmarks.planArchivedAt), inArray(bookmarks.urlCanonical, canonicals.slice(from, from + CANONICALS_PER_QUERY))));
+        for (const row of rows) {
+          existing.add(row.canonical);
+        }
+      }
+      return existing;
     },
 
     async takePlaces(ceiling, wanted) {

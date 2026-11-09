@@ -177,6 +177,44 @@ describe("importBookmarks", () => {
     expect(written.batches.flatMap((batch) => batch.bookmarks.map((bookmark) => bookmark.url))).toEqual(["https://example.com/new", "https://example.com/other"]);
   });
 
+  it("reads a long file in chunks and lets the event loop run between them, with the same reads, canonical URLs and duplicates as a short file", async () => {
+    const { written, dependencies } = fixture();
+    const file = urls(...Array.from({ length: 1200 }, (_, index) => `https://example.com/${String(index)}`), "https://example.com/0/", "bogus");
+    let turns = 0;
+    let spinning = true;
+    const spin = (): void => {
+      if (spinning) {
+        turns += 1;
+        setImmediate(spin);
+      }
+    };
+    setImmediate(spin);
+    let asked: readonly string[] = [];
+    let turnsWhenAsked = -1;
+    const store: ImportStore = {
+      ...dependencies.store,
+      existingCanonicalUrls: (canonicals) => {
+        asked = canonicals;
+        turnsWhenAsked = turns;
+        return dependencies.store.existingCanonicalUrls(canonicals);
+      },
+    };
+
+    const outcome = await importBookmarks({ ...dependencies, store }, ask(file));
+    spinning = false;
+
+    expect(turnsWhenAsked).toBeGreaterThanOrEqual(2);
+    expect(asked).toEqual(Array.from({ length: 1200 }, (_, index) => `https://example.com/${String(index)}`));
+    if (outcome.kind !== "imported") {
+      throw new Error("not imported");
+    }
+    expect(outcome.result.detected.bookmarks).toBe(1202);
+    expect(outcome.result.created).toBe(1200);
+    expect(outcome.result.skipped).toEqual([{ position: 1201, title: "example.com", url: "https://example.com/0/", reason: "duplicate" }]);
+    expect(outcome.result.failed.map((entry) => entry.position)).toEqual([1202]);
+    expect(written.takes).toEqual([{ ceiling: null, wanted: 1200 }]);
+  });
+
   it("passes no ceiling for an unlimited workspace, and creates all", async () => {
     const { written, dependencies } = fixture();
 

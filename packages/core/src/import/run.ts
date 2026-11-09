@@ -1,9 +1,10 @@
-import type { ImportResult } from "@slugbase/contracts";
+import type { ImportFileBookmark, ImportResult } from "@slugbase/contracts";
 import type { AuditActor, AuditWriter } from "../audit/writer.ts";
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
 import { parseSlug } from "../go/slug.ts";
 import { bookmarksOfFile, entry, isRefusal, missingNames, overDistinctNames, overLinks, overNewNames, planNames, planSlugs, readImportBookmark, roomUnder, slugsToCheck, type ImportBookmark, type ImportPreviewStore, type ImportRefusal } from "./preview.ts";
+import { yieldToEventLoop } from "./yield.ts";
 
 // The JSON import itself (doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13), in the one transaction the store and the audit writer are bound to. The file is judged exactly as the preview judges it
 // (`previewImport`): each bookmark's URL goes through the bookmark URL module, its text is made plain and cut, a duplicate by canonical URL is left out unless asked otherwise, and the workspace's room is spent in the order
@@ -34,6 +35,26 @@ import { bookmarksOfFile, entry, isRefusal, missingNames, overDistinctNames, ove
 
 /** The most bookmarks one insert statement writes. */
 export const IMPORT_BATCH_SIZE = 500;
+
+/** The most bookmarks of a file read before the event loop is let go: a file of 5 000 bookmarks is read in a few milliseconds of work each, never in one run that holds every other request of the process back. */
+const READ_CHUNK_SIZE = 500;
+
+/** What reading the bookmarks of a file leaves: each one's read, and the canonical URLs of those that are bookmarks, once each in the order of the file. */
+async function readBookmarks(entries: readonly ImportFileBookmark[]): Promise<{ reads: (ImportBookmark | ImportRefusal)[]; canonicals: string[] }> {
+  const reads: (ImportBookmark | ImportRefusal)[] = [];
+  const canonicals = new Set<string>();
+  for (let from = 0; from < entries.length; from += READ_CHUNK_SIZE) {
+    entries.slice(from, from + READ_CHUNK_SIZE).forEach((entryOfFile, index) => {
+      const read = readImportBookmark(entryOfFile, from + index + 1);
+      reads.push(read);
+      if (!isRefusal(read)) {
+        canonicals.add(read.canonical);
+      }
+    });
+    await yieldToEventLoop();
+  }
+  return { reads, canonicals: [...canonicals] };
+}
 
 /** A bookmark the import creates. */
 export interface ImportNewBookmark {
@@ -189,8 +210,7 @@ export async function importBookmarks({ store, audit, newBookmarkId, newId }: Im
   if (distinct !== undefined) {
     return { kind: "too_many_distinct_names", names: distinct };
   }
-  const reads = bookmarksOfFile(ask.file).map((bookmark, index) => readImportBookmark(bookmark, index + 1));
-  const canonicals = [...new Set(reads.flatMap((read) => (isRefusal(read) ? [] : [read.canonical])))];
+  const { reads, canonicals } = await readBookmarks(bookmarksOfFile(ask.file));
   const existing = ask.skipDuplicates && canonicals.length > 0 ? await store.existingCanonicalUrls(canonicals) : new Set<string>();
 
   const seen = new Set<string>();

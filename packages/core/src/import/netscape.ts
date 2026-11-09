@@ -1,5 +1,6 @@
 import { IMPORT_MAX_BOOKMARKS, type ImportFileBookmark } from "@slugbase/contracts";
 import { decodeCharacterReferences, isRawTextElement, nextMarkup, rawTextEnd } from "../bookmarks/metadata.ts";
+import { yieldToEventLoop } from "./yield.ts";
 
 // The reader of a browser's bookmark file (doc 02 section 13.1, doc 04 section 10.9, doc 10 T13): Netscape bookmark HTML as Chrome, Edge, Firefox and Safari write it, turned into the bookmarks of
 // the JSON import, which then judges them exactly as it judges a file of its own. The file is untrusted text. It is read in one pass with the tag scanner of the page-metadata parser (`nextMarkup`): no
@@ -12,6 +13,9 @@ import { decodeCharacterReferences, isRawTextElement, nextMarkup, rawTextEnd } f
 // list that no `<H3>` names, such as the first one of a file, belongs to the folder around it, or to none. `TAGS` is split at commas. The description (`<DD>`), `ADD_DATE`, `SHORTCUTURL` and the other
 // attributes are not read. What a link's address or text is worth is for the import to say: the address goes through the bookmark URL module, so a bookmarklet or a `place:` query is a failure there.
 // More than `IMPORT_MAX_BOOKMARKS` links end the read, and the file is refused whole.
+//
+// A file of 5 MiB takes the walk longer than a request should hold the event loop for, so the walk is one generator that hands control back every `TOKENS_PER_SLICE` tokens. `parseNetscapeBookmarks` runs it to its end in one go;
+// `parseNetscapeBookmarksInSlices` lets the event loop run between the slices, and reads the same bookmarks.
 
 /** The most folders deep the walk keeps names for; a list nested deeper is counted and belongs to the folder at this depth. */
 const MAX_FOLDER_DEPTH = 128;
@@ -26,6 +30,9 @@ const KEPT_ATTRIBUTES: ReadonlySet<string> = new Set(["a", "h3"]);
 
 // The tags that begin or end an entry: the text of a link or a folder name stops at any of them, so a link whose `</A>` is missing does not take the entries after it.
 const ENTRY_TAGS: ReadonlySet<string> = new Set(["a", "dt", "dd", "dl", "h1", "h2", "h3", "hr", "p"]);
+
+/** The tokens the walk reads before it hands control back: a slice is a millisecond or two of work. */
+const TOKENS_PER_SLICE = 4096;
 
 const WHITESPACE_RUN = /\s+/g;
 
@@ -53,8 +60,8 @@ function tagsOf(attribute: string | undefined): string[] {
     .filter((tag) => tag !== "");
 }
 
-/** The bookmarks of a browser's bookmark file, in the order of the file. The bytes are read as UTF-8; a sequence that is not is replaced, never an error. */
-export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile {
+/** The walk over a browser's bookmark file, which yields after each slice of tokens and returns what the file holds. */
+function* walkNetscapeBookmarks(file: Uint8Array): Generator<undefined, NetscapeFile> {
   const text = new TextDecoder("utf-8").decode(file).replaceAll("\u0000", "");
   const bookmarks: ImportFileBookmark[] = [];
   const folders: (string | null)[] = [];
@@ -77,7 +84,12 @@ export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile {
   };
 
   let cursor = 0;
+  let tokens = 0;
   for (;;) {
+    tokens += 1;
+    if (tokens % TOKENS_PER_SLICE === 0) {
+      yield undefined;
+    }
     const token = nextMarkup(text, cursor, KEPT_ATTRIBUTES);
     if (pending.collecting !== undefined && pending.collecting.text.length < TEXT_MAX_LENGTH && token.start > cursor) {
       pending.collecting.text += text.slice(cursor, Math.min(token.start, cursor + TEXT_MAX_LENGTH));
@@ -141,4 +153,27 @@ export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile {
   }
   finish();
   return { kind: "parsed", bookmarks };
+}
+
+/** The bookmarks of a browser's bookmark file, in the order of the file. The bytes are read as UTF-8; a sequence that is not is replaced, never an error. */
+export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile {
+  const walk = walkNetscapeBookmarks(file);
+  for (;;) {
+    const step = walk.next();
+    if (step.done === true) {
+      return step.value;
+    }
+  }
+}
+
+/** The same bookmarks as `parseNetscapeBookmarks`, read a slice at a time with the event loop let go between the slices, so that the process's other requests are served while a large file is read. */
+export async function parseNetscapeBookmarksInSlices(file: Uint8Array): Promise<NetscapeFile> {
+  const walk = walkNetscapeBookmarks(file);
+  for (;;) {
+    const step = walk.next();
+    if (step.done === true) {
+      return step.value;
+    }
+    await yieldToEventLoop();
+  }
 }

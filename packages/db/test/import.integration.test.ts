@@ -90,6 +90,20 @@ describe("the existing canonical URLs of the import preview", () => {
     expect(none.size).toBe(0);
   });
 
+  it("find the member's bookmarks wherever they fall in a list long enough to be asked in several statements, each once", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const places = [0, 499, 500, 501, 1000, 2999, 4999];
+    for (const n of places) {
+      await bookmark(w, me, `https://example.com/${String(n)}`);
+    }
+    const asked = Array.from({ length: 5000 }, (_, n) => `https://example.com/${String(n)}`);
+
+    const found = await asMember(w, me, (tx) => importRepository(tx).existingCanonicalUrls(asked));
+
+    expect([...found].sort()).toEqual(places.map((n) => `https://example.com/${String(n)}`).sort());
+  });
+
   it("match a URL as text, whatever characters it holds", async () => {
     const me = await account();
     const w = await workspace([me]);
