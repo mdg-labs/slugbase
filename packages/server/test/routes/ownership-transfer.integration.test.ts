@@ -1,12 +1,14 @@
+import { randomBytes } from "node:crypto";
 import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { MailPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { hashPassword } from "../../src/auth/password.ts";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Authenticator, type Server } from "../../src/create-server.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
-import { seedAccount, seedMembership, seedWorkspace, sessionRows, setActiveWorkspace, storeFor, workspaceChecksum, type SeededAccount } from "../auth/support.ts";
+import { seedAccount, seedMembership, seedWorkspace, sessionRows, setActiveWorkspace, sha256, storeFor, workspaceChecksum, type SeededAccount } from "../auth/support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { urlOf } from "../migrate/support.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
@@ -21,7 +23,6 @@ import { adapters, recordingLogger, serverConfig } from "../support.ts";
 
 const TRANSFER = "/api/v1/workspace/transfer-ownership";
 const MEMBERS = "/api/v1/members";
-const REAUTH = "/api/v1/me/reauth";
 const SESSION_COOKIE = "__Host-slugbase_session";
 const HOOK_TIMEOUT_MS = 300_000;
 const MAIL_JOB = "mail.send";
@@ -105,35 +106,38 @@ interface Person {
   readonly sessionId: string;
 }
 
-async function signIn(world: World, account: SeededAccount, reauthenticate: boolean): Promise<string> {
-  const response = await send(world, "POST", "/api/v1/auth/login", {}, { email: account.email, password: account.password, remember: false });
-  const token = new RegExp(`^${SESSION_COOKIE}=([A-Za-z0-9_-]{43});`).exec(response.headers.get("set-cookie") ?? "")?.[1];
-  if (response.status !== 200 || token === undefined) {
-    throw new Error(`could not sign in: ${String(response.status)}`);
+// One account password, hashed once with the production parameters for the whole file. Hashing it for every account
+// and signing in through the login route twice per person (plus the re-authentication) cost an argon2id operation
+// each, about twenty in the longest test, and that is what ran past the default timeout on a loaded host (#809).
+// None of these tests is about signing in: a session is created in the store as the login route creates one, and
+// the re-authentication is the store call the route makes, so the chain under test still sees a full session.
+const PASSWORD = "a long password for the accounts of the ownership tests";
+const passwordHash = hashPassword(PASSWORD);
+
+async function startSession(account: SeededAccount, reauthenticate: boolean): Promise<{ readonly cookie: string; readonly sessionId: string }> {
+  const token = randomBytes(32);
+  const sessionId = `0192f3a0-dddd-7000-8000-${randomBytes(6).toString("hex")}`;
+  const created = await store.createSession({ id: sessionId, accountId: account.id, level: "full", remember: false, ipPrefix: null, userAgent: null, tokenHash: sha256(token), replacedTokenHash: null });
+  if (!created) {
+    throw new Error("could not start a session");
   }
-  const cookie = `${SESSION_COOKIE}=${token}`;
-  if (reauthenticate) {
-    expect((await send(world, "POST", REAUTH, { cookie }, { password: account.password })).status).toBe(204);
+  if (reauthenticate && !(await store.markReauthenticated(sessionId, account.id))) {
+    throw new Error("could not re-authenticate the session");
   }
-  return cookie;
+  return { cookie: `${SESSION_COOKIE}=${token.toString("base64url")}`, sessionId };
 }
 
-async function person(world: World, emailVerified = true): Promise<Person> {
-  const account = await seedAccount(database(), { emailVerified });
-  const cookie = await signIn(world, account, true);
-  const stale = await signIn(world, account, false);
-  const sessions = await sessionRows(database(), account.id);
-  const sessionId = sessions[0]?.id;
-  if (sessionId === undefined) {
-    throw new Error("the account has no session");
-  }
+async function person(emailVerified = true): Promise<Person> {
+  const account = await seedAccount(database(), { emailVerified, password: PASSWORD, passwordHash: await passwordHash });
+  const { cookie, sessionId } = await startSession(account, true);
+  const { cookie: stale } = await startSession(account, false);
   return { account, cookie, stale, sessionId };
 }
 
 type Role = "owner" | "admin" | "member";
 
 /** A workspace with a signed-in member of each role given, in that order, all acting in it. */
-async function workspaceOf(world: World, ...roles: Role[]): Promise<{ readonly workspaceId: string; readonly people: readonly (Person & { readonly role: Role })[] }> {
+async function workspaceOf(...roles: Role[]): Promise<{ readonly workspaceId: string; readonly people: readonly (Person & { readonly role: Role })[] }> {
   const workspaceId = await seedWorkspace(database(), { name: "Ownership test" });
   await database().owner.begin(async (tx) => {
     await tx`SET LOCAL ROLE slugbase_system`;
@@ -141,7 +145,7 @@ async function workspaceOf(world: World, ...roles: Role[]): Promise<{ readonly w
   });
   const people: (Person & { role: Role })[] = [];
   for (const role of roles) {
-    const as = await person(world);
+    const as = await person();
     await seedMembership(database(), { workspaceId, accountId: as.account.id, role });
     for (const session of await sessionRows(database(), as.account.id)) {
       await setActiveWorkspace(database(), session.id, workspaceId);
@@ -213,7 +217,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
     "answers 403 email_unverified and writes nothing when the owner made the workspace for itself and has not verified its address (demoteSelf %s)",
     async (demoteSelf) => {
       const world = serve(canSend);
-      const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+      const { workspaceId, people } = await workspaceOf("owner", "member");
       const [owner, recipient] = [only(people, 0), only(people, 1)];
       await database().owner.begin(async (tx) => {
         await tx`SET LOCAL ROLE slugbase_system`;
@@ -236,7 +240,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("makes the recipient an owner and keeps the caller one, with the audit event and the recipient's email queued", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
     const before = await tokenHashOf(owner.sessionId, owner.account.id);
 
@@ -263,7 +267,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("promotes the recipient and demotes the caller in one request, rotates the caller's token and refuses the one they had as an owner", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "admin");
+    const { workspaceId, people } = await workspaceOf("owner", "admin");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
     const before = await tokenHashOf(owner.sessionId, owner.account.id);
 
@@ -286,7 +290,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("refuses a session that has not re-authenticated within ten minutes with 401 reauth_required, and changes, queues and writes nothing", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
     const before = await tokenHashOf(owner.sessionId, owner.account.id);
 
@@ -306,7 +310,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("refuses an admin and a member with 403, whoever they name, and changes, queues and writes nothing", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "admin", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "admin", "member");
     const [owner, admin, member] = [only(people, 0), only(people, 1), only(people, 2)];
     const roles = await rolesOf(workspaceId);
 
@@ -334,7 +338,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("refuses an API token of the owner with 403 and changes nothing", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
     const roles = await rolesOf(workspaceId);
 
@@ -356,9 +360,9 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("answers 404 for a recipient that is no member of the workspace, a member of another workspace included, and leaves both workspaces as they were", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
-    const other = await workspaceOf(world, "owner", "member");
-    const outsider = await person(world);
+    const { workspaceId, people } = await workspaceOf("owner", "member");
+    const other = await workspaceOf("owner", "member");
+    const outsider = await person();
     const owner = only(people, 0);
     const beforeOther = await workspaceChecksum(database(), other.workspaceId);
     const before = await tokenHashOf(owner.sessionId, owner.account.id);
@@ -392,7 +396,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("refuses an owner who names themselves with 422 naming accountId, and changes nothing", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, member] = [only(people, 0), only(people, 1)];
     const roles = await rolesOf(workspaceId);
 
@@ -416,7 +420,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
     ["no accountId", { demoteSelf: false }],
   ])("answers 422 for %s and changes nothing", async (_name, template) => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
     const roles = await rolesOf(workspaceId);
     const body = JSON.parse(JSON.stringify(template).replace("RECIPIENT", recipient.account.id)) as unknown;
@@ -430,7 +434,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("writes nothing and queues no email when the recipient is an owner already and the caller stays one", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "owner");
+    const { workspaceId, people } = await workspaceOf("owner", "owner");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
 
     const response = await send(world, "POST", TRANSFER, { cookie: owner.cookie }, { accountId: recipient.account.id, demoteSelf: false });
@@ -445,7 +449,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("only steps the caller down when the recipient is an owner already, and tells the recipient nothing", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "owner");
+    const { workspaceId, people } = await workspaceOf("owner", "owner");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
 
     const response = await send(world, "POST", TRANSFER, { cookie: owner.cookie }, { accountId: recipient.account.id, demoteSelf: true });
@@ -459,7 +463,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("commits the transfer on an instance that sends no mail and queues no email", async () => {
     const world = serve();
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
 
     const response = await send(world, "POST", TRANSFER, { cookie: owner.cookie }, { accountId: recipient.account.id, demoteSelf: false });
@@ -472,7 +476,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("is one transaction: when the commit is refused neither role changes, no email is queued, no audit event stays and the caller keeps their token", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
     const before = await tokenHashOf(owner.sessionId, owner.account.id);
     const roles = await rolesOf(workspaceId);
@@ -501,7 +505,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("answers 409 last_owner when the database refuses the commit for want of an owner, and the roles, the audit log, the email and the token stay as they were", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "member");
+    const { workspaceId, people } = await workspaceOf("owner", "member");
     const [owner, recipient] = [only(people, 0), only(people, 1)];
     const before = await tokenHashOf(owner.sessionId, owner.account.id);
     const roles = await rolesOf(workspaceId);
@@ -530,7 +534,7 @@ describe("POST /api/v1/workspace/transfer-ownership", () => {
 
   it("leaves an owner when two owners step down to each other at the same moment", async () => {
     const world = serve(canSend);
-    const { workspaceId, people } = await workspaceOf(world, "owner", "owner");
+    const { workspaceId, people } = await workspaceOf("owner", "owner");
     const [first, second] = [only(people, 0), only(people, 1)];
 
     const responses = await Promise.all([
