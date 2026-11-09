@@ -27,6 +27,7 @@ The people you invite use SlugBase as described in [Get started](../user/getting
 | Page | What it covers |
 | ---- | -------------- |
 | [Back up and restore](backup-restore.md) | Back up the database and your secrets, and restore them into an empty database. |
+| [Put SlugBase behind a reverse proxy](reverse-proxy.md) | Serve SlugBase over HTTPS with nginx or Caddy, and set the origin and the trusted proxy hops. |
 | [Environment settings](environment.md) | Look up every environment key, its default and what it sets, and see which limits are fixed. |
 | [Check the bookmark counter](check-bookmark-counter.md) | Find workspaces whose bookmark counter differs from the number of their bookmarks, without changing anything. |
 
