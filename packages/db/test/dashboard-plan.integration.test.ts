@@ -146,14 +146,15 @@ async function planOf(statement: { sql: string; params: unknown[] }): Promise<Pl
 const indexesOf = (nodes: readonly PlanNode[]): string[] => nodes.map((node) => node["Index Name"]).filter((name) => name !== undefined);
 
 // The most buffers each statement of the dashboard may touch on this fixture: 5 % and 16 blocks over the most it touched in 21 runs on PostgreSQL 17 and 18, rounded up to ten. The sharing counts touch 6 853 blocks on
-// PostgreSQL 17 and 9 199 to 9 231 on 18, whose plans differ in the test of the owner's bookmarks for a share; the bound is the one both pass.
+// PostgreSQL 17 and 9 199 to 9 231 on 18, whose plans differ in the test of the owner's bookmarks for a share; the bound is the one both pass. The top tags count the links of each tag from the index of the links, so
+// their work follows the 24 000 links of this fixture (1 312 blocks) and not the bookmarks they point to; `dashboard-large-plan.integration.test.ts` holds them on the shape of the instance the budget is measured on.
 const BLOCKS: Readonly<Record<string, number>> = {
   "quick access, the owner's own": 4300,
   "quick access, shared with the owner": 2560,
   pinned: 1080,
   counts: 590,
   "sharing counts": 9710,
-  "top tags": 890,
+  "top tags": 1400,
 };
 
 describe("the dashboard on a workspace of 50 000 bookmarks", () => {

@@ -111,6 +111,10 @@ export const bookmarks = pgTable(
     index("bookmarks_owner_url_idx")
       .on(table.workspaceId, table.ownerId, table.urlCanonical)
       .where(sql`${table.planArchivedAt} IS NULL`),
+    // The plan-archived bookmarks of an owner, which are few: the tag counts subtract the links of these from the links of a tag (`tagsQuery`), so a count visits them and not every bookmark a tag is linked to.
+    index("bookmarks_owner_archived_idx")
+      .on(table.workspaceId, table.ownerId, table.id)
+      .where(sql`${table.planArchivedAt} IS NOT NULL`),
     index("bookmarks_pinned_idx")
       .on(table.workspaceId, table.ownerId, table.pinnedAt.desc())
       .where(sql`${table.pinnedAt} IS NOT NULL AND ${table.planArchivedAt} IS NULL`),

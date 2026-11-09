@@ -137,6 +137,7 @@
     "20261107132258_add_search_custom_plans": "a526d1b0818db3a31216c2ba3fd87a7a91bbb27bce60803b5fde90419a2e8c23",
     "20261107145225_add_bookmark_title_page": "29baf23fd5b688de0f8140b851e88b0631853da2897df5b6f7e27196e23c9726",
     "20261107172700_add_account_deletion_lock_indexes": "99c5eba2a7dd1bccd4250c19ea9705c39c6ded4ce0eeba192982a88853ef70b9",
-    "20261107215946_add_slug_suggest_custom_plans": "663bd6453e936bf22c002f2ab138c8e8ed9e8acc2aa5179714602a9966f93c4f"
+    "20261107215946_add_slug_suggest_custom_plans": "663bd6453e936bf22c002f2ab138c8e8ed9e8acc2aa5179714602a9966f93c4f",
+    "20261109080232_index_bookmark_owner_archived": "7cf0745a498eb6b7742ab2aec7233f7e9f3bddcb62b85f5588d7f861bdde1772"
   }
 }

@@ -1210,6 +1210,42 @@ describe("an upgrade from the level before the bookmark URL index", () => {
   }, 120_000);
 });
 
+describe("an upgrade from the level before the plan-archived bookmark index", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000061";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000062";
+
+  it("builds the index concurrently on a table that holds bookmarks, in a step of its own, and it is valid and partial", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const archivedIndex = journal.entries.filter((entry) => entry.tag.includes("index_bookmark_owner_archived"));
+    expect(archivedIndex).toHaveLength(1);
+    for (const entry of archivedIndex) {
+      expect(readFileSync(join(CE_CHAIN.folder, `${entry.tag}.sql`), "utf8").startsWith("-- slugbase:non-transactional\n")).toBe(true);
+    }
+    await owner.unsafe("DROP INDEX public.bookmarks_owner_archived_idx");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${archivedIndex.map((entry) => String(entry.when)).join(", ")})`);
+    await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SELECT set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${ACCOUNT}, 'archived-index@example.test', 'Archived index')`;
+      await tx`INSERT INTO workspaces (id, name) VALUES (${WORKSPACE}, 'Archived index')`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${WORKSPACE}, ${ACCOUNT}, 'owner')`;
+      await tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, plan_archived_at)
+        SELECT gen_random_uuid(), ${WORKSPACE}, ${ACCOUNT}, 'https://example.com/' || n, 'https://example.com/' || n, 'example.com', 'Title ' || n, CASE WHEN n % 10 = 0 THEN now() END
+        FROM generate_series(1, 500) AS n`;
+    });
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(archivedIndex.map((entry) => entry.tag));
+    expect((await indexes(owner, ["bookmarks_owner_archived_idx"])).map((index) => [index.name, index.valid])).toEqual([["bookmarks_owner_archived_idx", true]]);
+    const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.bookmarks_owner_archived_idx'::regclass) AS definition`;
+    expect(definition?.definition).toContain("(workspace_id, owner_id, id) WHERE (plan_archived_at IS NOT NULL)");
+  }, 120_000);
+});
+
 describe("an upgrade from the level before the workspace creator index", () => {
   const WORKSPACE = "0190a000-0000-7000-8000-000000000051";
   const ACCOUNT = "0190a000-0000-7000-8000-000000000052";
