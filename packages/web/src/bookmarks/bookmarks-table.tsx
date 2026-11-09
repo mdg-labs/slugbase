@@ -1,6 +1,6 @@
 import { DataTable, Favicon, PinIcon, RowActions, SelectCheckbox, type DataTableColumn, type DataTableSortDirection } from "@slugbase/ui/patterns";
 import { useRouter } from "@tanstack/react-router";
-import type { ReactElement } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { useBookmarkActions, type BookmarkActionHandlers } from "./bookmark-card.tsx";
@@ -24,6 +24,34 @@ export type BookmarksTableProps = Pick<BookmarkActionHandlers, "onEdit" | "onPin
   readonly sort: BookmarkSort | undefined;
   readonly onSort: (sort: BookmarkSort) => void;
 };
+
+/**
+ * A bookmark with what its row shows besides it. A row is drawn again only when its model is a new object, so a model
+ * is kept while the bookmark, its selection and its pending pin are the same (`useRowModels`).
+ */
+interface RowModel {
+  readonly bookmark: Bookmark;
+  readonly selected: boolean;
+  readonly pinPending: boolean;
+}
+
+function useRowModels(bookmarks: readonly Bookmark[], selected: ReadonlySet<string>, pendingPins: ReadonlySet<string>): readonly RowModel[] {
+  const kept = useRef<ReadonlyMap<string, RowModel>>(new Map());
+  const models = useMemo(
+    () =>
+      bookmarks.map((bookmark): RowModel => {
+        const before = kept.current.get(bookmark.id);
+        const isSelected = selected.has(bookmark.id);
+        const pinPending = pendingPins.has(bookmark.id);
+        return before?.bookmark === bookmark && before.selected === isSelected && before.pinPending === pinPending ? before : { bookmark, selected: isSelected, pinPending };
+      }),
+    [bookmarks, selected, pendingPins],
+  );
+  useLayoutEffect(() => {
+    kept.current = new Map(models.map((model) => [model.bookmark.id, model]));
+  }, [models]);
+  return models;
+}
 
 function directionOf(sort: BookmarkSort, ascending: BookmarkSort | undefined, descending: BookmarkSort | undefined): DataTableSortDirection {
   if (sort === ascending) {
@@ -79,90 +107,119 @@ function ActionsCell(props: BookmarkActionHandlers): ReactElement {
 /**
  * The bookmarks as a table (doc 03 section 3.3): the title, slug, host, usage and date columns, which order the list
  * from their headers, and the actions of the card. The address holds the order; below `md` each row is a card. The
- * folders column shows a dot and the name of each folder and the tags column the first three tags.
+ * folders column shows a dot and the name of each folder and the tags column the first three tags. A selection, a pin
+ * being saved or a new tab stop draws the rows it changes and no others: the columns are kept from one render to the
+ * next and reach the page's handlers through a ref, so only a row whose bookmark, selection or pending pin changed is new.
  */
-export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected, selectionActive, tabStopId, onSelectedChange, onSort, onEdit, onPin, onShare, onDelete }: BookmarksTableProps): ReactElement {
+export function BookmarksTable(props: BookmarksTableProps): ReactElement {
+  const { bookmarks, pendingPins, sort: current, selected, selectionActive, tabStopId } = props;
   const { t } = useTranslation();
   const format = useFormat();
   const sort = current ?? DEFAULT_SORT;
-  const columns: readonly DataTableColumn<Bookmark>[] = [
-    {
-      id: "select",
-      header: t("bookmarks.list.table.select"),
-      hideHeader: true,
-      cardSlot: "leading",
-      cell: (bookmark) => (
-        <SelectCheckbox
-          checked={selected.has(bookmark.id)}
-          label={t("bookmarks.list.select", { title: bookmark.title })}
-          onCheckedChange={(next) => {
-            onSelectedChange(bookmark, next);
-          }}
-        />
-      ),
-    },
-    {
-      id: "title",
-      header: t("bookmarks.list.table.title"),
-      cardSlot: "title",
-      cell: (bookmark) => <TitleCell bookmark={bookmark} />,
-      sort: { direction: directionOf(sort, "title_asc", "title_desc"), onSort: () => { onSort(sort === "title_asc" ? "title_desc" : "title_asc"); } },
-    },
-    {
-      id: "slug",
-      header: t("bookmarks.list.table.slug"),
-      cell: (bookmark) =>
-        bookmark.slug === null ? null : (
-          <span className="font-mono text-xs" translate="no">
-            {`/go/${bookmark.slug}`}
+  const latest = useRef(props);
+  useLayoutEffect(() => {
+    latest.current = props;
+  });
+  const onSelectedChange = useCallback((bookmark: Bookmark, next: boolean): void => {
+    latest.current.onSelectedChange(bookmark, next);
+  }, []);
+  const onEdit = useCallback((bookmark: Bookmark): void => {
+    latest.current.onEdit(bookmark);
+  }, []);
+  const onPin = useCallback((bookmark: Bookmark, pinned: boolean): void => {
+    latest.current.onPin(bookmark, pinned);
+  }, []);
+  const onShare = useCallback((bookmark: Bookmark): void => {
+    latest.current.onShare(bookmark);
+  }, []);
+  const onDelete = useCallback((bookmark: Bookmark): void => {
+    latest.current.onDelete(bookmark);
+  }, []);
+  const onSort = useCallback((next: BookmarkSort): void => {
+    latest.current.onSort(next);
+  }, []);
+  const rows = useRowModels(bookmarks, selected, pendingPins);
+  const columns = useMemo<readonly DataTableColumn<RowModel>[]>(
+    () => [
+      {
+        id: "select",
+        header: t("bookmarks.list.table.select"),
+        hideHeader: true,
+        cardSlot: "leading",
+        cell: ({ bookmark, selected: checked }) => (
+          <SelectCheckbox
+            checked={checked}
+            label={t("bookmarks.list.select", { title: bookmark.title })}
+            onCheckedChange={(next) => {
+              onSelectedChange(bookmark, next);
+            }}
+          />
+        ),
+      },
+      {
+        id: "title",
+        header: t("bookmarks.list.table.title"),
+        cardSlot: "title",
+        cell: ({ bookmark }) => <TitleCell bookmark={bookmark} />,
+        sort: { direction: directionOf(sort, "title_asc", "title_desc"), onSort: () => { onSort(sort === "title_asc" ? "title_desc" : "title_asc"); } },
+      },
+      {
+        id: "slug",
+        header: t("bookmarks.list.table.slug"),
+        cell: ({ bookmark }) =>
+          bookmark.slug === null ? null : (
+            <span className="font-mono text-xs" translate="no">
+              {`/go/${bookmark.slug}`}
+            </span>
+          ),
+      },
+      {
+        id: "host",
+        header: t("bookmarks.list.table.host"),
+        cell: ({ bookmark }) => (
+          <span className="block max-w-48 truncate font-mono text-muted-foreground text-xs" translate="no">
+            {bookmark.host}
           </span>
         ),
-    },
-    {
-      id: "host",
-      header: t("bookmarks.list.table.host"),
-      cell: (bookmark) => (
-        <span className="block max-w-48 truncate font-mono text-muted-foreground text-xs" translate="no">
-          {bookmark.host}
-        </span>
-      ),
-    },
-    { id: "folders", header: t("bookmarks.list.table.folders"), cell: (bookmark) => <FolderDots folders={bookmark.folders} named /> },
-    { id: "tags", header: t("bookmarks.list.table.tags"), cell: (bookmark) => <TagBadges tags={bookmark.tags} /> },
-    {
-      id: "opens",
-      header: t("bookmarks.list.table.opens"),
-      cell: (bookmark) => format.number(bookmark.openCount),
-      sort: { direction: directionOf(sort, undefined, "most_used"), onSort: () => { onSort("most_used"); } },
-    },
-    {
-      id: "lastOpened",
-      header: t("bookmarks.list.table.lastOpened"),
-      cell: (bookmark) =>
-        bookmark.lastOpenedAt === null ? <span className="text-muted-foreground">{t("bookmarks.list.table.never")}</span> : format.relativeTime(new Date(bookmark.lastOpenedAt)),
-      sort: { direction: directionOf(sort, undefined, "recently_opened"), onSort: () => { onSort("recently_opened"); } },
-    },
-    {
-      id: "added",
-      header: t("bookmarks.list.table.added"),
-      cell: (bookmark) => format.date(new Date(bookmark.createdAt), { dateStyle: "medium" }),
-      sort: { direction: directionOf(sort, "oldest", "recent"), onSort: () => { onSort(sort === "recent" ? "oldest" : "recent"); } },
-    },
-    {
-      id: "actions",
-      header: t("bookmarks.list.table.actions"),
-      hideHeader: true,
-      cardSlot: "trailing",
-      cell: (bookmark) => <ActionsCell bookmark={bookmark} onDelete={onDelete} onEdit={onEdit} onPin={onPin} onShare={onShare} pinPending={pendingPins.has(bookmark.id)} />,
-    },
-  ];
+      },
+      { id: "folders", header: t("bookmarks.list.table.folders"), cell: ({ bookmark }) => <FolderDots folders={bookmark.folders} named /> },
+      { id: "tags", header: t("bookmarks.list.table.tags"), cell: ({ bookmark }) => <TagBadges tags={bookmark.tags} /> },
+      {
+        id: "opens",
+        header: t("bookmarks.list.table.opens"),
+        cell: ({ bookmark }) => format.number(bookmark.openCount),
+        sort: { direction: directionOf(sort, undefined, "most_used"), onSort: () => { onSort("most_used"); } },
+      },
+      {
+        id: "lastOpened",
+        header: t("bookmarks.list.table.lastOpened"),
+        cell: ({ bookmark }) =>
+          bookmark.lastOpenedAt === null ? <span className="text-muted-foreground">{t("bookmarks.list.table.never")}</span> : format.relativeTime(new Date(bookmark.lastOpenedAt)),
+        sort: { direction: directionOf(sort, undefined, "recently_opened"), onSort: () => { onSort("recently_opened"); } },
+      },
+      {
+        id: "added",
+        header: t("bookmarks.list.table.added"),
+        cell: ({ bookmark }) => format.date(new Date(bookmark.createdAt), { dateStyle: "medium" }),
+        sort: { direction: directionOf(sort, "oldest", "recent"), onSort: () => { onSort(sort === "recent" ? "oldest" : "recent"); } },
+      },
+      {
+        id: "actions",
+        header: t("bookmarks.list.table.actions"),
+        hideHeader: true,
+        cardSlot: "trailing",
+        cell: ({ bookmark, pinPending }) => <ActionsCell bookmark={bookmark} onDelete={onDelete} onEdit={onEdit} onPin={onPin} onShare={onShare} pinPending={pinPending} />,
+      },
+    ],
+    [t, format, sort, onSelectedChange, onEdit, onPin, onShare, onDelete, onSort],
+  );
   return (
     <DataTable
       columns={columns}
       label={t("bookmarks.list.label")}
-      rowKey={(bookmark) => bookmark.id}
-      rowSelected={(bookmark) => selected.has(bookmark.id)}
-      rows={bookmarks}
+      rowKey={(row) => row.bookmark.id}
+      rowSelected={(row) => row.selected}
+      rows={rows}
       selectionActive={selectionActive}
       {...(tabStopId === undefined ? {} : { tabStopId })}
     />
