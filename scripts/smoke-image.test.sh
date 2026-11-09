@@ -97,6 +97,19 @@ printf 'HTTP/1.1 200 OK\r\nCache-Control: public, max-age=60\r\nContent-Type: te
 if [[ "$(header_value cache-control)" == "public, max-age=60" ]]; then pass "header_value reads a header without case or the line ending"; else fail_test "header_value (got '$(header_value cache-control)')"; fi
 if [[ -z "$(header_value content-security-policy)" ]]; then pass "header_value is empty for an absent header"; else fail_test "header_value for an absent header"; fi
 
+# What the container of `server --with-worker` must have done once SIGTERM stopped it.
+stopped_logs='{"msg":"Shutting down"} {"msg":"Server stopped"} {"msg":"Worker stopped"} {"msg":"Shutdown complete"}'
+run expect_with_worker_stopped 0 "$stopped_logs"
+expect_ok "expect_with_worker_stopped accepts exit 0 with the server, the worker and the shutdown logged"
+run expect_with_worker_stopped 137 "$stopped_logs"
+expect_failed "expect_with_worker_stopped fails when the container was killed"
+run expect_with_worker_stopped "" "$stopped_logs"
+expect_failed "expect_with_worker_stopped fails when the exit code could not be read"
+for missing in "Server stopped" "Worker stopped" "Shutdown complete"; do
+  run expect_with_worker_stopped 0 "${stopped_logs/$missing/}"
+  expect_failed "expect_with_worker_stopped fails when '$missing' was not logged"
+done
+
 secrets=("first-generated-value" "second/generated+value=")
 redacted="$(printf 'url=postgres://u:first-generated-value@h key=second/generated+value= tail' | redact)"
 if [[ "$redacted" == "url=postgres://u:[redacted]@h key=[redacted] tail" ]]; then pass "redact replaces every generated value"; else fail_test "redact (got '$redacted')"; fi

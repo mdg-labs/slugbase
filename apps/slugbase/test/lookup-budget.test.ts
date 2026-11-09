@@ -3,12 +3,13 @@ import { createServer, type AddressInfo, type Server, type Socket } from "node:n
 import { EgressError, type AiSuggestRequest } from "@slugbase/core";
 import { loadConfig, type Logger } from "@slugbase/server";
 import { afterEach, describe, expect, it } from "vitest";
-import { composeAdapters } from "../src/main.ts";
+import { composeAdapters, composeWithWorkerAdapters } from "../src/main.ts";
 
 // The egress instances of one process (shared, AI and OIDC) draw on one budget of three host-name lookups, one fewer than the
 // four threads libuv starts (doc 01 section 6). These tests build the instances through the composition root, the way the
 // server does, with a scripted resolver. They fail when an instance is built without its share of the budget, and when the
-// OIDC adapter runs more requests at once than its share can hold.
+// OIDC adapter runs more requests at once than its share can hold. `server --with-worker` runs the server and the worker in one
+// process, so the two sides must draw on that one budget too: the last tests compose them as that command does.
 
 const logger: Logger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
@@ -185,5 +186,62 @@ describe("the process's host-name lookup budget, through the composition root", 
     }).config;
     const adapters = composeAdapters(config, logger, { resolve, testOnly: { allowAddresses: ["127.0.0.1"] } });
     expect((await adapters.identity.listProviders()).map((provider) => provider.id)).toEqual(["alpha", "beta", "gamma"]);
+  });
+});
+
+describe("the lookup budget of `server --with-worker`, through the composition root", () => {
+  const request = (adapters: ReturnType<typeof composeAdapters>, host: string) =>
+    adapters.egress.request({ url: `http://${host}.example.test/`, timeoutMs: 100, maxBytes: 10 }).catch((error: unknown) => error);
+
+  it("holds at most three lookups across the server's and the worker's requests, the AI and the OIDC instance together", async () => {
+    const providers = await startProviders();
+    servers.push(providers);
+    const resolver = stallingResolver();
+    const serverConfig = loadConfig("server", { ...environment, ...ai, ...providerKeys("alpha", providers.port) }).config;
+    const workerConfig = loadConfig("worker", { ...environment, ...ai, ...providerKeys("alpha", providers.port) }).config;
+    const sides = composeWithWorkerAdapters(serverConfig, workerConfig, logger, { resolve: resolver.resolve, testOnly: { allowAddresses: ["127.0.0.1"] } });
+
+    // Requests of members on the server's side and fetches of the worker's jobs, all on hosts whose name server never answers.
+    const outcomes = await Promise.all([
+      request(sides.server, "member-1"),
+      request(sides.worker, "job-1"),
+      request(sides.server, "member-2"),
+      request(sides.worker, "job-2"),
+    ]);
+    expect(outcomes.every((outcome) => outcome instanceof EgressError)).toBe(true);
+    // One lookup is the shared instance's: the other two slots are reserved for the AI and the OIDC instance.
+    expect(resolver.asked).toHaveLength(1);
+
+    const suggesting = sides.server.ai.suggest(suggestion).catch((error: unknown) => error);
+    const listing = sides.server.identity.listProviders().catch((error: unknown) => error);
+    await expect.poll(() => resolver.asked.length).toBe(3);
+
+    // Three are held in the process; the worker's side is refused without asking the resolver.
+    await expect(request(sides.worker, "job-3")).resolves.toBeInstanceOf(EgressError);
+    await expect(sides.server.ai.suggest(suggestion)).rejects.toMatchObject({ code: "ai_failed" });
+    expect(resolver.asked).toHaveLength(3);
+
+    for (const held of open.splice(0)) {
+      held.release();
+    }
+    await Promise.all([suggesting, listing]);
+  });
+
+  it("holds at most three lookups across the two sides when neither AI nor OIDC is configured", async () => {
+    const resolver = stallingResolver();
+    const serverConfig = loadConfig("server", environment).config;
+    const workerConfig = loadConfig("worker", environment).config;
+    const sides = composeWithWorkerAdapters(serverConfig, workerConfig, logger, { resolve: resolver.resolve, testOnly: { allowAddresses: ["127.0.0.1"] } });
+
+    const outcomes = await Promise.all([
+      request(sides.server, "member-1"),
+      request(sides.worker, "job-1"),
+      request(sides.server, "member-2"),
+      request(sides.worker, "job-2"),
+      request(sides.server, "member-3"),
+      request(sides.worker, "job-3"),
+    ]);
+    expect(outcomes.every((outcome) => outcome instanceof EgressError)).toBe(true);
+    expect(resolver.asked).toHaveLength(3);
   });
 });

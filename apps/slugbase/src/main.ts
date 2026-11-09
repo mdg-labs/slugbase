@@ -22,6 +22,7 @@ import {
   unconfigured,
   type Adapters,
   type AiSuggestPort,
+  type EgressPort,
   type IdentityPort,
   type MailPort,
   type RegistrationSettings,
@@ -44,7 +45,11 @@ import {
   runMigrations,
   type Logger,
   type MigrateConfig,
+  type ProcessType,
+  type RunningWorker,
+  type Server,
   type ServerConfig,
+  type Worker,
   type WorkerConfig,
 } from "@slugbase/server";
 
@@ -193,6 +198,13 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
   return createSmtpMail({ host, port, security, ...(auth === undefined ? {} : { auth }), from, templates: mailTemplates(config) });
 }
 
+// What the server and the worker of one process (`server --with-worker`) hold in common: the lookup budget the egress
+// instances draw on and the shared egress instance. Without it, `composeAdapters` makes both for the process it composes.
+export interface ProcessSharing {
+  readonly lookups?: LookupBudget;
+  readonly egress?: EgressPort;
+}
+
 // What a test may change about the egress instances the composition builds: the resolver, and the allowances that
 // the adapter itself refuses when `NODE_ENV` is `production`. `nodeEnv` is always set after the options are spread, so
 // no options object can replace the process's own value, whatever it carries.
@@ -274,7 +286,12 @@ function composeAi(config: ServerConfig | WorkerConfig, logger: Logger, lookups:
 // bucket registry of the server package, with the `RATE_LIMIT_*` keys applied. The entitlement source is the
 // full one: every flag is granted and every limit is unlimited (doc 01 section 7.5); the server's engine
 // reads it, and no edition flag decides anything (D4).
-export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger, egressOptions: EgressTestOptions = {}): Adapters {
+export function composeAdapters(
+  config: ServerConfig | WorkerConfig,
+  logger: Logger,
+  egressOptions: EgressTestOptions = {},
+  sharing: ProcessSharing = {},
+): Adapters {
   const secretBox = createSecretBox({
     current: { keyId: config.ENCRYPTION_KEY_ID, key: Buffer.from(config.ENCRYPTION_KEY, "base64") },
     previous: config.ENCRYPTION_KEY_PREVIOUS.map(({ keyId, key }) => ({ keyId, key: Buffer.from(key, "base64") })),
@@ -297,9 +314,10 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
   const mail = composeMail(config, logger);
   logger.info(mail.available ? "Mail ready" : "Mail is off; messages are only logged");
-  const lookups = createLookupBudget();
-  // The shared instance is built first and every other instance joins its budget.
-  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV, lookups: lookups.share(LOOKUP_RESERVE) });
+  const lookups = sharing.lookups ?? createLookupBudget();
+  // The shared instance is built first and every other instance joins its budget. One that the process already holds
+  // (`server --with-worker`) is used as it is, and takes no further slot of the budget.
+  const egress = sharing.egress ?? new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV, lookups: lookups.share(LOOKUP_RESERVE) });
   return {
     ...defaults,
     mail,
@@ -315,15 +333,15 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   };
 }
 
-async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {
-  const logger = createLogger({ level: config.LOG_LEVEL });
+// The server of the CE composition: the same one whether it runs in a process of its own or beside the worker.
+function composeServer(config: ServerConfig, logger: Logger, adapters: Adapters = composeAdapters(config, logger)): Server {
   const serveWeb = existsSync(WEB_ROOT);
   if (!serveWeb) {
     logger.warn("There is no web build; only the API is served", { webRoot: WEB_ROOT });
   }
-  const server = createServer({
+  return createServer({
     config,
-    adapters: composeAdapters(config, logger),
+    adapters,
     modules: [],
     migrations: MIGRATIONS,
     usage: composeUsage(config, logger),
@@ -333,7 +351,91 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
     buildInfo: loadBuildInfo(BUILD_INFO_FILE),
     ...(serveWeb ? { webRoot: WEB_ROOT } : {}),
   });
+}
+
+// The worker of the CE composition, likewise the same in either mode.
+function composeWorker(config: WorkerConfig, logger: Logger, adapters: Adapters = composeAdapters(config, logger)): Worker {
+  return createWorker({
+    config,
+    adapters,
+    modules: [],
+    logger,
+  });
+}
+
+// The adapters of the two sides of `server --with-worker`. Each side keeps the adapters of its process type, but one process
+// has one budget of three host-name lookups against the four threads libuv starts, shared with password hashing (doc 01
+// section 6), so the sides cannot each make a budget of their own: two would let six lookups run at once, and a name
+// server that never answers could then hold every thread and stall every sign-in. The server's instances (shared, AI,
+// OIDC) reserve their slots as in a server of its own, which leaves none to reserve for a worker instance, so the worker
+// uses the server's shared egress instance: the metadata and favicon jobs and the requests of members draw on the same
+// slots, and the AI and the identity adapters keep theirs.
+export function composeWithWorkerAdapters(
+  serverConfig: ServerConfig,
+  workerConfig: WorkerConfig,
+  logger: Logger,
+  egressOptions: EgressTestOptions = {},
+): { readonly server: Adapters; readonly worker: Adapters } {
+  const lookups = createLookupBudget();
+  const server = composeAdapters(serverConfig, logger, egressOptions, { lookups });
+  const worker = composeAdapters(workerConfig, logger, egressOptions, { lookups, egress: server.egress });
+  return { server, worker };
+}
+
+async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {
+  const logger = createLogger({ level: config.LOG_LEVEL });
+  const server = composeServer(config, logger);
   await runUntilSignal(trap, () => server.start(), logger);
+}
+
+// `server --with-worker` (Q11, doc 01 section 2.1) runs the two compositions above in one process, and nothing else
+// differs from the two-container setup: each keeps the adapters, the pools and the configuration of its own process
+// type, and the worker is built from the worker's schema, so it reads no key that the worker process would not. The one
+// thing the sides share is the process's budget of host-name lookups (see `composeWithWorkerAdapters`).
+// The server starts first: with MIGRATE_ON_START it migrates and installs the pg-boss schema before `start` resolves,
+// and the worker never migrates, so it has to start after that. The worker opens no metrics listener here, because
+// the one `METRICS_PORT` belongs to the server's; /metrics then reports the server's samples only. A worker that
+// fails to start stops the server again, so a failed start leaves nothing listening.
+async function runServerWithWorker(serverConfig: ServerConfig, workerConfig: WorkerConfig, trap: SignalTrap): Promise<void> {
+  const logger = createLogger({ level: serverConfig.LOG_LEVEL });
+  const adapters = composeWithWorkerAdapters(serverConfig, workerConfig, logger);
+  const server = composeServer(serverConfig, logger, adapters.server);
+  const workerWithoutMetrics: WorkerConfig = { ...workerConfig, METRICS_PORT: undefined };
+  await runUntilSignal(
+    trap,
+    async () => {
+      const runningServer = await server.start();
+      let runningWorker: RunningWorker;
+      try {
+        runningWorker = await composeWorker(workerWithoutMetrics, logger, adapters.worker).start();
+      } catch (error) {
+        await runningServer.shutdown().catch((cleanup: unknown) => {
+          logger.error("Cleanup after a failed start failed", { error: cleanup instanceof Error ? cleanup.name : typeof cleanup });
+        });
+        throw error;
+      }
+      // Both stops run at once: each waits up to its own deadline for in-flight work, and the image's stop timeout
+      // has to cover the longer of them, not their sum. The server stops accepting connections at once; the worker
+      // stops fetching and lets its active jobs finish. A stop that fails does not keep the other from finishing.
+      return {
+        shutdown: async () => {
+          const outcomes = await Promise.allSettled([
+            runningServer.shutdown().then(() => {
+              logger.info("Server stopped");
+            }),
+            runningWorker.shutdown().then(() => {
+              logger.info("Worker stopped");
+            }),
+          ]);
+          const failed = outcomes.find((outcome) => outcome.status === "rejected");
+          if (failed !== undefined) {
+            throw failed.reason;
+          }
+        },
+      };
+    },
+    logger,
+  );
 }
 
 // `migrate` applies the CE chain, installs the pg-boss schema with the queues of
@@ -354,22 +456,35 @@ async function runMigrate(config: MigrateConfig): Promise<void> {
 // pg-boss schema before it starts.
 async function runWorker(config: WorkerConfig, trap: SignalTrap): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
-  const worker = createWorker({
-    config,
-    adapters: composeAdapters(config, logger),
-    modules: [],
-    logger,
-  });
+  const worker = composeWorker(config, logger);
   await runUntilSignal(trap, () => worker.start(), logger);
 }
 
-async function start(): Promise<void> {
-  const command = process.argv[2] ?? "server";
+const WITH_WORKER_FLAG = "--with-worker";
+
+// `slugbase <command> [--with-worker]`: the one flag belongs to `server`. Anything else after the command is refused
+// rather than ignored, so a mistyped flag does not start a server without the worker the operator asked for.
+function parseArguments(argv: readonly string[]): { command: ProcessType; withWorker: boolean } | undefined {
+  const [command = "server", ...flags] = argv;
   if (!isProcessType(command)) {
     log("error", `Unknown command; use one of ${PROCESS_TYPES.join(", ")}`);
+    return undefined;
+  }
+  const withWorker = command === "server" && flags.length === 1 && flags[0] === WITH_WORKER_FLAG;
+  if (flags.length > 0 && !withWorker) {
+    log("error", `Unexpected arguments; only \`server\` takes ${WITH_WORKER_FLAG}, and nothing else follows a command`);
+    return undefined;
+  }
+  return { command, withWorker };
+}
+
+async function start(): Promise<void> {
+  const parsed = parseArguments(process.argv.slice(2));
+  if (parsed === undefined) {
     process.exitCode = 2;
     return;
   }
+  const { command, withWorker } = parsed;
 
   const trap = command === "migrate" ? undefined : trapShutdownSignals();
   let serverConfig: ServerConfig | undefined;
@@ -381,6 +496,13 @@ async function start(): Promise<void> {
       const loaded = loadConfig("server", process.env);
       serverConfig = loaded.config;
       warnings = loaded.warnings;
+      if (withWorker) {
+        // The worker's schema is a subset of the server's, so an environment that satisfies the server satisfies it too;
+        // it is loaded all the same, so the worker reads its configuration the way the worker process does.
+        const loadedWorker = loadConfig("worker", process.env);
+        workerConfig = loadedWorker.config;
+        warnings = [...new Set([...warnings, ...loadedWorker.warnings])];
+      }
     } else if (command === "worker") {
       const loaded = loadConfig("worker", process.env);
       workerConfig = loaded.config;
@@ -401,10 +523,12 @@ async function start(): Promise<void> {
   for (const warning of warnings) {
     log("warn", warning);
   }
-  log("info", "Configuration loaded", { process: command });
+  log("info", "Configuration loaded", { process: command, ...(withWorker ? { withWorker } : {}) });
 
   try {
-    if (serverConfig !== undefined && trap !== undefined) {
+    if (serverConfig !== undefined && workerConfig !== undefined && trap !== undefined) {
+      await runServerWithWorker(serverConfig, workerConfig, trap);
+    } else if (serverConfig !== undefined && trap !== undefined) {
       await runServer(serverConfig, trap);
     } else if (workerConfig !== undefined && trap !== undefined) {
       await runWorker(workerConfig, trap);
