@@ -1,10 +1,11 @@
 import { IMPORT_MAX_BOOKMARKS, IMPORT_NETSCAPE_FIELD, IMPORT_NETSCAPE_MAX_FILE_BYTES, type ImportFileBookmark } from "@slugbase/contracts";
 import { parseNetscapeBookmarks } from "@slugbase/core";
+import { decodedForm } from "../../http/body-limits.ts";
 import type { ChainContext } from "../../http/chain.ts";
 import { ProblemError, VALIDATION_FAILED_DETAIL } from "../../http/problem.ts";
 
 // The upload of POST /api/v1/import/netscape (doc 04 sections 5.1 and 10.9, doc 10 T5 and T13). The route is registered with `acceptsMultipart`, so the cross-site stage lets `multipart/form-data` through
-// and the validation stage leaves the body alone; this reads it. The body-limits stage has already counted the request and holds it in memory, so the parse reads bytes it has, never the socket. The
+// and the validation stage leaves the body alone; this reads it. The body-limits stage has already counted the request and holds it in memory, so the parse reads bytes it has, never the socket, and decodes the form once for the request (`decodedForm`): the idempotency stage's digest of the parts and this read share it. The
 // request must be `multipart/form-data` (a JSON request, which the cross-site stage also admits on a route that accepts multipart, is `415`), and it holds one part, the file. A body that is not
 // well-formed multipart is `400`; a missing or repeated file part, a part that is text, or another part is `422`; a file over 5 MiB is `413` (the request limit is larger than that by the envelope).
 // The file is read as UTF-8 text by the parser of `@slugbase/core`, which builds no document and runs and follows nothing.
@@ -33,8 +34,7 @@ export async function uploadedBookmarks(context: ChainContext): Promise<ImportFi
   }
   let form: FormData;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the body-limits stage has already read the whole request, at most the route's limit, into memory, so this parses bytes the server holds
-    form = await context.req.raw.formData();
+    form = await decodedForm(context.req.raw);
   } catch {
     throw new ProblemError("bad_request", REFUSALS.malformed);
   }

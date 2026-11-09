@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_REPLAYED_HEADER, type AuthPolicy } from "@slugbase/contracts";
 import { IdempotencyBusyError, idempotencyRepository, type Database, type StoredResponse, type TenantTx } from "@slugbase/db";
+import { bodyBytes, decodedForm } from "./body-limits.ts";
 import type { ChainContext, RequestStage } from "./chain.ts";
 import { ProblemError, requestIdOf } from "./problem.ts";
 
@@ -22,6 +23,7 @@ import { ProblemError, requestIdOf } from "./problem.ts";
 // 7.1), so the two requests take the rows in one order and cannot deadlock.
 // The body of a route that declares `acceptsMultipart` is not in the validated input, so its request hash also covers the parts of the upload (`uploadDigest`): the same key with another file is a
 // conflict and not a replay of the first answer. The digest is of the content of the parts and not of the bytes of the request, which carry a boundary the client picks anew on every attempt.
+// The parts are decoded once for the request (`decodedForm` of the body-limits stage); the handler reads the same decoded form.
 // A request without the header runs as usual. The handler of an operation that declares idempotency must
 // open its transaction through `tenant.withTenant` for a workspace operation, or `withTenant` with the
 // account alone for an account operation, which is what this stage opens.
@@ -87,8 +89,7 @@ export async function uploadDigest(request: Request): Promise<string> {
     digest.update(bytes);
   };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the body-limits stage has already read the whole request, at most the route's limit, into memory, so this parses bytes the server holds
-    for (const [name, value] of await request.clone().formData()) {
+    for (const [name, value] of await decodedForm(request)) {
       add(new TextEncoder().encode(name));
       if (typeof value === "string") {
         digest.update("s");
@@ -100,7 +101,7 @@ export async function uploadDigest(request: Request): Promise<string> {
     }
     return `parts:${digest.digest("hex")}`;
   } catch {
-    return `bytes:${createHash("sha256").update(new Uint8Array(await request.clone().arrayBuffer())).digest("hex")}`;
+    return `bytes:${createHash("sha256").update(await bodyBytes(request)).digest("hex")}`;
   }
 }
 

@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { refuseUncallableToken } from "./authorize.ts";
+import { parsedBody } from "./body-limits.ts";
 import type { ChainContext, MatchedRoute, RequestStage, ValidatedInput } from "./chain.ts";
 import { MAX_FIELD_ERRORS, ProblemError, VALIDATION_FAILED_DETAIL, fieldErrors, type ProblemFieldError } from "./problem.ts";
 
@@ -45,6 +46,11 @@ function queryOf(url: string): Record<string, string | string[]> {
 
 async function bodyOf(context: ChainContext): Promise<unknown> {
   const raw = context.req.raw;
+  // The body-limits stage has parsed and kept the JSON of a request it found well-formed.
+  const parsed = parsedBody(raw);
+  if (parsed !== undefined) {
+    return parsed.value;
+  }
   const text = await raw.clone().text();
   if (text === "") {
     return undefined;

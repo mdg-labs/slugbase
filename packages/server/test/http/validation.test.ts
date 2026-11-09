@@ -1,5 +1,5 @@
 import { defineOperation, emptyResponse, jsonResponse, problemResponse } from "@slugbase/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createServer, type ModuleContribution, type RouteBinding, type ServerModule } from "../../src/create-server.ts";
 import { route } from "../../src/routes/register.ts";
@@ -113,6 +113,20 @@ describe("the validation stage", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ id: ID, title: "padded", tags: ["a", "b"], page: 3 });
     expect(reached).toHaveLength(1);
+  });
+
+  it("parses a JSON body once for the request, in the body-limits stage, and hands the validation the result", async () => {
+    const { server } = setup();
+    const text = JSON.stringify({ title: "padded", nested: { level: 2 } });
+    const parse = vi.spyOn(JSON, "parse");
+
+    try {
+      const response = await server.fetch(post(`/api/v1/notes/${ID}`, text));
+      expect(response.status).toBe(201);
+      expect(parse.mock.calls.filter(([argument]) => argument === text)).toHaveLength(1);
+    } finally {
+      parse.mockRestore();
+    }
   });
 
   it("applies the defaults of the query schema", async () => {

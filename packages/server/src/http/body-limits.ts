@@ -14,6 +14,10 @@ import { problemDocument, requestIdOf } from "./problem.ts";
 // browser-facing request belongs to stage 5. A bearer-authenticated mutation has
 // no ambient credential for stage 5 to check, so its content type is checked
 // here, ahead of authentication, by the credential the request presents.
+//
+// What the stage decodes it keeps for the stages after it, for the request it hands on: the parsed JSON of a
+// route that declares a JSON body (`parsedBody`), and the decoded form of an upload (`decodedForm`), so that a
+// large body is decoded once and not again by each stage that needs its content.
 
 /** 64 KiB: the limit of a route whose operation declares none. */
 export const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
@@ -74,13 +78,48 @@ async function readUpTo(body: ReadableStream<Uint8Array>, limit: number): Promis
   return bytes;
 }
 
-function isWellFormedJson(bytes: Uint8Array): boolean {
+/** The JSON the stage parsed from a request body, by the request it handed on. */
+const parsedBodies = new WeakMap<Request, { readonly value: unknown }>();
+
+/** The bytes the stage read, by the request it handed on. */
+const heldBodies = new WeakMap<Request, Uint8Array>();
+
+/** The decoded form of a multipart request, by the request that was decoded. */
+const decodedForms = new WeakMap<Request, Promise<FormData>>();
+
+/** The body parsed as JSON, or `undefined` when it is not well-formed (or not UTF-8). */
+function parseJson(bytes: Uint8Array): { readonly value: unknown } | undefined {
   try {
-    JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    return true;
+    return { value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown };
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+/** What stage 3 parsed from the body of `request`, when it is the request the stage handed on and its route declares a JSON body. */
+export function parsedBody(request: Request): { readonly value: unknown } | undefined {
+  return parsedBodies.get(request);
+}
+
+/** The bytes of a request body: the ones the stage holds when `request` is the request it handed on, otherwise a copy read from the request, which stays unread. */
+export async function bodyBytes(request: Request): Promise<Uint8Array> {
+  return heldBodies.get(request) ?? new Uint8Array(await request.clone().arrayBuffer());
+}
+
+/**
+ * The form of a multipart request, decoded once: every caller for the same request gets the same decoded parts. The decode reads the bytes the stage holds (or a copy of the request) and leaves the body
+ * of `request` unread. A body that is no well-formed multipart rejects, for every caller.
+ */
+export function decodedForm(request: Request): Promise<FormData> {
+  let form = decodedForms.get(request);
+  if (form === undefined) {
+    const held = heldBodies.get(request);
+    const source = held === undefined ? request.clone() : new Response(held, { headers: { "content-type": request.headers.get("content-type") ?? "" } });
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the stage has already read the whole request, at most the route's limit, into memory, so this parses bytes the server holds
+    form = source.formData();
+    decodedForms.set(request, form);
+  }
+  return form;
 }
 
 /** Stage 3: per-route body limit, malformed-JSON answer and the content type of a bearer mutation. */
@@ -108,15 +147,24 @@ export const bodyLimits: RequestStage = async (context, next) => {
       return refuse(context, "unsupported_media_type");
     }
   }
-  if (bytes.byteLength > 0 && operation?.request?.body !== undefined && isJson(contentType) && !isWellFormedJson(bytes)) {
+  const declaresJson = bytes.byteLength > 0 && operation?.request?.body !== undefined && isJson(contentType);
+  const parsed = declaresJson ? parseJson(bytes) : undefined;
+  if (declaresJson && parsed === undefined) {
     return refuse(context, "bad_request");
   }
 
-  context.req.raw = new Request(raw.url, {
+  const handedOn = new Request(raw.url, {
     method: raw.method,
     headers: raw.headers,
     signal: raw.signal,
     ...(bytes.byteLength === 0 ? {} : { body: bytes }),
   });
+  if (parsed !== undefined) {
+    parsedBodies.set(handedOn, parsed);
+  }
+  if (bytes.byteLength > 0) {
+    heldBodies.set(handedOn, bytes);
+  }
+  context.req.raw = handedOn;
   return next();
 };
