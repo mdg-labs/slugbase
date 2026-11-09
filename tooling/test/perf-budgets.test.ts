@@ -359,15 +359,17 @@ describe("performance budgets", () => {
     expect([...steady, ...imported].sort()).toEqual(Object.keys(thresholds).sort());
   });
 
-  it("has the /go and list budgets during an import, named for it, at the limits of /go and of the list", () => {
+  it("has the /go and list budgets during an import, named for it: /go at 50 ms, which a synchronous import can hold, and the list at its own limit", () => {
     expect(IMPORT_SCENARIOS).toEqual(["go_import", "list_import"]);
     expect(budgets(IMPORT_SCENARIOS)).toEqual([
-      { name: "go during import", scenario: "go_import", metric: "http_req_waiting{kind:go_import}", limitMs: 30 },
+      { name: "go during import", scenario: "go_import", metric: "http_req_waiting{kind:go_import}", limitMs: 50 },
       { name: "list during import", scenario: "list_import", metric: "http_req_waiting{kind:list_import}", limitMs: 100 },
     ]);
-    expect(BUDGETS_MS.go_import).toBe(BUDGETS_MS.go);
+    expect(BUDGETS_MS.go).toBe(30);
+    expect(BUDGETS_MS.go_import).toBe(50);
+    expect(BUDGETS_MS.list_import).toBe(100);
     expect(BUDGETS_MS.list_import).toBe(BUDGETS_MS.list);
-    expect(budgetThresholds(IMPORT_SCENARIOS)).toEqual({ "http_req_waiting{kind:go_import}": ["p(95)<30"], "http_req_waiting{kind:list_import}": ["p(95)<100"] });
+    expect(budgetThresholds(IMPORT_SCENARIOS)).toEqual({ "http_req_waiting{kind:go_import}": ["p(95)<50"], "http_req_waiting{kind:list_import}": ["p(95)<100"] });
     expect(budgets(STEADY_SCENARIOS).map((budget) => budget.scenario)).not.toContain("go_import");
   });
 

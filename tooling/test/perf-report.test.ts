@@ -215,7 +215,7 @@ describe("the issues a performance run files", () => {
     expect(summary(plain(only))).toEqual(["create: Performance budget exceeded: import"]);
     const body = plain(only)[0]?.body ?? "";
     expect(body).toContain("the `import` budget");
-    expect(body).toContain("| go during import | 60 ms | 30 ms | exceeded |");
+    expect(body).toContain("| go during import | 100 ms | 50 ms | exceeded |");
     expect(body).toContain("| go_import |");
     expect(body).toContain("| list_import |");
     // Both of them at once are one issue, and an open issue of go or list is never extended with them.
