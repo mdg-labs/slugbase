@@ -169,6 +169,29 @@ describe("the favicon of a host", () => {
     expect(await fetchesOf(a.id)).toEqual(["example.com"]);
   });
 
+  it("derives both dates of the fetch from one read of the database clock, however many reads the statement could make", async () => {
+    // A clock that answers a later instant on every read, one millisecond apart, stands in for `clock_timestamp()` in this transaction only: a statement that reads the
+    // clock twice gets two instants, so `expires_at` is not exactly seven days after `fetched_at`. `sys_favicon_put` fixes its own search path and keeps the real clock.
+    const a = await workspaceOf();
+    await db.owner.unsafe(`
+      CREATE SEQUENCE public.favicon_test_clock_ticks;
+      GRANT USAGE ON SEQUENCE public.favicon_test_clock_ticks TO slugbase_app;
+      CREATE FUNCTION public.clock_timestamp() RETURNS timestamptz LANGUAGE sql VOLATILE
+        AS $$ SELECT timestamptz '2030-01-01 00:00:00+00' + nextval('public.favicon_test_clock_ticks') * interval '1 millisecond' $$;`);
+    try {
+      await inTenant(a, async (tx) => {
+        await tenantHandle(tx).execute(sql`SET LOCAL search_path = public, pg_catalog`);
+        await faviconRepository(tx).store("example.com", ICON);
+      });
+      const [stored] = await asSystem(db, (tx) => tx<{ fetched_at: Date; expires_at: Date }[]>`SELECT fetched_at, expires_at FROM workspace_favicons WHERE workspace_id = ${a.id}`);
+
+      expect(stored?.expires_at.getTime()).toBe((stored?.fetched_at.getTime() ?? 0) + 7 * 24 * 3600 * 1000);
+      expect(stored?.fetched_at.getUTCFullYear()).toBe(2030);
+    } finally {
+      await db.owner.unsafe("DROP FUNCTION public.clock_timestamp(); DROP SEQUENCE public.favicon_test_clock_ticks");
+    }
+  });
+
   it("records no fetch for the workspace when the stored result is refused", async () => {
     const a = await workspaceOf();
 
