@@ -13,7 +13,12 @@ name: E2E
 # docs/self-hosting/backup-restore.md (e2e/restore-drill.spec.ts) on the same two
 # majors: it dumps, destroys and restores the database of a stack that is its own, so
 # it cannot share one with the shards, and it needs docker, which the Playwright image
-# does not have, so it runs on the runner. No job references a secret, the workflow never runs on pull_request_target,
+# does not have, so it runs on the runner. A job of its own, `reverse-proxy`, runs the
+# reverse proxy drill (e2e/reverse-proxy.spec.ts): the nginx file and the Caddyfile of
+# docs/self-hosting/reverse-proxy.md, taken from the guide, in front of the image over https, and
+# the cookie, origin and client-address behaviour that depends on them. It starts a stack of its
+# own and proxies pinned by digest (e2e/compose.proxy.yml) on the runner's network, and what it
+# proves does not depend on the PostgreSQL major, so it runs once. No job references a secret, the workflow never runs on pull_request_target,
 # and the secrets of the stack are generated per run by scripts/smoke-image.sh and
 # never printed (doc 10 T16).
 
@@ -179,13 +184,70 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The reverse proxy drill of docs/self-hosting/reverse-proxy.md on the image built from this commit
+  # (doc 08 section 5.1, doc 10 T4, T5 and T9). The nginx and the Caddy file are read from the guide on
+  # every run, so a change to the guide that breaks one of them, or that no longer says what the drill
+  # sees, fails this job. The proxies are containers on the host's network, started by the drill from
+  # the images pinned by digest in e2e/compose.proxy.yml, so each client has an address of its own as
+  # the proxy sees it; the drill removes them, and its stack, however it ends. It uses the HTTP API,
+  # docker and docker compose alone, so no browser and no Playwright image are needed here.
+  reverse-proxy:
+    name: reverse proxy drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: e2e-reverse-proxy
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:e2e .
+      # The step fails when the drill does, and so does the check of the leg.
+      - name: Run the reverse proxy drill
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:e2e
+        run: pnpm --filter @slugbase/e2e test:e2e reverse-proxy
+      # A stack or a proxy that the drill could not remove (its process killed, say) is removed here.
+      - name: Remove any stack or proxy left behind
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          docker ps --all --format '{{.ID}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker ps --all --quiet --filter 'label=slugbase-e2e-proxy' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker volume ls --quiet --filter 'label=com.docker.compose.project' --format '{{.Name}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker volume rm --force
+      - name: Upload the artifacts of a failed run
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reverse-proxy-artifacts
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The check each leg has always reported, which the ruleset of `main` requires by
-  # name ("e2e (PostgreSQL 17)", "e2e (PostgreSQL 18)"). It fails unless every shard
-  # and every restore drill succeeded: a failed, cancelled or skipped job is not a pass,
+  # name ("e2e (PostgreSQL 17)", "e2e (PostgreSQL 18)"). It fails unless every shard,
+  # every restore drill and the reverse proxy drill succeeded: a failed, cancelled or skipped job is not a pass,
   # and `needs` waits for the jobs of both legs, so one failing job fails the check of both.
   e2e:
     name: e2e (PostgreSQL ${{ matrix.postgres }})
-    needs: [shards, restore-drill]
+    needs: [shards, restore-drill, reverse-proxy]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -197,6 +259,7 @@ jobs:
         env:
           SHARDS_RESULT: ${{ needs.shards.result }}
           RESTORE_DRILL_RESULT: ${{ needs.restore-drill.result }}
+          REVERSE_PROXY_RESULT: ${{ needs.reverse-proxy.result }}
         run: |
           set -euo pipefail
           if [[ "$SHARDS_RESULT" != "success" ]]; then
@@ -205,5 +268,9 @@ jobs:
           fi
           if [[ "$RESTORE_DRILL_RESULT" != "success" ]]; then
             echo "the restore drill ended '$RESTORE_DRILL_RESULT', not 'success'" >&2
+            exit 1
+          fi
+          if [[ "$REVERSE_PROXY_RESULT" != "success" ]]; then
+            echo "the reverse proxy drill ended '$REVERSE_PROXY_RESULT', not 'success'" >&2
             exit 1
           fi
