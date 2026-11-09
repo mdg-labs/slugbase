@@ -355,7 +355,17 @@ expect_failed "expect_owner_allowed fails when the log holds the password"
 expect_quiet_about "expect_owner_allowed does not print the password it found" "$smoke_superuser_password"
 
 picked="$(pick_port)"
-if [[ "$picked" =~ ^[0-9]+$ ]] && ((picked >= 20000 && picked < 40000)); then pass "pick_port returns a port in 20000-39999"; else fail_test "pick_port (got '$picked')"; fi
+if [[ "$picked" =~ ^[0-9]+$ ]] && ((picked >= 20000 && picked < 32768)); then pass "pick_port returns a port in 20000-32767"; else fail_test "pick_port (got '$picked')"; fi
+
+# Linux's ephemeral range starts at 32768: a port inside it can be taken by the server's own
+# outbound sockets before it listens. 300 picks all below it; the old 20000-39999 range puts
+# about 36% of its picks at 32768 or above, so the chance that it passes this is below 1e-50.
+outside_range=0
+for _ in $(seq 1 300); do
+  candidate="$(pick_port)"
+  if ((candidate < 20000 || candidate >= 32768)); then outside_range=$((outside_range + 1)); fi
+done
+if ((outside_range == 0)); then pass "pick_port never picks from the ephemeral range"; else fail_test "pick_port picked outside 20000-32767 $outside_range times in 300"; fi
 
 node -e 'const s = require("node:net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); }); setTimeout(() => process.exit(0), 20000);' >"$tmp/port" &
 listener=$!

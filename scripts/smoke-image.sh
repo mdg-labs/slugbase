@@ -125,11 +125,16 @@ port_in_use() {
   (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
 }
 
-# A free port in 20000-39999 on 127.0.0.1, away from the development database (54329).
+# A free port in 20000-32767 on 127.0.0.1, away from the development database (54329).
+# The range ends below 32768, where Linux's ephemeral range starts (32768-60999, the
+# kernel default that the CE image's container also has). The server connects to
+# PostgreSQL before it calls listen, and a port inside the ephemeral range can be handed
+# to one of those outbound sockets as its local port, so listen fails with EADDRINUSE
+# inside the container, where the check below on the runner's 127.0.0.1 cannot see it.
 pick_port() {
   local candidate
   for _ in $(seq 1 50); do
-    candidate=$((20000 + (RANDOM * 32768 + RANDOM) % 20000))
+    candidate=$((20000 + (RANDOM * 32768 + RANDOM) % 12768))
     if [[ "$candidate" != "${SMOKE_AVOID_PORT:-}" ]] && ! port_in_use "$candidate"; then
       printf '%s' "$candidate"
       return 0
