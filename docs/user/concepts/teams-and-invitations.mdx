@@ -1,0 +1,78 @@
+---
+title: "Teams and invitations"
+description: "Learn how teams group members for sharing, and how an invitation brings a new person into a workspace."
+edition: both
+order: 50
+---
+
+A team is a named group of members that you can share with. An invitation is how an owner or admin brings a person into a workspace.
+
+## Teams
+
+A team groups members so you can share a bookmark or folder with all of them at once. A team name has 1 to 64 characters. A description is optional and has up to 280 characters.
+
+A team is a sharing target and nothing else. It does not change what its members may do in the workspace.
+
+Admins and owners manage teams under **Settings**, **Workspace**, **Teams**. Choose **Create team**, enter a name and an optional description, and pick the members. You can also edit a team later, or choose **Manage teams** for one member on the **Members** page. When you share, you can pick any team of the workspace.
+
+Teams change who can read what:
+
+- When someone joins a team, they can read what is shared with that team.
+- When you remove someone from a team, they lose access to anything shared only through that team, at once.
+- When you delete a team, everything shared through it stops being shared with its members. The members stay in the workspace.
+
+<Callout>
+On a self-hosted SlugBase, teams are always on. On SlugBase Cloud, your plan decides whether the workspace can use teams and invite people. Where it cannot, SlugBase says that the workspace's plan does not include teams or invitations. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## Inviting people
+
+Owners and admins invite people under **Settings**, **Workspace**, **Members**.
+
+1. Choose **Invite people**.
+2. Enter one or more **Email addresses**. Separate them with a comma, or press Enter after each.
+3. Choose a **Role**, **Admin** or **Member**. An invitation cannot make someone an owner.
+4. Optionally pick **Teams**. The people you invite join them when they accept.
+5. Choose **Send invitations**.
+
+SlugBase then lists the result for each address. An address is **Invited**, **Skipped** (for example, when that person is already a member) or **Failed**.
+
+Each invitation email carries a link. The link works once, and it works for seven days. After that, or once someone has used or you have revoked it, the page says **This invitation link does not work**. The person then asks you for a new one.
+
+### Pending invitations
+
+The **Invitations** list on the **Members** page shows people who were invited and have not joined. It shows the email, role, who invited them, **Pending** or **Expired**, and when it expires. For each invitation you can:
+
+- **Resend.** The person gets a new link by email, and the old link stops working. You can resend an expired invitation. Inviting an address that is already pending does the same, with the role and teams of your new request.
+- **Copy invitation link.** SlugBase shows a new link once, and any earlier link stops working. The link expires in seven days. Use it when you want to send the link yourself.
+- **Revoke.** The link stops working at once, and you can invite the person again later.
+
+On a self-hosted SlugBase that cannot send email, SlugBase creates invitations without sending anything. Copy each link from the list and send it yourself. **Resend** is not offered there.
+
+## Accepting an invitation
+
+The person opens the link and sees the workspace, who invited them and the role. What happens next depends on who they are:
+
+- **Signed in as the invited address.** They choose the **Join** button, which names the workspace.
+- **Signed in as another account.** They see **This invitation is for another address** and can choose **Sign out and continue**.
+- **No account yet.** They create one with a name and a password, and the email address is fixed to the invited one. If the server allows it, they can sign in with a provider that has confirmed that address instead.
+- **An account, but signed out.** They sign in and then join.
+
+An invitation is for one email address. The account that accepts it must have exactly that address, and the address must be verified. Joining gives the person exactly the invited role and the invited teams, and the workspace opens for them. If they were already a member, nothing changes.
+
+If someone joined with a copied link and a password, SlugBase may ask them to verify their address before they sign in.
+
+<Callout>
+On SlugBase Cloud, an invitation uses a seat when the person accepts it, not when you send it. If the workspace has no free seat, the person sees **This workspace has no free seat. Ask the person who invited you.** and the invitation stays pending. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## What it means for you
+
+- Invite people with the address they will sign in with. A link for another address does not work.
+- Put people in teams when you invite them, so they can read shared bookmarks as soon as they join.
+- If a link stopped working, resend the invitation.
+
+## Related pages
+
+- [Workspaces and roles](workspaces-and-roles.mdx)
+- [Sharing](sharing.mdx)

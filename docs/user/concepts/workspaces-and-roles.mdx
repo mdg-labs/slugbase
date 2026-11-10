@@ -1,0 +1,91 @@
+---
+title: "Workspaces and roles"
+description: "Learn what a workspace holds, what owners, admins and members can each do, and what happens when someone leaves."
+edition: both
+order: 30
+---
+
+A workspace is the space where your bookmarks, folders, tags, teams and slugs live. Every person in a workspace is a member with one of three roles: owner, admin or member.
+
+## How workspaces work
+
+A workspace holds everything that belongs to it: bookmarks, folders, tags, teams, slugs, remembered go choices and settings. Nothing crosses from one workspace to another. A slug in one workspace never opens a bookmark in a second one, and sharing stays inside one workspace.
+
+You sign in with one account, and one account can be a member of several workspaces. You work in one workspace at a time. The sidebar shows the open one under **Workspace**. Open the switcher there to move to another workspace, which opens it and reloads your data.
+
+If the workspace you have open becomes unavailable, for example because you were removed from it, SlugBase opens the workspace you used most recently among those that remain. If you have none, you see **You are not in a workspace yet** or **Waiting for an invitation**. In the second case, ask the owner of a workspace to invite you.
+
+A workspace name has 1 to 64 characters. SlugBase generates its colour and monogram from the name.
+
+### Creating a workspace
+
+Choose **New workspace** in the switcher. You can create one only if the server allows it, and your email address must be verified. You become the owner of the workspace you create.
+
+<Callout>
+On a self-hosted SlugBase, an instance admin creates workspaces from the **Admin** area. Whether other members may create their own is the instance admin's choice, and it is off by default. On SlugBase Cloud, any member with a verified address can create a workspace. The Free plan allows one workspace that you own. When you reach the limit, SlugBase shows how to upgrade. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## Roles
+
+| What you can do | Owner | Admin | Member |
+| --- | :-: | :-: | :-: |
+| Use SlugBase: your own bookmarks, folders, tags and slugs, and read what is shared with you | Yes | Yes | Yes |
+| Share your own bookmarks and folders | Yes | Yes | Yes |
+| Leave the workspace | Yes | Yes | Yes |
+| Invite people, and resend or revoke invitations | Yes | Yes | No |
+| Change a member's role between admin and member, and remove members | Yes | Yes, but not owners | No |
+| Create and manage teams | Yes | Yes | No |
+| View the audit log | Yes | Yes | No |
+| Rename the workspace and switch AI suggestions on or off | Yes | Yes | No |
+| Make someone an owner, transfer ownership, or take an owner's role away | Yes | No | No |
+| Delete the workspace | Yes | No | No |
+| Manage the plan, seats and payment method (SlugBase Cloud) | Yes | No | No |
+| See the plan, invoices and cancellation invoices (SlugBase Cloud) | Yes | Yes | No |
+
+You change roles and remove members under **Settings**, **Workspace**, **Members**. Members see the **General** settings read-only and can use **Leave workspace** there.
+
+<Callout>
+On a self-hosted SlugBase, every feature in this table is on and nothing is limited. On SlugBase Cloud, your plan decides whether the workspace can invite people, use teams, share and keep an audit log. Where a feature is not in your plan, SlugBase says so on the page. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+### Admins do not read your bookmarks
+
+Admins and owners administer people, teams and settings. They do not get to read what other members have saved. A bookmark, a folder or a tag you have not shared stays yours, whatever role anyone has.
+
+### Owners
+
+A workspace always has at least one owner, and it can have several. The last owner cannot leave, be removed or lose the role. To step down, make someone else an owner first.
+
+An invitation cannot make someone an owner. Owners make other owners by choosing **Make owner** for a member, or **Transfer ownership**, which makes another member an owner. When you transfer ownership, you type the new owner's name to confirm. You can switch on **Stay as admin** to step down from owner to admin at the same time, and leave it off to stay an owner. SlugBase asks you to confirm it is you before it makes someone an owner, takes an owner's role away or removes an owner.
+
+If you made a workspace for yourself and have not verified your email address, SlugBase asks you to verify it before you make someone an owner or give up your own owner role.
+
+## When someone leaves or is removed
+
+A member leaves from **Settings**, **Workspace**, **General**, with **Leave workspace**. An admin or an owner removes a member with **Remove from workspace** on the **Members** page. Either way the access ends at once.
+
+The bookmarks and folders do not leave the workspace. Whoever ends the membership chooses what happens to them:
+
+- **Transfer the content.** The bookmarks and folders go to another member and keep their slugs. If the recipient already uses a slug, it is cleared on the transferred bookmark and forwarding is turned off. If the recipient already has a folder with the same name, the transferred folder gets a number added to its name.
+- **Delete the content.** The bookmarks and folders are deleted together with the membership. This cannot be undone.
+
+Whichever you choose, the member's tags and remembered go choices are deleted, and shares that the member received end. Shares the member gave move with transferred content and end with deleted content. API tokens that member made for the workspace stop working. If you want to keep your own bookmarks elsewhere, export them first from **Import & export** in your account settings.
+
+## Deleting a workspace
+
+Only an owner can delete a workspace. SlugBase asks you to confirm it is you and to type the workspace name. Deleting removes the workspace and everything in it for every member, and it cannot be undone. The confirmation offers an export first.
+
+<Callout>
+On SlugBase Cloud, a workspace with an active paid subscription cannot be deleted until you cancel the subscription.
+</Callout>
+
+## What it means for you
+
+- If you need to be sure nobody sees a bookmark, do not share it. Roles never open a private bookmark.
+- Before you leave a workspace, export what you want to keep, or choose a recipient for it.
+
+## Related pages
+
+- [Sharing](sharing.mdx)
+- [Teams and invitations](teams-and-invitations.mdx)
+- [Slugs and /go](slugs.md)
