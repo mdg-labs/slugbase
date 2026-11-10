@@ -24,6 +24,9 @@ existing line by adding its PR number.
 - **two clocks** — a freshness check compares an instant stamped by one host's clock (the database) with one read from another (the application) and allows no difference, so a session stamped a moment ago reads as in the future and is refused — PR 462
 - **repeat erases the record** — a fail-closed lint records an object's prior state each time a statement names it, so a repeat that is valid SQL (a second `DROP … IF EXISTS`) overwrites the record with "unknown" and the later comparison and end-of-file check skip it — PR 506
 - **new branch skips the gate** — a handler gates some branches of a state-changing request with a cross-site check (Fetch Metadata) and a newly added branch that also changes state (an OIDC start intent that accepts an invitation) is left out, so a hostile page can drive that branch — PR 520
+- **regex guard** — a list of secret names matches names by their suffix only, so a secret whose name ends otherwise (an old key of a rotation, a URL with a password in its userinfo) passes the check — PR 825
+- **regex guard** — a credential-shape check matches any long run of name characters, so a long but legitimate identifier (a 32-character key name) reads as a credential and fails the check — PR 825
+- **silent exit** — a check script under `set -euo pipefail` assigns a command substitution without `|| fail`, so a failed or timed-out command ends the script with no failure line naming the step — PR 825
 - **allow list by operation, purpose by intent** — a restricted mode's allow list is keyed by operation, and an operation that serves several intents (an OIDC start for sign-in, re-authentication, link and invite) is left off whole, so a step the mode promises (re-authenticating to delete the account) is refused; admitting it means the handler must refuse the other intents itself — PR 716
 - **one scheme for many** — a check for a script address (in a guard or a test's injection detector) matches `javascript:` only, so `vbscript:` and `data:` addresses pass — PR 577, 612
 - **missing read as zero** — a fail-closed reader of a tool's summary treats a missing entry as an error for some metrics but defaults a sibling metric to 0 (`?? 0`), so a measurement that was never exported reads as a clean zero — PR 791
@@ -54,12 +57,20 @@ existing line by adding its PR number.
 
 - **comment vs check** — a comment summarising what a check rejects states the rule more broadly than the check enforces ("a secret" where the workflow token is allowed), so the next editor misreads the guard — PR 444
 - **invariant vs feature** — a feature the spec settles (a credential returned once in an API response) contradicts the literal wording of a threat-model invariant, and the invariant is not amended with a narrow, named exception in the same change — PR 471
-- **planned as current** — an operator-facing comment describes a setting's intended end state (a sign-in block) that a later item enforces, so an operator relies on a guard the build does not have yet — PR 491
-- **exception list lags** — a doc lists the exceptions to a rule (the CI jobs that do not run in a container) and a change adds another without updating the list, so the doc states a rule the code breaks — PR 775
+- **planned as current** — an operator-facing comment describes a setting's intended end state (a sign-in block) that a later item enforces, so an operator relies on a guard the build does not have yet — PR 491, 825
+- **exception list lags** — a doc lists the exceptions to a rule (the CI jobs that do not run in a container) and a change adds another without updating the list, so the doc states a rule the code breaks — PR 775, 825
+- **stale figure** — a change replaces a value the code checks (a fixed budget turned into a ratio) and an operator page keeps the old number, so readers get a target nothing checks — PR 825
+- **one mode only** — an operator procedure names a service, log or command of the default setup only, and a documented alternative mode (one container) has none of them — PR 825
+- **step contradicts the rule** — a verification or recovery step expects an outcome the same page's rule or the API rules out (a domain list refusing an address that already has an account, a recovery that needs one more one-time code than it names) — PR 825
+- **shared phrase, one meaning** — a generated description reuses one phrase for every setting of a kind and the phrase states one setting's purpose ("the address a message is for"), which is false for the others — PR 825
+- **documented secret exposed** — an operator command or example passes a secret as a process argument, or writes it unquoted into a file Compose interpolates, so the value leaks to the process list or changes on a `$` — PR 825
 
 ## Processes
 
 - **signal exit code** — a wrapper process maps every signal that ended its child to one fixed exit code (130), so a SIGTERM is reported as an interrupt instead of 128 plus its signal number — PR 422
+- **interrupt checked once** — a runner of several child steps checks its interrupt flag after the first step only, so an interrupt during a later step starts the next one with no handler waiting on it — PR 825
+- **output truncated before success** — a command redirects straight onto its final file, so a failed run destroys the previous good output; write elsewhere and rename on success — PR 825
+- **sync throw past a promise** — a function returns `Promise.resolve(f())`, so a synchronous throw in `f` escapes as an exception and skips the caller's rejection handler; an `async` function turns it into a rejection — PR 825
 
 ## Database sessions and migrations
 
@@ -114,6 +125,8 @@ existing line by adding its PR number.
 - **deadline checked only between polls** — a polling helper checks its own deadline between calls while each call auto-waits on its own (a Playwright locator action waiting for its element), so a missing element holds one call until the test's timeout and the helper's bound and named error never fire — PR 602
 - **unescaped literal in a pattern** — a test builds a `RegExp` from a literal value (an origin, a hostname) without escaping it, so each `.` matches any character and the assertion accepts look-alike values — PR 529
 - **fixed sleep as a bound** — a test sleeps a fixed delay and then asserts that something has happened, so a loaded runner that takes longer fails it; a positive outcome is awaited by polling it — PR 622
+- **absence shown by a sleep** — a test proves a component is not running only by waiting and seeing nothing happen, with no direct check that it is absent (its connection, its process) — PR 825
+- **order claim untested** — a comment states a start order that matters (migrate before the worker starts), and every test runs with the precondition already met, so reversing the order passes — PR 825
 - **timeout told by timing alone** — an error classifier treats any rejection that arrives near a deadline as that deadline's timeout without reading the error, so an unrelated late failure (`Target closed`) is reported as the timeout — PR 622
 - **hook shorter than its waits** — a test hook calls a helper whose own deadlines (a mail wait, a wait on another worker) exceed the hook's default timeout, so the hook dies first and leaves shared coordination files half-written (or a setup ends before the build its helper allows for) — PR 622, 724
 - **cross-run state keyed by a reusable value** — state a test run keeps on disk is keyed by a value a later run can draw again (a random free port) instead of being cleared at the start of each run, so a later run reads a session of a stack that is gone — PR 622
