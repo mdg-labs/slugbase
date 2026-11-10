@@ -2,6 +2,8 @@ import type { Page } from "@playwright/test";
 import { savingTheme } from "../support/account-preferences.ts";
 import { message, type Locale } from "../support/catalog.ts";
 import { homeCounts, homeHeading } from "../support/home.ts";
+import { appOrigin } from "../support/environment.ts";
+import { foreignOrigins } from "../support/foreign-requests.ts";
 import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
 
@@ -11,7 +13,9 @@ import { expect, test } from "../support/test.ts";
 //
 // As a member, from the session the setup project signed in (e2e/tests/first-run.setup.ts): the
 // home heading, the 404 page inside the shell for a path that no page owns, and the
-// theme toggle of the top bar from the keyboard.
+// theme toggle of the top bar from the keyboard. The home journey also records every request the
+// page and its workers make and fails on one to an origin other than the app's (Q18): the shell
+// asks nothing of a font host, an analytics service or an update server.
 //
 // As a visitor without a session: every page of the app sends them to the sign-in
 // page, which names the page they asked for in `next`.
@@ -93,6 +97,10 @@ for (const { locale, browser, title } of LANGUAGES) {
     // loads and holds the account's preferences until it ends.
     test("opens the shell on the home page", async ({ page, app, account }) => {
       await account.set({ locale });
+      const requested: string[] = [];
+      page.context().on("request", (request) => {
+        requested.push(request.url());
+      });
       const name = await productName(page);
       await app.visit("/", homeCounts(page, locale));
       await expect(homeHeading(page, locale, name)).toBeVisible();
@@ -104,6 +112,10 @@ for (const { locale, browser, title } of LANGUAGES) {
       await expect(page.getByRole("link", { name: message(locale, "shell.skipToContent") })).toBeAttached();
       // The member is not sent to sign in.
       await expect(authenticationCard(page, locale)).toHaveCount(0);
+
+      // The shell loaded and rendered, and every request it made went to the app's own origin.
+      expect(requested.length, "the requests the shell made").toBeGreaterThan(0);
+      expect(foreignOrigins(requested, appOrigin()), "the origins other than the app's that the shell requested").toEqual([]);
     });
 
     test("toggles the theme with the keyboard", async ({ page, app, account }) => {

@@ -16,6 +16,8 @@ import { runSequence } from "./support/run-sequence.ts";
 // (upgrade-drill.spec.ts) runs only when named, `pnpm test:e2e upgrade-drill`: it pulls the
 // published release candidate image and needs the image of the commit under test and its
 // commit, SLUGBASE_IMAGE and BUILD_COMMIT, as the `upgrade-drill` job of e2e.yml sets them.
+// The no-egress drill (no-egress.spec.ts) runs only when named too, `pnpm test:e2e no-egress`: it idles for
+// minutes by design and needs the image of the commit under test, SLUGBASE_IMAGE, as the `no-egress` job of e2e.yml sets it.
 const args = process.argv.slice(2);
 const forwarded = args[0] === "--" ? args.slice(1) : args;
 

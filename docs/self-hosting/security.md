@@ -72,6 +72,18 @@ Go through this list when you install, and again after any change to `.env`.
 11. **Backups are offsite and complete.** Back up the database and, separately, your keys: `.env`, with `ENCRYPTION_KEY`, `ENCRYPTION_KEY_ID`, `ENCRYPTION_KEY_PREVIOUS` and `SESSION_SECRET`. Test a restore. See [Back Up and Restore SlugBase](backup-restore.md).
 12. **You can upgrade.** Pin a version, and read [Upgrade SlugBase](upgrade.md) before you need it.
 
+## What an instance contacts
+
+SlugBase sends nothing to MDG Labs: it has no usage pings, no update check and no telemetry, and the web app asks for nothing from any origin but your own, so a browser fetches no font, script or image from a third party. Besides its connection to its database, a default instance, with none of the optional services of [Set Up the Environment](environment.md) configured, makes a network request for one reason only: a member gives it a link. SlugBase contacts the host of that link in three cases:
+
+- **A member opens the bookmark form with an address, or enters one in it.** When the form opens with an address (chosen in the command palette, pasted onto the page, or carried by a link to the form), when the address field loses focus, and after a paste into it, the server fetches the page at once, to suggest a title and a description, whether or not the member saves the bookmark.
+- **A member saves the bookmark, or changes its address.** Unless the workspace already has a fresh result for that page, the worker fetches the page in the background and caches its title and description for seven days.
+- **A list shows a bookmark.** The worker fetches the icon of the site, once for each member and workspace, and then not again for seven days. SlugBase stores the icon and serves it from your own origin, so the browser never contacts the site.
+
+Those fetches can reach other hosts than the one in the link. SlugBase follows up to five redirects, and the worker also tries the icon addresses that the site names on its home page, which can be on other hosts. Every one of these requests goes through the egress adapter, which resolves each host itself and refuses private and internal addresses. Besides the hosts that a link leads to this way, an instance contacts only what you configure: your mail server (`SMTP_HOST`), your AI endpoint (`AI_BASE_URL`), your sign-in providers, and the error reporting endpoint (`ERROR_REPORT_DSN`). The continuous integration runs a drill that proves this on the built image. It puts the server and the worker on a network with no route out, records every DNS question and every connection attempt that leaves their own network for minutes, and fails on a question for any name other than the database and, after a link is saved, the host of that link, and on any attempt to reach an address outside that network.
+
+If your network does not let the server and the worker reach the Internet, SlugBase still works. The bookmark form suggests no title or description, so the member types them, and the list shows the first letter of the host on a coloured tile where the site's icon would be. A failed fetch is not reported as an error and changes no bookmark.
+
 ## What you can see as the operator
 
 You own the deployment, so you can read everything in it: the database, which holds every member's bookmarks and the content of every workspace, the email addresses of your members, the logs and the environment. SlugBase does not hide content from you.

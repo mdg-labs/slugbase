@@ -1,0 +1,93 @@
+# The stack of the no-egress drill (e2e/no-egress.spec.ts, doc 08 section 5.1, Q18, doc 10 T6): compose.yml with the server, the worker and the
+# database on a network that has no route out, and a packet capture in the network namespace of the server and of the worker. It is an override
+# file, merged over compose.yml by e2e/support/no-egress.ts through SMOKE_EXTRA_COMPOSE_FILES and by nothing an operator runs, and it adds none of
+# compose.e2e.yml: no mail server, no AI endpoint and no other optional adapter is configured, which is the instance the drill is about.
+#
+# `internal: true` gives the network no gateway, so nothing on it reaches the host or the Internet. An internal network cannot publish a port
+# either, so `relay` is on it and on the default network and publishes the server's port on the loopback address; it is part of neither the
+# instance nor the capture.
+#
+# Each capture container owns the network namespace of one container of the instance (`network_mode: service:<capture>`), so it is running
+# before that container starts and records everything it sends, from its first packet. It records every DNS question, which Docker's resolver
+# receives on 127.0.0.11 inside the namespace, and every UDP datagram, ICMP packet and TCP connection attempt (a SYN without an ACK); the
+# questions are printed with their names (`-T domain`, because Docker redirects port 53 to a port of its own). Its one change to the namespace is
+# a default route to the loopback device: without it a connection to an address outside the network is refused by the kernel before a packet
+# exists, and the capture could not see that it was tried; with it the packet is sent, shows in the capture, and is dropped at once, so it
+# reaches nothing. Docker's resolver, which answers a name it does not know by asking the host's name server, is then seen asking as well, and
+# the drill reads that as the lookup it answers (e2e/support/no-egress.ts). The container holds NET_ADMIN to add the route and NET_RAW to capture; the instance's containers keep `cap_drop: ALL`.
+#
+# The capture image is pinned by digest like every other image the repository runs (the tag says which version the digest is, and Renovate
+# keeps both current); only tcpdump of it is used. The healthcheck is true once tcpdump has opened its socket, which the instance waits for.
+x-no-egress-capture: &capture
+  image: nicolaka/netshoot:v0.14@sha256:7f08c4aff13ff61a35d30e30c5c1ea8396eac6ab4ce19fd02d5a4b3b5d0d09a2
+  entrypoint: ["sh", "-c"]
+  command:
+    - |
+      ip route add default dev lo && { ip -6 route add default dev lo || true; }
+      exec tcpdump -n -l -p -tt --immediate-mode -T domain -i any 'udp or icmp or (tcp[tcpflags] & (tcp-syn|tcp-ack) = tcp-syn) or (ip6 and not icmp6)'
+  networks:
+    - internal
+  read_only: true
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+  security_opt:
+    - no-new-privileges:true
+  restart: "no"
+  healthcheck:
+    test: ["CMD-SHELL", '[ "$$(wc -l < /proc/net/packet)" -gt 1 ]']
+    interval: 1s
+    timeout: 3s
+    retries: 60
+
+networks:
+  internal:
+    internal: true
+
+services:
+  capture-server:
+    <<: *capture
+  capture-worker:
+    <<: *capture
+
+  postgres:
+    networks:
+      - internal
+
+  slugbase:
+    network_mode: service:capture-server
+    ports: !reset []
+    depends_on:
+      capture-server:
+        condition: service_healthy
+
+  slugbase-worker:
+    network_mode: service:capture-worker
+    depends_on:
+      capture-worker:
+        condition: service_healthy
+
+  # Publishes the port of the server on the loopback address, as compose.yml does, and passes each connection on to the server by the name of
+  # its capture container; its code is e2e/support/relay/main.ts, mounted read-only into a container of the image under test, which only supplies Node.
+  relay:
+    image: ${SLUGBASE_IMAGE:?SLUGBASE_IMAGE is set by scripts/smoke-image.sh}
+    entrypoint: ["node", "/relay/main.ts"]
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      RELAY_PORT: ${PORT:?PORT is set by scripts/smoke-image.sh}
+      RELAY_TARGET: capture-server
+    volumes:
+      - ./e2e/support/relay:/relay:ro
+    ports:
+      - "${SLUGBASE_BIND:-127.0.0.1}:${PORT:?PORT is set by scripts/smoke-image.sh}:${PORT:?PORT is set by scripts/smoke-image.sh}"
+    networks:
+      - internal
+      - default
+    restart: unless-stopped

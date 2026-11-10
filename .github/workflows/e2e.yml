@@ -22,7 +22,10 @@ name: E2E
 # the upgrade drill (e2e/upgrade-drill.spec.ts): the published 1.0.0-rc.1 image, pinned by digest, started
 # with seeded data and replaced by the image built here on the same database, by the steps of
 # docs/self-hosting/upgrade.md; it runs on PostgreSQL 18 only, since the migration chain is proved on both
-# majors elsewhere. No job references a secret, the workflow never runs on pull_request_target,
+# majors elsewhere. A job of its own, `no-egress`, runs the no-egress drill (e2e/no-egress.spec.ts): a default
+# instance on a network with no route out, a packet capture in the namespace of the server and of the worker,
+# one saved URL and two minutes of idle, and nothing but the host of that URL is looked up or contacted; what it
+# proves does not depend on the PostgreSQL major, so it runs once. No job references a secret, the workflow never runs on pull_request_target,
 # and the secrets of the stack are generated per run by scripts/smoke-image.sh and
 # never printed (doc 10 T16).
 
@@ -298,13 +301,71 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The no-egress drill (doc 08 section 5.1, Q18, doc 10 T6): a stack of its own on a network with no route out
+  # (e2e/compose.no-egress.yml), with a packet capture in the network namespace of the server and of the worker, is
+  # claimed through the API, signed in to, left idle, given one saved URL with a reserved host, and left idle again;
+  # the capture must hold no DNS question and no connection attempt outside the compose network but the lookup of that
+  # host. The drill pulls the capture image, pinned by digest, from Docker Hub like the stack's database image, and
+  # removes the stack, both captures and the network however it ends. It uses the HTTP API, docker and docker compose
+  # alone, so no browser and no Playwright image are needed here.
+  no-egress:
+    name: no-egress drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: e2e-no-egress
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:e2e .
+      # The step fails when the drill does, and so does the check of the leg.
+      - name: Run the no-egress drill
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:e2e
+        run: pnpm --filter @slugbase/e2e test:e2e no-egress
+      # A stack, a capture or a network that the drill could not remove (its process killed, say) is removed here.
+      - name: Remove any stack left behind
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          docker ps --all --format '{{.ID}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker volume ls --quiet --filter 'label=com.docker.compose.project' --format '{{.Name}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker volume rm --force
+          docker network ls --format '{{.Name}}' |
+            awk '/^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker network rm
+      - name: Upload the artifacts of a failed run
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: no-egress-artifacts
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The check each leg has always reported, which the ruleset of `main` requires by
   # name ("e2e (PostgreSQL 17)", "e2e (PostgreSQL 18)"). It fails unless every shard,
-  # every restore drill, the reverse proxy drill and the upgrade drill succeeded: a failed, cancelled or skipped job is not a pass,
+  # every restore drill, the reverse proxy drill, the upgrade drill and the no-egress drill succeeded: a failed, cancelled or skipped job is not a pass,
   # and `needs` waits for the jobs of both legs, so one failing job fails the check of both.
   e2e:
     name: e2e (PostgreSQL ${{ matrix.postgres }})
-    needs: [shards, restore-drill, reverse-proxy, upgrade-drill]
+    needs: [shards, restore-drill, reverse-proxy, upgrade-drill, no-egress]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -318,6 +379,7 @@ jobs:
           RESTORE_DRILL_RESULT: ${{ needs.restore-drill.result }}
           REVERSE_PROXY_RESULT: ${{ needs.reverse-proxy.result }}
           UPGRADE_DRILL_RESULT: ${{ needs.upgrade-drill.result }}
+          NO_EGRESS_RESULT: ${{ needs.no-egress.result }}
         run: |
           set -euo pipefail
           if [[ "$SHARDS_RESULT" != "success" ]]; then
@@ -334,5 +396,9 @@ jobs:
           fi
           if [[ "$UPGRADE_DRILL_RESULT" != "success" ]]; then
             echo "the upgrade drill ended '$UPGRADE_DRILL_RESULT', not 'success'" >&2
+            exit 1
+          fi
+          if [[ "$NO_EGRESS_RESULT" != "success" ]]; then
+            echo "the no-egress drill ended '$NO_EGRESS_RESULT', not 'success'" >&2
             exit 1
           fi

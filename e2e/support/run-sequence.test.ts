@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DRILL, PROXY_DRILL, runSequence, UPGRADE_DRILL } from "./run-sequence.ts";
+import { DRILL, NO_EGRESS_DRILL, PROXY_DRILL, runSequence, UPGRADE_DRILL } from "./run-sequence.ts";
 
 interface Rig {
   calls: (readonly string[])[];
@@ -76,6 +76,17 @@ void describe("the run of the journeys and the drills", () => {
     const upgrade = rig();
     await upgrade.sequence({ forwarded: ["upgrade-drill", "--headed"], statuses: [7] });
     assert.deepEqual(upgrade.calls, [[...UPGRADE_DRILL, "--headed"]]);
+    const noEgress = rig();
+    await noEgress.sequence({ forwarded: ["no-egress", "--headed"] });
+    assert.deepEqual(noEgress.calls, [[...NO_EGRESS_DRILL, "--headed"]]);
+  });
+
+  void it("ends with the status of the no-egress drill, and leaves it out of a run without arguments", async () => {
+    const named = rig();
+    assert.equal(await named.sequence({ forwarded: ["no-egress"], statuses: [9] }), 9);
+    const all = rig();
+    await all.sequence({});
+    assert.ok(!all.calls.some((call) => call.includes(NO_EGRESS_DRILL[1] ?? "")), "the run without arguments does not run the no-egress drill");
   });
 
   void it("ends with the status of the upgrade drill, and leaves it out of a run without arguments", async () => {
