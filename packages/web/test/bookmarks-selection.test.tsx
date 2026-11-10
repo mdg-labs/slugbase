@@ -124,6 +124,17 @@ async function press(element: HTMLElement): Promise<void> {
   });
 }
 
+/** Turns the Pinned filter on through the Filters panel and closes the panel again, so the page behind it is reachable. */
+async function filterToPinned(): Promise<void> {
+  await press(screen.getByRole("button", { name: /^Filters/ }));
+  const panel = await screen.findByRole("dialog", { name: "Filters" });
+  await press(within(panel).getByRole("checkbox", { name: "Pinned" }));
+  await press(within(panel).getByRole("button", { name: "Close filters" }));
+  await waitFor(() => {
+    expect(screen.queryByRole("dialog", { name: "Filters" })).toBeNull();
+  });
+}
+
 function box(n: number): HTMLElement {
   return screen.getByRole("checkbox", { name: `Select Bookmark ${String(n)}` });
 }
@@ -232,7 +243,7 @@ describe("selecting", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await select(1);
     expect(screen.getByRole("toolbar")).toBeDefined();
 
-    await press(screen.getByRole("button", { name: "Pinned" }));
+    await filterToPinned();
 
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true");
@@ -320,7 +331,7 @@ describe("select all matching", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await select(1);
     await press(within(bar()).getByRole("button", { name: "Select all 40 matching" }));
 
-    await press(screen.getByRole("button", { name: "Pinned" }));
+    await filterToPinned();
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true");
     });
@@ -552,7 +563,7 @@ describe("a request that answers after the filters changed", { timeout: HEAVY_TE
       expect(sent.bodies).toHaveLength(2);
     });
 
-    await press(screen.getByRole("button", { name: "Pinned" }));
+    await filterToPinned();
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true");
     });
@@ -578,7 +589,7 @@ describe("a request that answers after the filters changed", { timeout: HEAVY_TE
     await screen.findByRole("link", { name: "Bookmark 1" });
     await select(1);
     await press(within(bar()).getByRole("button", { name: "Pin" }));
-    await press(screen.getByRole("button", { name: "Pinned" }));
+    await filterToPinned();
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true");
     });

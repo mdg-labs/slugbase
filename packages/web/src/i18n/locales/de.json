@@ -155,6 +155,7 @@
       "countAtLeast": "{shown} von {total}+ angezeigt",
       "loadMore": "Mehr laden",
       "pageSize": "Lesezeichen pro Ladevorgang",
+      "pageSizeOption": "{size} pro Ladevorgang",
       "filter": {
         "label": "Nur anzeigen",
         "pinned": "Angeheftet",
@@ -164,7 +165,13 @@
       "filters": {
         "active": "Aktive Filter",
         "remove": "Filter entfernen: {label}",
+        "button": "Filter",
+        "buttonCount": "Filter, {count} gesetzt",
+        "title": "Filter",
+        "close": "Filter schließen",
         "folderChip": "Ordner: {name}",
+        "tagChip": "Tag: {name}",
+        "tagChipUnknown": "Tag: unbekannt",
         "folderChipUnknown": "Ordner",
         "queryChip": "Suche: {text}",
         "folder": {

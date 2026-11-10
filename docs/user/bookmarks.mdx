@@ -15,21 +15,23 @@ order: 30
 
 ## Find bookmarks
 
-The toolbar above the list narrows what it shows.
+The toolbar above the list is one row. From left to right it holds the search field, the scope, the **Filters** button, the sort and the view. The controls have no labels on screen; a screen reader announces each one by name.
 
 1. Type in **Search** to match the title, host, slug or description of a bookmark. The path of an address is not searched.
-2. Choose a **Folder** to see only the bookmarks in that folder. A folder in the sidebar does the same.
-3. Choose **Tags** to see only the bookmarks that carry every tag you pick. You can pick up to 10.
-4. Under **Show only**, switch on **Pinned**, **Has slug** or **Forwarding on**.
-5. Under **Scope**, choose **All**, **Mine**, **Shared with me** or **Shared by me**. The last two appear only where your workspace can share bookmarks.
+2. Choose **All**, **Mine**, **Shared with me** or **Shared by me** to say whose bookmarks to show. The last two appear only where your workspace can share bookmarks.
+3. Choose **Filters** to open the panel of filters. The button shows how many of them are on.
+4. In the panel, choose a **Folder** to see only the bookmarks in that folder. A folder in the sidebar does the same.
+5. Choose **Tags** to see only the bookmarks that carry every tag you pick. You can pick up to 10.
+6. Under **Show only**, tick **Pinned**, **Has slug** or **Forwarding on**.
+7. Press `Esc` or choose **Close filters** to close the panel. The list has already changed while you chose.
 
-**Result:** The list shows the matches, and **Active filters** chips show what is on. Choose a chip to remove one filter, or **Clear filters** to remove them all.
+**Result:** The list shows the matches, and **Active filters** chips under the toolbar show what is on. Choose a chip to remove one filter, or **Clear filters** to remove them all. Without a filter, the chips are not shown.
 
 ## Sort and view the list
 
 1. Choose a **Sort by** order: **Recently added**, **Oldest first**, **Alphabetical A–Z**, **Alphabetical Z–A**, **Most used** or **Recently opened**.
-2. Under **View**, choose **Grid** or **Table**. Press `V` to switch.
-3. Under **Bookmarks per load**, choose 24, 48 or 96.
+2. Choose **Grid** or **Table** with the two view buttons at the right end of the toolbar. Press `V` to switch.
+3. Beside **Load more**, under the list, choose **24 per load**, **48 per load** or **96 per load**. The control is named **Bookmarks per load**.
 
 Your default view comes from **Preferences**, under **Default bookmark view**.
 
@@ -41,7 +43,7 @@ SlugBase loads the list in parts. Under the last row, the line **Showing 48 of 1
 
 ## Share a link to a filtered list
 
-The address of the page keeps your search, folder, tags, toggles, scope, sort, view and size. Copy it from the address bar to link to the same view, or save it as a browser bookmark. The browser's back and forward buttons step through the changes you made.
+The address of the page keeps your search, folder, tags, **Show only** choices, scope, sort, view and size. Copy it from the address bar to link to the same view, or save it as a browser bookmark. The browser's back and forward buttons step through the changes you made.
 
 Folders and tags are your own, so a link that holds one is meant for you. If a folder was deleted, the page says **That folder no longer exists**, removes that filter and shows the list without it.
 
@@ -107,13 +109,14 @@ Available on SlugBase Cloud. When a change of plan leaves a workspace with more 
 | Field / option | Description | Required |
 | -------------- | ----------- | -------- |
 | Search | Matches title, host, slug and description. | No |
-| Folder | One folder. | No |
-| Tags | Up to 10 tags. A bookmark must carry every one. | No |
-| Show only | **Pinned**, **Has slug**, **Forwarding on**. | No |
 | Scope | **All**, **Mine**, **Shared with me**, **Shared by me**. | No |
+| Filters | Opens the panel with **Folder**, **Tags** and **Show only**. The button shows how many are on. | No |
+| Folder | One folder. In the **Filters** panel. | No |
+| Tags | Up to 10 tags. A bookmark must carry every one. In the **Filters** panel. | No |
+| Show only | **Pinned**, **Has slug**, **Forwarding on**. In the **Filters** panel. | No |
 | Sort by | The order of the list. | No |
 | View | **Grid** or **Table**. | No |
-| Bookmarks per load | 24, 48 or 96 bookmarks for each load. | No |
+| Bookmarks per load | 24, 48 or 96 bookmarks for each load, beside **Load more**. | No |
 
 ## Troubleshooting
 

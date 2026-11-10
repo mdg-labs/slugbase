@@ -229,6 +229,12 @@ function sidebar(): HTMLElement {
   return screen.getByRole("navigation", { name: "Main navigation" });
 }
 
+/** Opens the Filters panel, which holds the folder and tag fields of the bookmark list. */
+async function openFilters(): Promise<void> {
+  await press(await screen.findByRole("button", { name: /^Filters/ }));
+  await screen.findByRole("dialog", { name: "Filters" });
+}
+
 function chipsOf(field: string): HTMLElement[] {
   const group = screen.getByRole("combobox", { name: field }).closest("[data-slot='multi-pick-chips']");
   return [...(group?.querySelectorAll<HTMLElement>("[data-slot='multi-pick-chip']") ?? [])];
@@ -432,11 +438,12 @@ describe("the filter chips with hostile names", { timeout: HEAVY_TEST_TIMEOUT_MS
         await screen.findByRole("list", { name: "Active filters" });
         await screen.findByText(`Folder: ${texts[0] ?? ""}`);
       },
-      (texts) => {
+      async (texts) => {
         const chips = screen.getByRole("list", { name: "Active filters" });
         const chip = within(chips).getByText(`Folder: ${texts[0] ?? ""}`);
         expect(chip.children).toHaveLength(0);
         expect(within(chips).getByRole("button", { name: `Remove filter: Folder: ${texts[0] ?? ""}` })).toBeDefined();
+        await openFilters();
         expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Folder" }).value).toBe(texts[0]);
       },
       HOSTILE.slice(0, 2),
@@ -448,6 +455,7 @@ describe("the filter chips with hostile names", { timeout: HEAVY_TEST_TIMEOUT_MS
       async (texts) => {
         use({ fixtures: { listTags: list(tagsOf(texts)) } });
         await openApp(`/bookmarks?${texts.map((_text, index) => `tag=${tagId(index + 1)}`).join("&")}`);
+        await openFilters();
         await screen.findByRole("button", { name: `Remove tag ${texts[0] ?? ""}` });
       },
       (texts) => {
@@ -458,6 +466,8 @@ describe("the filter chips with hostile names", { timeout: HEAVY_TEST_TIMEOUT_MS
         }
         for (const text of texts) {
           expect(screen.getByRole("button", { name: `Remove tag ${text}` })).toBeDefined();
+          // The chip under the toolbar names the tag as text too.
+          expect(screen.getByText(`Tag: ${text}`).children).toHaveLength(0);
         }
       },
     );
@@ -468,6 +478,7 @@ describe("the filter chips with hostile names", { timeout: HEAVY_TEST_TIMEOUT_MS
       async (texts) => {
         use({ fixtures: { listTags: list(tagsOf(texts)) } });
         await openApp("/bookmarks");
+        await openFilters();
         const input = await screen.findByRole("combobox", { name: "Tags" });
         await typeInto(input, "");
         await screen.findByRole("option", { name: texts[0] ?? "", hidden: true });

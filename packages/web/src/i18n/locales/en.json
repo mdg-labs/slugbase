@@ -155,6 +155,7 @@
       "countAtLeast": "Showing {shown} of {total}+",
       "loadMore": "Load more",
       "pageSize": "Bookmarks per load",
+      "pageSizeOption": "{size} per load",
       "filter": {
         "label": "Show only",
         "pinned": "Pinned",
@@ -164,7 +165,13 @@
       "filters": {
         "active": "Active filters",
         "remove": "Remove filter: {label}",
+        "button": "Filters",
+        "buttonCount": "Filters, {count} set",
+        "title": "Filters",
+        "close": "Close filters",
         "folderChip": "Folder: {name}",
+        "tagChip": "Tag: {name}",
+        "tagChipUnknown": "Tag: unknown",
         "folderChipUnknown": "Folder",
         "queryChip": "Search: {text}",
         "folder": {

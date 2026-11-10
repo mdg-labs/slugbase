@@ -133,6 +133,7 @@ describe("a folder shared with the member in the bookmarks list", { timeout: HEA
 
     await screen.findByRole("link", { name: "Grace's article" });
     expect(screen.queryByText("Own work page")).toBeNull();
+    await press(screen.getByRole("button", { name: /^Filters/ }));
     await waitFor(() => {
       expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Folder" }).value).toBe("Grace's reading");
     });

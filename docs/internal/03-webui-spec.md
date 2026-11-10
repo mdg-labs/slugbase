@@ -175,7 +175,7 @@ Type scale follows the prototype's dense tool scale: body 13 px / 18 px, small 1
 | `metric-tile` | Card with value and label | `p-card-1` | Dashboard counts |
 | `usage-meter` | Meter with formatted value | `p-meter-3` | Bookmark usage (slot), import progress summary |
 | `grouped-results` | Accordion allowing several open, count Badge per group | `p-accordion-3`, `p-badge-13` | Import result (skipped by reason) |
-| `side-panel` | Sheet | `p-sheet-1` | Tag preview on mobile, audit event detail |
+| `side-panel` | Sheet | `p-sheet-1` | Tag preview on mobile, audit event detail, bookmark filters |
 | `danger-zone` | Frame + destructive-outline Buttons → `confirm`/`typed-confirm` | `p-frame-1`, `p-button-5` | Delete workspace, delete account, leave workspace |
 | `entitlement-gate` | Renders children when the entitlement is granted, else slot `entitlement.upgradeAction` or nothing | — (SlugBase component) | Sharing, audit log, AI, invitations, teams |
 | `slot` | Named extension point; renders extension components or nothing | — (SlugBase component, doc 01 §7.2) | Plan label, sidebar footer, settings sections, banners, account menu |
@@ -266,11 +266,17 @@ One screen on desktop, no scrolling needed for the first three rows.
 
 ### 3.1 Toolbar
 
-- **Filters**: folder (Combobox, single), tags (Combobox multiple with chips, AND), scope (`segmented-choice`: All / Mine / Shared with me / Shared by me — scope options other than All/Mine only with `sharing.*`), toggles "Pinned", "Has slug", "Forwarding on" (ToggleGroup, multiple), text query.
-- **Sort** (Select): Recently added, Oldest first, Alphabetical A–Z, Alphabetical Z–A, Most used, Recently accessed.
-- **View** (`segmented-choice`): Grid / Table (`V` toggles).
-- **Active filter chips** with "Clear filters".
-- All state lives in the URL search params (TanStack Router validated search schema), so every view is linkable and back/forward works. There is no page parameter: the list loads further results with a "Load more" button under the last row (keyset pagination, doc 02 §5.7), and a page-size Select (24 / 48 / 96) sets how many each load adds.
+One row of controls of one height with no visible field labels (each keeps its accessible name), in this order, which is also the tab order:
+
+- **Search** (text query) grows to fill the row.
+- **Scope** (`segmented-choice`, compact): All / Mine / Shared with me / Shared by me — options other than All/Mine only with `sharing.*`.
+- **Filters** button with a count of the filters its panel holds that are set (the folder, each tag and each show-only switch). It opens a `side-panel` (a coss Sheet) holding **Folder** (Combobox, single), **Tags** (Combobox multiple with chips, AND; the hint "a bookmark must carry every tag chosen, up to 10" is shown there only) and the switches **Pinned**, **Has slug** and **Forwarding on** (checkboxes under "Show only"). Each change writes to the URL at once. Escape and the close button close the panel and focus returns to the button.
+- **Sort** (Select, compact): Recently added, Oldest first, Alphabetical A–Z, Alphabetical Z–A, Most used, Recently opened.
+- **View** (`segmented-choice`, icons only): Grid / Table (`V` toggles).
+
+Below the row, **active filter chips** (the search text, the folder, each tag, each switch and a scope other than All), each with a button that removes just that filter, and **Clear filters** at the end of the row of chips. The chip row is absent while no filter is set. Below 640 px the search takes its own line and the other controls wrap beneath it, so the page does not scroll sideways at 360 px.
+
+All state lives in the URL search params (TanStack Router validated search schema), so every view is linkable and back/forward works. There is no page parameter: the list loads further results with a "Load more" button under the last row (keyset pagination, doc 02 §5.7), and the page-size Select (24 / 48 / 96, worded "24 per load" and named "Bookmarks per load") sits in the same row as that button and sets how many each load adds.
 
 ### 3.2 Grid view
 
@@ -288,7 +294,7 @@ Selecting shows the `bulk-bar`: count, "Select all <n> matching" (doc 02 §5.7; 
 
 Loading: skeleton cards/rows matching the view. Below the list, the count line reads "Showing 48 of 1,234" ("of 10,000+" for very large filtered sets) with the Load more button. Empty (no bookmarks at all): teaching `empty-state` with New bookmark and Import from browser. Empty (filters match nothing): "No bookmarks match these filters" with Clear filters. Error: `banner` with retry.
 
-**Components:** `table-filters` (`p-input-group-20`, folder Combobox `p-combobox-7`, tags `multi-pick` `p-combobox-19`), scope `segmented-choice` (`p-radio-group-7`), ToggleGroup (`p-toggle-group-8`), sort Select (`p-select-15`), view `segmented-choice` with icons (`p-radio-group-7`), filter chips (`p-badge-20`); grid `card-grid`, table `data-table` (`p-table-8`, selection `p-table-7`); `bulk-bar`; `row-actions`, `context-actions`; `load-more`; `loading`; `empty-state`; `feedback-toast` with undo.
+**Components:** `table-filters` (search `p-input-group-20`), scope `segmented-choice` (`p-radio-group-7`), Filters outline Button (`p-button-18`) with a count Badge (`p-badge-13`) opening a `side-panel` (`p-sheet-1`) that holds the folder Combobox (`p-combobox-7`), tags `multi-pick` (`p-combobox-19`) and the show-only Checkboxes (`p-checkbox-1`), sort Select (`p-select-15`), view `segmented-choice` with icons (`p-radio-group-7`), filter chips (`p-badge-20`); grid `card-grid`, table `data-table` (`p-table-8`, selection `p-table-7`); `bulk-bar`; `row-actions`, `context-actions`; `load-more`; `loading`; `empty-state`; `feedback-toast` with undo.
 
 ### 3.6 `/bookmarks/archived`
 

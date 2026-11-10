@@ -113,6 +113,16 @@ async function openApp(path: string): Promise<void> {
   await renderApp(<App />);
 }
 
+/** Opens the Filters panel, which holds the folder and tag fields. */
+async function openFilters(): Promise<void> {
+  const button = await screen.findByRole("button", { name: /^Filters/ });
+  await act(async () => {
+    fireEvent.click(button);
+    await Promise.resolve();
+  });
+  await screen.findByRole("dialog", { name: "Filters" });
+}
+
 async function openField(name: string): Promise<void> {
   const input = await screen.findByRole("combobox", { name });
   await act(async () => {
@@ -132,6 +142,7 @@ describe("the lists behind the folder and tag filters while they are read", { ti
 
     expect(within(sidebar).getByText("Loading the folder list")).toBeDefined();
     expect(within(sidebar).queryByText("You have no folders yet")).toBeNull();
+    await openFilters();
     await openField("Folder");
     const folderPopup = document.querySelector("[data-slot='picker-popup']");
     expect(folderPopup?.querySelector("[data-slot='picker-loading']")?.textContent).toBe("Loading the folders");
@@ -155,6 +166,7 @@ describe("the lists behind the folder and tag filters while they are read", { ti
     await openApp("/bookmarks");
     await screen.findByRole("link", { name: "Example docs" });
 
+    await openFilters();
     await openField("Tags");
 
     const popup = document.querySelector("[data-slot='multi-pick-popup']");
