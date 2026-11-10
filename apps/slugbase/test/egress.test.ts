@@ -120,7 +120,7 @@ describe("the egress instance of the AI adapter", () => {
     expect(sink.bodies).toHaveLength(1);
     expect(sink.bodies[0]).toContain('"model":"small-model"');
 
-    // The shared egress port, which the metadata, favicon and OIDC discovery callers use, has no allowance.
+    // The shared egress port, which the metadata and favicon callers use, has no allowance.
     const shared = await failureOf(adapters.egress.request({ url: env["AI_BASE_URL"] as string, timeoutMs: 1_000, maxBytes: 100 }));
     expect(shared).toBeInstanceOf(EgressBlocked);
     expect(sink.bodies).toHaveLength(1);

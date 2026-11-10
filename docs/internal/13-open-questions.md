@@ -84,7 +84,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q9 | One generic SMTP adapter for every deployment | Decided (maintainer) |
 | Q66 | Errors through `ErrorReportPort`; internal `/metrics` endpoint; no metrics stack required | Settled → D27 (maintainer) |
 | Q90 | An AI endpoint on a private address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`, and a plain-`http` endpoint is accepted only on that host; the allowance covers that one origin, on the AI adapter's egress instance only | Decided (default) |
-| Q120 | An OIDC provider on a private address is refused unless the operator names the exact host of its `ISSUER_URL` in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`; the allowance covers that issuer's origin, on the OIDC adapter's egress instance only, and extends Q90 | Decided (maintainer) |
+| Q120 | An OIDC provider on a loopback, private, CGNAT or unique-local address is refused unless the operator names the exact host of its `ISSUER_URL` in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`; the allowance covers that issuer's origin, on the OIDC adapter's egress instance only, and extends Q90 | Decided (maintainer) |
 
 ### Infrastructure and operations
 
@@ -352,7 +352,7 @@ Cloud's backends are recorded in the Cloud documentation.
 ### Q90 — An AI endpoint on a private address
 **Status:** Decided (default) · **Due:** Phase 4 (AI feature) · **Affects:** doc 01 §6 (`EgressPort`, `AiSuggestPort`), doc 10 T6 and §5, doc 08 §3.5 (`egress/ssrf`), Q8
 
-**Decision: an AI endpoint on a loopback, private or CGNAT address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`. The allowance covers the one origin of `AI_BASE_URL` and is held only by the egress instance the AI adapter uses.** The AI settings are `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` and `AI_PROVIDER_NAME`; `AI_ALLOWED_PRIVATE_HOST` is the one more operator setting next to them (optional; CE self-host section of doc 07's key inventory; Cloud uses a public provider and leaves it unset). Member input can neither set nor widen it: the AI request URL is built from `AI_BASE_URL` alone, and a bookmark's URL or metadata reaches the provider only inside the request body.
+**Decision: an AI endpoint on a loopback, private, CGNAT or unique-local address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`. The allowance covers the one origin of `AI_BASE_URL` and is held only by the egress instance the AI adapter uses.** The AI settings are `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` and `AI_PROVIDER_NAME`; `AI_ALLOWED_PRIVATE_HOST` is the one more operator setting next to them (optional; CE self-host section of doc 07's key inventory; Cloud uses a public provider and leaves it unset). Member input can neither set nor widen it: the AI request URL is built from `AI_BASE_URL` alone, and a bookmark's URL or metadata reaches the provider only inside the request body.
 
 The matching rule, which the adapter (E4.3.2) implements as written:
 
@@ -395,7 +395,7 @@ Q8 allows a self-hosted model, which usually listens on a private address, while
 ### Q120 — An OIDC provider on a private address
 **Status:** Decided (maintainer, 2026-11-10) · **Due:** Phase 2 (OIDC) · **Affects:** doc 01 §6 (`EgressPort`, `IdentityPort`), doc 02 §2.8, doc 10 T6 and §5, Q90, D22, D24
 
-**Decision: an OIDC provider on a loopback, private or CGNAT address is refused unless the operator names the exact host of its `ISSUER_URL` in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`. The allowance covers the origin of that provider's `ISSUER_URL` and is held only by the egress instance the OIDC adapter uses.** The key is optional and per provider, next to the other `OIDC_<SLUG>_*` keys (CE self-host section of doc 07's key inventory; Cloud configures no OIDC provider on a private address and leaves it unset). It extends Q90 to a second operator-named destination, by the same reasoning: a self-hosted identity provider (Keycloak, Authentik and the like) next to SlugBase on a LAN or a compose network is a common CE setup, and the other ways in (a public address for a private service) move the exposure to the operator's network. It also covers the split-horizon case, where a public provider name resolves to a private address inside the operator's network.
+**Decision: an OIDC provider on a loopback, private, CGNAT or unique-local address is refused unless the operator names the exact host of its `ISSUER_URL` in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`. The allowance covers the origin of that provider's `ISSUER_URL` and is held only by the egress instance the OIDC adapter uses.** The key is optional and per provider, next to the other `OIDC_<SLUG>_*` keys (CE self-host section of doc 07's key inventory; Cloud configures no OIDC provider on a private address and leaves it unset). It extends Q90 to a second operator-named destination, by the same reasoning: a self-hosted identity provider (Keycloak, Authentik and the like) next to SlugBase on a LAN or a compose network is a common CE setup, and the other ways in (a public address for a private service) move the exposure to the operator's network. It also covers the split-horizon case, where a public provider name resolves to a private address inside the operator's network.
 
 The matching rule is Q90's, applied to each provider:
 
