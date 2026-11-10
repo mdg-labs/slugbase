@@ -146,7 +146,7 @@ Run this list after you add or change a provider. Keep another way to sign in op
 4. Sign in with an account that has the same verified email address at SlugBase and at the provider. You arrive signed in. In **Settings**, **Account**, **Security**, the provider appears under **Linked sign-in methods**.
 5. Sign out and sign in again with the provider. It no longer needs the email address to match.
 6. Try an address that has no account. With `AUTO_CREATE` off, the sign-in page shows the failure message. With it on, an account is created. If registration is off, the account sees **Waiting for an invitation**.
-7. If you set `OIDC_<SLUG>_ALLOWED_DOMAINS`, try an address outside the list. It must be refused.
+7. If you set `OIDC_<SLUG>_ALLOWED_DOMAINS` with `AUTO_CREATE` on, try an address outside the list that has no account at SlugBase. It must be refused, and no account is created. An address outside the list that already has an account links to it anyway, so it does not test the list.
 8. Check that the provider verifies addresses. A test account whose address is not verified at the provider must be refused, with `unverified_email` in the log.
 
 ## Troubleshooting
