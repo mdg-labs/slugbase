@@ -2,6 +2,8 @@
 // file of 5 000 bookmarks with folders, tags and slugs, some of which the importer has already or an earlier bookmark of the file keeps, so that the import drops them. Both are built from
 // the index of the bookmark alone, with no randomness, so every run sends the same bytes. Every address is its own (on a host no seeded bookmark has), so no bookmark is skipped as a
 // duplicate, and none is refused: an import of one of these files creates exactly `bookmarks` bookmarks, and an answer that created fewer is not the import the suite means to measure.
+// The suite imports the pair more than once, back to back, into the same workspace (#818): the file of repeat `n` (`repeat`, 0 for the first) carries a marker `r<n>` in every address, slug, folder and tag it names, so
+// that a repeat is skipped for nothing, drops no more slugs than the first and creates its own folders and tags: every repeat does the work of the first, and the first repeat's bytes are the ones of a suite without repeats.
 
 /** The most bookmarks one import file holds: `IMPORT_MAX_BOOKMARKS` of `@slugbase/contracts` (tooling/test/perf-budgets.test.ts holds the two together). */
 export const IMPORT_FILE_MAX_BOOKMARKS = 5000;
@@ -30,6 +32,8 @@ export interface ImportFile {
 export interface ImportFileOptions {
   /** The bookmarks of the file; the most there may be by default. */
   readonly bookmarks?: number;
+  /** Which repeat of the pair the file is, from 0 (the default, whose names carry no marker): a repeat names addresses, slugs, folders and tags of its own. */
+  readonly repeat?: number;
 }
 
 export interface JsonImportFileOptions extends ImportFileOptions {
@@ -46,7 +50,18 @@ function checkCount(bookmarks: number): number {
   return bookmarks;
 }
 
-const tagNames = (index: number): string[] => [`import-tag-${String((index * 7) % TAGS)}`, `import-tag-${String((index * 11 + 3) % TAGS)}`];
+function checkRepeat(repeat: number): number {
+  if (!Number.isInteger(repeat) || repeat < 0) {
+    throw new RangeError(`a repeat is a whole number from 0, not ${String(repeat)}`);
+  }
+  return repeat;
+}
+
+/** The marker of a repeat in an address path, a slug, a folder name and a tag name; none for the first. */
+const marks = (repeat: number): { readonly path: string; readonly slug: string; readonly folder: string; readonly tag: string } =>
+  repeat === 0 ? { path: "", slug: "", folder: "", tag: "" } : { path: `r${String(repeat)}/`, slug: `r${String(repeat)}-`, folder: ` r${String(repeat)}`, tag: `r${String(repeat)}-` };
+
+const tagNames = (index: number, tag: string): string[] => [`import-tag-${tag}${String((index * 7) % TAGS)}`, `import-tag-${tag}${String((index * 11 + 3) % TAGS)}`];
 
 /**
  * A browser bookmark file (Netscape bookmark HTML) of `bookmarks` links in forty folders, each tagged, whose addresses are padded so that the file is the size of the largest upload the
@@ -54,13 +69,14 @@ const tagNames = (index: number): string[] => [`import-tag-${String((index * 7) 
  */
 export function buildNetscapeFile(options: ImportFileOptions = {}): ImportFile {
   const bookmarks = checkCount(options.bookmarks ?? IMPORT_FILE_MAX_BOOKMARKS);
+  const mark = marks(checkRepeat(options.repeat ?? 0));
   const target = IMPORT_FILE_MAX_BYTES - NETSCAPE_HEADROOM_BYTES;
   const render = (padding: (index: number) => string): string => {
     const lines = ['<!DOCTYPE NETSCAPE-Bookmark-file-1>', '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">', "<TITLE>Bookmarks</TITLE>", "<H1>Bookmarks</H1>", "<DL><p>"];
     for (let folder = 0; folder < FOLDERS; folder += 1) {
-      lines.push(`<DT><H3>Import folder ${String(folder)}</H3>`, "<DL><p>");
+      lines.push(`<DT><H3>Import folder ${String(folder)}${mark.folder}</H3>`, "<DL><p>");
       for (let index = folder; index < bookmarks; index += FOLDERS) {
-        lines.push(`<DT><A HREF="https://netscape.import.example.test/p/${pad(index)}/${padding(index)}" ADD_DATE="1700000000" TAGS="${tagNames(index).join(",")}">Imported link ${pad(index)}</A>`);
+        lines.push(`<DT><A HREF="https://netscape.import.example.test/${mark.path}p/${pad(index)}/${padding(index)}" ADD_DATE="1700000000" TAGS="${tagNames(index, mark.tag).join(",")}">Imported link ${pad(index)}</A>`);
       }
       lines.push("</DL><p>");
     }
@@ -85,7 +101,9 @@ export function buildNetscapeFile(options: ImportFileOptions = {}): ImportFile {
  */
 export function buildJsonFile(options: JsonImportFileOptions = {}): ImportFile {
   const bookmarks = checkCount(options.bookmarks ?? IMPORT_FILE_MAX_BOOKMARKS);
+  const mark = marks(checkRepeat(options.repeat ?? 0));
   const colliding = options.collidingSlugs ?? [];
+  const folderName = (folder: number): string => `Import folder ${String(folder)}${mark.folder}`;
   const slugOf = (index: number): string | undefined => {
     if (index % 3 !== 0) {
       return undefined;
@@ -94,31 +112,31 @@ export function buildJsonFile(options: JsonImportFileOptions = {}): ImportFile {
       return `Not A Slug ${pad(index)}`;
     }
     if (index % JSON_REPEAT_CYCLE === 0 && index >= 3) {
-      return `json-import-${pad(index - 3)}`;
+      return `json-import-${mark.slug}${pad(index - 3)}`;
     }
     if (colliding.length > 0 && index % JSON_SLUG_CYCLE === 0) {
       return colliding[(index / JSON_SLUG_CYCLE) % colliding.length];
     }
-    return `json-import-${pad(index)}`;
+    return `json-import-${mark.slug}${pad(index)}`;
   };
   const entries = Array.from({ length: bookmarks }, (_, index) => {
     const slug = slugOf(index);
     return {
       ref: `b${String(index + 1)}`,
-      url: `https://json.import.example.test/p/${pad(index)}`,
+      url: `https://json.import.example.test/${mark.path}p/${pad(index)}`,
       title: `Imported bookmark ${pad(index)}`,
       description: `Bookmark ${pad(index)} of the SlugBase JSON file of the performance suite.`,
       ...(slug === undefined ? {} : { slug, forwarding: index % 2 === 0 }),
       pinned: index % 97 === 0,
-      folders: [`Import folder ${String(index % FOLDERS)}`],
-      tags: tagNames(index),
+      folders: [folderName(index % FOLDERS)],
+      tags: tagNames(index, mark.tag),
     };
   });
   const document = {
     format: "slugbase-export",
     version: 1,
-    folders: Array.from({ length: FOLDERS }, (_, folder) => ({ name: `Import folder ${String(folder)}` })),
-    tags: Array.from({ length: TAGS }, (_, tag) => `import-tag-${String(tag)}`),
+    folders: Array.from({ length: FOLDERS }, (_, folder) => ({ name: folderName(folder) })),
+    tags: Array.from({ length: TAGS }, (_, tag) => `import-tag-${mark.tag}${String(tag)}`),
     bookmarks: entries,
   };
   const body = JSON.stringify(document);
@@ -130,7 +148,7 @@ export interface ImportFiles {
   readonly json: ImportFile;
 }
 
-/** Both files, at the most the import takes. */
-export function buildImportFiles(options: { readonly collidingSlugs?: readonly string[] } = {}): ImportFiles {
-  return { netscape: buildNetscapeFile(), json: buildJsonFile(options) };
+/** Both files of a repeat (the first by default), at the most the import takes. */
+export function buildImportFiles(options: { readonly collidingSlugs?: readonly string[]; readonly repeat?: number } = {}): ImportFiles {
+  return { netscape: buildNetscapeFile(options.repeat === undefined ? {} : { repeat: options.repeat }), json: buildJsonFile(options) };
 }

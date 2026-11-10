@@ -37,6 +37,31 @@ export const IMPORTER_EMAIL = "perf-member-1@example.test";
 export const CREATOR_EMAIL = "perf-member-2@example.test";
 export const CREATE_RATE = 5;
 export const CREATE_PHASES = ["without", "during"];
+// How long the import phase is (#818). The p95 of /go and the list "while an import is in flight" is only as stable as the number of requests behind it: one pair of the largest files is in flight for 1 to 2.5 s on
+// the runner, which at the steady 40 a second was 146 to 319 requests per scenario, a p95 that is the 8th to the 16th worst of them, and a ratio that moved from 2.9 to 6.1 on a code that had not changed. So the phase
+// repeats the pair, one after the other, in the same workspace (each repeat's files name addresses, slugs, folders and tags of their own, packages/testing/src/seed/import-files.ts), and requests /go and the list at
+// `rate` a second, 1.5 times the steady rate. Neither can be pushed further, measured on a development host (24 cores, the runner is slower): at 100 a second the two scenarios dropped 4 % of their arrivals with 6 pairs
+// (their p95 was 29 times the steady one's, a queue), and at 40 a second 15 pairs, 150 000 bookmarks in 30 s into the workspace of 49 000, were fine for 13 pairs (1.0 s an import) and then slowed to 3 to 7 s an import with
+// 196 arrivals dropped, so the repeats are as few as the sample allows. `repeats` pairs are in flight for at least 10 x 2.1 s (the quickest pair seen on the runner: 1.19 s and 0.92 s) = 21.1 s, which at `rate` is 1 266
+// requests per scenario at the least (a fifth over the 1 000 needed) and about 2 800 when the runner takes 4.65 s a pair, its slowest; `windowSeconds` is the time all the pairs have to end in, 46.5 s on the slowest pair
+// seen and room for the imports to slow as the workspace grows.
+// `minSeconds` and `minRequests` are the sample the phase must have, which run.mjs holds a run to (a run with fewer is a failed run, never a ratio judged on too few requests).
+export const IMPORT_PHASE = { repeats: 10, rate: 60, windowSeconds: 120, minSeconds: 10, minRequests: 1000 };
+
+// The sample of an import phase against what it must have: `inFlightSeconds` (the imports' time in flight, summed) and `completed`, the requests of each of IMPORT_SCENARIOS. The reasons it falls short, none when it does not.
+export function importSampleShortfalls({ inFlightSeconds, completed }) {
+  const shortfalls = [];
+  if (!(inFlightSeconds >= IMPORT_PHASE.minSeconds)) {
+    shortfalls.push(`an import was in flight for ${String(inFlightSeconds)} s, not the ${String(IMPORT_PHASE.minSeconds)} s the phase needs`);
+  }
+  for (const scenario of IMPORT_SCENARIOS) {
+    if (!(completed[scenario] >= IMPORT_PHASE.minRequests)) {
+      shortfalls.push(`${scenario} made ${String(completed[scenario])} requests, not the ${String(IMPORT_PHASE.minRequests)} the phase needs`);
+    }
+  }
+  return shortfalls;
+}
+
 // The k6 VUs cannot share a variable, so the run (run.mjs) keeps the state of the import for them: the importer sets it, the other scenarios read it, and a request is made, and tagged,
 // by what the state is when its arrival is taken. `before` the first import, `importing` while one is in flight, `between` the two, `after` the second, `failed` when one did not succeed.
 export const IMPORT_STATES = ["before", "importing", "between", "after", "failed"];

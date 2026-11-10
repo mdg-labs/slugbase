@@ -44,6 +44,8 @@ interface BudgetsModule {
   IMPORTER_EMAIL: string;
   CREATOR_EMAIL: string;
   IMPORT_STATES: string[];
+  IMPORT_PHASE: { repeats: number; rate: number; windowSeconds: number; minSeconds: number; minRequests: number };
+  importSampleShortfalls: (sample: { inFlightSeconds: number; completed: Record<string, number> }) => string[];
   createMetrics: (phase: string) => { p95: string; completed: string };
   createThresholds: () => Record<string, string[]>;
   SEARCH_TERMS: string[];
@@ -79,6 +81,8 @@ const {
   IMPORTER_EMAIL,
   CREATOR_EMAIL,
   IMPORT_STATES,
+  IMPORT_PHASE,
+  importSampleShortfalls,
   createMetrics,
   createThresholds,
   SEARCH_TERMS,
@@ -478,6 +482,68 @@ describe("performance budgets", () => {
         ["go during import", 15, true],
         ["list during import", 50, false],
       ]);
+    });
+  });
+
+  describe("the length of the import phase", () => {
+    // The quickest and the slowest pair of the two largest imports seen on the runner (netscape + JSON, scripts/perf/README.md, "The import phase"), in seconds.
+    const QUICKEST_PAIR = 1.188 + 0.922;
+    const SLOWEST_PAIR = 2.54 + 2.108;
+
+    it("repeats the pair of imports so that the quickest runner seen still has an import in flight for the seconds, and /go and the list the requests, the phase needs", () => {
+      expect(IMPORT_PHASE.minSeconds).toBeGreaterThanOrEqual(10);
+      expect(IMPORT_PHASE.minRequests).toBeGreaterThanOrEqual(1000);
+      expect(Number.isInteger(IMPORT_PHASE.repeats) && IMPORT_PHASE.repeats > 1).toBe(true);
+      // With margin on the quickest pair: more than a fifth over each minimum.
+      const quickest = IMPORT_PHASE.repeats * QUICKEST_PAIR;
+      expect(quickest).toBeGreaterThanOrEqual(IMPORT_PHASE.minSeconds * 1.2);
+      expect(quickest * IMPORT_PHASE.rate).toBeGreaterThanOrEqual(IMPORT_PHASE.minRequests * 1.2);
+      // Every pair of the slowest runner seen ends in the window with room to spare: 2.5 times over, for the imports that slow as the workspace grows.
+      expect(IMPORT_PHASE.repeats * SLOWEST_PAIR * 2.5).toBeLessThanOrEqual(IMPORT_PHASE.windowSeconds);
+    });
+
+    it("requests /go and the list faster than the steady 40 a second, but not so fast that a stall of a second queues past the VUs of a scenario", () => {
+      expect(IMPORT_PHASE.rate).toBeGreaterThan(40);
+      // k6 drops an arrival when every VU of the scenario is busy, and the scenario is then saturated and its ratio not judged: at 100 a second a stall of a second did (a local run dropped 4 %). The rate stays
+      // under that, and a stall of a second and a half at it is under the VUs of a scenario.
+      expect(IMPORT_PHASE.rate).toBeLessThan(MAX_VUS);
+      expect(IMPORT_PHASE.rate * 1.5).toBeLessThan(MAX_VUS);
+    });
+
+    it("holds a sample to its minimums, and names each one it falls short of", () => {
+      const ok = { inFlightSeconds: IMPORT_PHASE.minSeconds, completed: { go_import: IMPORT_PHASE.minRequests, list_import: IMPORT_PHASE.minRequests } };
+      expect(importSampleShortfalls(ok)).toEqual([]);
+      expect(importSampleShortfalls({ ...ok, inFlightSeconds: IMPORT_PHASE.minSeconds - 0.1 })).toEqual([expect.stringMatching(/in flight for 9\.9 s, not the 10 s/)]);
+      expect(importSampleShortfalls({ ...ok, completed: { go_import: IMPORT_PHASE.minRequests - 1, list_import: IMPORT_PHASE.minRequests } })).toEqual([expect.stringMatching(/^go_import made 999 requests, not the 1000/)]);
+      expect(importSampleShortfalls({ inFlightSeconds: 2, completed: { go_import: 147, list_import: 146 } })).toHaveLength(3);
+      // A sample that is not a number is a shortfall, never a pass.
+      expect(importSampleShortfalls({ inFlightSeconds: Number.NaN, completed: {} })).toHaveLength(3);
+    });
+
+    it("is read by the scripts from budgets.js, runs the imports back to back in one workspace with files of their own, and holds a run to the sample unless it is a trial", () => {
+      const runner = read("run.mjs");
+      const scenarios = read("scenarios.js");
+      expect(runner).toMatch(/const DEFAULT_IMPORT_WINDOW_SECONDS = String\(IMPORT_PHASE\.windowSeconds\)/);
+      expect(runner).toMatch(/IMPORT_REPEATS: String\(importRepeats\),\s*IMPORT_RATE: String\(importRate\),\s*SIGNAL_URL/);
+      expect(runner).toMatch(/importSampleShortfalls\(\{ inFlightSeconds, completed: requests \}\)/);
+      expect(runner).toMatch(/importRun\.sample\.enforced && importRun\.sample\.shortfalls\.length > 0/);
+      expect(runner).toMatch(/buildImportFiles\(\{ collidingSlugs: \[\.\.\.collidingSlugs, \.\.\.slugs\], repeat \}\)/);
+      // The result records the window, the number of imports and the requests of each scenario.
+      expect(runner).toMatch(/phase: \{ windowSeconds: Number\(args\["import-window"\]\), repeats: importRepeats, importCount: imports\.length, rate: importRate, inFlightSeconds, requests,/);
+      // k6: the load of /go and the list is at the rate of the phase, the files are read by repeat, and the state is `after` only when the last import of the last repeat has answered.
+      expect(scenarios).toMatch(/rate: IMPORT_RATE,/);
+      expect(scenarios).toMatch(/const IMPORT_RATE = Number\(__ENV\.IMPORT_RATE \|\| RATE\)/);
+      expect(scenarios).toMatch(/open\(`\/data\/import-netscape-\$\{repeat\}\.html`\)/);
+      expect(scenarios).toMatch(/open\(`\/data\/import-\$\{repeat\}\.json`\)/);
+      expect(scenarios).toMatch(/repeat === IMPORT_REPEATS - 1 && index === imports\.length - 1 \? "after" : "between"/);
+      expect(scenarios).toMatch(new RegExp(`__ENV\\.IMPORT_WINDOW_SECONDS \\|\\| ${String(IMPORT_PHASE.windowSeconds)}\\)`));
+    });
+
+    it("judges every import of every repeat as it judged the pair: its own success, the bookmarks of its file created, none skipped or refused", () => {
+      const runner = read("run.mjs");
+      expect(runner).toMatch(/answered\?\.import !== name \|\| answered\.repeat !== repeat \|\| answered\.status !== 200 \|\| answered\.replayed !== false/);
+      expect(runner).toMatch(/answered\.created !== file\.bookmarks \|\| answered\.skipped !== 0 \|\| answered\.failed !== 0/);
+      expect(runner).toMatch(/files\.flatMap\(\(pair, repeat\) => \[\s*\["netscape", pair\.netscape, repeat\],\s*\["json", pair\.json, repeat\]/);
     });
   });
 
