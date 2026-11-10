@@ -630,7 +630,20 @@ check_with_worker() {
     sleep 2
   done
   log "ok: server --with-worker answered /ready"
-  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+  # The server listens before the worker starts (runServerWithWorker), so /ready can answer before the worker has logged that it
+  # started: the log is read again until the line is there, the container has stopped, or the limit is spent, and the assertion
+  # below then judges the last read.
+  deadline=$((SECONDS + limit))
+  while true; do
+    state="$(docker inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
+    logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')" || logs=""
+    [[ "$logs" == *"Worker started"* ]] && break
+    case "$state" in
+      exited | dead) break ;;
+    esac
+    ((SECONDS < deadline)) || break
+    sleep 1
+  done
   expect_contains "the log of server --with-worker" "$logs" "Worker started"
 
   password="$(random_hex 16)"
