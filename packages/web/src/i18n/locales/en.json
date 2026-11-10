@@ -2747,12 +2747,23 @@
         "unknown": "Too many attempts. Try again later.",
         "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
         "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
-      }
+      },
+      "invalidCode": "That code is not valid. Check it and try again.",
+      "codeUnavailable": "The code could not be checked right now. Try again in a moment."
     },
     "provider": {
       "description": "This change needs you to confirm it is you with your sign-in provider.",
       "confirm": "Confirm with {name}",
       "none": "No sign-in provider is available to confirm it is you. Ask your administrator."
+    },
+    "useCode": "Use a code instead",
+    "usePassword": "Use your password instead",
+    "useProvider": "Use your sign-in provider instead",
+    "code": {
+      "description": "This change needs a code from your authenticator app.",
+      "label": "Authentication code",
+      "slot": "Digit {position} of {length}",
+      "required": "Enter the six-digit code."
     }
   },
   "setup": {

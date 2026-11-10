@@ -41,7 +41,20 @@ The prompt appears when you:
 
 A few workspace actions ask too, such as deleting a workspace or transferring its ownership.
 
-If your account has no password, the dialog says "This change needs you to confirm it is you with your sign-in provider." Choose **Confirm with** and the provider's name. You come back to this page. Repeat the action there. If no provider is available, the dialog says "No sign-in provider is available to confirm it is you. Ask your administrator."
+If your account has no password, the dialog says "This change needs you to confirm it is you with your sign-in provider." Choose **Confirm with** and the provider's name. You come back to this page. Repeat the action there. If no provider is available, the dialog says "No sign-in provider is available to confirm it is you. Ask your administrator." If two-factor authentication is on for your account, you can choose **Use a code instead** here too and enter a code from your authenticator app. To return to your provider, choose **Use your sign-in provider instead**.
+
+### Use a code instead of your password
+
+If two-factor authentication is on for your account, the dialog also offers **Use a code instead**. Use it when you do not have your password at hand.
+
+1. Choose **Use a code instead**. The dialog says "This change needs a code from your authenticator app."
+2. Enter the six-digit **Authentication code** from your authenticator app. SlugBase checks it as soon as you enter the sixth digit.
+
+**Result:** the change goes ahead, and SlugBase remembers the confirmation for ten minutes, as it does after a password.
+
+A wrong, expired or already used code shows "That code is not valid. Check it and try again." and the field is emptied. After too many wrong tries SlugBase asks you to wait and says for how long. A backup code does not work here. To go back, choose **Use your password instead**.
+
+Without two-factor authentication the dialog offers no code.
 
 ## Change your password
 

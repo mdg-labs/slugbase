@@ -2747,12 +2747,23 @@
         "unknown": "Zu viele Versuche. Versuche es später noch einmal.",
         "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
         "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
-      }
+      },
+      "invalidCode": "Dieser Code ist nicht gültig. Prüfe ihn und versuche es noch einmal.",
+      "codeUnavailable": "Der Code konnte gerade nicht geprüft werden. Versuche es gleich noch einmal."
     },
     "provider": {
       "description": "Für diese Änderung musst du über deinen Anmeldeanbieter bestätigen, dass du es bist.",
       "confirm": "Mit {name} bestätigen",
       "none": "Es ist kein Anmeldeanbieter verfügbar, um deine Identität zu bestätigen. Wende dich an deine Administration."
+    },
+    "useCode": "Stattdessen einen Code verwenden",
+    "usePassword": "Stattdessen dein Passwort verwenden",
+    "useProvider": "Stattdessen deinen Anmeldeanbieter verwenden",
+    "code": {
+      "description": "Für diese Änderung brauchen wir einen Code aus deiner Authenticator-App.",
+      "label": "Authentifizierungscode",
+      "slot": "Ziffer {position} von {length}",
+      "required": "Gib den sechsstelligen Code ein."
     }
   },
   "setup": {
