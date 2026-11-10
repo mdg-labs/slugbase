@@ -47,7 +47,7 @@ async function seedLibrary(): Promise<void> {
         ] AS w
       )
       INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, open_count, last_opened_at, created_at, plan_archived_at)
-      SELECT gen_random_uuid(), ${workspaceId}, CASE WHEN n % 10 = 0 THEN ${otherId}::uuid ELSE ${accountId}::uuid END,
+      SELECT md5('bookmark ' || n)::uuid, ${workspaceId}, CASE WHEN n % 10 = 0 THEN ${otherId}::uuid ELSE ${accountId}::uuid END,
              'https://' || h.host || '/p/' || n, 'https://' || h.host || '/p/' || n, h.host,
              initcap(words.w[1 + n % cardinality(words.w)]) || ' ' || words.w[1 + (n / 7) % cardinality(words.w)] || ' ' || words.w[1 + (n / 11) % cardinality(words.w)] || CASE WHEN n % 3 = 0 THEN ' ' || words.w[1 + (n / 13) % cardinality(words.w)] ELSE '' END || CASE WHEN n % 4 = 0 THEN ' ' || words.w[1 + (n / 17) % cardinality(words.w)] ELSE '' END,
              CASE WHEN n % 2 = 0 THEN 'Notes on ' || words.w[1 + (n / 3) % cardinality(words.w)] || ' and ' || words.w[1 + (n / 19) % cardinality(words.w)] || ' for the team' END,
@@ -96,7 +96,7 @@ beforeAll(async () => {
     db,
     (tx) => tx`
       INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug)
-      SELECT gen_random_uuid(), ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${accountId},
+      SELECT md5('small bookmark ' || n)::uuid, ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${accountId},
              'https://github.com/s' || n, 'https://github.com/s' || n, 'github.com', 'GitHub docs ' || n, 'mail-' || n
       FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`,
   );
@@ -619,9 +619,9 @@ describe("the page of the list with a text in the default scope, when bookmarks 
       db,
       (tx) => tx`
         INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
-        SELECT gen_random_uuid(), ${workspaceId}, id, ${accountId}, ${otherId}
-        FROM bookmarks
-        WHERE workspace_id = ${workspaceId} AND owner_id = ${otherId} AND plan_archived_at IS NULL AND host LIKE 'www.%' AND abs(hashtext(id::text)) % ${SHARED_EVERY} = 0`,
+        SELECT md5('share ' || id::text)::uuid, ${workspaceId}, id, ${accountId}, ${otherId}
+        FROM (SELECT id, row_number() OVER (ORDER BY url COLLATE "C") AS n FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${otherId} AND plan_archived_at IS NULL AND host LIKE 'www.%') AS candidates
+        WHERE n % ${SHARED_EVERY} = 0`,
     );
   }, HOOK_TIMEOUT_MS);
 
@@ -696,7 +696,15 @@ describe("the page of the list with a text in the default scope, when bookmarks 
 //  - The plan of the match function is not seen in blocks on this fixture: a connection plans the statements of a PL/pgSQL function with the values of the call for its first five runs and from the sixth keeps one
 //    plan that does not know them, and for the two-letter `do` on the large instance that plan reads every slug of the workspace through `bookmarks_slug_idx` (3 745 blocks against 617 and about 5 ms against 1),
 //    where on this fixture it reads what the plan made for the text reads. What is held for it is the setting itself, `plan_cache_mode = force_custom_plan` in the function's configuration.
-// The bounds are 5 % and 16 blocks above the most each case touched in 3 runs of this file on PostgreSQL 18, rounded up to ten.
+// The data is the same on every run: no row is chosen by its id and no id is drawn at random. The bookmarks, tags and shares have ids that are the md5 of a name and a number (random-looking, as the ids of the
+// seed are, but fixed), and a word, the `Do` prefix, the shared bookmarks and the links to the tags go to the rows by their place in the order of `url` (`COLLATE "C"`, so the order does not depend on the database's
+// locale), which is unique for a workspace: the word of a third of the titles goes to the bookmarks whose place is a multiple of three, and so on. Choosing by `abs(hashtext(id::text)) % N` with ids drawn at random
+// (UUIDs) gave each run other matches in other places of the heap and the indexes, and bounds taken from three runs failed on a draw (2 284 blocks for `do` against 2 270). What still differs from run to run is
+// the sample `ANALYZE` draws and what else commits on the cluster (see `support/plan-work.ts`; the cause is inferred, not established): on PostgreSQL 18 one run of ten read 56 to 147 blocks more for every page
+// (up to 2.7 %) and `reading` and `database indexes` 1 004 and 136 blocks fewer, and on PostgreSQL 17 no run differed.
+// The bounds are 5 % and 16 blocks above the most each case touched in 20 runs of this file, 10 on PostgreSQL 18 (the development server, beside other work) and 10 on PostgreSQL 17 (a stock server, as CI's matrix has it),
+// rounded up to ten. Per case (page, first and deep; tags) the runs touched: `caching` 19 475 to 19 676, `accessibility` 19 535 to 19 627, `release notes` 9 771 to 9 893, `database indexes` 10 120 to 10 310, `docs` 8 497 to
+// 8 725, `reading` 4 348 to 5 353, `do` 2 146 to 2 205 (PostgreSQL 17 alone: the same number in all 10 runs for each case), and the tags 176 to 198 over the cases, the same number in every run.
 describe("the page and the tags of the list for the texts of the performance run, on a workspace of 50 000 bookmarks", () => {
   const TAG_COUNT = 30;
   const TEXTS = ["caching", "accessibility", "release notes", "database indexes", "docs", "reading", "do"] as const;
@@ -705,15 +713,15 @@ describe("the page and the tags of the list for the texts of the performance run
 
   /** The most buffers the page statement of a text, its first page or its deep one, may touch. */
   const PAGE_BLOCKS: Readonly<Record<(typeof TEXTS)[number], number>> = {
-    caching: 20_220,
-    accessibility: 21_370,
+    caching: 20_680,
+    accessibility: 20_630,
     "release notes": 10_410,
-    "database indexes": 11_330,
-    docs: 8960,
-    reading: 6430,
-    do: 2270,
+    "database indexes": 10_850,
+    docs: 9180,
+    reading: 5640,
+    do: 2340,
   };
-  /** The most buffers the tags statement of the 48 bookmarks of a page may touch: 172 to 197 on the fixture, against 3 855 to 4 402 for the join the planner drives from the tags. */
+  /** The most buffers the tags statement of the 48 bookmarks of a page may touch: 176 to 198 on the fixture, against 3 855 to 4 402 for the join the planner drives from the tags. */
   const TAGS_BLOCKS = 230;
 
   beforeAll(async () => {
@@ -721,24 +729,28 @@ describe("the page and the tags of the list for the texts of the performance run
     for (const [word, modulus, remainder] of [["caching", 10, 0], ["accessibility", 10, 1], ["database indexes", 20, 2], ["reading", 3, 0]] as const) {
       await asSystem(
         db,
-        (tx) => tx`UPDATE bookmarks SET title = title || ${` ${word}`} WHERE workspace_id = ${workspaceId} AND abs(hashtext(id::text)) % ${modulus} = ${remainder}`,
+        (tx) => tx`
+          UPDATE bookmarks SET title = title || ${` ${word}`}
+          WHERE id IN (SELECT id FROM (SELECT id, row_number() OVER (ORDER BY url COLLATE "C") AS n FROM bookmarks WHERE workspace_id = ${workspaceId}) AS ordered WHERE n % ${modulus} = ${remainder})`,
       );
     }
     // A hundred or so of the caller's titles start with `Do`, as the seed's `do` finds a few score of the bookmarks (those of the generated library that start so belong to the other member).
     await asSystem(
       db,
-      (tx) => tx`UPDATE bookmarks SET title = 'Do ' || title WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId} AND abs(hashtext(id::text)) % 400 = 3`,
+      (tx) => tx`
+        UPDATE bookmarks SET title = 'Do ' || title
+        WHERE id IN (SELECT id FROM (SELECT id, row_number() OVER (ORDER BY url COLLATE "C") AS n FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId}) AS ordered WHERE n % 400 = 3)`,
     );
     // The caller's thirty tags, a link to one of them on each of their bookmarks and a second link on half.
     await asSystem(
       db,
-      (tx) => tx`INSERT INTO tags (id, workspace_id, owner_id, name) SELECT gen_random_uuid(), ${workspaceId}, ${accountId}, 'Tag ' || lpad(n::text, 2, '0') FROM generate_series(1, ${TAG_COUNT}) AS n`,
+      (tx) => tx`INSERT INTO tags (id, workspace_id, owner_id, name) SELECT md5('tag ' || n)::uuid, ${workspaceId}, ${accountId}, 'Tag ' || lpad(n::text, 2, '0') FROM generate_series(1, ${TAG_COUNT}) AS n`,
     );
     await asSystem(
       db,
       (tx) => tx`
-        WITH numbered AS (SELECT id, row_number() OVER (ORDER BY id) AS n FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId}),
-             tagged AS (SELECT id, row_number() OVER (ORDER BY id) AS n FROM tags WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId})
+        WITH numbered AS (SELECT id, row_number() OVER (ORDER BY url COLLATE "C") AS n FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId}),
+             tagged AS (SELECT id, row_number() OVER (ORDER BY name COLLATE "C") AS n FROM tags WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId})
         INSERT INTO bookmark_tags (workspace_id, bookmark_id, tag_id)
         SELECT ${workspaceId}::uuid, b.id, t.id FROM numbered b JOIN tagged t ON t.n = (b.n % ${TAG_COUNT}) + 1
         UNION
@@ -762,7 +774,7 @@ describe("the page and the tags of the list for the texts of the performance run
       db,
       (tx) => tx`
         INSERT INTO tags (id, workspace_id, owner_id, name)
-        SELECT gen_random_uuid(), ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ('00000000-0000-7000-9000-' || lpad(n::text, 12, '0'))::uuid, 'Tag ' || k
+        SELECT md5('small tag ' || n || ' ' || k)::uuid, ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ('00000000-0000-7000-9000-' || lpad(n::text, 12, '0'))::uuid, 'Tag ' || k
         FROM generate_series(1, ${SMALL_WORKSPACES}) AS n CROSS JOIN generate_series(1, 3) AS k`,
     );
     await asSystem(
