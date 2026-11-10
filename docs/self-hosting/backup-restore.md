@@ -89,10 +89,12 @@ The `postgres` service holds the database. Dump it as the database superuser `sl
 
    ```sh
    install -d -m 700 backups
-   (umask 077; docker compose exec -T postgres pg_dump -U slugbase -d slugbase --format=custom > "backups/slugbase-$(date +%F).dump")
+   (umask 077; docker compose exec -T postgres pg_dump -U slugbase -d slugbase --format=custom > backups/slugbase.partial && mv backups/slugbase.partial "backups/slugbase-$(date +%F).dump")
    ```
 
    The directory and the dump are readable by your account only.
+
+   The dump goes to `backups/slugbase.partial` first and gets its dated name only when `pg_dump` has succeeded. A dump that you made earlier the same day stays as it was when this run fails. A failed run leaves the incomplete `backups/slugbase.partial` behind, and the next run replaces it. It is incomplete, so delete it when you find it.
 
    The dump is a consistent snapshot, so SlugBase can keep running while it is made.
 
@@ -206,10 +208,10 @@ The schedule below is a recommendation, not a rule of SlugBase. Adjust it to how
 A crontab line for the daily dump on a `compose.yml` installation that lives in `/opt/slugbase`, which also deletes dumps older than 14 days:
 
 ```text
-17 3 * * * cd /opt/slugbase && (umask 077; docker compose exec -T postgres pg_dump -U slugbase -d slugbase --format=custom > "backups/slugbase-$(date +\%F).dump") && find backups -name 'slugbase-*.dump' -mtime +14 -delete
+17 3 * * * cd /opt/slugbase && (umask 077; docker compose exec -T postgres pg_dump -U slugbase -d slugbase --format=custom > backups/slugbase.partial && mv backups/slugbase.partial "backups/slugbase-$(date +\%F).dump") && find backups -name 'slugbase-*.dump' -mtime +14 -delete
 ```
 
-The crontab line keeps 14 days on the server. Copying the dumps offsite, and keeping the monthly ones there, is yours to add with the tool you use for backups. Check now and then that the job still runs and that the newest file lists its contents, as in step 2 of [Back up the database](#back-up-the-database).
+The crontab line writes the dump to `backups/slugbase.partial` and renames it only when `pg_dump` has succeeded, so a failed run keeps the dump that is already there. It also skips the clean-up, and the incomplete file stays until the next run replaces it. The crontab line keeps 14 days on the server. Copying the dumps offsite, and keeping the monthly ones there, is yours to add with the tool you use for backups. Check now and then that the job still runs and that the newest file lists its contents, as in step 2 of [Back up the database](#back-up-the-database).
 
 ## Audit events and retention
 

@@ -24,10 +24,11 @@
 #   - in the guide's code (between fences, or indented four spaces or more outside them) every line that names pg_dump or
 #     pg_restore, after backslash continuations are joined, is exactly the documented dump, restore, scheduled dump or
 #     listing of a dump, so the tool inside a sh -c, a here-document, docker-compose or a pipe fails; guide_tool_lines in
-#     this file lists the forms. What may differ in them is the file of the redirection (one word, or a quoted text whose
-#     only substitution is $(date +%F); no /dev/ or /proc/), and, in the crontab line, the schedule, the directory of
-#     `cd` (one word) and the number of days of the `find ... -mtime +<days> -delete` clean-up. A tool whose name is not
-#     written out in the code is not found, and prose, tables and headings are not read;
+#     this file lists the forms. What may differ in them is the file the dump is renamed to or the restore reads (one
+#     word, or a quoted text whose only substitution is $(date +%F); no /dev/ or /proc/), and, in the crontab line, the
+#     schedule, the directory of `cd` (one word) and the number of days of the `find ... -mtime +<days> -delete`
+#     clean-up. A tool whose name is not written out in the code is not found, and prose, tables and headings are not
+#     read;
 #   - the guide has that dump and that restore, and `docker compose up -d postgres` and `docker compose up -d` as lines
 #     of their own;
 #   - the wait for the database is the guide's own single pg_isready line, which the script runs;
@@ -63,6 +64,10 @@ GUIDE_DUMP="exec -T postgres pg_dump -U slugbase -d slugbase --format=custom"
 GUIDE_RESTORE="exec -T postgres pg_restore -U slugbase -d slugbase --exit-on-error --single-transaction"
 GUIDE_START="up -d postgres"
 GUIDE_APP_START="up -d"
+# The file a dump is written to, and renamed to its dated name only when pg_dump succeeded, so a failed run keeps the
+# dump of the same day that is already there. The clean-up below does not match it.
+GUIDE_PARTIAL_NAME="slugbase.partial"
+GUIDE_PARTIAL="backups/${GUIDE_PARTIAL_NAME}"
 # The clean-up of the scheduled dump in the guide, up to the number of days.
 GUIDE_FIND=" && find backups -name 'slugbase-*.dump' -mtime +"
 GUIDE_WAIT_PREFIX="exec -T postgres timeout 120 sh -c '"
@@ -155,19 +160,19 @@ guide_has() {
 # `sh -c` (on one line or several), a here-document, `docker-compose`, a pipe or a changed spelling of `docker compose`
 # fails. A tool whose name is not written out in the code (assembled by the shell, say) is not found. The forms
 # (GUIDE_DUMP and GUIDE_RESTORE are the commands of the steps):
-#   - the dump: `(umask 077; docker compose <GUIDE_DUMP> > <file>)`;
+#   - the dump: `(umask 077; docker compose <GUIDE_DUMP> > <GUIDE_PARTIAL> && mv <GUIDE_PARTIAL> <file>)`;
 #   - the scheduled dump: five cron fields, `cd <directory> && `, the dump as above, and ` && find backups -name
 #     'slugbase-*.dump' -mtime +<days> -delete` (GUIDE_FIND) as the whole clean-up: the schedule, the directory and the
 #     number of days are free;
 #   - the restore: `docker compose <GUIDE_RESTORE> < <file>`;
 #   - the listing of a dump: `docker compose exec -T postgres pg_restore --list < <file>`, optionally with ` | head`.
 # A file is one word, or one double-quoted text whose only substitution is $(date +%F) (or $(date +\%F) in a crontab);
-# it has no $ or backtick outside that, and no /dev/ or /proc/ in it. The guide must hold the dump and the restore of
-# its steps. The check is made by the awk named in GUIDE_AWK (awk by default).
+# it has no $ or backtick outside that, and no /dev/ or /proc/ in it. The file the dump is written to is GUIDE_PARTIAL
+# itself, in both places. The guide must hold the dump and the restore of its steps. The check is made by the awk named in GUIDE_AWK (awk by default).
 # shellcheck disable=SC2016
 guide_tool_lines() {
   "${GUIDE_AWK:-awk}" -v dump="docker compose $GUIDE_DUMP" -v restore="docker compose $GUIDE_RESTORE" \
-    -v list="docker compose exec -T postgres pg_restore --list" -v find_prefix="$GUIDE_FIND" '
+    -v list="docker compose exec -T postgres pg_restore --list" -v find_prefix="$GUIDE_FIND" -v partial="$GUIDE_PARTIAL" '
     function trim(text) {
       sub(/^[ \t]+/, "", text)
       sub(/[ \t]+$/, "", text)
@@ -197,9 +202,10 @@ guide_tool_lines() {
       }
       return text !~ /[$`]/
     }
-    # The dump after its command: ` > <file>)`, and for the scheduled dump the clean-up after it.
-    function dump_rest_ok(rest, scheduled) {
-      if (!split_file(rest, " > ") || !file_ok(file) || substr(after, 1, 1) != ")") {
+    # The dump after its command: ` > <partial> && mv <partial> <file>)`, and for the scheduled dump the clean-up after it.
+    function dump_rest_ok(rest, scheduled,    lead) {
+      lead = " > " partial " && mv " partial
+      if (index(rest, lead) != 1 || !split_file(substr(rest, length(lead) + 1), " ") || !file_ok(file) || substr(after, 1, 1) != ")") {
         return 0
       }
       after = substr(after, 2)
@@ -540,7 +546,7 @@ take_dump() {
   (
     umask 077
     # shellcheck disable=SC2086
-    compose $GUIDE_DUMP >"$dump"
+    compose $GUIDE_DUMP >"$work/$GUIDE_PARTIAL" && mv "$work/$GUIDE_PARTIAL" "$dump"
   ) || fail "the dump of the guide failed"
   [[ -s "$dump" ]] || fail "the dump of the guide is empty"
   # The listing is captured whole and then matched. Piping it into `grep -q` would close the pipe at the first match,

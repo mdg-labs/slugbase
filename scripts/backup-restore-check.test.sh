@@ -165,11 +165,11 @@ run require_guide_commands "$(mutated_matching cron-no-format.md "$CRON_LINE" " 
 expect_failed "a crontab dump without --format=custom is refused"
 run require_guide_commands "$(mutated_matching cron-no-umask.md "$CRON_LINE" "(umask 077; " "(")"
 expect_failed "a crontab dump without the umask is refused"
-run require_guide_commands "$(mutated_matching cron-null.md "$CRON_LINE" "> \"backups/slugbase-\$(date +\\%F).dump\"" "> /dev/null")"
+run require_guide_commands "$(mutated_matching cron-null.md "$CRON_LINE" "\"backups/slugbase-\$(date +\\%F).dump\"" "/dev/null")"
 expect_failed "a crontab dump to /dev/null is refused"
 run require_guide_commands "$(mutated_matching cron-other-schedule.md "$CRON_LINE" "17 3 * * *" "*/5 1 * * 1-5")"
 expect_ok "a crontab dump on another schedule is the same dump"
-run require_guide_commands "$(mutated_command dump-null.md "$DUMP_TOOL" "> \"backups/slugbase-\$(date +%F).dump\"" "> /dev/null")"
+run require_guide_commands "$(mutated_command dump-null.md "$DUMP_TOOL" "\"backups/slugbase-\$(date +%F).dump\"" "/dev/null")"
 expect_failed "a dump to /dev/null is refused"
 run require_guide_commands "$(mutated_command dump-no-umask.md "$DUMP_TOOL" "(umask 077; " "(")"
 expect_failed "a dump without the umask is refused"
@@ -238,14 +238,37 @@ run require_guide_commands "$(mutated_matching cron-cd.md "$CRON_LINE" "cd /opt/
 expect_failed "a crontab directory that is not one word is refused"
 run require_guide_commands "$(mutated_matching cron-cd-other.md "$CRON_LINE" "cd /opt/slugbase" "cd /srv/slugbase")"
 expect_ok "a crontab in another directory is the same dump"
-run require_guide_commands "$(mutated_matching cron-stdout.md "$CRON_LINE" "> \"backups/slugbase-\$(date +\\%F).dump\"" "> /dev/stdout")"
+run require_guide_commands "$(mutated_matching cron-stdout.md "$CRON_LINE" "\"backups/slugbase-\$(date +\\%F).dump\"" "/dev/stdout")"
 expect_failed "a crontab dump to /dev/stdout is refused"
-run require_guide_commands "$(mutated_command dump-proc.md "$DUMP_TOOL" "> \"backups/slugbase-\$(date +%F).dump\"" "> /proc/self/fd/1")"
+run require_guide_commands "$(mutated_command dump-proc.md "$DUMP_TOOL" "\"backups/slugbase-\$(date +%F).dump\"" "/proc/self/fd/1")"
 expect_failed "a dump to a file under /proc is refused"
 run require_guide_commands "$(mutated_command dump-substitution.md "$DUMP_TOOL" "\$(date +%F)" "\$(rm -rf x)")"
 expect_failed "a dump file with another substitution is refused"
 run require_guide_commands "$(mutated_command dump-backtick.md "$DUMP_TOOL" "\$(date +%F)" "\`id\`")"
 expect_failed "a dump file with a backtick is refused"
+
+# The dump is written to a partial file and renamed only when pg_dump succeeded: the old form, which truncates the dated
+# file before pg_dump starts, and every variant of the new one are refused.
+PARTIAL_REDIRECT="> backups/slugbase.partial && mv backups/slugbase.partial "
+run require_guide_commands "$(mutated_command dump-direct.md "$DUMP_TOOL" "$PARTIAL_REDIRECT" "> ")"
+expect_failed "a dump that is redirected straight to the dated file is refused"
+expect_output "the refusal names the dump" "pg_dump"
+run require_guide_commands "$(mutated_matching cron-direct.md "$CRON_LINE" "$PARTIAL_REDIRECT" "> ")"
+expect_failed "a crontab dump that is redirected straight to the dated file is refused"
+run require_guide_commands "$(mutated_command dump-other-partial.md "$DUMP_TOOL" "> backups/slugbase.partial" "> backups/other.partial")"
+expect_failed "a dump written to another file than the partial one is refused"
+run require_guide_commands "$(mutated_command dump-mv-other.md "$DUMP_TOOL" "&& mv backups/slugbase.partial" "&& mv backups/other.partial")"
+expect_failed "a dump that renames another file than the one it wrote is refused"
+run require_guide_commands "$(mutated_command dump-cp.md "$DUMP_TOOL" "&& mv " "&& cp ")"
+expect_failed "a dump that copies instead of renaming is refused"
+run require_guide_commands "$(mutated_command dump-mv-always.md "$DUMP_TOOL" "&& mv " "; mv ")"
+expect_failed "a dump that renames the file even when pg_dump failed is refused"
+run require_guide_commands "$(mutated_matching cron-mv-always.md "$CRON_LINE" "&& mv " "; mv ")"
+expect_failed "a crontab dump that renames the file even when pg_dump failed is refused"
+run require_guide_commands "$(mutated_command dump-mv-extra.md "$DUMP_TOOL" "&& mv " "&& chmod 644 backups/slugbase.partial && mv ")"
+expect_failed "a dump with another command between the dump and the rename is refused"
+run require_guide_commands "$(mutated_command dump-renamed.md "$DUMP_TOOL" "\"backups/slugbase-\$(date +%F).dump\"" "backups/latest.dump")"
+expect_ok "a dump that is renamed to another file is the same dump"
 
 run guide_wait_script "$(mutated_guide "pg_isready" "" no-wait.md)"
 expect_failed "a guide without a wait for the database is refused"
@@ -488,6 +511,35 @@ compose() {
 run take_dump
 expect_failed "a listing that fails fails the check even when it printed the bookmarks"
 expect_output "the failure says the listing failed" "listing the dump failed"
+
+# A dump that fails keeps the dump of the same day that is already there, and the dated file is only made by a rename.
+# shellcheck disable=SC2317 # called by take_dump
+compose() {
+  case "$*" in
+    "$GUIDE_DUMP") printf 'PGDMP, cut off'; return 3 ;;
+    *) return 1 ;;
+  esac
+}
+work="$tmp/failed-dump-work"
+mkdir -p "$work/backups"
+printf 'dump made earlier' >"$work/backups/slugbase.dump"
+run take_dump
+expect_failed "a dump that fails fails the check"
+expect_output "the failure says the dump failed" "the dump of the guide failed"
+if [[ "$(cat "$work/backups/slugbase.dump")" == "dump made earlier" ]]; then pass "a failed dump leaves the dump of the same day as it was"; else fail_test "a failed dump replaced the earlier dump"; fi
+if [[ "$(cat "$work/$GUIDE_PARTIAL")" == "PGDMP, cut off" ]]; then pass "a failed dump stays in the partial file"; else fail_test "the partial file after a failed dump"; fi
+
+# shellcheck disable=SC2317 # called by take_dump
+compose() {
+  case "$*" in
+    "$GUIDE_DUMP") printf 'PGDMP\n' ;;
+    "exec -T postgres pg_restore --list") printf '1; 0 0 TABLE DATA public bookmarks slugbase\n' ;;
+    *) return 1 ;;
+  esac
+}
+run take_dump
+expect_ok "a dump that succeeds replaces the earlier dump"
+if [[ "$(cat "$work/backups/slugbase.dump")" == "PGDMP" && ! -e "$work/$GUIDE_PARTIAL" ]]; then pass "the dated file holds the new dump and the partial file is gone"; else fail_test "the files after a dump that succeeded"; fi
 
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2
