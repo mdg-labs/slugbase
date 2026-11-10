@@ -276,9 +276,9 @@ if [[ -f "$wf" ]]; then
     fail "unpinned action: $unpinned"
   fi
   scopes="$(grep -E '^[[:space:]]+[a-z-]+: (read|write|none)$' <<<"$code_lines" | sed -E 's/^[[:space:]]+//' | sort -u)"
-  if ! grep -vxE 'contents: (read|write)|packages: (read|write)' <<<"$scopes" > /dev/null \
-    && grep -qx 'contents: write' <<<"$scopes" && grep -qx 'packages: write' <<<"$scopes"; then
-    pass "release.yml asks for contents and packages permissions only"
+  if ! grep -vxE 'contents: (read|write)|packages: (read|write)|id-token: write' <<<"$scopes" > /dev/null \
+    && grep -qx 'contents: write' <<<"$scopes" && grep -qx 'packages: write' <<<"$scopes" && grep -qx 'id-token: write' <<<"$scopes"; then
+    pass "release.yml asks for contents, packages and id-token permissions only"
   else
     fail "release.yml permissions: $(tr '\n' ';' <<<"$scopes")"
   fi
@@ -287,17 +287,21 @@ if [[ -f "$wf" ]]; then
   else
     pass "release.yml never names :latest"
   fi
-  if grep -qE 'cosign|id-token' <<<"$code_lines"; then
-    fail "release.yml signs, which is Phase 6"
+  # The OIDC token is for keyless signing: only the job that pushes the image holds
+  # it, and the plan job, which reads only, does not.
+  id_token_jobs="$(awk '/^jobs:/ { inside = 1; next } inside && /^  [a-z-]+:$/ { job = $1 } inside && /^      id-token: write$/ { print job }' <<<"$code_lines")"
+  if [[ "$id_token_jobs" == "build:" ]]; then
+    pass "release.yml grants id-token: write to the build job only"
   else
-    pass "release.yml has no signing step and no OIDC token"
+    fail "release.yml grants id-token: write to: ${id_token_jobs:-no job}"
   fi
 else
   fail "release.yml does not exist"
 fi
 
-# The tag step of the same workflow has its own test.
+# The tag step and the signature check of the same workflow have their own tests.
 bash "$here/release-tag.test.sh" || failures=$((failures + 1))
+bash "$here/verify-image.test.sh" || failures=$((failures + 1))
 
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2

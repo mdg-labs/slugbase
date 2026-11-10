@@ -86,6 +86,8 @@ The server port is published on `127.0.0.1` only, so the reverse proxy on the sa
 
 Do not rely on the default of the file, `ghcr.io/mdg-labs/slugbase:latest`. The release workflow pushes version tags only, so that tag does not exist yet.
 
+The release workflow signs every release it publishes, except `1.0.0-rc.1`, which was pushed before signing was added and has no signature. A version whose signing step failed stays unsigned and is abandoned; do not run it, and use the next version. To check an image before you run it, see [Verify the image](upgrade.md#verify-the-image).
+
 To run an image you built yourself, set `SLUGBASE_IMAGE` to its tag, or run `docker compose up -d --build`, which builds the image from the checkout.
 
 ## First-run setup
