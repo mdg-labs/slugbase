@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { Page } from "@playwright/test";
-import { settleAnimations } from "./axe.ts";
+import { settleAnimations, settleLayout, type LayoutSettle } from "./axe.ts";
 
 interface FakeAnimation {
   readonly playState: AnimationPlayState;
@@ -93,5 +93,98 @@ void describe("settling the animations before a scan", () => {
       settleAnimations(pageWith([animation("paused", 1, NEVER), animation("idle", 1, NEVER)])),
       "a paused or idle animation",
     );
+  });
+});
+
+interface LayoutProbe {
+  readonly page: Page;
+  /** How many frames have passed since the page was made. */
+  frames: () => number;
+}
+
+/**
+ * A page whose evaluate runs the callback here with the argument it is given, against a document with one target
+ * whose box is the one `boxAt` gives for the number of frames that have passed, and fonts that are ready once
+ * `fontsReady` settles. It holds no animation, so `settleAnimations` has nothing to wait for.
+ */
+function layoutPage(boxAt: (frames: number) => readonly [number, number, number, number], fontsReady: Promise<void> = Promise.resolve()): LayoutProbe {
+  let frames = 0;
+  const target = {
+    getBoundingClientRect: () => {
+      const [left, top, width, height] = boxAt(frames);
+      return { left, top, width, height };
+    },
+  };
+  Object.defineProperty(globalThis, "document", {
+    value: { getAnimations: () => [], querySelectorAll: () => [target], fonts: { ready: fontsReady } },
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, "requestAnimationFrame", {
+    value: (callback: () => void) =>
+      setTimeout(() => {
+        frames += 1;
+        callback();
+      }, 1),
+    configurable: true,
+  });
+  return {
+    page: { evaluate: (callback: (arg?: LayoutSettle) => Promise<void>, arg?: LayoutSettle) => callback(arg) } as unknown as Page,
+    frames: () => frames,
+  };
+}
+
+const SETTLE: LayoutSettle = { selector: "a", stableFrames: 3, timeoutMs: 1000 };
+
+// The nav link of the settings pages is 206 by 30 once the page has settled; the box that a page still making room for
+// its sidebar gives for the frames before is another one.
+const MOVING_UNTIL = 6;
+const settling = (frames: number): readonly [number, number, number, number] =>
+  frames >= MOVING_UNTIL ? [280, 100, 206, 30] : [280 - 8 * (MOVING_UNTIL - frames), 100, 206, 30];
+
+void describe("settling the layout before a scan", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, "document");
+    Reflect.deleteProperty(globalThis, "requestAnimationFrame");
+  });
+
+  void it("is not done by settling the animations: there are none, and the boxes are still moving", async () => {
+    const probe = layoutPage(settling);
+    await within(settleAnimations(probe.page), "the animations");
+    assert.ok(probe.frames() < MOVING_UNTIL, `the animations settled after ${String(probe.frames())} frames, before the boxes stopped at ${String(MOVING_UNTIL)}`);
+  });
+
+  void it("waits until the boxes of the targets have stopped moving", async () => {
+    const probe = layoutPage(settling);
+    await within(settleLayout(probe.page, SETTLE), "a layout that settles");
+    assert.ok(probe.frames() >= MOVING_UNTIL + SETTLE.stableFrames, `returned after ${String(probe.frames())} frames`);
+  });
+
+  void it("starts counting again when the boxes move after a still frame", async () => {
+    // Still for the first two frames, one short of the stable run, then moving again until the seventh.
+    const probe = layoutPage((frames) => [0, 0, frames <= 2 ? 100 : frames < 7 ? 100 + frames : 206, 30]);
+    await within(settleLayout(probe.page, SETTLE), "a layout that settles twice");
+    assert.ok(probe.frames() >= 7 + SETTLE.stableFrames, `returned after ${String(probe.frames())} frames`);
+  });
+
+  void it("returns after the stable frames when the layout has not moved", async () => {
+    const probe = layoutPage(() => [0, 0, 206, 30]);
+    await within(settleLayout(probe.page, SETTLE), "a layout that is still");
+    assert.equal(probe.frames(), SETTLE.stableFrames);
+  });
+
+  void it("waits for the fonts", async () => {
+    let loaded = false;
+    const fonts = new Promise<void>((resolve) => setTimeout(resolve, 20)).then(() => {
+      loaded = true;
+    });
+    const probe = layoutPage(() => [0, 0, 206, 30], fonts);
+    await within(settleLayout(probe.page, SETTLE), "the fonts");
+    assert.equal(loaded, true);
+  });
+
+  void it("gives up on a layout that never stops moving and scans what it finds", async () => {
+    const probe = layoutPage((frames) => [frames, 0, 206, 30]);
+    await within(settleLayout(probe.page, { ...SETTLE, timeoutMs: 40 }), "a layout that never settles");
+    assert.ok(probe.frames() > 0);
   });
 });

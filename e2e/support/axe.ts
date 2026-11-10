@@ -82,17 +82,69 @@ export async function settleAnimations(page: Page): Promise<void> {
   });
 }
 
+/** What `settleLayout` reads: the elements axe measures as targets, and how long it waits for them to stop moving. */
+export interface LayoutSettle {
+  /** Matches the elements whose boxes axe measures (links, buttons, fields and anything that takes focus). */
+  readonly selector: string;
+  /** How many frames in a row the boxes must be the same before the layout counts as settled. */
+  readonly stableFrames: number;
+  /** The longest the wait lasts, in milliseconds; the scan then runs on the layout it finds and reports it. */
+  readonly timeoutMs: number;
+}
+
+export const LAYOUT_SETTLE: LayoutSettle = {
+  selector: 'a[href], button, input, select, textarea, summary, [tabindex], [role="button"], [role="link"], [role="menuitem"], [role="tab"]',
+  stableFrames: 3,
+  timeoutMs: 2000,
+};
+
 /**
- * Runs axe with the WCAG 2.2 AA rules on the page as it is now and returns one
- * line per violating element that the allowlist does not name.
+ * Waits until the fonts have loaded and the boxes of the page's targets have been the same for a few frames in a
+ * row. `target-size` reads each target's box and the boxes of the targets around it once, when the scan reaches
+ * the rule, so a page whose boxes are still moving (a sidebar that is making room, content that arrives and pushes
+ * the rest down, text that swaps to its web font) is judged on a frame that no visitor rests on. An animation that
+ * `settleAnimations` can see is not read again here; a layout that moves for a script's reasons, which no animation
+ * announces, is. The wait is bounded: a page that never stops moving is scanned as it is after `timeoutMs`.
+ */
+export async function settleLayout(page: Page, settle: LayoutSettle = LAYOUT_SETTLE): Promise<void> {
+  await page.evaluate(async ({ selector, stableFrames, timeoutMs }) => {
+    const frame = (): Promise<void> =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    const boxes = (): string =>
+      Array.from(document.querySelectorAll(selector), (element) => {
+        const { left, top, width, height } = element.getBoundingClientRect();
+        return [left, top, width, height].map((value) => Math.round(value * 10)).join(",");
+      }).join(";");
+    await document.fonts.ready;
+    const deadline = performance.now() + timeoutMs;
+    let previous = boxes();
+    let same = 0;
+    while (same < stableFrames && performance.now() < deadline) {
+      await frame();
+      const current = boxes();
+      same = current === previous ? same + 1 : 0;
+      previous = current;
+    }
+  }, settle);
+}
+
+/**
+ * Runs axe with the WCAG 2.2 AA rules on the page once its animations have ended and its layout has settled, and
+ * returns one line per violating element that the allowlist does not name, with the reasons axe gives for it (the
+ * size it measured, the targets that crowd it), so that a violation names its own cause.
  */
 export async function findViolations(page: Page, allowlist: readonly AllowlistEntry[]): Promise<string[]> {
   await settleAnimations(page);
+  await settleLayout(page);
   const results = await new AxeBuilder({ page }).withTags([...WCAG_22_AA_TAGS]).analyze();
   return results.violations.flatMap((violation) =>
     violation.nodes
-      .map((node) => selectorOf(node.target))
-      .filter((target) => !allowlist.some((entry) => entry.rule === violation.id && entry.target === target))
-      .map((target) => `${violation.id} (${violation.impact ?? "unknown impact"}): ${violation.help} at ${target}`),
+      .map((node) => ({ target: selectorOf(node.target), why: [...node.any, ...node.all, ...node.none].map((check) => check.message) }))
+      .filter(({ target }) => !allowlist.some((entry) => entry.rule === violation.id && entry.target === target))
+      .map(({ target, why }) => `${violation.id} (${violation.impact ?? "unknown impact"}): ${violation.help} at ${target}${why.length > 0 ? ` [${why.join("; ")}]` : ""}`),
   );
 }
