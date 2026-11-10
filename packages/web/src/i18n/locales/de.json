@@ -1843,7 +1843,7 @@
           "submit": "Ausschalten",
           "confirmTitle": "Zwei-Faktor-Authentifizierung ausschalten?",
           "confirmDescription": "Dein Konto ist dann nur noch durch das Passwort geschützt, und deine Backup-Codes funktionieren nicht mehr.",
-          "confirmDescriptionNoPassword": "Deine Backup-Codes und die Codes aus deiner Authenticator-App funktionieren dann nicht mehr.",
+          "confirmDescriptionNoPassword": "Deine Backup-Codes und die Codes aus deiner Authenticator-App funktionieren dann nicht mehr. Du meldest dich über deinen Anmeldeanbieter an.",
           "gained": "Dieses Konto hat jetzt ein Passwort. Lade die Seite neu und schalte die Zwei-Faktor-Authentifizierung dann mit dem Passwort aus.",
           "confirm": "Ausschalten",
           "done": "Die Zwei-Faktor-Authentifizierung ist aus"

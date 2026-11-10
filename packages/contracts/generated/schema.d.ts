@@ -11080,7 +11080,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The secret, the activation time and every backup code are deleted and the account signs in with its password alone; the response carries the Set-Cookie header of the session's new token */
+            /** @description The secret, the activation time and every backup code are deleted and the account signs in with its password alone, or through its provider when it has no password; the response carries the Set-Cookie header of the session's new token */
             204: {
                 headers: {
                     [name: string]: unknown;

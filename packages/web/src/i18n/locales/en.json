@@ -1843,7 +1843,7 @@
           "submit": "Turn off",
           "confirmTitle": "Turn off two-factor authentication?",
           "confirmDescription": "Your account will be protected by its password alone, and your backup codes will stop working.",
-          "confirmDescriptionNoPassword": "Your backup codes and the codes from your authenticator app will stop working.",
+          "confirmDescriptionNoPassword": "Your backup codes and the codes from your authenticator app will stop working. You will sign in through your sign-in provider.",
           "gained": "This account now has a password. Reload the page, then turn off two-factor authentication with it.",
           "confirm": "Turn off",
           "done": "Two-factor authentication is off"
