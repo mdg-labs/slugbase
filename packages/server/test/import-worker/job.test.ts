@@ -64,6 +64,25 @@ describe("an import job of a JSON file", () => {
   });
 });
 
+describe("an import job of a JSON file that throws", () => {
+  it("answers as a rejected promise and never as a throw, which the worker thread turns into its failure reply", async () => {
+    const job: ImportJob = {
+      kind: "json",
+      get bytes(): Uint8Array {
+        throw new Error("the bytes cannot be read");
+      },
+      contentType: "application/json",
+      digest: false,
+    };
+
+    let pending: Promise<unknown> | undefined;
+    expect(() => {
+      pending = runImportJob(job);
+    }).not.toThrow();
+    await expect(pending).rejects.toThrow("the bytes cannot be read");
+  });
+});
+
 describe("an import job of an upload", () => {
   it("reads the file part with the reader of browser bookmark files and prepares the bookmarks", async () => {
     const outcome = await runImportJob(await upload([["file", file(LINKS)]]));

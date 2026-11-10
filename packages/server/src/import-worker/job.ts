@@ -123,6 +123,6 @@ async function netscapeJob(job: ImportJob): Promise<ImportJobOutcome> {
 }
 
 /** Does the work of an import job. It reads nothing but the bytes it is given and writes nothing. */
-export function runImportJob(job: ImportJob): Promise<ImportJobOutcome> {
-  return job.kind === "json" ? Promise.resolve(jsonJob(job)) : netscapeJob(job);
+export async function runImportJob(job: ImportJob): Promise<ImportJobOutcome> {
+  return job.kind === "json" ? jsonJob(job) : await netscapeJob(job);
 }
