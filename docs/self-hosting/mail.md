@@ -22,9 +22,11 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_SECURITY=starttls
 SMTP_USER=<your SMTP user name>
-SMTP_PASS=<your SMTP password>
+SMTP_PASS='<your SMTP password>'
 SMTP_FROM=SlugBase <slugbase@example.com>
 ```
+
+Put the password in single quotes, as shown. Compose replaces a `$` and the name after it in a value without quotes, so a password that holds one reaches SlugBase changed and the relay refuses the login. Single quotes keep the value as it is. If the password holds a single quote itself, set a new password without one.
 
 ```sh
 docker compose up -d

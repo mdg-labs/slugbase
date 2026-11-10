@@ -41,9 +41,11 @@ Choose a `<SLUG>` for the provider: upper-case letters and digits, in groups joi
 ```sh
 OIDC_COMPANY_SSO_ISSUER_URL=https://sso.example.com
 OIDC_COMPANY_SSO_CLIENT_ID=<your client ID>
-OIDC_COMPANY_SSO_CLIENT_SECRET=<your client secret>
+OIDC_COMPANY_SSO_CLIENT_SECRET='<your client secret>'
 OIDC_COMPANY_SSO_NAME=Company SSO
 ```
+
+Put the client secret in single quotes, as shown. Compose replaces a `$` and the name after it in a value without quotes, so a secret that holds one reaches SlugBase changed and the sign-in fails. Single quotes keep the value as it is. If the secret holds a single quote itself, ask the provider for a new secret without one.
 
 Keep only `OIDC_<SLUG>_*` keys in this file. The container receives it as it is. Make it readable by you only, and keep it out of version control.
 
