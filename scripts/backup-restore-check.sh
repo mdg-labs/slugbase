@@ -607,7 +607,8 @@ check_restore_without_roles() {
   ((restore_status != 0)) || fail "the restore into a server without the roles succeeded"
   grep -qF -e "$DOCUMENTED_ERROR" "$work/bare-restore.out" ||
     fail "the restore into a server without the roles failed, but not with the documented error ${DOCUMENTED_ERROR}"
-  tables="$(timeout 60 docker exec "$name" psql -U slugbase -d slugbase --no-psqlrc --tuples-only --no-align -c "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'" | tr -d '[:space:]')"
+  tables="$(timeout 60 docker exec "$name" psql -U slugbase -d slugbase --no-psqlrc --tuples-only --no-align -c "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'" | tr -d '[:space:]')" ||
+    fail "counting the tables of the server without roles after the failed restore did not complete"
   [[ "$tables" == "0" ]] || fail "the failed restore left ${tables} tables in the database"
   remove_container "$name" || fail "could not remove the container ${name} with its volumes"
   log "ok: a restore without the roles fails with '${DOCUMENTED_ERROR}' and leaves the database empty"
