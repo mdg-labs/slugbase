@@ -47,7 +47,9 @@ export function AccountSecurityPage(): ReactElement {
           key={`${me.data.account.id}-${String(me.data.account.hasPassword)}`}
         />
       )}
-      {me.data === undefined ? null : <TwoFactorCard enabled={me.data.account.mfaEnabled} key={`mfa-${me.data.account.id}`} />}
+      {me.data === undefined ? null : (
+        <TwoFactorCard enabled={me.data.account.mfaEnabled} hasPassword={me.data.account.hasPassword} key={`mfa-${me.data.account.id}`} />
+      )}
       {me.isPending ? <Loading label={t("shell.loading")} /> : null}
       {me.isError ? (
         <Banner

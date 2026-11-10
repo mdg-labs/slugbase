@@ -1832,9 +1832,12 @@
           "open": "Turn off",
           "title": "Turn off two-factor authentication",
           "description": "Enter a code and your password. Signing in then needs your password alone.",
+          "descriptionNoPassword": "Enter a code. Your account has no password, so none is asked for.",
           "submit": "Turn off",
           "confirmTitle": "Turn off two-factor authentication?",
           "confirmDescription": "Your account will be protected by its password alone, and your backup codes will stop working.",
+          "confirmDescriptionNoPassword": "Your backup codes and the codes from your authenticator app will stop working.",
+          "gained": "This account now has a password. Reload the page, then turn off two-factor authentication with it.",
           "confirm": "Turn off",
           "done": "Two-factor authentication is off"
         },

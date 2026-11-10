@@ -1832,9 +1832,12 @@
           "open": "Ausschalten",
           "title": "Zwei-Faktor-Authentifizierung ausschalten",
           "description": "Gib einen Code und dein Passwort ein. Die Anmeldung braucht danach nur noch dein Passwort.",
+          "descriptionNoPassword": "Gib einen Code ein. Dein Konto hat kein Passwort, deshalb wird keins verlangt.",
           "submit": "Ausschalten",
           "confirmTitle": "Zwei-Faktor-Authentifizierung ausschalten?",
           "confirmDescription": "Dein Konto ist dann nur noch durch das Passwort geschützt, und deine Backup-Codes funktionieren nicht mehr.",
+          "confirmDescriptionNoPassword": "Deine Backup-Codes und die Codes aus deiner Authenticator-App funktionieren dann nicht mehr.",
+          "gained": "Dieses Konto hat jetzt ein Passwort. Lade die Seite neu und schalte die Zwei-Faktor-Authentifizierung dann mit dem Passwort aus.",
           "confirm": "Ausschalten",
           "done": "Die Zwei-Faktor-Authentifizierung ist aus"
         },
