@@ -25,10 +25,10 @@
 | `/settings/workspace/teams` | docs/user/workspace/teams.mdx | current | 7f88acee | |
 | `/settings/workspace/audit` | docs/user/workspace/audit-log.mdx | current | 7f88acee | |
 | `/settings/workspace/ai` | docs/user/workspace/ai-suggestions.mdx | current | 7f88acee | |
-| `/admin` | docs/user/admin/overview.mdx | missing | — | |
-| `/admin/workspaces` | docs/user/admin/workspaces.mdx | missing | — | |
-| `/admin/accounts` | docs/user/admin/accounts.mdx | missing | — | |
-| `/admin/settings` | docs/user/admin/settings-and-status.mdx | missing | — | |
+| `/admin` | docs/user/admin/overview.mdx | current | e495996a | |
+| `/admin/workspaces` | docs/user/admin/workspaces.mdx | current | e495996a | |
+| `/admin/accounts` | docs/user/admin/accounts.mdx | current | e495996a | |
+| `/admin/settings` | docs/user/admin/settings-and-status.mdx | current | e495996a | |
 | `/setup` | docs/user/access/first-run-setup.mdx | current | e0010e65 | |
 | `/login`, `/login/mfa` | docs/user/access/sign-in.mdx | current | e0010e65 | |
 | `/register`, `/verify-email` | docs/user/access/create-an-account.mdx | current | e0010e65 | |

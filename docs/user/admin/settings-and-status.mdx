@@ -1,0 +1,111 @@
+---
+title: "Settings and Status"
+description: "Change the instance settings, send a test email and read what the operator has configured."
+edition: ce
+order: 40
+---
+
+**Settings & status** holds the few settings an instance admin changes in the app, a test email, and a read-only view of what the operator set up on the server.
+
+<Callout>
+Self-hosted only. This page is part of the **Admin** area of a self-hosted SlugBase.
+</Callout>
+
+<Screenshot alt="The Settings and status page with the workspace switch, the sign-in page form and the configuration table" />
+
+## Prerequisites
+
+- Your account is an instance admin. See [Instance Overview](overview.mdx).
+- To change a setting, two-factor authentication is on for your account. Without it you can read the settings and send the test email. A banner says **Changing the settings needs two-factor authentication**: "You can read the settings below. Turn on two-factor authentication for your account to change them." Choose **Set up two-factor authentication**. See [Security](../account/security.mdx).
+
+## Open Settings and status
+
+1. Choose **Admin** in the sidebar.
+2. Choose **Settings & status**.
+
+If your SlugBase cannot send email, instance admins also see a banner on every page, **Email is not set up**. It says that invitation emails, address verification and password-reset emails are not delivered, and that SlugBase shows you the invitation and reset links instead, to pass on by hand. Choose **Open settings & status** in the banner to come here.
+
+## Decide who can create workspaces
+
+Under **Workspaces**, turn **Allow members to create workspaces** on or off.
+
+- **On:** members can create their own workspaces from the workspace switcher.
+- **Off:** "only an instance admin creates workspaces." See [Instance Workspaces](workspaces.mdx).
+
+**Result:** SlugBase says **Saved.** The change applies from the next request.
+
+Until you change it, the page says "Not set yet, so the default of this deployment applies, shown here. Changing it overrides that default." On a self-hosted SlugBase that default is off, so until you turn the switch on, only an instance admin creates workspaces.
+
+## Change the sign-in page
+
+Under **Sign-in page**, you set what people see before they sign in.
+
+1. Enter an **Instance name**. Use 1 to 100 characters. It shows on the sign-in page in place of the product name. Leave it empty to show the product name.
+2. Enter a **Sign-in notice**. Use plain text, up to 500 characters. It shows above the sign-in form. Leave it empty for no notice. See [Sign In](../access/sign-in.mdx).
+3. Choose **Save**.
+
+**Result:** SlugBase says **Saved.** The notice is shown as plain text only. Links and formatting do not work in it.
+
+## Send a test email
+
+Under **Test email**, SlugBase says "Check that this server can send email to" your address.
+
+1. Choose **Send test email**.
+
+**Result:** SlugBase says a test email "was queued". A background worker sends it, so it can arrive a moment later. If your SlugBase has no mail set up, SlugBase says **No test email was queued**: "This server has no mail configured. Set up the mail connection in the server's environment, restart it, and try again." See [Set Up Mail](/docs/self-hosting/mail).
+
+The test email works without two-factor authentication.
+
+## Read the operator configuration
+
+**Configuration** shows what the operator set up on the server. It cannot be changed here, and it never shows a credential. The operator changes it on the server, then restarts SlugBase.
+
+| Setting | What it tells you |
+| ------- | ----------------- |
+| **Public registration** | **On** if anyone can create an account, or **Off** if people need an invitation. |
+| **Email verification required** | **On** if a new address must be verified before sign-in. |
+| **Mail** | **Configured** or **Not configured**. |
+| **AI suggestions** | **Configured** if an AI service is set up. |
+| **Error reporting** | **Configured** or **Not configured**. |
+| **Sign-in providers** | The identity providers people can sign in with, or **None**. |
+
+The note says: "This is read-only." The keys that control these settings, and how to set them, are in the operator guides:
+
+- [Environment Settings](/docs/self-hosting/environment) lists every setting.
+- [Set Up Mail](/docs/self-hosting/mail) covers email.
+- [Set Up OIDC Sign-In](/docs/self-hosting/oidc) covers sign-in providers.
+- [Run SlugBase Day to Day](/docs/self-hosting/operations) covers the worker, logs and routine checks.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Allow members to create workspaces | Lets members create their own workspaces. | No |
+| Instance name | The name on the sign-in page. 1 to 100 characters. | No |
+| Sign-in notice | A plain-text notice on the sign-in page. Up to 500 characters. | No |
+| Send test email | Queues a test message to your address. | No |
+
+## Troubleshooting
+
+### The page says "The settings were refused."
+
+The full message is "The settings were refused. Check the values and try again." Check that the name has 1 to 100 characters and the notice has 1 to 500.
+
+### The page says "You can no longer manage this instance."
+
+Your account lost the instance admin role while the page was open. The page reloads. Ask another instance admin.
+
+### The page says "The settings could not be loaded"
+
+Choose **Try again**. If it continues, check the logs of the server.
+
+### A setting shows the wrong value
+
+The operator's settings are read-only here. Ask the operator to change them on the server.
+
+## Related pages
+
+- [Instance Overview](overview.mdx)
+- [Instance Workspaces](workspaces.mdx)
+- [Instance Accounts](accounts.mdx)
+- [Account Recovery and Security Checklist](/docs/self-hosting/security)

@@ -1,0 +1,126 @@
+---
+title: "Instance Workspaces"
+description: "List every workspace on your self-hosted SlugBase, create one for an owner, add yourself to one, and delete one."
+edition: ce
+order: 20
+---
+
+**Workspaces** lists every workspace on your SlugBase and lets an instance admin create one for its first owner, join one as a member, or delete one.
+
+<Callout>
+Self-hosted only. This page is part of the **Admin** area of a self-hosted SlugBase.
+</Callout>
+
+<Screenshot alt="The instance Workspaces page with the list of workspaces and the Create workspace button" />
+
+## Prerequisites
+
+- Your account is an instance admin. See [Instance Overview](overview.mdx).
+- For **Add me as member**, **Re-issue owner invitation** and **Delete workspace**, two-factor authentication is on for your account. See [Security](../account/security.mdx).
+
+## What you see and what you do not
+
+The table shows each workspace's **Name**, its **Owners** with their names and email addresses, the number of **Members** and when it was **Created**. A workspace that has no owner yet shows **Waiting for its first owner**.
+
+It never shows bookmarks, folders, tags or members who are not owners. An instance admin has no access to the content of a workspace they are not a member of. The only way in is **Add me as member**, which is explicit, needs confirmation and is visible to the workspace's owners.
+
+## Open Workspaces
+
+1. Choose **Admin** in the sidebar.
+2. Choose **Workspaces**.
+
+## Create a workspace
+
+You create the workspace for its owner. You do not become a member.
+
+1. Choose **Create workspace**.
+2. Enter a **Name**. Use 1 to 64 characters.
+3. Under **Owner**, choose how the owner is named:
+   - **Existing account.** Search under **Account** by name or email and choose one. This needs two-factor authentication on your account. Disabled accounts do not appear.
+   - **Invite by email.** Enter an **Email address**. The workspace waits for this address to accept the invitation and become its first owner.
+4. Choose **Create workspace**.
+
+**Result:** SlugBase says the workspace "was created".
+
+- With an existing account, that account is the owner at once.
+- With an email address, the workspace has no member until the invitation is accepted. Where your SlugBase can send email, the invitation is mailed and SlugBase says so. Where it cannot, the dialog shows **Owner invitation link** once. Send it to the person yourself, select **I have sent or saved this link**, and choose **Done**. "The link is shown only now." It works for seven days, and only for the account that has that address.
+
+Without two-factor authentication on your account, the dialog says: "The owner is invited by email. Choosing an existing account needs two-factor authentication on your account."
+
+## Add yourself to a workspace
+
+Use this when you must look inside a workspace, for example to help its owner.
+
+1. Open the actions menu, **Actions for** and the workspace's name, and choose **Add me as member**.
+2. Read "You join" and the workspace's name "as a member. Its owners will see in the workspace's activity that an instance admin joined."
+3. Choose **Add me as member**.
+4. If SlugBase asks you to confirm it is you, enter your password and choose **Confirm**. See [Security](../account/security.mdx).
+
+**Result:** SlugBase says "You are now a member of" and the workspace's name. You are a member, not an owner. SlugBase does not open the workspace for you. Switch to it in the workspace switcher.
+
+The workspace's owners can read **Instance administrator joined** in their [audit log](../workspace/audit-log.mdx). SlugBase also records the action in the audit log of the instance. If you already belong to the workspace, SlugBase says "You are already a member of this workspace."
+
+## Give a workspace a new owner invitation
+
+If the owner invitation was lost or expired, a workspace that still waits for its first owner can get a new one.
+
+1. Open the actions menu and choose **Re-issue owner invitation**. The entry appears only for a workspace with no owner.
+2. Optional: enter an **Email address**. Leave it empty to use the address of the previous invitation.
+3. Choose **Re-issue invitation**.
+4. Confirm it is you if SlugBase asks.
+
+**Result:** the new invitation replaces the earlier ones, and their links stop working at once. Where your SlugBase sends email, it mails the new one. Otherwise the dialog shows the link once, as above.
+
+If the workspace has an owner by now, SlugBase says so and issues nothing. If there was no earlier invitation to take an address from, it asks you to enter one.
+
+## Delete a workspace
+
+Deleting a workspace removes it and everything in it for every member. This cannot be undone.
+
+1. Open the actions menu and choose **Delete workspace**.
+2. Read the warning: "This is irreversible." Every member loses access right away.
+3. Type the workspace's name where the dialog says "Type" and the name "to confirm".
+4. Choose **Delete workspace**.
+5. If SlugBase asks you to confirm it is you, enter your password and choose **Confirm**. If you close that prompt, SlugBase says "Confirm it is you to delete the workspace." and deletes nothing.
+
+**Result:** SlugBase says the workspace "is being deleted". It leaves every member's switcher at once, and SlugBase removes its data in the background. Members cannot export from it any more. Suggest that they export their bookmarks first. See [Import and Export](../account/import-and-export.mdx).
+
+An owner can also delete their own workspace. See [General](../workspace/general.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Name | 1 to 64 characters. | Yes |
+| Owner | **Existing account** or **Invite by email**. | Yes |
+| Account | The account that becomes the owner. | Yes, for an existing account |
+| Email address | The address that gets the owner invitation. | Yes, for an invitation |
+
+## Troubleshooting
+
+### The page says "There are no workspaces yet"
+
+Choose **Create workspace** to make the first one, or ask someone to be its first owner by email.
+
+### A dialog says "Turn on two-factor authentication first"
+
+The action changes the instance or who can reach it. Choose **Set up two-factor authentication**, or open **Security**, then come back.
+
+### A dialog says "cannot be deleted yet"
+
+SlugBase refuses the deletion and changes nothing. The dialog says "This server does not allow the workspace to be deleted right now. Nothing was changed." Choose **Close**.
+
+### Creating says "This account no longer exists or is disabled."
+
+Choose another account, or invite the owner by email.
+
+### The page says "The workspaces could not be loaded"
+
+Choose **Try again**. If it continues, check the logs of the server.
+
+## Related pages
+
+- [Instance Overview](overview.mdx)
+- [Accounts](accounts.mdx)
+- [General](../workspace/general.mdx)
+- [Audit Log](../workspace/audit-log.mdx)
