@@ -33,6 +33,10 @@ export default defineConfig(({ command, mode }) => {
           ? [
               { find: /^@slugbase\/web$/, replacement: resolve(PACKAGES, "web/src/index.ts") },
               { find: /^@slugbase\/ui$/, replacement: resolve(PACKAGES, "ui/src/index.ts") },
+              // Every subpath the packages export from `dist` needs its own entry: left to the
+              // package, it loads a second copy of the source beside the aliased one, and the two
+              // copies hold separate React contexts (apps/slugbase/test/dev-aliases.test.ts).
+              { find: /^@slugbase\/ui\/patterns$/, replacement: resolve(PACKAGES, "ui/src/patterns/index.ts") },
             ]
           : [],
     },
