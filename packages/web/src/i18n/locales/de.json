@@ -1330,7 +1330,7 @@
         "resetMfa": {
           "label": "Zwei-Faktor-Authentifizierung zurücksetzen",
           "title": "Die Zwei-Faktor-Authentifizierung von {name} zurücksetzen?",
-          "description": "Die Zwei-Faktor-Authentifizierung wird für {name} ausgeschaltet. {name} wird überall abgemeldet und meldet sich nur noch mit dem Passwort an. Wo der E-Mail-Versand eingerichtet ist, wird {name} per E-Mail informiert.",
+          "description": "Die Zwei-Faktor-Authentifizierung wird für {name} ausgeschaltet. {name} wird überall abgemeldet und meldet sich danach mit dem Passwort oder über den Anmeldeanbieter an. Wo der E-Mail-Versand eingerichtet ist, wird {name} per E-Mail informiert.",
           "done": "Die Zwei-Faktor-Authentifizierung von {name} wurde zurückgesetzt."
         },
         "disable": {
@@ -1838,11 +1838,11 @@
         "disable": {
           "open": "Ausschalten",
           "title": "Zwei-Faktor-Authentifizierung ausschalten",
-          "description": "Gib einen Code und dein Passwort ein. Die Anmeldung braucht danach nur noch dein Passwort.",
+          "description": "Gib einen Code und dein Passwort ein. Die Anmeldung fragt danach nicht mehr nach einem Code.",
           "descriptionNoPassword": "Gib einen Code ein. Dein Konto hat kein Passwort, deshalb wird keins verlangt.",
           "submit": "Ausschalten",
           "confirmTitle": "Zwei-Faktor-Authentifizierung ausschalten?",
-          "confirmDescription": "Dein Konto ist dann nur noch durch das Passwort geschützt, und deine Backup-Codes funktionieren nicht mehr.",
+          "confirmDescription": "Deine Backup-Codes und die Codes aus deiner Authenticator-App funktionieren dann nicht mehr. Du meldest dich mit deinem Passwort oder über deinen Anmeldeanbieter an, je nachdem, was dein Konto nutzt.",
           "confirmDescriptionNoPassword": "Deine Backup-Codes und die Codes aus deiner Authenticator-App funktionieren dann nicht mehr. Du meldest dich über deinen Anmeldeanbieter an.",
           "gained": "Dieses Konto hat jetzt ein Passwort. Lade die Seite neu und schalte die Zwei-Faktor-Authentifizierung dann mit dem Passwort aus.",
           "confirm": "Ausschalten",

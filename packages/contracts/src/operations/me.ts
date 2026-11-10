@@ -551,7 +551,7 @@ export const disableMfa = defineOperation({
   reauth: true,
   request: { body: DisableMfaRequestSchema },
   responses: {
-    204: emptyResponse("The secret, the activation time and every backup code are deleted and the account signs in with its password alone, or through its provider when it has no password; the response carries the Set-Cookie header of the session's new token"),
+    204: emptyResponse("The secret, the activation time and every backup code are deleted and the account signs in with its password or through its provider, whichever it uses; the response carries the Set-Cookie header of the session's new token"),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
     403: problemResponse("The request did not come from the application itself, or the credential is an API token"),

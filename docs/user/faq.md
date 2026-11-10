@@ -22,7 +22,7 @@ SlugBase cannot let you in without a code, and it cannot recover the codes for y
 - **Self-hosted:** ask an instance admin to reset two-factor authentication for your account. Where email is set up, SlugBase emails you when they do. An instance admin cannot reset their own account, so another instance admin does it.
 - **SlugBase Cloud:** contact support. Support checks who you are before it resets anything.
 
-After the reset, you are signed out everywhere and you sign in with your password alone. Set up two-factor authentication again in [Security](account/security.mdx). Save the new backup codes this time.
+After the reset, you are signed out everywhere. You sign in with your password or through your sign-in provider, whichever your account uses. Set up two-factor authentication again in [Security](account/security.mdx). Save the new backup codes this time.
 
 See [Accounts](admin/accounts.mdx) for what the instance admin does.
 
