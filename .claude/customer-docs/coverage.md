@@ -36,4 +36,5 @@
 | `/invite/$token` | docs/user/access/accept-an-invitation.mdx | current | e0010e65 | |
 | `/no-workspace` | docs/user/access/no-workspace.mdx | current | e0010e65 | |
 | `/email-change/confirm`, `/email-change/cancel` | docs/user/access/email-change-links.mdx | missing | — | |
-| `/403`, `/404`, `/500`, offline banner | docs/user/error-pages.md | missing | — | |
+| `/403`, `/404`, `/500`, offline banner | docs/user/error-pages.md | current | b850b5de | order 120; also covers the session-expired prompt |
+| FAQ (no app route) | docs/user/faq.md | current | b850b5de | order 130 |
