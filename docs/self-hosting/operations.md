@@ -168,7 +168,10 @@ The project's performance run starts the image against PostgreSQL on the same ma
 | Opening a slug link (`/go/<slug>`) | 30 ms |
 | Slug suggestions of the palette | 50 ms |
 | A page of the bookmark list, a search and the home screen | 100 ms |
-| Opening a slug link while someone imports a file | 50 ms |
+| Opening a slug link while someone imports a file | At most 8.4 times the 95th percentile of opening a slug link at the steady rate in the same run |
+| A page of the bookmark list while someone imports a file | At most 9.0 times the 95th percentile of a page of the bookmark list at the steady rate in the same run |
+
+The last two rows are ratios, not times. They compare the requests made while a member imports files of 5,000 bookmarks each with the same requests at the steady rate in the same run. An import slows the requests beside it by an amount that follows the speed of the machine, as the steady times do, so the run sets no time of its own for them.
 
 These are targets that the project checks each week on a hosted build machine. They are not measurements of your hardware and not a guarantee. Your numbers depend on your hardware, your data and your traffic. Watch the request duration metric of the route `/go/{slug}`, and the pool and queue metrics above, on your own installation.
 
