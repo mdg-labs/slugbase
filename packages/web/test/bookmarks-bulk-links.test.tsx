@@ -101,6 +101,8 @@ function applied(body: BulkBody): Response {
     switch (body.action) {
       case "add_to_folder":
         return folder === undefined || item.folders.some(({ id }) => id === folder.id) ? item : { ...item, folders: [...item.folders, folder] };
+      case "move_to_folder":
+        return folder === undefined ? item : { ...item, folders: [folder] };
       case "remove_from_folder":
         return { ...item, folders: item.folders.filter(({ id }) => id !== body.folderId) };
       case "add_tags":
@@ -393,6 +395,70 @@ describe("adding to a folder", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     });
 
     expect(await screen.findByText("You have no folders yet.")).toBeDefined();
+  });
+});
+
+describe("moving to a folder", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  it("sends move_to_folder with the chosen folder and the selection, replaces the folders shown, and states the counts", async () => {
+    world.bookmarks = [bookmark(1, { folders: [FOLDER_WORK] }), bookmark(2, { folders: [FOLDER_WORK, FOLDER_READING] }), bookmark(3, { folders: [FOLDER_WORK] })];
+    await openApp();
+    await select(1, 2);
+
+    const dialog = await openAction("Move to folder", "Move 2 bookmarks to a folder");
+    expect(within(dialog).getByRole("button", { name: "Move to folder" }).hasAttribute("disabled")).toBe(true);
+    await choose(dialog, "Folder", "Reading");
+    await press(within(dialog).getByRole("button", { name: "Move to folder" }));
+
+    await waitFor(() => {
+      expect(to(`${LIST}/bulk`)).toHaveLength(1);
+    });
+    expect(to(`${LIST}/bulk`)[0]?.body).toEqual({ action: "move_to_folder", ids: [idOf(1), idOf(2)], folderId: READING });
+    await waitFor(() => {
+      expect(dotsOf(1)).toEqual(["Reading"]);
+    });
+    expect(dotsOf(2)).toEqual(["Reading"]);
+    expect(dotsOf(3)).toEqual(["Work"]);
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar")).toBeNull();
+    });
+    expect(liveRegion().textContent).toBe("2 bookmarks moved to “Reading”.");
+    expect((await screen.findAllByText("2 bookmarks moved to “Reading”.")).length).toBeGreaterThan(1);
+  });
+
+  it("states the skipped count beside the moved count", async () => {
+    world.bulk = () => result(2, 1);
+    await openApp();
+    await select(1, 2);
+    const dialog = await openAction("Move to folder", "Move 2 bookmarks to a folder");
+    await choose(dialog, "Folder", "Work");
+
+    await press(within(dialog).getByRole("button", { name: "Move to folder" }));
+
+    await waitFor(() => {
+      expect(liveRegion().textContent).toBe("1 bookmark moved to “Work”. 1 bookmark was skipped because it no longer exists or can’t be changed.");
+    });
+  });
+
+  it("puts the folders back, tells the member, and keeps the selection when the request fails", async () => {
+    world.bookmarks = [bookmark(1, { folders: [FOLDER_WORK] }), bookmark(2, { folders: [FOLDER_WORK] }), bookmark(3)];
+    world.bulk = () => {
+      world.listFails = true;
+      return problem(429, "rate_limited", "req-bulk");
+    };
+    await openApp();
+    await select(1, 2);
+    const dialog = await openAction("Move to folder", "Move 2 bookmarks to a folder");
+    await choose(dialog, "Folder", "Reading");
+
+    await press(within(dialog).getByRole("button", { name: "Move to folder" }));
+
+    expect((await screen.findAllByText("The bookmarks could not be moved to the folder. Nothing was changed. Try again in a moment.")).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(dotsOf(1)).toEqual(["Work"]);
+    });
+    expect(dotsOf(2)).toEqual(["Work"]);
+    expect(within(bar()).getByText("2 selected")).toBeDefined();
+    expect(screen.queryByText(/bookmarks moved to/)).toBeNull();
   });
 });
 

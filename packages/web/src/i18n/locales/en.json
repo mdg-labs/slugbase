@@ -284,6 +284,7 @@
       "pin": "Pin",
       "unpin": "Unpin",
       "addToFolder": "Add to folder",
+      "moveToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
       "addTags": "Add tags",
       "removeTags": "Remove tags",
@@ -307,6 +308,7 @@
         "pin": "{count, plural, one {# bookmark pinned.} other {# bookmarks pinned.}}",
         "unpin": "{count, plural, one {# bookmark unpinned.} other {# bookmarks unpinned.}}",
         "addToFolder": "{count, plural, one {# bookmark added to “{folder}”.} other {# bookmarks added to “{folder}”.}}",
+        "moveToFolder": "{count, plural, one {# bookmark moved to “{folder}”.} other {# bookmarks moved to “{folder}”.}}",
         "removeFromFolder": "{count, plural, one {# bookmark removed from “{folder}”.} other {# bookmarks removed from “{folder}”.}}",
         "addTags": "{count, plural, one {Tags added to # bookmark.} other {Tags added to # bookmarks.}}",
         "removeTags": "{count, plural, one {Tags removed from # bookmark.} other {Tags removed from # bookmarks.}}",
@@ -320,6 +322,7 @@
         "unpin": "The bookmarks could not be unpinned. Nothing was changed. Try again in a moment.",
         "partial": "Only {done, number} of {total, number} bookmarks were changed before an error. The rest are still selected; try again in a moment.",
         "addToFolder": "The bookmarks could not be added to the folder. Nothing was changed. Try again in a moment.",
+        "moveToFolder": "The bookmarks could not be moved to the folder. Nothing was changed. Try again in a moment.",
         "removeFromFolder": "The bookmarks could not be removed from the folder. Nothing was changed. Try again in a moment.",
         "addTags": "The tags could not be added. Nothing was changed. Try again in a moment.",
         "removeTags": "The tags could not be removed. Nothing was changed. Try again in a moment.",
@@ -335,6 +338,7 @@
         "retry": "Try again",
         "title": {
           "addToFolder": "Add {count, plural, one {# bookmark} other {# bookmarks}} to a folder",
+          "moveToFolder": "Move {count, plural, one {# bookmark} other {# bookmarks}} to a folder",
           "removeFromFolder": "Remove {count, plural, one {# bookmark} other {# bookmarks}} from a folder",
           "addTags": "Add tags to {count, plural, one {# bookmark} other {# bookmarks}}",
           "removeTags": "Remove tags from {count, plural, one {# bookmark} other {# bookmarks}}"
