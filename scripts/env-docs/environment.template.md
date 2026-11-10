@@ -122,7 +122,7 @@ A database backup holds the audit events too. [Back up and restore](backup-resto
 
 SlugBase limits how often one client can use each kind of operation. Each limit is a count and a period, written `<count>/<period>`, where the period is `sec`, `min` or `hour`. The count is a whole number of 1 or more. A request over the limit gets the answer `429` with a `Retry-After` header.
 
-A key ends in the scope it limits. `IP` is the address of the client. `ACCOUNT` is the signed-in account. `WORKSPACE` is the workspace the account acts in. `EMAIL` is the address a message or link is for. Whichever limit runs out first applies. The server and the worker read these keys.
+A key ends in the scope it limits. `IP` is the address of the client. `ACCOUNT` is the signed-in account. `WORKSPACE` is the workspace the account acts in. `EMAIL` is the email address the request names. Whichever limit runs out first applies. The server and the worker read these keys.
 
 {{keys:rate-limits}}
 
