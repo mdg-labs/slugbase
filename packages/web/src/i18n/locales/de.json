@@ -2061,6 +2061,10 @@
         "confirmLabel": "Tippe {name} zur Bestätigung",
         "cancel": "Abbrechen",
         "done": "{name} wird gelöscht",
+        "export": {
+          "description": "Lade vorher deine eigenen Lesezeichen in diesem Workspace als SlugBase-JSON-Datei herunter. Jedes Mitglied kann nur seine eigenen Lesezeichen exportieren.",
+          "action": "Zuerst exportieren"
+        },
         "error": {
           "title": "Der Workspace wurde nicht gelöscht",
           "reauthCancelled": "Bestätige, dass du es bist, um den Workspace zu löschen.",

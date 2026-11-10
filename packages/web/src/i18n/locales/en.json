@@ -2061,6 +2061,10 @@
         "confirmLabel": "Type {name} to confirm",
         "cancel": "Cancel",
         "done": "{name} is being deleted",
+        "export": {
+          "description": "Download your own bookmarks in this workspace as a SlugBase JSON file before you delete it. Each member can export only their own bookmarks.",
+          "action": "Export first"
+        },
         "error": {
           "title": "The workspace was not deleted",
           "reauthCancelled": "Confirm it is you to delete the workspace.",

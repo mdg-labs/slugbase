@@ -65,13 +65,20 @@ Only an owner can delete a workspace. Deleting it removes the workspace and ever
 
 1. Under **Danger zone**, choose **Delete workspace**.
 2. Read the warning. The dialog asks to delete the workspace by name and says: "This is irreversible." Every member loses access right away.
-3. Type the workspace's name where the dialog says "Type" and the name "to confirm".
-4. Choose **Delete workspace**.
-5. If SlugBase asks you to confirm it is you, enter your password and choose **Confirm**. If you close that prompt, SlugBase says "Confirm it is you to delete the workspace." and deletes nothing. See [Security](../account/security.mdx).
+3. To keep your own bookmarks, choose **Export first**. SlugBase downloads them as a SlugBase JSON file and keeps the dialog open. See "Export before you delete" below.
+4. Type the workspace's name where the dialog says "Type" and the name "to confirm".
+5. Choose **Delete workspace**.
+6. If SlugBase asks you to confirm it is you, enter your password and choose **Confirm**. If you close that prompt, SlugBase says "Confirm it is you to delete the workspace." and deletes nothing. See [Security](../account/security.mdx).
 
 **Result:** SlugBase says the workspace "is being deleted". It disappears from every member's workspace switcher at once, its API tokens stop working, and members who had it open move to another workspace or to the page for people with none. SlugBase then removes the bookmarks, folders, tags, teams, shares, invitations and settings in the background. The request is recorded in the audit log before anything is removed.
 
-SlugBase does not offer an export in this dialog. Each member can export only their own bookmarks, from [Import and Export](../account/import-and-export.mdx). Ask members to export what they want before you delete the workspace.
+### Export before you delete
+
+**Export first** downloads your own bookmarks in this workspace as a SlugBase JSON file, the same file as **Download** under **Export bookmarks** in [Import and Export](../account/import-and-export.mdx). SlugBase says **Preparing your export…**, then **Download started** with the file name. The dialog stays open, and the export does not delete anything. You still type the workspace's name and choose **Delete workspace**.
+
+If the export fails, SlugBase says "The export was not downloaded" and why. Nothing is saved, nothing is deleted, and you can choose **Export first** again.
+
+The export holds only your own bookmarks. Each member can export only their own, from [Import and Export](../account/import-and-export.mdx), so ask members to export what they want before you delete the workspace. To export in another format, such as Netscape HTML, use that page.
 
 ### When SlugBase refuses
 
@@ -87,6 +94,7 @@ A dialog titled with the workspace's name and "cannot be deleted yet" says why. 
 | Name | 1 to 64 characters. Read-only for members. | Yes |
 | Transfer the content | Your bookmarks and folders go to the member you pick under **Transfer to**. | One of the two |
 | Delete the content | Your bookmarks and folders are deleted. | One of the two |
+| Export first | Downloads your own bookmarks in this workspace as a SlugBase JSON file. It does not delete anything. | No |
 | Type the workspace name | Confirms a deletion. It must match the name exactly. | Yes, to delete |
 
 ## Troubleshooting
