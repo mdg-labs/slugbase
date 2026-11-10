@@ -4,9 +4,9 @@
 | ----- | -------- | ------ | --------------- | ----- |
 | landing page (no app route) | docs/user/index.md | current | e986708a | order 0 |
 | getting started guide (the app links to `/docs/getting-started`) | docs/user/getting-started.mdx | current | e986708a | order 1 |
-| `/` | docs/user/home.mdx | missing | — | |
-| `/bookmarks` | docs/user/bookmarks.mdx | missing | — | |
-| bookmark modal (`?bookmark`, `?new`) | docs/user/add-and-edit-bookmarks.mdx | missing | — | overlay |
+| `/` | docs/user/home.mdx | current | e0010e65 | |
+| `/bookmarks` | docs/user/bookmarks.mdx | current | e0010e65 | |
+| bookmark modal (`?bookmark`, `?new`) | docs/user/add-and-edit-bookmarks.mdx | current | e0010e65 | overlay |
 | share dialog | docs/user/sharing.mdx | missing | — | overlay |
 | `/folders` | docs/user/folders.mdx | missing | — | |
 | `/tags` | docs/user/tags.mdx | missing | — | |
