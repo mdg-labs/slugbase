@@ -3,7 +3,7 @@ name: E2E
 # The browser journeys of doc 08 section 5.1 against the image built from this
 # commit, started through compose.yml with the Mailpit of compose.e2e.yml that
 # catches the mail of the stack, once on PostgreSQL 17 and once on 18 (doc 08
-# section 6.2, Q3), each leg in four Playwright shards on runners of their own (doc 08
+# section 6.2, Q3), each leg in five Playwright shards on runners of their own (doc 08
 # section 5.1). The stack runs on the Docker daemon of the runner itself, as in
 # the `build` job of ci.yml, with its ports published on 127.0.0.1; only the
 # journeys run in a container, the Playwright image of e2e/Dockerfile (pinned to the
@@ -55,15 +55,15 @@ jobs:
   # address (doc 04 section 7) nor the session files under e2e/.auth. A failing shard
   # stops no other, so every shard and both majors report.
   shards:
-    name: e2e shard (PostgreSQL ${{ matrix.postgres }}, ${{ matrix.shard }}/4)
+    name: e2e shard (PostgreSQL ${{ matrix.postgres }}, ${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         postgres: ["17", "18"]
-        # --shard=<n>/4 below: the four have to agree.
-        shard: [1, 2, 3, 4]
+        # --shard=<n>/5 below: the five have to agree.
+        shard: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -108,7 +108,7 @@ jobs:
           BUILD_COMMIT: ${{ github.sha }}
           SLUGBASE_IMAGE: slugbase:e2e
           SMOKE_POSTGRES_MAJOR: ${{ matrix.postgres }}
-        run: bash e2e/with-stack.sh bash e2e/in-image.sh node run-tests.ts --shard=${{ matrix.shard }}/4
+        run: bash e2e/with-stack.sh bash e2e/in-image.sh node run-tests.ts --shard=${{ matrix.shard }}/5
       # A stack that the script could not remove (its process killed, say) is removed
       # here; a run that ended normally leaves nothing to find.
       - name: Remove any stack left behind
