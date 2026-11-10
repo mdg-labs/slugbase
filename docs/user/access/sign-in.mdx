@@ -1,0 +1,98 @@
+---
+title: "Sign In"
+description: "Sign in with your email and password, a code from your authenticator app, or an identity provider."
+edition: both
+order: 20
+---
+
+**Sign in** opens your workspace with your email and password, and, where your account asks for it, a second step.
+
+<Screenshot alt="The Sign in page with email, password and Remember me" />
+
+## Prerequisites
+
+- You have an account. If you do not, see [Create an Account](create-an-account.mdx) or [Accept an Invitation](accept-an-invitation.mdx).
+
+## Sign in with email and password
+
+1. Open your SlugBase. The page **Sign in** appears when you are signed out.
+2. Enter your **Email** and **Password**.
+3. Select **Remember me** to stay signed in for longer on this device. Leave it off on a computer you share.
+4. Choose **Sign in**.
+
+**Result:** Home opens. If you were on the way to a page or a slug when SlugBase asked you to sign in, it takes you there instead.
+
+If your account has two-step verification, **Two-step verification** appears after you choose **Sign in**.
+
+## Finish two-step verification
+
+If you turned on two-step verification in your account security settings, the password is only the first step.
+
+1. Open your authenticator app and read the six-digit code.
+2. Enter it under **Authentication code**.
+3. Choose **Verify**.
+
+If you cannot use your authenticator app, choose **Use a backup code instead**, enter one of your backup codes under **Backup code**, and choose **Verify**. Choose **Use the authenticator app instead** to go back to the code field. Each backup code works once.
+
+Choose **Back to sign in** to start again. You have about five minutes for this step. When the time runs out, SlugBase says **Your sign-in has expired**. Sign in again to continue. Five wrong codes in a row also end the attempt.
+
+## Sign in with an identity provider
+
+Where the operator of your SlugBase set up an identity provider, buttons named **Continue with** and the provider's name appear under the form, after the word **or**.
+
+1. Choose the **Continue with** button of your provider.
+2. Sign in at the provider.
+
+**Result:** You are back in SlugBase, signed in. A sign-in through a provider does not ask for the SlugBase code, because the provider already checked you.
+
+With no provider set up, the page shows only the email and password form.
+
+## Notices on the page
+
+The operator of a self-hosted SlugBase can add a notice to the sign-in page. It appears above the form.
+
+The link **Create an account** appears under the form only where registration is open. On a self-hosted SlugBase it is off unless the operator turned it on. See [Create an Account](create-an-account.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Email | The address of your account. | Yes |
+| Password | Your password. **Show password** and **Hide password** reveal or hide it. | Yes |
+| Remember me | Keeps you signed in for longer on this device: a 90-day session instead of a 30-day one. | No |
+| Forgot password? | Opens [Reset Your Password](reset-your-password.mdx). | No |
+| Authentication code | The six-digit code of your authenticator app. | Yes, on the second step |
+| Backup code | One of your backup codes, when you cannot use the app. | Yes, instead of the code |
+
+## Troubleshooting
+
+### The page says "The email address or the password is wrong."
+
+Check both entries. SlugBase gives this one message whatever the reason, so it never reveals which addresses have an account. A disabled account sees the same message. If you forgot the password, choose **Forgot password?**. If a disabled account is the cause, ask the person who runs your SlugBase.
+
+### The page says "Verify your email"
+
+Your address is not verified yet. Open the link in the email we sent you, or choose **Send the link again** and enter your **Email**. After a request, the button shows a countdown before you can send again. See [Create an Account](create-an-account.mdx).
+
+### The page says "Too many sign-in attempts"
+
+Too many attempts came from your network or for your address. Wait for the time the page names and try again.
+
+### The page says "Signing in with that provider did not work."
+
+The provider did not confirm you. Try again, or sign in with your email address and password. If it keeps failing, tell the person who runs your SlugBase.
+
+### I lost my authenticator app and my backup codes
+
+SlugBase cannot let you in without a code. On a self-hosted SlugBase, ask an instance admin to reset two-step verification for your account. On SlugBase Cloud, contact support. After the reset, you sign in with your password alone and can turn two-step verification on again.
+
+### A message says "Your session has ended"
+
+Your session is over, so SlugBase asks you to sign in again. Open **Sign in** and enter your details to continue.
+
+## Related pages
+
+- [Reset Your Password](reset-your-password.mdx)
+- [Create an Account](create-an-account.mdx)
+- [Accept an Invitation](accept-an-invitation.mdx)
+- [Getting started](../getting-started.mdx)

@@ -1,0 +1,89 @@
+---
+title: "Create an Account"
+description: "Register with your email, verify the address and sign in."
+edition: both
+order: 30
+---
+
+**Create an account** registers you with a name, an email address and a password, and **Verify your email** finishes it.
+
+<Screenshot alt="The Create an account page with name, email and password" />
+
+<Callout>
+Registration is on by default on SlugBase Cloud. A self-hosted SlugBase has it off unless the operator turned it on. Without it, you join through an invitation. See [Accept an Invitation](accept-an-invitation.mdx).
+</Callout>
+
+## Prerequisites
+
+- Registration is open on your SlugBase. If it is not, the page says **Registration is closed**.
+- You can open email at the address you register with, where the server sends email.
+
+## Create your account
+
+1. Open **Create an account**. On the page **Sign in**, the link **Create an account** leads there.
+2. Enter your **Name**, **Email** and **Password**. Use at least 12 characters. The meter under **Password** shows **Password strength**.
+3. Choose **Create account**.
+
+**Result:** The page **Check your email** names your address and says that, if SlugBase can use it, a link to verify it is on its way: "Open it to finish creating your account." The link works for 24 hours.
+
+<Callout>
+SlugBase Cloud asks you to accept its terms on this page.
+</Callout>
+
+## Verify your email
+
+1. Open the link in the email.
+2. On **Verify your email**, enter your **Password**. This is the password you will use to sign in.
+3. Choose **Verify and sign in**.
+
+**Result:** You are signed in, and your address is verified. SlugBase creates a personal workspace for you, named after you, and Home opens.
+
+A link works once.
+
+On a server that cannot send email, registration does not wait for a link. The page **Your account is ready** says: "This server does not send email, so there is no link to open. Sign in to continue." Choose **Go to sign in**.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Name | Your display name. | Yes |
+| Email | The address you sign in with, and where the verification link goes. | Yes |
+| Password | At least 12 characters and at most 256. A long phrase works well. | Yes |
+| Send the link again | Sends a new verification link. It shows a countdown after you use it. | No |
+
+## Troubleshooting
+
+### The page says "Registration is closed"
+
+The operator of this SlugBase turned off public registration. Ask an admin for an invitation, or choose **Back to sign in** if you already have an account.
+
+### The page says "An account cannot be created with that email address."
+
+SlugBase cannot use that address for a new account. Check it, or try another address. If it keeps failing, ask the person who runs your SlugBase.
+
+### The page says "Registration needs email, and this server cannot send any right now. Ask an administrator."
+
+This server requires you to verify your address and cannot send the link at the moment. Ask the person who runs your SlugBase.
+
+### The email does not arrive
+
+Check your spam folder, and check that you typed the address correctly. A self-hosted server needs mail set up to send it.
+
+If you already have an account for that address, SlugBase shows the same **Check your email** page and creates nothing, so it never reveals which addresses have an account. Open [Sign In](sign-in.mdx) instead, or choose **Forgot password?** there.
+
+To get the verification link again, enter your **Email** and **Password** on **Sign in** and choose **Sign in**. The message **Verify your email** appears with the button **Send the link again**.
+
+### The page says "This link is not valid or has expired"
+
+A link works once and for 24 hours. Enter your **Email** on the page to get a new one.
+
+### The page says "Too many registrations"
+
+Wait for the time the page names, then try again.
+
+## Related pages
+
+- [Sign In](sign-in.mdx)
+- [Accept an Invitation](accept-an-invitation.mdx)
+- [Reset Your Password](reset-your-password.mdx)
+- [Getting started](../getting-started.mdx)

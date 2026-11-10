@@ -1,0 +1,105 @@
+---
+title: "Accept an Invitation"
+description: "Join a workspace with the link from an invitation, with a new or an existing account."
+edition: both
+order: 50
+---
+
+**You are invited** shows the workspace, who invited you and your role, and lets you join with one action.
+
+<Screenshot alt="The You are invited page showing the workspace, who invited you and the role" />
+
+## Prerequisites
+
+- An admin or owner of a workspace invited your email address, and you have the invitation link. The email carries it. On a server that cannot send email, the admin copies the link and gives it to you.
+- The invitation is still valid. A link works once and for 7 days from the invitation.
+
+## Open the invitation
+
+1. Open the link in the invitation email. The page **You are invited** appears.
+2. Check **Workspace**, **Invited by** and **Role**. The role is **Admin** or **Member**.
+3. Follow the case below that fits you.
+
+An invitation never makes you an owner. A workspace owner can promote you later.
+
+## You have no account yet
+
+1. Enter your **Name**. The **Email** is fixed: the invitation was sent to this address, so the account uses it.
+2. Enter a **Password**. Use at least 12 characters. The meter shows **Password strength**.
+3. Choose **Create account and join**.
+
+**Result:** SlugBase creates your account, adds you to the workspace and signs you in. Home opens in that workspace. A person who joins this way gets no personal workspace.
+
+If your SlugBase offers identity providers, buttons named **Continue with** and the provider's name appear under the form. They work when the provider has confirmed the invited address.
+
+## You have an account and are signed out
+
+1. Under **You are invited**, read the line that says the invited address already has an account and asks you to sign in to join.
+2. Enter your **Password**, then choose **Sign in**. You can also use a provider button.
+3. If **Two-step verification** appears, enter your code.
+
+**Result:** You come back to the invitation. Choose the button **Join** followed by the workspace name to finish.
+
+## You are signed in
+
+If you are signed in with the invited address, the page says "You are signed in as" and your address. Choose the button **Join** followed by the workspace name.
+
+**Result:** You are a member of the workspace, and it is the workspace you have open. Home opens.
+
+## You are signed in with another account
+
+The page says **This invitation is for another address**: The page names your current address and the invited address, then says: "Sign out to continue with the invited address."
+
+1. Choose **Sign out and continue**.
+2. Follow the case for a new account or for an existing account.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Workspace | The workspace you join. | n/a |
+| Invited by | The person who sent the invitation. | n/a |
+| Role | **Admin** or **Member**. The role you get on joining. | n/a |
+| Name | Your display name, for a new account. | Yes, for a new account |
+| Email | The invited address. You cannot change it. | n/a |
+| Password | For a new account: at least 12 characters. For an existing account, your password. | Yes |
+
+## Troubleshooting
+
+### The page says "This invitation link does not work"
+
+An invitation link works once and only for a limited time. SlugBase gives the same message whether the link expired, was used, or was withdrawn, and does not say which. Ask the person who invited you to send a new one. Choose **Go to sign in** if you already have an account.
+
+### The page says "This account cannot accept the invitation"
+
+The invitation is for an address that your account has to hold, verified. Sign out and use the invited address, or ask for an invitation to the address of your account.
+
+### The page says "You are already a member of this workspace."
+
+You joined before. Choose **Go to Home**.
+
+### The page says "This workspace has no free seat. Ask the person who invited you."
+
+<EditionBadge edition="cloud" /> The workspace has no room for another member. Ask the person who invited you to free one.
+
+### "Verify your address to sign in" appears after I create the account
+
+You joined with a link that an admin copied, not with the link from the email. Your account exists and is a member. This server requires a verified address before you can sign in. Open the link in the email sent to that address. If none arrives, ask an administrator of the instance to verify it for you.
+
+### The page says "An account cannot be created with this invitation. Ask the person who invited you."
+
+SlugBase refused to create the account. The invitation stays open. Ask the person who invited you.
+
+### The invitation email does not arrive
+
+Check your spam folder. A self-hosted server without mail cannot send invitations. Ask the admin to copy the invitation link from the invitation list and send it to you.
+
+### I do not know who invited me
+
+The page shows **Invited by** when it knows the name. Ask the owner or an admin of the workspace.
+
+## Related pages
+
+- [Sign In](sign-in.mdx)
+- [Create an Account](create-an-account.mdx)
+- [No Workspace](no-workspace.mdx)

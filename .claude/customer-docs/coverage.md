@@ -29,11 +29,11 @@
 | `/admin/workspaces` | docs/user/admin/workspaces.mdx | missing | — | |
 | `/admin/accounts` | docs/user/admin/accounts.mdx | missing | — | |
 | `/admin/settings` | docs/user/admin/settings-and-status.mdx | missing | — | |
-| `/setup` | docs/user/access/first-run-setup.mdx | missing | — | |
-| `/login`, `/login/mfa` | docs/user/access/sign-in.mdx | missing | — | |
-| `/register`, `/verify-email` | docs/user/access/create-an-account.mdx | missing | — | |
-| `/forgot-password`, `/reset-password` | docs/user/access/reset-your-password.mdx | missing | — | |
-| `/invite/$token` | docs/user/access/accept-an-invitation.mdx | missing | — | |
-| `/no-workspace` | docs/user/access/no-workspace.mdx | missing | — | |
+| `/setup` | docs/user/access/first-run-setup.mdx | current | e0010e65 | |
+| `/login`, `/login/mfa` | docs/user/access/sign-in.mdx | current | e0010e65 | |
+| `/register`, `/verify-email` | docs/user/access/create-an-account.mdx | current | e0010e65 | |
+| `/forgot-password`, `/reset-password` | docs/user/access/reset-your-password.mdx | current | e0010e65 | |
+| `/invite/$token` | docs/user/access/accept-an-invitation.mdx | current | e0010e65 | |
+| `/no-workspace` | docs/user/access/no-workspace.mdx | current | e0010e65 | |
 | `/email-change/confirm`, `/email-change/cancel` | docs/user/access/email-change-links.mdx | missing | — | |
 | `/403`, `/404`, `/500`, offline banner | docs/user/error-pages.md | missing | — | |

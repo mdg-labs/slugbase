@@ -1,0 +1,80 @@
+---
+title: "First-Run Setup"
+description: "Create the first account and workspace of a self-hosted SlugBase."
+edition: ce
+order: 10
+---
+
+On a new self-hosted SlugBase, **Set up SlugBase** creates the first account and the first workspace and signs you in.
+
+<Screenshot alt="The Set up SlugBase page on its Your account step" />
+
+<Callout>
+Self-hosted only. SlugBase Cloud has no setup page: you create an account on the page [Create an Account](create-an-account.mdx).
+</Callout>
+
+## Prerequisites
+
+- SlugBase is installed and running. The [install guide](/docs/self-hosting/install) walks through it.
+- Nobody has created an account on this server yet. The setup page exists only until the first account is made.
+
+## Get the setup token
+
+By default, setup asks for a one-time token. It proves that you run the server, so a stranger who finds a new server cannot claim it.
+
+1. Open the server's log. The server printed the setup token there when it started.
+2. Copy the latest token. A new start replaces the token, so only the latest one works.
+
+The [install guide](/docs/self-hosting/install) shows the command that reads the log and says how to turn the check off. The setup page does not ask for a token on a server where the operator turned it off, and starts at **Your account**.
+
+## Set up the server
+
+1. Open your server in the browser. The page **Set up SlugBase** appears.
+2. On **Setup token**, paste the token into **Setup token** and choose **Next**.
+3. On **Your account**, enter your **Name**, **Email** and **Password**. The meter under **Password** shows **Password strength**. Choose **Next**.
+4. On **Your first workspace**, enter a **Workspace name**, such as your name or your team.
+5. Choose **Create account**.
+6. On **You are all set**, choose **Go to Home**.
+
+**Result:** Your account is the instance admin of the server and the owner of your first workspace. You are signed in, and Home shows the **Getting started** checklist.
+
+The last screen recommends two-step verification for this account. Choose **Open security settings** to turn it on. You can also do it later.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Setup token | The token from the server log. The step appears only where the server requires a token. | Yes, when the step appears |
+| Name | Your display name. | Yes |
+| Email | The address you sign in with. | Yes |
+| Password | At least 12 characters and at most 256. A long phrase works well. | Yes |
+| Workspace name | The name of your first workspace. You can add more workspaces later. | Yes |
+
+## Troubleshooting
+
+### The setup page asks for a token I cannot find
+
+Read the server log again and copy the latest token. If the line is gone from the log, restart the server. It prints a new token, and the old one stops working. The [install guide](/docs/self-hosting/install) lists the commands.
+
+### The page says "The setup token is missing or wrong. Copy the latest one from the server log."
+
+You used an older token, or the token has a typo. Copy the latest token from the log and enter it again.
+
+### The page says "Setup was already completed on this server. Sign in with your account instead."
+
+Someone already created the first account. Choose **Go to sign in** and use [Sign In](sign-in.mdx). Once an account exists, the address `/setup` shows the page "This page doesn't exist".
+
+### A password is refused
+
+SlugBase refuses a password with fewer than 12 characters, and one that appears in a list of breached passwords: "This password appears in a list of breached passwords. Choose a different one." Choose a longer, less common password.
+
+### The page says "Too many setup attempts"
+
+Wait for the time the page names, then try again.
+
+## Related pages
+
+- [Sign In](sign-in.mdx)
+- [Create an Account](create-an-account.mdx)
+- [Accept an Invitation](accept-an-invitation.mdx)
+- [Getting started](../getting-started.mdx)
