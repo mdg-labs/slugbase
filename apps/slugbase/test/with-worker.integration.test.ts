@@ -102,10 +102,15 @@ async function until(check: () => boolean | Promise<boolean>, what: string, time
 
 // Starts `server` with `args` and waits until it listens and answers /ready 200, which is after the migration level is
 // checked; with the worker, also until it logged `Worker started`.
-async function startServer(database: TestDatabase, args: readonly string[]): Promise<Running> {
+async function startServer(database: TestDatabase, args: readonly string[], migrateOnStart = false): Promise<Running> {
   const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server", ...args], {
     cwd: APP,
-    env: { PATH: process.env["PATH"] ?? "", ...base, DATABASE_URL: databaseUrl(database), MIGRATE_ON_START: "false" },
+    env: {
+      PATH: process.env["PATH"] ?? "",
+      ...base,
+      DATABASE_URL: databaseUrl(database),
+      ...(migrateOnStart ? { MIGRATE_ON_START: "true", DATABASE_MIGRATE_URL: databaseUrl(database, "owner") } : { MIGRATE_ON_START: "false" }),
+    },
   });
   let output = "";
   const exited = new Promise<number | null>((resolveExit) => {
@@ -141,6 +146,13 @@ async function stop(running: Running): Promise<number | null> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// The harness only hands out clones of a migrated template, so a database that has never been migrated is made from a
+// clone by dropping what `migrate` creates, as the owner that created it: the three schemas, and with `public` the
+// extensions and tenant functions in it. `public` is then created again with the access it has in a fresh database.
+async function unmigrate(database: TestDatabase): Promise<void> {
+  await database.owner.unsafe("DROP SCHEMA drizzle CASCADE; DROP SCHEMA pgboss CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT USAGE ON SCHEMA public TO PUBLIC");
 }
 
 function logLines(output: string): Record<string, unknown>[] {
@@ -233,6 +245,32 @@ describe("apps/slugbase main server --with-worker", () => {
     expect(await canConnect(running.port)).toBe(false);
     expect(await workerConnections(database)).toBe(0);
   }, 90_000);
+
+  it("migrates an unmigrated database before the worker starts and then carries out a job", async () => {
+    const fresh = await createTestDatabase();
+    try {
+      await unmigrate(fresh);
+      expect(await fresh.owner`SELECT 1 FROM pg_namespace WHERE nspname IN ('drizzle', 'pgboss')`).toHaveLength(0);
+      const running = await startServer(fresh, ["--with-worker"], true);
+      try {
+        const output = running.output();
+        // The order is read from each line's own timestamp (see the shutdown test).
+        const at = (message: string): number => {
+          const entry = logLines(output).find((line) => line["msg"] === message);
+          expect(entry, `a "${message}" line in\n${output}`).toBeDefined();
+          return Number(entry?.["time"]);
+        };
+        expect(at("The database is migrated")).toBeLessThanOrEqual(at("Worker started"));
+        expect((await register(running.port, "edsger@example.test")).split("\r\n")[0]).toBe("HTTP/1.1 202 Accepted");
+        await until(async () => (await eventJobs(fresh)).some((job) => job.state === "completed"), "the queued job to complete");
+      } finally {
+        expect(await stop(running), running.output()).toBe(0);
+      }
+      expect(await eventJobs(fresh)).toEqual([{ name: "event.workspace.created", state: "completed" }]);
+    } finally {
+      await fresh.drop();
+    }
+  }, 120_000);
 
   it("shuts down what started when the signal arrives while it starts", async () => {
     const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server", "--with-worker"], {
