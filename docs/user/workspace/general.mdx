@@ -1,0 +1,115 @@
+---
+title: "General"
+description: "Rename a workspace, leave it, or delete it."
+edition: both
+order: 10
+---
+
+**General** shows the name of the workspace you have open. Admins and owners rename it here. Every member can leave the workspace, and an owner can delete it.
+
+<Screenshot alt="The General page with the workspace name and the danger zone" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open.
+
+## What you can do, by role
+
+| What | Owner | Admin | Member |
+| ---- | :---: | :---: | :----: |
+| See the workspace name | Yes | Yes | Yes, read-only |
+| Rename the workspace | Yes | Yes | No |
+| Leave the workspace | Yes, unless you are the last owner | Yes | Yes |
+| Delete the workspace | Yes | No | No |
+
+A member sees the name as a field that cannot be edited, with the note "Only admins and owners can rename the workspace." See [Workspaces and Roles](../concepts/workspaces-and-roles.mdx) for the roles.
+
+## Open General
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Workspace** in the settings navigation, choose **General**.
+
+The workspace switcher at the top of the sidebar also has a **Workspace settings** entry. The page always shows the workspace you have open. To change another workspace, switch to it first.
+
+## Rename the workspace
+
+1. Change the **Name**. Use 1 to 64 characters. Everyone in the workspace sees this name in the workspace switcher. The monogram next to it is made from the name.
+2. Choose **Save**.
+
+**Result:** SlugBase says **Workspace renamed**. The rename is recorded in the [audit log](audit-log.mdx).
+
+If someone else changed the workspace after you opened the page, SlugBase says **The workspace changed**. Your edit was not saved. Choose **Reload** to see the current name, then try again.
+
+## Leave a workspace
+
+You lose access to the workspace right away, and your API tokens for it stop working. You decide what happens to the bookmarks and folders you made there.
+
+1. Under **Danger zone**, choose **Leave workspace**.
+2. The dialog opens with the title **Leave** and the workspace's name. Choose what happens to your content:
+   - **Transfer the content.** Your bookmarks and folders go to another member and keep their slugs. A slug the recipient already uses is cleared on the transferred bookmark. Under **Transfer to**, search for the member. SlugBase starts with the longest-standing other owner.
+   - **Delete the content.** Your bookmarks and folders are deleted with your membership. This cannot be undone.
+3. Choose **Continue**.
+4. Read the consequence the next dialog states, then choose **Leave workspace**.
+
+Your tags and your remembered choices for slugs are deleted either way, because they are private.
+
+**Result:** SlugBase says **You left** and the workspace's name. It then opens another of your workspaces, or tells you that you are not in a workspace yet. See [No Workspace](../access/no-workspace.mdx).
+
+### If you are the last owner
+
+A workspace always has at least one owner. If you are the last one, **Leave workspace** is off, and the page says "You are the last owner of this workspace, so you cannot leave it yet." Choose **Transfer ownership first.** to open [Members](members.mdx). Make another member an owner, then leave.
+
+## Delete a workspace
+
+Only an owner can delete a workspace. Deleting it removes the workspace and everything in it for every member, and cannot be undone.
+
+1. Under **Danger zone**, choose **Delete workspace**.
+2. Read the warning. The dialog asks to delete the workspace by name and says: "This is irreversible." Every member loses access right away.
+3. Type the workspace's name where the dialog says "Type" and the name "to confirm".
+4. Choose **Delete workspace**.
+5. If SlugBase asks you to confirm it is you, enter your password and choose **Confirm**. If you close that prompt, SlugBase says "Confirm it is you to delete the workspace." and deletes nothing. See [Security](../account/security.mdx).
+
+**Result:** SlugBase says the workspace "is being deleted". It disappears from every member's workspace switcher at once, its API tokens stop working, and members who had it open move to another workspace or to the page for people with none. SlugBase then removes the bookmarks, folders, tags, teams, shares, invitations and settings in the background. The request is recorded in the audit log before anything is removed.
+
+SlugBase does not offer an export in this dialog. Each member can export only their own bookmarks, from [Import and Export](../account/import-and-export.mdx). Ask members to export what they want before you delete the workspace.
+
+### When SlugBase refuses
+
+A dialog titled with the workspace's name and "cannot be deleted yet" says why. Nothing changes.
+
+- On SlugBase Cloud, a workspace with an active paid subscription cannot be deleted. Cancel the subscription first.
+- Your SlugBase may refuse for another reason. The dialog then says "This server does not allow the workspace to be deleted right now. Nothing was changed."
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Name | 1 to 64 characters. Read-only for members. | Yes |
+| Transfer the content | Your bookmarks and folders go to the member you pick under **Transfer to**. | One of the two |
+| Delete the content | Your bookmarks and folders are deleted. | One of the two |
+| Type the workspace name | Confirms a deletion. It must match the name exactly. | Yes, to delete |
+
+## Troubleshooting
+
+### The page says "The workspace could not be loaded"
+
+Choose **Try again**. If it continues, tell the person who runs your SlugBase.
+
+### The page says "You are no longer allowed to change this workspace."
+
+Your role changed while the page was open. Reload the page.
+
+### Leaving says "Nothing was changed"
+
+SlugBase gives the reason: you are the last owner, or the member you picked to receive your content left the workspace. Choose another member and try again.
+
+### Deleting says "Only an owner can delete the workspace."
+
+You are not an owner any more. The page reloads. Ask an owner to delete it.
+
+## Related pages
+
+- [Members](members.mdx)
+- [Teams](teams.mdx)
+- [Audit Log](audit-log.mdx)
+- [Workspaces and Roles](../concepts/workspaces-and-roles.mdx)

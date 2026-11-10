@@ -1,0 +1,104 @@
+---
+title: "Share Dialog"
+description: "Share a bookmark or a folder with members and teams, and stop sharing again."
+edition: both
+order: 50
+---
+
+The **share dialog** lets you give other members of your workspace read access to a bookmark or a folder of yours. You pick members and teams, see who has access, and remove access with one click.
+
+<Screenshot alt="The share dialog with the Share with field, the current shares and the read-only note" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open.
+- The bookmark or folder is yours. You cannot share what another member shared with you.
+- Your workspace can share. The share controls are hidden where it cannot.
+
+<Callout>
+On a self-hosted SlugBase, sharing is always on. On SlugBase Cloud, your plan decides whether you can share with individual members and whether you can share with teams. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## Open the share dialog
+
+| Where | How |
+| ----- | --- |
+| A bookmark in [Bookmarks](bookmarks.mdx) | Open the actions menu, **Actions for** and the bookmark's title, and choose **Share**. |
+| The bookmark dialog | Open your bookmark for editing and choose **Manage** on the **Sharing** line. See [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx). |
+| A folder in [Folders](folders.mdx) | Open the actions menu and choose **Share settings**. |
+
+The title says **Share** and the bookmark's title, or **Share the folder** and its name. The text under it tells you what the people you choose can read.
+
+To share several bookmarks at once, select them in [Bookmarks](bookmarks.mdx) and choose **Share** on the bar. That dialog is a separate one.
+
+## Share with a member or a team
+
+1. Under **Share with**, search for a name. The field says "Search members and teams". The results are in two groups, **Members** and **Teams**. It leaves out you, and anyone who already has a share.
+2. Choose a member or a team.
+
+**Result:** SlugBase says **Shared with** and the name. The share applies at once, with no Save button. The person can read the bookmark or folder from their next request.
+
+Share a folder to give people everything in it, now and later. Share with a team to give the same access to everyone in it, including people who join the team later. See [Sharing](concepts/sharing.mdx) for how access reaches people.
+
+## Check who has access
+
+Under **Current shares**, each row shows the member's name and email address, or the team's name, with **Member** or **Team** next to it. A new dialog without shares says "Not shared with anyone yet."
+
+The footer says how many members can read it, for example **Visible to 7 members**, with a row of their avatars. A team counts as the members in it now. The line appears once you have shared with someone. It says **Not shared with anyone** when the only shares are with teams that have no members.
+
+## Stop sharing
+
+1. In the row of the member or team, choose the remove button, labelled **Stop sharing with** and the name.
+
+**Result:** SlugBase says **Stopped sharing with** and the name. Their access ends at once. If the person can still read it another way, for example through a team or a shared folder, they keep that access.
+
+Choose **Done** to close the dialog.
+
+## What the people you share with get
+
+Sharing is read-only. The dialog says so in a note: for a bookmark, "Sharing is read-only. Members can open this bookmark and its slug, but only you can change or delete it." For a folder, members can see the folder and the bookmarks in it, but only you can change or delete them.
+
+- They can find it in lists, search and the command palette, open it and use its slug.
+- They cannot edit it, pin it, tag it, file it in a folder, delete it or share it further.
+- They cannot see who else it is shared with. They see only that you shared it.
+- Your tags and your folders do not travel with a bookmark.
+- Workspace admins and owners get no access to your private bookmarks through their role. They need a share like anyone else.
+
+The full list is in [Sharing](concepts/sharing.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Share with | A member or a team of the workspace. | Yes, to add a share |
+| Current shares | The members and teams that have access. Remove one with **Stop sharing with**. | n/a |
+
+## Troubleshooting
+
+### The share button is missing
+
+Your workspace cannot share, or the bookmark or folder is not yours. On SlugBase Cloud, a plan decides what you can share.
+
+### The dialog says "No member or team matches."
+
+Nobody in the workspace matches the search, or they already have a share. Try another spelling. Teams are made by admins and owners. See [Teams](workspace/teams.mdx).
+
+### A message says "is no longer in the workspace"
+
+The person or the team left the workspace or was deleted while the dialog was open. The list updates.
+
+### A message says "This bookmark no longer exists" or "This folder no longer exists"
+
+Someone deleted it. Close the dialog.
+
+### The dialog says "Members and teams could not be loaded."
+
+Close the dialog and open it again. If it continues, tell the person who runs your SlugBase.
+
+## Related pages
+
+- [Sharing](concepts/sharing.mdx)
+- [Teams](workspace/teams.mdx)
+- [Bookmarks](bookmarks.mdx)
+- [Folders](folders.mdx)
+- [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx)

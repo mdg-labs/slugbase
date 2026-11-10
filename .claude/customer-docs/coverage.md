@@ -7,7 +7,7 @@
 | `/` | docs/user/home.mdx | current | e0010e65 | |
 | `/bookmarks` | docs/user/bookmarks.mdx | current | e0010e65 | |
 | bookmark modal (`?bookmark`, `?new`) | docs/user/add-and-edit-bookmarks.mdx | current | e0010e65 | overlay |
-| share dialog | docs/user/sharing.mdx | missing | — | overlay |
+| share dialog | docs/user/sharing.mdx | current | 7f88acee | overlay |
 | `/folders` | docs/user/folders.mdx | current | e0010e65 | |
 | `/tags` | docs/user/tags.mdx | current | e0010e65 | |
 | `/forwarding` | docs/user/forwarding.mdx | current | e0010e65 | |
@@ -20,11 +20,11 @@
 | `/settings/account/tokens` | docs/user/account/api-tokens.mdx | current | f60e2b5e | |
 | `/settings/account/preferences` | docs/user/account/preferences.mdx | current | f60e2b5e | |
 | `/settings/account/data` | docs/user/account/import-and-export.mdx | current | f60e2b5e | |
-| `/settings/workspace` | docs/user/workspace/general.mdx | missing | — | |
-| `/settings/workspace/members` | docs/user/workspace/members.mdx | missing | — | |
-| `/settings/workspace/teams` | docs/user/workspace/teams.mdx | missing | — | |
-| `/settings/workspace/audit` | docs/user/workspace/audit-log.mdx | missing | — | |
-| `/settings/workspace/ai` | docs/user/workspace/ai-suggestions.mdx | missing | — | |
+| `/settings/workspace` | docs/user/workspace/general.mdx | current | 7f88acee | |
+| `/settings/workspace/members` | docs/user/workspace/members.mdx | current | 7f88acee | |
+| `/settings/workspace/teams` | docs/user/workspace/teams.mdx | current | 7f88acee | |
+| `/settings/workspace/audit` | docs/user/workspace/audit-log.mdx | current | 7f88acee | |
+| `/settings/workspace/ai` | docs/user/workspace/ai-suggestions.mdx | current | 7f88acee | |
 | `/admin` | docs/user/admin/overview.mdx | missing | — | |
 | `/admin/workspaces` | docs/user/admin/workspaces.mdx | missing | — | |
 | `/admin/accounts` | docs/user/admin/accounts.mdx | missing | — | |

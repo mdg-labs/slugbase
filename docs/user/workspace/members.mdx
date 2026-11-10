@@ -1,0 +1,162 @@
+---
+title: "Members"
+description: "Invite people, change roles, remove members, transfer ownership and manage pending invitations."
+edition: both
+order: 20
+---
+
+**Members** lists the people in the workspace and what each of them can do. Admins and owners use it to invite people, change roles, remove members and hand over ownership.
+
+<Screenshot alt="The Members page with the members table and the pending invitations" />
+
+## Prerequisites
+
+- You are an admin or an owner of the workspace. A member who opens this page sees "You don't have access" and finds only **General** and **Teams** in the settings navigation.
+
+<Callout>
+On a self-hosted SlugBase, invitations and teams are always on. On SlugBase Cloud, your plan decides whether the workspace can invite people and use teams, and a seat summary appears above the invitations. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## What each role can do here
+
+| What | Owner | Admin | Member |
+| ---- | :---: | :---: | :----: |
+| Open this page | Yes | Yes | No |
+| Invite people, resend, copy a link or revoke an invitation | Yes | Yes | No |
+| Change a role between admin and member | Yes | Yes, but not an owner's | No |
+| Make someone an owner, or change an owner's role | Yes | No | No |
+| Transfer ownership | Yes | No | No |
+| Remove a member | Yes | Yes, but not an owner | No |
+| Remove an owner | Yes | No | No |
+
+A workspace always has at least one owner. The last owner cannot be demoted, removed or leave. See [Workspaces and Roles](../concepts/workspaces-and-roles.mdx).
+
+## Open Members
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Workspace**, choose **Members**.
+
+The table shows each member's **Name**, with **You** next to your own, **Email**, **Role**, **Teams**, **Joined** and **Last active**. **Last active** says **Never** for someone who has not used the workspace yet. Choose **Show more** to see further members.
+
+## Invite people
+
+1. Under **Invitations**, choose **Invite people**.
+2. Enter one or more **Email addresses**. Separate them with a comma, or press Enter after each.
+3. Choose a **Role**: **Admin** or **Member**. An invitation cannot make someone an owner.
+4. Optional: pick **Teams**. The people you invite join them when they accept. This field appears only where your workspace can use teams.
+5. Choose **Send invitations**.
+
+**Result:** SlugBase lists the outcome for each address: **Invited**, **Skipped** or **Failed**. It says, for example, "Already a member of this workspace." for someone who is in. Choose **Try the failed ones again** to resend only the failed ones.
+
+Inviting an address that already has a pending invitation sends it again, with the role and teams of your new request. See [Teams and Invitations](../concepts/teams-and-invitations.mdx) for what the person sees when they accept.
+
+If your SlugBase cannot send email, the dialog says so. The invitations are created without a message. Copy each link from the list and send it yourself.
+
+## Manage pending invitations
+
+**Invitations** lists people who were invited and have not joined yet, with their **Email**, **Role**, who they were **Invited by**, the **Status** (**Pending** or **Expired**) and when it **Expires**. Open the actions menu of a row, **Actions for the invitation of** and the address:
+
+| Action | What it does |
+| ------ | ------------ |
+| **Resend** | Sends the invitation again by email, with a new link and a new expiry. The old link stops working. It appears only where your SlugBase can send email. You can resend an expired invitation. |
+| **Copy invitation link** | Shows a new link once, in **Invitation link**. Send it to the person yourself. Any earlier link for this invitation stops working, and the new one expires in 7 days. Use it when your SlugBase cannot send email. |
+| **Revoke** | Asks "Revoke the invitation for" the address. The link stops working at once, and you can invite the person again later. |
+
+A link shows only once. If you lose it, choose **Copy invitation link** again for a new one.
+
+## Change a role
+
+1. In the **Role** column, choose the new role from the list in the person's row. Or open **Actions for** and the person's name, and choose **Make owner**, **Make admin** or **Make member**.
+
+**Result:** the role changes at once. The role changes what the person can do in the workspace, for example whether they can open this page.
+
+Making someone an owner, or changing an owner's role, asks you to confirm it is you. See the section **Confirm it is you** below.
+
+SlugBase can refuse a change:
+
+- "A workspace needs at least one owner. Make someone else an owner first."
+- "You are not allowed to change this role." An admin cannot change an owner's role.
+- "Verify your email address before you make someone an owner or give up your own owner role in a workspace you made."
+
+## Assign teams to a member
+
+1. Open **Actions for** and the person's name, and choose **Manage teams**.
+2. In **Teams of** and the person's name, search under **Teams** and choose the teams.
+3. Choose **Save teams**.
+
+**Result:** SlugBase says the teams were saved. **Manage teams** appears only where your workspace can use teams. See [Teams](teams.mdx).
+
+## Remove a member
+
+1. Open **Actions for** and the person's name, and choose **Remove from workspace**. You cannot remove yourself here. Use **Leave workspace** on [General](general.mdx).
+2. In **Remove** and the person's name, choose what happens to their bookmarks and folders:
+   - **Transfer the content.** The bookmarks and folders go to another member and keep their slugs. A slug the recipient already uses is cleared on the transferred bookmark. Under **Transfer to**, search for the recipient. SlugBase starts with you.
+   - **Delete the content.** The bookmarks and folders are deleted with the membership. This cannot be undone.
+3. Choose **Continue**.
+4. Read the consequence, then choose **Remove member**.
+
+**Result:** SlugBase says the person "was removed from the workspace". They lose access right away, and their API tokens for the workspace stop working. Their tags and remembered choices for slugs are deleted either way, because they are private. Shares they received end. Shares they granted move with transferred content, and go with deleted content.
+
+Removing another owner asks you to confirm it is you.
+
+## Transfer ownership
+
+Transfer ownership when another member should take over the workspace. Only an owner can.
+
+1. Open **Actions for** and the name of a member who is not an owner, and choose **Transfer ownership**.
+2. Read **Transfer ownership to** and the person's name. The person becomes an owner. "Owners can also make other members owners."
+3. Optional: turn on **Stay as admin** to step down from owner to admin once they are an owner. Leave it off to stay an owner.
+4. Type the person's name where the dialog says "Type" and the name "to confirm".
+5. Choose **Transfer ownership**.
+6. Confirm it is you.
+
+**Result:** SlugBase says the person "is now an owner of the workspace", and with **Stay as admin**, that you are an admin. Where your SlugBase can send email, the new owner gets a message about it.
+
+## Confirm it is you
+
+Some actions here ask for your password again, even though you are signed in: making someone an owner, changing an owner's role, removing an owner, and transferring ownership. SlugBase shows **Confirm it is you**.
+
+1. Enter your **Password**.
+2. Choose **Confirm**.
+
+**Result:** the action goes ahead. SlugBase remembers the confirmation for ten minutes. If you close the prompt, nothing changes, and a transfer says "Confirm it is you to transfer ownership." If your account signs in through a provider and has no password, you confirm through the provider instead. See [Security](../account/security.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Email addresses | One or more addresses to invite. | Yes |
+| Role | **Admin** manages members, invitations and the workspace settings. **Member** uses the workspace's bookmarks and folders. | Yes |
+| Teams | Teams the invited people join. | No |
+| Transfer to | The member who receives the content of someone who leaves. | Yes, when you transfer |
+| Stay as admin | Step down from owner to admin after a transfer. | No |
+
+## Troubleshooting
+
+### The page says "No pending invitations"
+
+Nobody is waiting. People you invite appear here until they join.
+
+### Resend is missing
+
+Your SlugBase cannot send email. Choose **Copy invitation link** and send the link yourself. The page says: "This server cannot send email. Copy the invitation link instead."
+
+### The invitation says "This invitation is no longer pending"
+
+The person joined or someone revoked it. The list reloads.
+
+### A removal says "Nothing was changed"
+
+SlugBase gives the reason. The person may be the last owner, or the member you chose to receive the content may have left the workspace. Choose another member and try again.
+
+### The page says "The members could not be loaded"
+
+Choose **Try again**.
+
+## Related pages
+
+- [General](general.mdx)
+- [Teams](teams.mdx)
+- [Audit Log](audit-log.mdx)
+- [Teams and Invitations](../concepts/teams-and-invitations.mdx)
+- [Workspaces and Roles](../concepts/workspaces-and-roles.mdx)
