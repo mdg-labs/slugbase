@@ -21,13 +21,13 @@ export const BUDGETS_MS = { go: 30, go_suggest: 50, list: 100, search: 100, list
 // The two budgets of the import phase are not in milliseconds but ratios to the same run's steady scenario: the p95 of `go_import` may be at most `ratio` times the p95 of `go` of the run, and
 // that of `list_import` at most `ratio` times the p95 of `list`. A ratio is what another member's import costs /go and the list, and it cancels most of the speed of the runner machine, which a
 // millisecond budget set from a few runs did not (the p95 of go during an import was 30 to 67 ms in four runs, its ratio to steady go 3.0 to 4.4). See `RATIO_BUDGETS` below and "The import phase" in README.md.
-export const RATIO_BUDGETS = { go_import: { of: "go", ratio: 5.9 }, list_import: { of: "list", ratio: 5.8 } };
+export const RATIO_BUDGETS = { go_import: { of: "go", ratio: 8.4 }, list_import: { of: "list", ratio: 9.0 } };
 // A budget is named for its scenario with a space for the underscore, unless the scenario is named here.
 const NAMES = { go_import: "go during import", list_import: "list during import" };
 // `go_import` and `list_import` are ratios (RATIO_BUDGETS) because an import is synchronous: while one is in flight the request thread still checks the answer of the import worker thread and runs its
 // database writes (doc 02 section 13.1), on a runner whose CPUs the server, the worker thread, Postgres and k6 share, so the time of a request beside an import follows the speed of that machine
 // as the time of a steady request does. Each is set by the rule of #806 over the nightly runs on the runner (the reference host of every budget), applied to the ratio: the highest ratio plus the
-// spread (highest minus lowest) of the counted runs, rounded up to one decimal; see "The import phase" in README.md. The steady `go` stays 30 ms and the steady list 100 ms.
+// spread (highest minus lowest) of the counted runs, rounded up to one decimal (8.4 and 9.0, from four counted runs of the phase of IMPORT_PHASE below); see "The import phase" in README.md. The steady `go` stays 30 ms and the steady list 100 ms.
 
 // The import run (doc 02 section 13.1, doc 08 section 5.3): `perf-member-1` imports the largest Netscape file and then the largest SlugBase JSON file into the large workspace, while the
 // instance admin's /go and list traffic goes on at the run's rate (go_import, list_import: the p95 of the requests made while an import is in flight is a budget) and `perf-member-2`

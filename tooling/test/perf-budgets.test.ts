@@ -149,8 +149,8 @@ function summaryOf(ids: string[], { requests = 20, without = [], peakVus = 3 }: 
 const omitting = (summary: Summary, key: string): Summary => ({ metrics: Object.fromEntries(Object.entries(summary.metrics).filter(([name]) => name !== key)) });
 
 // The committed ratios, set by the rule of #806 over the nightly runs on the runner (scripts/perf/README.md, "The import phase").
-const GO_RATIO = 5.9;
-const LIST_RATIO = 5.8;
+const GO_RATIO = 8.4;
+const LIST_RATIO = 9.0;
 
 const read = (file: string): string => readFileSync(resolve(ROOT, "scripts/perf", file), "utf8");
 
