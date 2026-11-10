@@ -543,8 +543,11 @@ take_dump() {
     compose $GUIDE_DUMP >"$dump"
   ) || fail "the dump of the guide failed"
   [[ -s "$dump" ]] || fail "the dump of the guide is empty"
-  compose exec -T postgres pg_restore --list <"$dump" | grep -qF 'TABLE DATA public bookmarks' ||
-    fail "the dump does not list the data of the bookmarks"
+  # The listing is captured whole and then matched. Piping it into `grep -q` would close the pipe at the first match,
+  # pg_restore would get SIGPIPE while it is still writing, and pipefail would fail a listing that holds the line.
+  local listing
+  listing="$(compose exec -T postgres pg_restore --list <"$dump")" || fail "listing the dump failed"
+  [[ "$listing" == *'TABLE DATA public bookmarks'* ]] || fail "the dump does not list the data of the bookmarks"
   log "ok: the guide's dump was made and lists its contents"
 }
 

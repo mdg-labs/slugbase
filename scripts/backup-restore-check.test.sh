@@ -437,6 +437,58 @@ if grep -qx "rm --force --volumes abc" "$FAKE_DOCKER_LOG"; then pass "the cleanu
 if grep -qx "rm --force --volumes bare1 bare2" "$FAKE_DOCKER_LOG"; then pass "the cleanup step finds the server without roles by its name and removes it with its volumes"; else fail_test "cleanup of the bare server (log: $(cat "$FAKE_DOCKER_LOG"))"; fi
 if ! grep -qE "(def|ghi)" "$FAKE_DOCKER_LOG"; then pass "the cleanup step leaves other containers alone"; else fail_test "cleanup removed another container (log: $(cat "$FAKE_DOCKER_LOG"))"; fi
 
+# ---------------------------------------------------------------------------------------------------------------------
+# The dump's listing
+# ---------------------------------------------------------------------------------------------------------------------
+
+# take_dump matches the listing of pg_restore for the data of the bookmarks. A consumer that closes the pipe at the first
+# match (grep -q) gives the producer SIGPIPE, and pipefail then fails the check although the line was found. The stand-in
+# compose makes the dump, then prints the matching line first and keeps writing well past the size of a pipe, so the
+# producer is always still writing when the match is found.
+# shellcheck disable=SC2317 # called by take_dump
+compose() {
+  case "$*" in
+    "$GUIDE_DUMP") printf 'PGDMP\n' ;;
+    "exec -T postgres pg_restore --list")
+      printf '1; 0 0 TABLE DATA public bookmarks slugbase\n'
+      local i
+      for ((i = 0; i < 4096; i++)); do printf '%s; 0 0 TABLE DATA public filler_%s slugbase %0100d\n' "$i" "$i" 0; done
+      ;;
+    *) return 1 ;;
+  esac
+}
+work="$tmp/listing-work"
+mkdir -p "$work"
+run take_dump
+expect_ok "the dump's listing is matched although the listing is still being written when the match is found"
+expect_output "the check reports the dump and its contents" "the guide's dump was made and lists its contents"
+
+# Without the data of the bookmarks the check still fails.
+# shellcheck disable=SC2317 # called by take_dump
+compose() {
+  case "$*" in
+    "$GUIDE_DUMP") printf 'PGDMP\n' ;;
+    "exec -T postgres pg_restore --list") printf '1; 0 0 TABLE DATA public tags slugbase\n' ;;
+    *) return 1 ;;
+  esac
+}
+run take_dump
+expect_failed "a listing without the data of the bookmarks fails the check"
+expect_output "the failure names the bookmarks" "the dump does not list the data of the bookmarks"
+
+# A listing that fails is a failure of its own, whatever it printed.
+# shellcheck disable=SC2317 # called by take_dump
+compose() {
+  case "$*" in
+    "$GUIDE_DUMP") printf 'PGDMP\n' ;;
+    "exec -T postgres pg_restore --list") printf '1; 0 0 TABLE DATA public bookmarks slugbase\n'; return 3 ;;
+    *) return 1 ;;
+  esac
+}
+run take_dump
+expect_failed "a listing that fails fails the check even when it printed the bookmarks"
+expect_output "the failure says the listing failed" "listing the dump failed"
+
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2
   exit 1
