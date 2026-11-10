@@ -39,14 +39,16 @@ export const CREATE_RATE = 5;
 export const CREATE_PHASES = ["without", "during"];
 // How long the import phase is (#818). The p95 of /go and the list "while an import is in flight" is only as stable as the number of requests behind it: one pair of the largest files is in flight for 1 to 2.5 s on
 // the runner, which at the steady 40 a second was 146 to 319 requests per scenario, a p95 that is the 8th to the 16th worst of them, and a ratio that moved from 2.9 to 6.1 on a code that had not changed. So the phase
-// repeats the pair, one after the other, in the same workspace (each repeat's files name addresses, slugs, folders and tags of their own, packages/testing/src/seed/import-files.ts), and requests /go and the list at
-// `rate` a second, 1.5 times the steady rate. Neither can be pushed further, measured on a development host (24 cores, the runner is slower): at 100 a second the two scenarios dropped 4 % of their arrivals with 6 pairs
-// (their p95 was 29 times the steady one's, a queue), and at 40 a second 15 pairs, 150 000 bookmarks in 30 s into the workspace of 49 000, were fine for 13 pairs (1.0 s an import) and then slowed to 3 to 7 s an import with
-// 196 arrivals dropped, so the repeats are as few as the sample allows. `repeats` pairs are in flight for at least 10 x 2.1 s (the quickest pair seen on the runner: 1.19 s and 0.92 s) = 21.1 s, which at `rate` is 1 266
-// requests per scenario at the least (a fifth over the 1 000 needed) and about 2 800 when the runner takes 4.65 s a pair, its slowest; `windowSeconds` is the time all the pairs have to end in, 46.5 s on the slowest pair
-// seen and room for the imports to slow as the workspace grows.
+// repeats the pair, one after the other, in the same workspace (each repeat's files name addresses, slugs, folders and tags of their own, packages/testing/src/seed/import-files.ts), until the imports have been in flight for
+// `targetSeconds` (the importer stops after the pair that takes it there), at most `maxRepeats` pairs. The rate stays the steady 40 a second: two runner runs of 10 pairs at 60 a second were saturated (both scenarios
+// dropped 28 to 33 arrivals and used 86 to 94 VUs, their p95 was 456 to 586 ms against steady 12 to 19 ms, a queue), although the imports did not slow as the workspace grew by 100 000 bookmarks (1.7 to 2.4 s
+// each in the first run, 1.6 to 2.6 s in the second, no trend); a rate of 100 saturated a local run the same way. At 40 a second the pair that was run alone never dropped an arrival, and requests follow the rate times the time in flight
+// (2 446 + 31 dropped = 41.2 s x 60), so 30 s in flight is 1 200 requests per scenario. A fixed number of pairs would give that only on one speed of runner (a pair has taken 2.1 to 4.65 s there, 15 to 6.5 pairs for
+// 30 s): counting the time makes the sample the same on any runner, and the number of pairs (7 to 14, 70 000 to 140 000 bookmarks) is what varies; `maxRepeats` is the pairs a runner as quick as the quickest seen needs
+// (14 x 2.1 s = 29.4 s, 1 176 requests), and a run that reaches it without the minimum fails closed (below). `windowSeconds` is the time they all have to end in: 30 to 35 s of imports and about 0.3 s of signalling
+// for each, 45 s at most, and room for the imports to slow.
 // `minSeconds` and `minRequests` are the sample the phase must have, which run.mjs holds a run to (a run with fewer is a failed run, never a ratio judged on too few requests).
-export const IMPORT_PHASE = { repeats: 10, rate: 60, windowSeconds: 120, minSeconds: 10, minRequests: 1000 };
+export const IMPORT_PHASE = { maxRepeats: 14, targetSeconds: 30, rate: 40, windowSeconds: 90, minSeconds: 10, minRequests: 1000 };
 
 // The sample of an import phase against what it must have: `inFlightSeconds` (the imports' time in flight, summed) and `completed`, the requests of each of IMPORT_SCENARIOS. The reasons it falls short, none when it does not.
 export function importSampleShortfalls({ inFlightSeconds, completed }) {

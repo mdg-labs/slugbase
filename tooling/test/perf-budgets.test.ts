@@ -44,7 +44,7 @@ interface BudgetsModule {
   IMPORTER_EMAIL: string;
   CREATOR_EMAIL: string;
   IMPORT_STATES: string[];
-  IMPORT_PHASE: { repeats: number; rate: number; windowSeconds: number; minSeconds: number; minRequests: number };
+  IMPORT_PHASE: { maxRepeats: number; targetSeconds: number; rate: number; windowSeconds: number; minSeconds: number; minRequests: number };
   importSampleShortfalls: (sample: { inFlightSeconds: number; completed: Record<string, number> }) => string[];
   createMetrics: (phase: string) => { p95: string; completed: string };
   createThresholds: () => Record<string, string[]>;
@@ -490,24 +490,21 @@ describe("performance budgets", () => {
     const QUICKEST_PAIR = 1.188 + 0.922;
     const SLOWEST_PAIR = 2.54 + 2.108;
 
-    it("repeats the pair of imports so that the quickest runner seen still has an import in flight for the seconds, and /go and the list the requests, the phase needs", () => {
+    it("repeats the pairs until the imports have been in flight long enough for the requests the phase needs, at the rate the steady scenarios keep up with, and a runner as quick as the quickest seen has the pairs for it", () => {
       expect(IMPORT_PHASE.minSeconds).toBeGreaterThanOrEqual(10);
       expect(IMPORT_PHASE.minRequests).toBeGreaterThanOrEqual(1000);
-      expect(Number.isInteger(IMPORT_PHASE.repeats) && IMPORT_PHASE.repeats > 1).toBe(true);
-      // With margin on the quickest pair: more than a fifth over each minimum.
-      const quickest = IMPORT_PHASE.repeats * QUICKEST_PAIR;
-      expect(quickest).toBeGreaterThanOrEqual(IMPORT_PHASE.minSeconds * 1.2);
-      expect(quickest * IMPORT_PHASE.rate).toBeGreaterThanOrEqual(IMPORT_PHASE.minRequests * 1.2);
-      // Every pair of the slowest runner seen ends in the window with room to spare: 2.5 times over, for the imports that slow as the workspace grows.
-      expect(IMPORT_PHASE.repeats * SLOWEST_PAIR * 2.5).toBeLessThanOrEqual(IMPORT_PHASE.windowSeconds);
-    });
-
-    it("requests /go and the list faster than the steady 40 a second, but not so fast that a stall of a second queues past the VUs of a scenario", () => {
-      expect(IMPORT_PHASE.rate).toBeGreaterThan(40);
-      // k6 drops an arrival when every VU of the scenario is busy, and the scenario is then saturated and its ratio not judged: at 100 a second a stall of a second did (a local run dropped 4 %). The rate stays
-      // under that, and a stall of a second and a half at it is under the VUs of a scenario.
-      expect(IMPORT_PHASE.rate).toBeLessThan(MAX_VUS);
-      expect(IMPORT_PHASE.rate * 1.5).toBeLessThan(MAX_VUS);
+      // The requests follow the rate times the time in flight: the target is a fifth over the minimum, and the minimum of seconds is far under it.
+      expect(IMPORT_PHASE.targetSeconds).toBeGreaterThanOrEqual(IMPORT_PHASE.minSeconds * 2);
+      expect(IMPORT_PHASE.targetSeconds * IMPORT_PHASE.rate).toBeGreaterThanOrEqual(IMPORT_PHASE.minRequests * 1.2);
+      // The rate is the steady one: 60 a second saturated two runner runs (28 to 33 arrivals dropped, a queue for a p95), and the run's default rate is this one.
+      expect(IMPORT_PHASE.rate).toBe(40);
+      expect(read("run.mjs")).toContain(`rate: { type: "string", default: "${String(IMPORT_PHASE.rate)}" }`);
+      // The pairs there are files for: enough at the quickest pair for the target to within a pair and for the minimum of requests with 15 % to spare.
+      expect(Number.isInteger(IMPORT_PHASE.maxRepeats)).toBe(true);
+      expect(IMPORT_PHASE.maxRepeats * QUICKEST_PAIR).toBeGreaterThanOrEqual(IMPORT_PHASE.targetSeconds - QUICKEST_PAIR);
+      expect(IMPORT_PHASE.maxRepeats * QUICKEST_PAIR * IMPORT_PHASE.rate).toBeGreaterThanOrEqual(IMPORT_PHASE.minRequests * 1.15);
+      // The slowest runner seen reaches the target in whole pairs and ends them in the window with room to spare: twice over.
+      expect((IMPORT_PHASE.targetSeconds + SLOWEST_PAIR) * 2).toBeLessThanOrEqual(IMPORT_PHASE.windowSeconds);
     });
 
     it("holds a sample to its minimums, and names each one it falls short of", () => {
@@ -524,18 +521,21 @@ describe("performance budgets", () => {
       const runner = read("run.mjs");
       const scenarios = read("scenarios.js");
       expect(runner).toMatch(/const DEFAULT_IMPORT_WINDOW_SECONDS = String\(IMPORT_PHASE\.windowSeconds\)/);
-      expect(runner).toMatch(/IMPORT_REPEATS: String\(importRepeats\),\s*IMPORT_RATE: String\(importRate\),\s*SIGNAL_URL/);
+      expect(runner).toMatch(/IMPORT_REPEATS: String\(importMaxRepeats\),\s*IMPORT_TARGET_SECONDS: String\(IMPORT_PHASE\.targetSeconds\),\s*IMPORT_RATE: String\(importRate\),\s*SIGNAL_URL/);
       expect(runner).toMatch(/importSampleShortfalls\(\{ inFlightSeconds, completed: requests \}\)/);
       expect(runner).toMatch(/importRun\.sample\.enforced && importRun\.sample\.shortfalls\.length > 0/);
       expect(runner).toMatch(/buildImportFiles\(\{ collidingSlugs: \[\.\.\.collidingSlugs, \.\.\.slugs\], repeat \}\)/);
       // The result records the window, the number of imports and the requests of each scenario.
-      expect(runner).toMatch(/phase: \{ windowSeconds: Number\(args\["import-window"\]\), repeats: importRepeats, importCount: imports\.length, rate: importRate, inFlightSeconds, requests,/);
+      expect(runner).toMatch(/phase: \{ windowSeconds: Number\(args\["import-window"\]\), maxRepeats: importMaxRepeats, repeats: imports\.length \/ 2, importCount: imports\.length, targetSeconds: IMPORT_PHASE\.targetSeconds, rate: importRate, inFlightSeconds, requests,/);
       // k6: the load of /go and the list is at the rate of the phase, the files are read by repeat, and the state is `after` only when the last import of the last repeat has answered.
       expect(scenarios).toMatch(/rate: IMPORT_RATE,/);
       expect(scenarios).toMatch(/const IMPORT_RATE = Number\(__ENV\.IMPORT_RATE \|\| RATE\)/);
       expect(scenarios).toMatch(/open\(`\/data\/import-netscape-\$\{repeat\}\.html`\)/);
       expect(scenarios).toMatch(/open\(`\/data\/import-\$\{repeat\}\.json`\)/);
-      expect(scenarios).toMatch(/repeat === IMPORT_REPEATS - 1 && index === imports\.length - 1 \? "after" : "between"/);
+      // The importer stops after the pair that takes the time in flight to the target, or at the last pair there is a file for, and that import is the one that says `after`.
+      expect(scenarios).toMatch(/index === imports\.length - 1 && \(repeat === IMPORT_REPEATS - 1 \|\| inFlightMs >= IMPORT_TARGET_SECONDS \* 1000\)/);
+      expect(scenarios).toMatch(/setImportState\(last \? "after" : "between", record\);\s*if \(last\) \{\s*return;/);
+      expect(runner).toMatch(/held\.imports\.length % 2 !== 0 \|\| held\.imports\.length < 2 \|\| held\.imports\.length > files\.length \* 2/);
       expect(scenarios).toMatch(new RegExp(`__ENV\\.IMPORT_WINDOW_SECONDS \\|\\| ${String(IMPORT_PHASE.windowSeconds)}\\)`));
     });
 

@@ -8,7 +8,7 @@
 // creates bookmarks: the p95 of /go and of the list while an import is in flight are budgets (ratios to the same run's steady /go and list, judged here, budgets.js), and each import's duration and counts and the p95 of the creates with and without an import are reported (doc 02 section 13.1).
 // Everything this run starts, the server or its container, the k6 containers, the state of the import and the database, is removed however it ends.
 //
-//   node scripts/perf/run.mjs [--image <ref>] [--commit <sha>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>] [--import-window <seconds>] [--import-repeats <n>] [--import-rate <per second>]
+//   node scripts/perf/run.mjs [--image <ref>] [--commit <sha>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>] [--import-window <seconds>] [--import-repeats <most pairs>] [--import-rate <per second>]
 //
 // Needs `pnpm turbo run build --filter=slugbase --filter=@slugbase/testing` first (`--filter=@slugbase/testing` alone with --image),
 // `psql` and Docker (k6 runs from a pinned image on the host network, as does the server image), and the server the test harness
@@ -97,9 +97,9 @@ if (isMain && args["import-rate"] !== undefined && !/^[1-9][0-9]{0,3}$/.test(arg
   process.exit(1);
 }
 // A run with another number of repeats or another rate for the import phase is a trial of the scripts: the sample the phase must have (budgets.js IMPORT_PHASE) is the one of the phase as committed, at the rate it was sized for, and is not held to a run that changed either.
-const importRepeats = Number(args["import-repeats"] ?? IMPORT_PHASE.repeats);
+const importMaxRepeats = Number(args["import-repeats"] ?? IMPORT_PHASE.maxRepeats);
 const importRate = Number(args["import-rate"] ?? IMPORT_PHASE.rate);
-const importTrial = importRepeats !== IMPORT_PHASE.repeats || importRate !== IMPORT_PHASE.rate;
+const importTrial = importMaxRepeats !== IMPORT_PHASE.maxRepeats || importRate !== IMPORT_PHASE.rate;
 // The commit is written into the result and from there into an issue, so it is a full hash and nothing else.
 if (isMain && args.commit !== undefined && !/^[0-9a-f]{40}$/.test(args.commit)) {
   process.stderr.write("perf: --commit takes a full commit hash of 40 hex digits\n");
@@ -470,7 +470,7 @@ async function main() {
   }
   // The result is written, so the run can be read, but the ratios of a phase with too few requests are not a measurement of what an import costs /go and the list: it is a failed run, not a budget, and it names the way out.
   if (importRun.sample.enforced && importRun.sample.shortfalls.length > 0) {
-    throw new Error(`the import phase is too short to judge its ratios (${importRun.sample.shortfalls.join("; ")}); raise IMPORT_PHASE.repeats or IMPORT_PHASE.rate in scripts/perf/budgets.js`);
+    throw new Error(`the import phase is too short to judge its ratios (${importRun.sample.shortfalls.join("; ")}); raise IMPORT_PHASE.maxRepeats (or its targetSeconds) in scripts/perf/budgets.js`);
   }
   return budgets.every((budget) => budget.ok) && writeLoad.ok && k6 === 0 && importRun.status === 0 ? 0 : REGRESSION;
 }
@@ -702,7 +702,7 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
   // One pair of files for each repeat (import-files.ts): the files of a repeat name addresses, slugs, folders and tags of their own, so every repeat creates all of its bookmarks and does the work of the first.
   // They are made one at a time and only written, so that the run holds one pair in memory.
   const files = [];
-  for (let repeat = 0; repeat < importRepeats; repeat += 1) {
+  for (let repeat = 0; repeat < importMaxRepeats; repeat += 1) {
     const pair = buildImportFiles({ collidingSlugs: [...collidingSlugs, ...slugs], repeat });
     writeFileSync(join(work, "data", `import-netscape-${String(repeat)}.html`), pair.netscape.body);
     writeFileSync(join(work, "data", `import-${String(repeat)}.json`), pair.json.body);
@@ -714,7 +714,8 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
     DURATION_SECONDS: args.duration,
     DEEP_PAGE: String(deepPage),
     IMPORT_WINDOW_SECONDS: args["import-window"],
-    IMPORT_REPEATS: String(importRepeats),
+    IMPORT_REPEATS: String(importMaxRepeats),
+    IMPORT_TARGET_SECONDS: String(IMPORT_PHASE.targetSeconds),
     IMPORT_RATE: String(importRate),
     SIGNAL_URL: `http://127.0.0.1:${String(port)}/`,
   });
@@ -725,7 +726,11 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
   if (held.state !== "after") {
     throw new Error(`the import run ended with the import in the state ${held.state}, not after`);
   }
-  const imports = judgeImports(held.imports, files);
+  // The importer stops after the pair that took the time in flight to the target, or at the last pair there is a file for: so the imports are whole pairs, from the first, and no more than the files.
+  if (held.imports.length % 2 !== 0 || held.imports.length < 2 || held.imports.length > files.length * 2) {
+    throw new Error(`${String(held.imports.length)} imports answered, not whole pairs of at most ${String(files.length)}`);
+  }
+  const imports = judgeImports(held.imports, files.slice(0, held.imports.length / 2));
   const summary = JSON.parse(readFileSync(join(outDir, summaryFile("import")), "utf8"));
   // The creates, /go, the list and the importer run at the same time, and `active_vus` counts them all: the peak is of the run and not of one scenario, against the VUs the run may use.
   const { budgets, scenarios } = evaluate(summary, IMPORT_SCENARIOS, { capacity: MAX_VUS * (IMPORT_SCENARIOS.length + 1) + 1, of: "run" });
@@ -739,7 +744,7 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
     budgets,
     scenarios,
     sample,
-    phase: { windowSeconds: Number(args["import-window"]), repeats: importRepeats, importCount: imports.length, rate: importRate, inFlightSeconds, requests, sample, k6Status: status, imports, creates: createsOf(summary) },
+    phase: { windowSeconds: Number(args["import-window"]), maxRepeats: importMaxRepeats, repeats: imports.length / 2, importCount: imports.length, targetSeconds: IMPORT_PHASE.targetSeconds, rate: importRate, inFlightSeconds, requests, sample, k6Status: status, imports, creates: createsOf(summary) },
   };
 }
 
