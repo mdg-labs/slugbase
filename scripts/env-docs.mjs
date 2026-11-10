@@ -287,7 +287,8 @@ function fail(message) {
   process.exitCode = 2;
 }
 
-async function main(argv) {
+/** Runs the script on `argv`; `load` reads the schema configuration, so that a test can hand it another one. */
+export async function main(argv, load = () => loadSchemaConfig(ROOT)) {
   const check = argv.includes("--check");
   const unknown = argv.filter((argument) => argument !== "--check");
   if (unknown.length > 0) {
@@ -298,7 +299,7 @@ async function main(argv) {
   let template;
   let exampleText;
   try {
-    config = await loadSchemaConfig(ROOT);
+    config = await load();
     template = readFileSync(join(ROOT, TEMPLATE), "utf8");
     exampleText = readFileSync(join(ROOT, EXAMPLE), "utf8");
   } catch (error) {
@@ -307,14 +308,21 @@ async function main(argv) {
   }
 
   if (!check) {
-    const keyProblems = checkEnvironment(config, { template, pageText: renderPage(config, template), exampleText });
+    let page;
+    try {
+      page = renderPage(config, template);
+    } catch (error) {
+      fail(`could not generate the page: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    const keyProblems = checkEnvironment(config, { template, pageText: page, exampleText });
     if (keyProblems.length > 0) {
       process.stderr.write(`${keyProblems.map((problem) => `env-docs: ${problem}`).join("\n")}\n`);
       process.exitCode = 1;
       return;
     }
     mkdirSync(dirname(join(ROOT, PAGE)), { recursive: true });
-    writeFileSync(join(ROOT, PAGE), renderPage(config, template));
+    writeFileSync(join(ROOT, PAGE), page);
     process.stdout.write(`env-docs: wrote ${PAGE}\n`);
     return;
   }

@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
-import { checkEnvironment, loadSchemaConfig, renderPage } from "./env-docs.mjs";
+import { checkEnvironment, loadSchemaConfig, main, renderPage } from "./env-docs.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const script = join(import.meta.dirname, "env-docs.mjs");
@@ -201,6 +201,26 @@ test("a description that holds a value shaped like a secret is reported", () => 
 test("a default given to a secret key is reported", () => {
   const problems = problemsOf(withDoc("SESSION_SECRET", { ...config.KEY_DOCS.SESSION_SECRET, defaultText: "`changeme`" }));
   assertProblem(problems, "SESSION_SECRET is a secret and must have no default on the page");
+});
+
+test("the script writing the page, when the page cannot be generated, stops with status 2 and writes nothing", async () => {
+  const broken = withDoc("LOG_LEVEL", { group: "runtime", description: "Has no type." });
+  const written = [];
+  const stderrWrite = process.stderr.write;
+  const exitCode = process.exitCode;
+  process.stderr.write = (chunk) => {
+    written.push(String(chunk));
+    return true;
+  };
+  try {
+    await main([], () => Promise.resolve(broken));
+    assert.equal(process.exitCode, 2);
+  } finally {
+    process.stderr.write = stderrWrite;
+    process.exitCode = exitCode;
+  }
+  assert.match(written.join(""), /env-docs: could not generate the page: /);
+  assert.equal(readFileSync(join(root, "docs", "self-hosting", "environment.md"), "utf8"), pageText);
 });
 
 test("the script passes on this repository", () => {
