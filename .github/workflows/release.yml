@@ -8,7 +8,11 @@ name: Release
 # scripts/release-plan.sh decides whether to release and which tags to push:
 # a pre-release version gets its own tag only, a version without a suffix also
 # gets :<major>.<minor>, and :latest is never pushed. An image tag that already
-# exists is never overwritten.
+# exists is never overwritten: `plan` refuses an existing version, and the build
+# job asks the registry again immediately before the push
+# (scripts/release-check-tags.sh), because "Re-run failed jobs" skips `plan`. A
+# failed release is not re-run. It is abandoned for a new version bump, and a re-run
+# of the build job after the push is refused by that check.
 # After the image is pushed, the workflow creates the lightweight git tag
 # v<version> on the pushed commit through the API (scripts/release-tag.sh), then
 # signs the image by the digest it pushed and attests its SBOM and provenance, and
@@ -172,6 +176,9 @@ jobs:
           BUILD_COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # A re-run of this job skips `plan`, so the refusal of an existing version
+          # is made here, immediately before the push: no tag that exists is pushed.
+          bash scripts/release-check-tags.sh
           tag_args=()
           IFS=',' read -r -a tag_list <<<"$TAGS"
           for tag in "${tag_list[@]}"; do
@@ -196,8 +203,9 @@ jobs:
       # The tag v<version> is made on the pushed commit before the draft, which is
       # then made from it. A tag on another commit fails here and no draft is made.
       # If this step or one of the next fails after the push, the image is in the
-      # registry and the job is not re-run. Re-running it would build and push the
-      # version tag again, with a new digest. A missing tag or draft is made by hand
+      # registry and the job is not re-run. A re-run is refused before the push by
+      # scripts/release-check-tags.sh, because the version tag exists by then, so it
+      # cannot push that tag again with a new digest. A missing tag or draft is made by hand
       # from the digest in the build step's log. A missing signature cannot be: a
       # signature made by hand does not carry the identity of this workflow on main,
       # which scripts/verify-image.sh requires. That version stays unsigned and is
