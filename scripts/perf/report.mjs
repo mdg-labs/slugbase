@@ -10,7 +10,7 @@
 //   search       the `search` scenario and each of its terms
 //   import       `go_import` and `list_import`, the /go and list budgets while an import is in flight, which are ratios to the same run's steady /go and list p95 (budgets.js RATIO_BUDGETS): their
 //                cause is the import (its lock, its load), not /go or the list on their own, so they are not filed under `go` or `list`, whose budgets hold with no import. The issue lists every ratio row of
-//                the run, with both p95, the ratio and the limit, and says which were not judged (a saturated side, or dropped arrivals) and why
+//                the run, with both p95, the ratio and the limit, and says which missed because the import scenario was saturated or dropped arrivals, and which were not judged (only the steady side saturated, or dropped arrivals) and why
 //   write load   the write-load check of /go (doc 01 section 8.1), which is not a p95 and has its own issue
 // A run that exceeds a budget whose issue is open comments on that issue (the lowest number when the title is on several), and one whose issue is not open creates
 // it. The title must match exactly: an issue of another scenario, or one that names several, is never extended. A result that cannot be read, a budget of a scenario
@@ -52,8 +52,8 @@ for (const scenario of SCENARIOS) {
 
 const NAME = /^[a-z0-9][a-z0-9 _.-]{0,79}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
-// The reason a ratio was not judged goes into an issue: plain words, no markup or line break.
-const NOT_JUDGED = /^[A-Za-z0-9 ;,()._-]{1,300}$/;
+// The reason a ratio was not judged, or was missed by saturation, goes into an issue: plain words, no markup or line break.
+const REASON = /^[A-Za-z0-9 ;,()._-]{1,300}$/;
 
 const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const isCount = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -111,7 +111,7 @@ export function parseResult(text) {
       fail(`the budget ${budget.name} belongs to the scenario ${budget.scenario}, which has no load in the result`);
     }
     if (Object.hasOwn(budget, "limitRatio")) {
-      // A ratio budget: the p95 of the scenario against that of the steady scenario of the same run. It is judged or it says why not, and a row that is not judged is never an exceeded one.
+      // A ratio budget: the p95 of the scenario against that of the steady scenario of the same run. It is judged, or missed by saturation of its own import scenario (`saturatedMiss`), or it says why it was not judged, and a row that is not judged is never an exceeded one.
       requireCounts(budget, ["p95Ms", "limitRatio", "baselineP95Ms"], `budget ${budget.name}`);
       if (typeof budget.of !== "string" || !Object.hasOwn(result.scenarios, budget.of)) {
         fail(`the budget ${budget.name} is judged against the scenario ${String(budget.of)}, which has no load in the result`);
@@ -119,7 +119,12 @@ export function parseResult(text) {
       if (typeof budget.judged !== "boolean" || typeof budget.baselineSaturated !== "boolean") {
         fail(`budget ${budget.name} has no judged and baselineSaturated flags`);
       }
-      if (budget.judged ? !isCount(budget.ratio) : budget.ratio !== null || typeof budget.notJudged !== "string" || !NOT_JUDGED.test(budget.notJudged) || budget.ok !== true) {
+      if (Object.hasOwn(budget, "saturatedMiss")) {
+        // Missed because its own import scenario was saturated or dropped arrivals: always exceeded, with the reason, and a ratio only when the baseline was usable.
+        if (budget.judged !== true || budget.ok !== false || typeof budget.saturatedMiss !== "string" || !REASON.test(budget.saturatedMiss) || (budget.ratio !== null && !isCount(budget.ratio))) {
+          fail(`budget ${budget.name} is missed by saturation without a reason, a ratio or null, and ok false`);
+        }
+      } else if (budget.judged ? !isCount(budget.ratio) : budget.ratio !== null || typeof budget.notJudged !== "string" || !REASON.test(budget.notJudged) || budget.ok !== true) {
         fail(`budget ${budget.name} is judged without a ratio, or not judged without a reason, a null ratio and ok`);
       }
     } else {
@@ -155,7 +160,8 @@ export function parseIssues(text) {
   return issues;
 }
 
-const ratioStatus = (row) => (!row.judged ? `not judged: ${row.notJudged ?? ""}` : row.ok ? "within the limit" : "exceeded");
+const ratioStatus = (row) => (row.saturatedMiss !== undefined ? `exceeded, saturated: ${row.saturatedMiss}` : !row.judged ? `not judged: ${row.notJudged ?? ""}` : row.ok ? "within the limit" : "exceeded");
+const ratioCell = (row) => (row.ratio !== null ? String(row.ratio) : row.saturatedMiss !== undefined ? "no ratio" : "not judged");
 
 const loadRow = (name, load) => `| ${name} | ${String(load.completed)} | ${String(load.dropped)} | ${String(load.peakVus)} of ${String(load.maxVus)} | ${load.saturated ? "saturated" : ""} |`;
 
@@ -176,16 +182,16 @@ function describe(result, group, rows, runUrl, event) {
       }
       lines.push("");
     }
-    // The ratio rows of the group, all of them and not only the exceeded: a ratio is read against its baseline, and one that was not judged says so here and is not left out.
+    // The ratio rows of the group, all of them and not only the exceeded: a ratio is read against its baseline, and one that was not judged or was missed by saturation says so here and is not left out.
     const ratios = result.budgets.filter((budget) => budget.limitRatio !== undefined && ISSUE_OF[budget.scenario] === group);
     if (ratios.length > 0) {
       lines.push("| Shape | p95 server time | p95 of the same run's steady scenario | Ratio | Limit | |", "|---|---|---|---|---|---|");
       for (const row of ratios) {
-        lines.push(`| ${row.name} | ${String(row.p95Ms)} ms | ${String(row.baselineP95Ms)} ms (${row.of}) | ${row.judged ? String(row.ratio) : "not judged"} | ${String(row.limitRatio)} | ${ratioStatus(row)} |`);
+        lines.push(`| ${row.name} | ${String(row.p95Ms)} ms | ${String(row.baselineP95Ms)} ms (${row.of}) | ${ratioCell(row)} | ${String(row.limitRatio)} | ${ratioStatus(row)} |`);
       }
       lines.push(
         "",
-        "A ratio is the p95 while an import is in flight over the p95 of the steady scenario of the same run (budgets.js `RATIO_BUDGETS`), so that the speed of the runner machine cancels. It is not judged when either side is saturated or dropped arrivals.",
+        "A ratio is the p95 while an import is in flight over the p95 of the steady scenario of the same run (budgets.js `RATIO_BUDGETS`), so that the speed of the runner machine cancels. An import scenario that is saturated or dropped arrivals is a miss, since its p95 is the time of a queue; a ratio is not judged when only its steady scenario is saturated or dropped arrivals (that scenario has a budget of its own).",
         "",
       );
     }

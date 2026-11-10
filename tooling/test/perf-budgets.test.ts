@@ -28,6 +28,7 @@ interface RatioRow {
   ratio?: number | null;
   judged?: boolean;
   notJudged?: string;
+  saturatedMiss?: string;
 }
 
 interface BudgetsModule {
@@ -53,7 +54,7 @@ interface BudgetsModule {
   MAX_VUS: number;
   BUDGETS_MS: Record<string, number>;
   RATIO_BUDGETS: Record<string, { of: string; ratio: number }>;
-  judgeRatios: (rows: RatioRow[], loads: Record<string, { dropped: number; saturated: boolean }>) => RatioRow[];
+  judgeRatios: (rows: RatioRow[], loads: Record<string, { dropped: number; saturated: boolean; peakVus: number; maxVus: number }>) => RatioRow[];
   GO_HOT_REQUESTS: number;
   GO_HOT_METRIC: string;
   FLUSH_INTERVAL_SECONDS: number;
@@ -419,7 +420,7 @@ describe("performance budgets", () => {
   });
 
   describe("the ratio budgets of the import phase", () => {
-    const load = { dropped: 0, saturated: false };
+    const load = { dropped: 0, saturated: false, peakVus: 3, maxVus: 301 };
     const loads = { go: load, list: load, go_import: load, list_import: load };
     // The rows of one run as run.mjs hands them to `judgeRatios`: the steady budgets of go and list with the p95 of the run, and the import budgets as `evaluate` leaves them (the p95 and nothing judged).
     const rows = (p95: { go: number; list: number; goImport: number; listImport: number }): RatioRow[] =>
@@ -447,17 +448,50 @@ describe("performance budgets", () => {
       expect(importRows(judgeRatios(rows({ go: 10, list: 60, goImport: 150, listImport: 180 }), loads))[0]).toMatchObject({ judged: true, ok: false });
     });
 
-    it("does not judge a ratio whose baseline is saturated or dropped arrivals, nor one whose own scenario is, and says which", () => {
+    it("does not judge a ratio whose steady baseline is saturated or dropped arrivals while its own scenario is clean, and says which", () => {
       const slow = rows({ go: 10, list: 15, goImport: 1000, listImport: 1000 });
-      // Saturated baseline: the p95 of go is the time of a queue, so no ratio to it is a measurement; the miss it would be is not reported as one.
-      const baseline = importRows(judgeRatios(slow, { ...loads, go: { dropped: 0, saturated: true } }));
+      // Saturated baseline: the p95 of go is the time of a queue, so no ratio to it is a measurement; the steady budget of go reports the queue, and the import is not its cause.
+      const baseline = importRows(judgeRatios(slow, { ...loads, go: { ...load, saturated: true } }));
       expect(baseline[0]).toMatchObject({ judged: false, ratio: null, ok: true, notJudged: "go (the steady baseline) was saturated", baselineP95Ms: 10, baselineSaturated: false });
+      expect(baseline[0]).not.toHaveProperty("saturatedMiss");
       expect(baseline[1]).toMatchObject({ judged: true, ok: false });
-      // Dropped arrivals, in the baseline and in the import scenario, and both sides at once.
-      const dropped = importRows(judgeRatios(slow, { ...loads, list: { dropped: 3, saturated: true }, list_import: { dropped: 7, saturated: true } }));
-      expect(dropped[0]).toMatchObject({ judged: true, ok: false });
-      expect(dropped[1]).toMatchObject({ judged: false, ratio: null, ok: true, notJudged: "list_import dropped 7 arrivals; list (the steady baseline) dropped 3 arrivals" });
-      expect(importRows(judgeRatios(slow, { ...loads, go_import: { dropped: 0, saturated: true } }))[0]).toMatchObject({ judged: false, notJudged: "go_import was saturated" });
+      const dropped = importRows(judgeRatios(slow, { ...loads, list: { ...load, dropped: 3, saturated: true } }));
+      expect(dropped[1]).toMatchObject({ judged: false, ratio: null, ok: true, notJudged: "list (the steady baseline) dropped 3 arrivals" });
+    });
+
+    it("misses a ratio whose own import scenario was saturated or dropped arrivals, with the numbers of its load, whatever the p95 is (the nightlies of 2026-11-10: 385 / 419 ms, 13 / 14 dropped)", () => {
+      // The p95 of a queue is 385 ms against a steady 10 ms here, and the same run at a p95 that is within the limit is a miss all the same.
+      for (const [goImport, listImport] of [[385, 419], [10, 15]] as const) {
+        const row = rows({ go: 10, list: 15, goImport, listImport });
+        const dropped = importRows(judgeRatios(row, { ...loads, go_import: { dropped: 13, saturated: true, peakVus: 61, maxVus: 301 }, list_import: { dropped: 14, saturated: true, peakVus: 301, maxVus: 301 } }));
+        expect(dropped[0]).toMatchObject({
+          judged: true,
+          ok: false,
+          ratio: Math.round((goImport / 10) * 100) / 100,
+          baselineP95Ms: 10,
+          saturatedMiss: "go_import dropped 13 arrivals and used 61 of 301 VUs; its p95 is the time of a queue",
+        });
+        expect(dropped[1]).toMatchObject({ ok: false, saturatedMiss: "list_import dropped 14 arrivals and used 301 of 301 VUs; its p95 is the time of a queue" });
+      }
+      // The flag alone: the VUs reached the cap and nothing was dropped.
+      const flagged = importRows(judgeRatios(rows({ go: 10, list: 15, goImport: 20, listImport: 30 }), { ...loads, go_import: { dropped: 0, saturated: true, peakVus: 301, maxVus: 301 } }));
+      expect(flagged[0]).toMatchObject({ judged: true, ok: false, saturatedMiss: "go_import was saturated and used 301 of 301 VUs; its p95 is the time of a queue" });
+      expect(flagged[0]).not.toHaveProperty("notJudged");
+      // The other import scenario, clean, is judged as ever.
+      expect(flagged[1]).toMatchObject({ judged: true, ok: true });
+    });
+
+    it("names both sides when the import scenario and its steady baseline are saturated, and keeps no ratio when the baseline is unusable", () => {
+      const both = importRows(judgeRatios(rows({ go: 10, list: 15, goImport: 385, listImport: 15 }), { ...loads, go: { ...load, saturated: true }, go_import: { dropped: 0, saturated: true, peakVus: 301, maxVus: 301 } }));
+      expect(both[0]).toMatchObject({
+        judged: true,
+        ok: false,
+        ratio: null,
+        saturatedMiss: "go_import was saturated and used 301 of 301 VUs; its p95 is the time of a queue; go (the steady baseline) was saturated",
+      });
+      const zero = importRows(judgeRatios(rows({ go: 0, list: 15, goImport: 385, listImport: 15 }), { ...loads, go_import: { dropped: 5, saturated: true, peakVus: 301, maxVus: 301 } }));
+      expect(zero[0]).toMatchObject({ ok: false, ratio: null });
+      expect(zero[0]?.saturatedMiss).toMatch(/^go_import dropped 5 arrivals .*; go \(the steady baseline\) has a p95 of 0 ms$/);
     });
 
     it("never takes a missing baseline, a missing load or a baseline of 0 ms for a ratio", () => {

@@ -449,7 +449,7 @@ async function main() {
       ...budgets.map((b) =>
         b.limitRatio === undefined
           ? `  ${b.name}: ${String(b.p95Ms)} ms, budget ${String(b.limitMs)} ms, ${b.ok ? "ok" : "EXCEEDED"}${b.saturated ? " (the scenario was saturated: the time includes the queue)" : ""}`
-          : `  ${b.name}: ${String(b.p95Ms)} ms against ${String(b.baselineP95Ms)} ms of ${b.of} in this run, ${b.judged ? `ratio ${String(b.ratio)}, limit ${String(b.limitRatio)}, ${b.ok ? "ok" : "EXCEEDED"}` : `NOT JUDGED (limit ${String(b.limitRatio)}): ${b.notJudged ?? ""}`}`,
+          : `  ${b.name}: ${String(b.p95Ms)} ms against ${String(b.baselineP95Ms)} ms of ${b.of} in this run, ${b.saturatedMiss !== undefined ? `EXCEEDED, SATURATED (${b.ratio === null ? "no ratio" : `ratio ${String(b.ratio)}`}, limit ${String(b.limitRatio)}): ${b.saturatedMiss}` : b.judged ? `ratio ${String(b.ratio)}, limit ${String(b.limitRatio)}, ${b.ok ? "ok" : "EXCEEDED"}` : `NOT JUDGED (limit ${String(b.limitRatio)}): ${b.notJudged ?? ""}`}`,
       ),
     ].join("\n"),
   );

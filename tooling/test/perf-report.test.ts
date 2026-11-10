@@ -24,6 +24,7 @@ interface Row extends Budget {
   ratio?: number | null;
   judged?: boolean;
   notJudged?: string;
+  saturatedMiss?: string;
 }
 
 interface Load {
@@ -255,7 +256,7 @@ describe("the issues a performance run files", () => {
     expect(summary(plain(exceeding(withinBudgets(), "go", "go during import")))).toEqual(["create: Performance budget exceeded: go", "create: Performance budget exceeded: import"]);
   });
 
-  it("files a ratio miss with the saturation of neither side, and a ratio that was not judged only beside one that was exceeded, saying that it was not judged and why", () => {
+  it("files a ratio miss with the saturation of neither side, and a ratio that was not judged (only its steady baseline saturated) only beside one that was exceeded, saying that it was not judged and why", () => {
     // A ratio within its limit is a pass: nothing is filed.
     expect(plain(withinBudgets())).toEqual([]);
     // A saturated baseline: the ratio is not judged, which is neither a pass nor a miss, so nothing is filed for it alone.
@@ -271,9 +272,54 @@ describe("the issues a performance run files", () => {
     expect(summary(plain(listMissed))).toEqual(["create: Performance budget exceeded: import"]);
     expect(body).toContain(`| list during import | ${String(20 * listLimit * 2)} ms | 20 ms (list) | ${String(listLimit * 2)} | ${String(listLimit)} | exceeded |`);
     expect(body).toMatch(/\| go during import \| [\d.]+ ms \| 10 ms \(go\) \| not judged \| [\d.]+ \| not judged: go \(the steady baseline\) was saturated \|/);
-    expect(body).toContain("It is not judged when either side is saturated or dropped arrivals.");
+    expect(body).toContain("a ratio is not judged when only its steady scenario is saturated or dropped arrivals");
     // The load of the baseline that was saturated is in the issue, beside the import scenarios'.
     expect(body).toContain("| go | 1200 | 4 | 100 of 100 | saturated |");
+  });
+
+  // The import scenario of the nightly of 2026-11-10 (runs 42770971232, 42773904224 and 42782179390): go and list p95 of 385 / 419 ms with 13 / 14 arrivals dropped, which exited 0 and filed nothing.
+  const saturatedImport = (result: PerfResult, scenario: "go_import" | "list_import", load: Partial<Load>, row: Partial<Row> = {}): PerfResult => {
+    const name = scenario === "go_import" ? "go during import" : "list during import";
+    const reason = `${scenario} ${(load.dropped ?? 0) > 0 ? `dropped ${String(load.dropped)} arrivals` : "was saturated"} and used ${String(load.peakVus)} of 301 VUs; its p95 is the time of a queue`;
+    return {
+      ...result,
+      scenarios: { ...result.scenarios, [scenario]: { completed: 4000, dropped: 0, peakVus: 301, maxVus: 301, saturated: true, ...load } },
+      budgets: result.budgets.map((budget) => (budget.name === name ? { ...budget, p95Ms: 385, ratio: 38.5, ok: false, saturatedMiss: reason, ...row } : budget)),
+    };
+  };
+
+  it("files a saturated or dropping import scenario as a missed ratio, with the reason and the load, and extends the open import issue", () => {
+    const dropping = saturatedImport(withinBudgets(), "go_import", { dropped: 13, peakVus: 61 });
+    expect(summary(plain(dropping))).toEqual(["create: Performance budget exceeded: import"]);
+    const body = plain(dropping)[0]?.body ?? "";
+    const goLimit = RATIO_BUDGETS.go_import?.ratio ?? 0;
+    expect(body).toContain(`| go during import | 385 ms | 10 ms (go) | 38.5 | ${String(goLimit)} | exceeded, saturated: go_import dropped 13 arrivals and used 61 of 301 VUs; its p95 is the time of a queue |`);
+    expect(body).not.toContain("| not judged |");
+    expect(body).toContain("| go_import | 4000 | 13 | 61 of 301 | saturated |");
+    expect(body).toContain("An import scenario that is saturated or dropped arrivals is a miss");
+    expect(summary(plain(dropping, [{ number: 650, title: "Performance budget exceeded: import" }]))).toEqual(["comment #650: Performance budget exceeded: import"]);
+    // The flag alone (the VUs reached the cap, no arrival dropped) is a miss as well, and so is the list.
+    const flagged = saturatedImport(withinBudgets(), "list_import", { peakVus: 301 });
+    expect(summary(plain(flagged))).toEqual(["create: Performance budget exceeded: import"]);
+    expect(plain(flagged)[0]?.body).toContain("exceeded, saturated: list_import was saturated and used 301 of 301 VUs; its p95 is the time of a queue");
+    // A saturated import scenario whose ratio could not be computed (the baseline was not usable) shows no ratio, and is not read as not judged.
+    const noRatio = saturatedImport(withinBudgets(), "go_import", { dropped: 2, peakVus: 301 }, { ratio: null, saturatedMiss: "go_import dropped 2 arrivals and used 301 of 301 VUs; its p95 is the time of a queue; go (the steady baseline) was saturated" });
+    expect(plain(noRatio)[0]?.body).toMatch(/\| go during import \| 385 ms \| 10 ms \(go\) \| no ratio \| [\d.]+ \| exceeded, saturated: go_import dropped 2 arrivals .* go \(the steady baseline\) was saturated \|/);
+  });
+
+  it("parses the row missed by saturation, and refuses one that is ok, is not judged, has an unreadable ratio or has markup in it", () => {
+    const withRow = (change: Partial<Row>): string => {
+      const result = saturatedImport(withinBudgets(), "go_import", { dropped: 13, peakVus: 61 }, change);
+      return JSON.stringify(result);
+    };
+    const parsed = parseResult(withRow({}));
+    expect(parsed.budgets.find((row) => row.name === "go during import")).toMatchObject({ ok: false, judged: true });
+    expect(parseResult(withRow({ ratio: null })).budgets.find((row) => row.name === "go during import")?.ratio).toBeNull();
+    for (const change of [{ ok: true }, { saturatedMiss: "x\n- [ ] injected" }, { saturatedMiss: "" }, { judged: false }, { ratio: "5" }]) {
+      expect(() => parseResult(withRow(change as unknown as Partial<Row>)), JSON.stringify(change)).toThrow(/missed by saturation|not judged without a reason|judged without a ratio/);
+    }
+    // An ok: false row that is not judged and says no reason is still refused.
+    expect(() => parseResult(withRow({ saturatedMiss: undefined, judged: false, ratio: null }))).toThrow(/not judged without a reason/);
   });
 
   it("names the commit measured, or says that it is unknown", () => {

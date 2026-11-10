@@ -132,9 +132,13 @@ export function budgetThresholds(scenarios = SCENARIOS) {
 }
 
 // The ratio budgets judged. `rows` are the rows of one run's budgets (steady and import together), each with `scenario`, `metric`, `p95Ms` and, for a ratio budget, `of` and `limitRatio`; `loads` is the load of each
-// scenario (`dropped`, `saturated`). A ratio row gets the steady p95 it is judged against (`baselineP95Ms`, `baselineSaturated`), the `ratio` (rounded to two decimals, the figure the report shows and the
-// one the limit is held to) and `judged`. It is not judged, `judged: false` with `ok: true` and the reasons in `notJudged`, when either side is saturated or dropped arrivals: the time of a request that waited for a
-// server that could not keep up is not the time of a statement, so neither side is one to divide by or into. A run with no such row is returned as it is.
+// scenario (`dropped`, `saturated`, `peakVus`, `maxVus`). A ratio row gets the steady p95 it is judged against (`baselineP95Ms`, `baselineSaturated`), the `ratio` (rounded to two decimals, the figure the report shows and the
+// one the limit is held to) and `judged`. The time of a request that waited for a server that could not keep up is not the time of a statement, so a saturated side is not one to divide by or into:
+//   - the row's own import scenario dropped arrivals or was saturated: the row is a miss, `ok: false` with the reason in `saturatedMiss` (the numbers of the load, and the other reasons below when there are any). A phase
+//     that queued is the import hurting /go and the list, which the ratio exists to catch. `ratio` is kept when the baseline is usable and is `null` when it is not.
+//   - only the steady baseline is saturated or dropped arrivals, or its p95 is 0 ms: the row is not judged, `judged: false` with `ok: true` and the reasons in `notJudged`. The baseline has a millisecond budget of its own, which a queue
+//     normally exceeds, so the problem is reported there and the import is not its cause.
+// A run with no ratio row is returned as it is.
 export function judgeRatios(rows, loads) {
   return rows.map((row) => {
     if (row.limitRatio === undefined) {
@@ -144,26 +148,33 @@ export function judgeRatios(rows, loads) {
     if (baseline === undefined) {
       throw new Error(`the budget ${row.name} is judged against the scenario ${row.of}, which has no budget in the run`);
     }
-    const notJudged = [];
-    for (const [label, scenario] of [[row.scenario, row.scenario], [`${row.of} (the steady baseline)`, row.of]]) {
+    const loadOf = (scenario) => {
       const load = loads[scenario];
       if (load === undefined) {
         throw new Error(`the budget ${row.name} has no load for the scenario ${scenario}`);
       }
-      if (load.dropped > 0) {
-        notJudged.push(`${label} dropped ${String(load.dropped)} arrivals`);
-      } else if (load.saturated) {
-        notJudged.push(`${label} was saturated`);
-      }
+      return load;
+    };
+    const queued = (load) => load.dropped > 0 || load.saturated;
+    const queueOf = (load) => (load.dropped > 0 ? `dropped ${String(load.dropped)} arrivals` : "was saturated");
+    const own = loadOf(row.scenario);
+    const base = loadOf(row.of);
+    const notJudged = [];
+    if (queued(base)) {
+      notJudged.push(`${row.of} (the steady baseline) ${queueOf(base)}`);
     }
     if (!(baseline.p95Ms > 0)) {
       notJudged.push(`${row.of} (the steady baseline) has a p95 of 0 ms`);
     }
     const judged = { ...row, baselineP95Ms: baseline.p95Ms, baselineSaturated: baseline.saturated };
+    const ratio = notJudged.length === 0 ? Math.round((row.p95Ms / baseline.p95Ms) * 100) / 100 : null;
+    if (queued(own)) {
+      const saturatedMiss = [`${row.scenario} ${queueOf(own)} and used ${String(own.peakVus)} of ${String(own.maxVus)} VUs; its p95 is the time of a queue`, ...notJudged].join("; ");
+      return { ...judged, ratio, judged: true, saturatedMiss, ok: false };
+    }
     if (notJudged.length > 0) {
       return { ...judged, ratio: null, judged: false, notJudged: notJudged.join("; "), ok: true };
     }
-    const ratio = Math.round((row.p95Ms / baseline.p95Ms) * 100) / 100;
     return { ...judged, ratio, judged: true, ok: ratio <= row.limitRatio };
   });
 }
