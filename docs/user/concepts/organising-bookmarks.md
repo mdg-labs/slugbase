@@ -24,7 +24,7 @@ Your folders also appear in the sidebar. Choose one to see only its bookmarks.
 
 ### Shared folders
 
-You can share a folder with a member or with a team. Everyone you share it with can read the folder and every bookmark in it, now and later. Their slugs work for them too. They cannot change the folder or its bookmarks. Only you can.
+You can share a folder with a member or with a team. Everyone you share it with can read the folder and every bookmark in it, now and later. Their slugs work for them too. They cannot change the folder or its bookmarks. Only you can. [Sharing](sharing.mdx) explains who can do what with what you share.
 
 A folder shared with you shows **Shared with you** or **Shared with you by** and the owner's name. On the **Folders** page, choose **Shared with me** to list them.
 
@@ -60,4 +60,5 @@ Pinning marks a bookmark as one you want within reach. It is the only way to mar
 ## Related pages
 
 - [Slugs and /go](slugs.md)
+- [Sharing](sharing.mdx)
 - [Getting started](../getting-started.mdx)

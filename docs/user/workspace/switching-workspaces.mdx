@@ -1,0 +1,107 @@
+---
+title: "Switching Workspaces"
+description: "Move between your workspaces from the sidebar, and create a new workspace."
+edition: both
+order: 60
+---
+
+The **workspace switcher** at the top of the sidebar shows the workspace you have open. Use it to open another workspace, to create a new one and to reach the settings of the open one.
+
+<Screenshot alt="The workspace switcher menu in the sidebar with two workspaces and the New workspace action" />
+
+## Prerequisites
+
+- You are signed in and belong to a workspace.
+- To switch, you belong to at least two workspaces.
+
+## Switch to another workspace
+
+1. Choose the switcher at the top of the sidebar. It shows the name of the open workspace.
+2. In the menu, under **Workspaces**, choose the workspace you want. The open one has a check.
+
+**Result:** SlugBase opens that workspace and loads its bookmarks, folders and tags. You work in one workspace at a time, and a slug opens only the bookmarks of the workspace you have open. See [Workspaces and Roles](../concepts/workspaces-and-roles.mdx).
+
+If you belong to no other workspace, the menu says "No other workspaces yet." An instance admin of a self-hosted SlugBase sees "No other workspaces yet. Create one under Admin → Workspaces." and the action **Create a workspace in Admin**. See [Instance Workspaces](../admin/workspaces.mdx).
+
+## Create a workspace
+
+The menu shows **New workspace** where you may create one, and where you have reached the limit of your plan. At the limit it opens a message instead of the form. See the note on editions below.
+
+To create one, your email address must be verified.
+
+1. Choose **New workspace** in the menu.
+2. Enter a **Name**. It has 1 to 64 characters.
+3. Choose **Create workspace**.
+
+**Result:** SlugBase creates the workspace, makes you its owner and opens it. Choose **Cancel** to close the form without creating anything.
+
+<Callout>
+On a self-hosted SlugBase, an instance admin decides whether members can create workspaces. Where they cannot, the menu has no **New workspace**, and an instance admin creates workspaces from **Admin**. On SlugBase Cloud, the number of workspaces you can own depends on your plan. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## Open the settings of the workspace
+
+Choose **Workspace settings** in the menu. It opens the settings of the workspace you have open. See [General](general.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Workspaces | The workspaces you belong to. Choose one to open it. | No |
+| New workspace | Opens the form that creates a workspace, or at the limit of your plan a message instead of the form. Shown where you may create one and where you have reached the limit. | No |
+| Create a workspace in Admin | Opens **Workspaces** in **Admin**. Shown to an instance admin with no other workspace. | No |
+| Workspace settings | Opens the settings of the open workspace. | No |
+| Name | The name of the new workspace, 1 to 64 characters. | Yes |
+
+## Troubleshooting
+
+### The menu says "Your workspaces could not be loaded."
+
+Choose **Try again** in the menu.
+
+### SlugBase says "The workspace was not switched"
+
+The message under it says why:
+
+- "A change is still being saved. Try again in a moment." Wait a moment, then choose the workspace again.
+- "You are no longer a member of that workspace." Someone removed you from it. Choose another workspace.
+- "You are still in the same workspace. Try again." The switch could not be made right now. Choose the workspace again.
+
+### The form says "Enter a name."
+
+You chose **Create workspace** with an empty **Name**. Type a name and choose it again.
+
+### The form says "Use a name of 1 to 64 characters."
+
+SlugBase refused the name. Enter a name of 1 to 64 characters and choose **Create workspace** again.
+
+### The form says "Verify your email address to create a workspace."
+
+This can appear only if your address stopped being verified while the form was open. The menu does not offer the form to an account whose address is not verified. Verify your address, then try again. See [Create an Account](../access/create-an-account.mdx).
+
+### The form says "This server does not let accounts create workspaces."
+
+This can appear only if your instance admin turned workspace creation off after the menu loaded. Ask them to create the workspace for you, or to turn it on.
+
+### SlugBase says "Workspace limit reached"
+
+The message says "You have reached the limit of workspaces for your account." It replaces the form, whether you saw the limit when you chose **New workspace** or reached it while the form was open. Choose **Not now**. You cannot own more workspaces than your plan allows.
+
+### The form says "Too many attempts"
+
+You tried too often. The message says "Too many attempts. Try again in" and a number of seconds or minutes, or "Too many attempts. Try again later." when it cannot name a time. Wait, then choose **Create workspace** again.
+
+### The form says "The workspace could not be created. Try again in a moment."
+
+Choose **Create workspace** again. If it continues, tell the person who runs your SlugBase.
+
+### SlugBase says "The new workspace was not opened"
+
+The workspace exists. The message names it, for example "“Team” was created." Choose **Try again** to open it, or **Not now** and open it from the menu later.
+
+## Related pages
+
+- [Workspaces and Roles](../concepts/workspaces-and-roles.mdx)
+- [General](general.mdx)
+- [No Workspace](../access/no-workspace.mdx)
+- [Instance Workspaces](../admin/workspaces.mdx)

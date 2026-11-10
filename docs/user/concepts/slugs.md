@@ -30,7 +30,7 @@ When you open a go address, SlugBase looks for bookmarks that fit all of these:
 
 - They are in the workspace you have open.
 - They have this slug and forwarding is on.
-- You can read them. These are your own bookmarks and the ones shared with you, whether directly, through a team or through a shared folder.
+- You can read them. These are your own bookmarks and the ones shared with you, whether directly, through a team or through a shared folder. See [Sharing](sharing.mdx).
 
 Then SlugBase opens the bookmark's saved destination. Only `http` and `https` addresses open. SlugBase does not scan the destination page.
 
@@ -73,3 +73,4 @@ You see this page when the slug does not exist, forwarding is off, the bookmark 
 
 - [Getting started](../getting-started.mdx)
 - [Organising bookmarks](organising-bookmarks.md)
+- [Sharing](sharing.mdx)

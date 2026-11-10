@@ -1,0 +1,64 @@
+---
+title: "Email Change Links"
+description: "Confirm a new email address, or cancel an email change you did not ask for, from the link in an email."
+edition: both
+order: 70
+---
+
+When your email address changes, SlugBase sends two kinds of link. **Confirm your new email address** finishes a change you asked for. **Cancel an email change** stops a change you did not ask for.
+
+<Screenshot alt="The result card after a confirmed email change" />
+
+## Prerequisites
+
+- You have the email that carries the link. You can open the link whether or not you are signed in.
+- The link is still valid. A link works once and for a limited time.
+
+## Confirm your new email address
+
+SlugBase sends this link to the new address after you choose **Send confirmation link** in your profile. See [Profile](../account/profile.mdx).
+
+1. Open the link in the email. The page says "The link you opened confirms the address you asked for."
+2. Wait a moment. SlugBase uses the link as soon as the page opens, so there is nothing to choose.
+
+**Result:** The page says **Your email address was changed** and "Use your new address the next time you sign in." Choose **Open the app** to go to Home. Confirming does not sign you out.
+
+## Cancel an email change
+
+SlugBase sends this link to your old address when someone asks to change it. It is the "this wasn't me" link. Open it only if you did not ask for the change.
+
+1. Open the link in the email. The page says "The link you opened is for an email change you did not ask for."
+2. Wait a moment. SlugBase uses the link as soon as the page opens.
+
+**Result:** The page says **The change was cancelled and you were signed out everywhere**. Every device of your account is signed out, this browser included. Choose **Sign in**. Then change your password in [Security](../account/security.mdx), because someone else may have had access to your account.
+
+The link also works after the new address was confirmed. Your old address is then your email address again, still verified. The exception is an old address that another account holds by now: your account then keeps its current address, and it is still signed out everywhere.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Open the app | After a confirmation: opens Home. | No |
+| Sign in | After a cancellation: opens **Sign in**. | No |
+| Go to sign in | When the link does not work: opens **Sign in**. | No |
+| Try again | When the link could not be used right now: tries once more. | No |
+
+## Troubleshooting
+
+### The page says "This link is not valid or has expired"
+
+SlugBase gives this answer whether the link was already used, was replaced by a newer request or ran out. It also appears when the address of the page has lost the part after the `#`. Sign in and start again from your account settings, in [Profile](../account/profile.mdx).
+
+### The page says "This could not be completed right now. Try again in a moment."
+
+Choose **Try again**.
+
+### The page says "Too many attempts"
+
+Wait for the time the page names, then choose **Try again**.
+
+## Related pages
+
+- [Profile](../account/profile.mdx)
+- [Security](../account/security.mdx)
+- [Sign In](sign-in.mdx)

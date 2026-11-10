@@ -40,10 +40,10 @@ A page that uses a component (`Callout`, `EditionBadge`, `Screenshot` and the re
 | Landing page | `docs/user/index.md` | content root |
 | Getting started / first steps | `docs/user/getting-started.mdx` | content root (the app links to `/docs/getting-started`) |
 | Page docs (one per in-app page) | `docs/user/<page>.mdx` | content root for the main app pages; `access/` (sign-in and account entry pages), `account/` (account settings), `workspace/` (workspace settings and switching) and `admin/` (instance admin) mirror the navigation |
-| Concept pages | `docs/user/concepts/<concept>.md` | `concepts/` |
+| Concept pages | `docs/user/concepts/<concept>.md` (`.mdx` where the page uses a component) | `concepts/` |
 | FAQ | `docs/user/faq.md` | content root |
 
-Planned concept pages: `concepts/slugs.md`, `concepts/workspaces-and-roles.md`, `concepts/sharing.md`, `concepts/editions.md`.
+Concept pages written: `concepts/slugs.md`, `concepts/organising-bookmarks.md`, `concepts/workspaces-and-roles.mdx`, `concepts/sharing.mdx`, `concepts/teams-and-invitations.mdx`. Planned: `concepts/editions.md`.
 
 File names: kebab-case. The first path segment is never `cloud`, `self-hosting` or `releases`, in any case. A new page needs no navigation entry: the site orders pages by the `order` field.
 
