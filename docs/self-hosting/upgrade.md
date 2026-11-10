@@ -19,10 +19,10 @@ SlugBase is published as one image, `ghcr.io/mdg-labs/slugbase`, which runs as t
 | Tag | What it points at |
 | --- | ----------------- |
 | `:<semver>`, such as `:1.2.3` | Exactly that release. It never moves. A pre-release such as `1.0.0-rc.1` has this tag only. |
-| `:<major>.<minor>`, such as `:1.2` | The newest patch release of that minor version, so it moves from one patch release to the next. A pre-release never has it. |
-| `:latest` | Not pushed yet, so it does not exist today. The design is that it points at the newest published release and moves only when a release is published, never because of a build, and never for a pre-release. |
+| `:<major>.<minor>`, such as `:1.2` | The newest published patch release of that minor version, so it moves from one patch release to the next, when that release is published. Publishing an older patch release later does not move it back. It can lag behind the newest patch release of its minor version until the next release of that minor version is published, or until the publish run that was cancelled is run again; it never moves backwards. A pre-release never has it. |
+| `:latest` | The newest published release. It moves only when a release is published, never because of a build, never for a pre-release, and never to a release older than the newest one already published. Until the first release without a pre-release suffix is published, it does not exist. |
 
-`compose.yml` runs `ghcr.io/mdg-labs/slugbase:latest` unless you set `SLUGBASE_IMAGE`. The release workflow pushes version tags only, so that default does not pull today. Set `SLUGBASE_IMAGE` to a version tag or to an image digest, as in [Choose the image](install.md#choose-the-image). A pinned installation changes only when you decide to, and you know which release a backup belongs to.
+`compose.yml` runs `ghcr.io/mdg-labs/slugbase:latest` unless you set `SLUGBASE_IMAGE`. Until the first release without a pre-release suffix is published, that tag does not exist and the default does not pull. Even afterwards, `:latest` moves whenever a release is published. Set `SLUGBASE_IMAGE` to a version tag or to an image digest, as in [Choose the image](install.md#choose-the-image). A pinned installation changes only when you decide to, and you know which release a backup belongs to.
 
 ```sh
 SLUGBASE_IMAGE=ghcr.io/mdg-labs/slugbase:1.2.3

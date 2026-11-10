@@ -108,7 +108,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q12 | Built in the public CE repository's CI on GitHub-hosted runners and published to `ghcr.io/mdg-labs/slugbase` (public) | Decided (default) |
 | Q17 | Build SBOM (SPDX) and SLSA provenance attestations with BuildKit for every image | Decided (default) |
 | Q18 | None | Decided (default) |
-| Q92 | Release signing and registry timing: SBOM and provenance from the first release candidate, cosign signing and the public package in Phase 6, `:latest` only from a published release | Decided (default) |
+| Q92 | Release signing and registry timing: SBOM and provenance from the first release candidate, cosign signing and the public package in Phase 6, `:<semver>` pushed by a build, `:latest` and `:<major>.<minor>` only from a published release and never to an older version | Decided (default) |
 | Q56 | CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions… | Decided (default) |
 
 ### Stack and process
@@ -512,8 +512,8 @@ Running the app as the table owner silently disables RLS (owners bypass non-forc
 ### Q92 — Release signing and registry timing
 **Status:** Decided (default) · **Due:** Phase 4 for the release candidate, Phase 6 for signing and the public package · **Affects:** doc 08 §6.2 (`release.yml`), doc 10 T16, doc 12 Phases 4 and 6, Q12, Q17
 
-**Decision: the release candidate of Phase 4 is built by `release.yml` with SBOM and provenance attached and is pushed with its pre-release tag only; `:latest` and `:<major>.<minor>` do not move. Signing with cosign (keyless, the release workflow's identity on `main`), `scripts/verify-image.sh` and the switch of the registry package to public come in Phase 6, before 1.0.0. From then on every pushed image is signed, `:<semver>` and `:<major>.<minor>` are pushed when a release is built, and `:latest` (with `:<major>.<minor>`) moves only when the GitHub Release is published, after the signature of that digest is re-verified. A pre-release never moves either tag, and an existing version tag is never overwritten.**
-The registry is the one named in Q12. Making the package public late keeps an unsigned candidate from becoming the thing operators pull; the first image documented for operators is one they can verify.
+**Decision: the release candidate of Phase 4 is built by `release.yml` with SBOM and provenance attached and is pushed with its pre-release tag only; `:latest` and `:<major>.<minor>` do not move. Signing with cosign (keyless, the release workflow's identity on `main`), `scripts/verify-image.sh` and the switch of the registry package to public come in Phase 6, before 1.0.0. From then on every pushed image is signed, a build pushes `:<semver>` only, and both floating tags, `:latest` and `:<major>.<minor>`, move only when the GitHub Release is published, after the signature of that digest is re-verified, and only to a version that is not older than the highest published stable release they follow (`:latest` the highest overall, `:<major>.<minor>` the highest of its line). A pre-release never moves either tag, and an existing version tag is never overwritten.**
+A build is a draft release candidate, so a tag that operators follow must not move on a build; and `:<major>.<minor>` pushed by the first build of a minor would make the existing-tag check refuse every later patch of that minor. The version order exists because every bump leaves a draft that a maintainer can publish later, and publishing an old one must not move operators back. The registry is the one named in Q12. Making the package public late keeps an unsigned candidate from becoming the thing operators pull; the first image documented for operators is one they can verify.
 
 ---
 

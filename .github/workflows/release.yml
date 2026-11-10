@@ -4,11 +4,13 @@ name: Release
 # version of apps/slugbase, and opens a draft GitHub Release for it (doc 08
 # section 6.2, Q12, Q17, Q92). The image carries an SPDX SBOM and provenance
 # attestations and is signed with cosign, keyless, by the identity of this
-# workflow on main (doc 10 T16, Q92); the publish job comes later.
-# scripts/release-plan.sh decides whether to release and which tags to push:
-# a pre-release version gets its own tag only, a version without a suffix also
-# gets :<major>.<minor>, and :latest is never pushed. An image tag that already
-# exists is never overwritten: `plan` refuses an existing version, and the build
+# workflow on main (doc 10 T16, Q92).
+# scripts/release-plan.sh decides whether to release and which tag to push: a
+# build pushes :<version> only, for a pre-release and for any other version. The
+# floating tags :<major>.<minor> and :latest are never pushed by a build, because
+# a build is a draft release candidate: they move in the publish job, when a
+# maintainer publishes the release (below). An image tag that already exists is
+# never overwritten: `plan` refuses an existing version, and the build
 # job asks the registry again immediately before the push
 # (scripts/release-check-tags.sh), because "Re-run failed jobs" skips `plan`. A
 # failed release is not re-run. It is abandoned for a new version bump, and a re-run
@@ -22,23 +24,41 @@ name: Release
 # commit lets the step go on; one on another commit fails the job before the
 # draft is made.
 #
-# The workflow runs on a push to main and on nothing else, so no pull request,
-# fork or comment can start it, and it reads no secret: the workflow token
-# (github.token) is the only credential, and the scopes it needs are contents
-# (the tag and the draft release), packages (the image and its signature) and
-# id-token (the OIDC token that keyless signing exchanges for a short-lived
+# When the draft is published, the publish job runs scripts/release-publish.sh,
+# which moves :latest and :<major>.<minor> to the digest the build signed, for a
+# version without a suffix only. A pre-release moves nothing. The release is read
+# from the API; the digest is the one named in the release notes; the move is
+# made only after scripts/verify-image.sh confirms that :<version> is that digest
+# and that it is signed, with its attestations, by the identity of this workflow
+# on main, and each tag moved is verified again by digest afterwards. Any other
+# answer stops the job before the move.
+#
+# The workflow runs on a push to main and on a published release and on nothing
+# else, so no pull request, fork or comment can start it. Publishing a release
+# needs write access to the repository, as pushing to main does, and a draft made
+# with the workflow token does not start it. The workflow reads no secret: the
+# workflow token (github.token) is the only credential, and the scopes it needs are
+# contents (the tag and the draft release, read-only in publish), packages (the
+# image, its signature, and the tags the publish job moves) and id-token (only the
+# build job: the OIDC token that keyless signing exchanges for a short-lived
 # certificate; there is no key material anywhere) (doc 10 T16).
-# Only the upstream repository builds and pushes; the plan job decides in any
-# repository, so it can be run on its own. Each action is pinned to a full commit SHA.
+# Only the upstream repository builds, pushes and publishes; the plan job decides in
+# any repository, so it can be run on its own. Each action is pinned to a full
+# commit SHA.
 
 on:
   push:
     branches: [main]
+  release:
+    types: [published]
 
 permissions: {}
 
+# One run at a time for a push to main, and one per release tag. The group differs
+# per tag, so publishes of different tags are not queued by it; the publish job has
+# a group of its own below.
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 defaults:
@@ -51,6 +71,7 @@ env:
 jobs:
   plan:
     name: plan
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Reading only: this job decides and pushes nothing.
@@ -86,7 +107,7 @@ jobs:
   build:
     name: build and push
     needs: plan
-    if: ${{ needs.plan.outputs.release == 'true' && github.repository == 'mdg-labs/slugbase' }}
+    if: ${{ github.event_name == 'push' && needs.plan.outputs.release == 'true' && github.repository == 'mdg-labs/slugbase' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -274,6 +295,8 @@ jobs:
             echo
             echo "Tags: ${TAGS//,/, }"
             echo
+            echo "Publishing this release points the tags latest and <major>.<minor> at this image after the signature is verified again. A pre-release moves neither."
+            echo
             echo "Built from $SHA with an SPDX SBOM and provenance attestations. The image and both attestations are signed with cosign, keyless, by the release workflow of this repository on main."
             echo
             echo "Verify the image before you run it, with scripts/verify-image.sh from this release: bash scripts/verify-image.sh $IMAGE@$DIGEST"
@@ -283,3 +306,52 @@ jobs:
             flags+=(--prerelease)
           fi
           gh release create "$GIT_TAG" --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+
+  # Runs when a maintainer publishes the draft the build made. The floating tags
+  # move here and nowhere else, to the digest the build signed. The job reads the
+  # release, verifies the signature and only then retags, and it holds no
+  # id-token: it signs nothing. `release.tag_name` is passed through the
+  # environment and read as v<semver> by the script, never put into the shell text.
+  publish:
+    name: publish
+    if: ${{ github.event_name == 'release' && github.repository == 'mdg-labs/slugbase' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    # One publish running at a time across tags, so that two publishes made close
+    # together do not retag at the same time; a running job is never cancelled. A
+    # group holds one running and one pending job, and a newer pending job replaces
+    # the one already waiting, which GitHub reports as cancelled. That is why the
+    # script does not move only its own release: every run puts :latest on the
+    # highest published release and :<major>.<minor> on the highest of its line,
+    # verified. The run that replaced a dropped one therefore repairs :latest and
+    # its own line's tag; the tag of another line waits for that line's next
+    # publish or for a re-run of the cancelled run. A run that finds the tags
+    # right is a green no-op.
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - name: Log in to the registry
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | docker login "${IMAGE%%/*}" --username "$REGISTRY_USER" --password-stdin
+      - name: Install cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+      - name: Verify the signed digest and move the floating tags
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_IMAGE: ${{ env.IMAGE }}
+        run: bash scripts/release-publish.sh

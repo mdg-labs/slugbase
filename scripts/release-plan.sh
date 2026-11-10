@@ -14,11 +14,13 @@
 #   version=<semver>
 #   prerelease=true|false              true when the version has a pre-release suffix
 #   git_tag=v<semver>
-#   tags=<image>:<version>[,<image>:<major>.<minor>]
+#   tags=<image>:<version>
 #
-# A pre-release carries `:<version>` only. A version without a suffix also carries
-# `:<major>.<minor>`. `:latest` is never planned: it moves only when a release is
-# published (Q92). The git tag `git_tag` is not created here: the build job creates
+# The build pushes `:<version>` only, for a pre-release and for any other version.
+# `:<major>.<minor>` and `:latest` are floating tags: they are never planned or pushed
+# by a build, because a build is a draft release candidate. Both move to the signed
+# digest when a release without a suffix is published (scripts/release-publish.sh,
+# Q92). The git tag `git_tag` is not created here: the build job creates
 # it (scripts/release-tag.sh) on the pushed commit after the image is pushed and
 # before it opens the draft release from that tag, because GitHub creates the tag of
 # a draft only when the draft is published. The script refuses, with a non-zero
@@ -89,8 +91,6 @@ semver_pattern="^${number}\\.${number}\\.${number}(-${identifier}(\\.${identifie
 if ((${#new_version} > 128)) || [[ ! "$new_version" =~ $semver_pattern ]]; then
   die "the version in $manifest is not valid semver without build metadata."
 fi
-major="${BASH_REMATCH[1]}"
-minor="${BASH_REMATCH[2]}"
 
 # The tag is made after the image push, so a tag that exists before then belongs
 # to an earlier run or to someone else, and the version is refused.
@@ -121,7 +121,6 @@ tags="${image}:${new_version}"
 prerelease=true
 if [[ "$new_version" != *-* ]]; then
   prerelease=false
-  tags="${tags},${image}:${major}.${minor}"
 fi
 
 emit release true

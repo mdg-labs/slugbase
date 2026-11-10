@@ -106,7 +106,8 @@ expect_plan() {
     && [[ "$(grep -c '^tags=' <<<"$out")" == 1 ]] \
     && [[ "$(cat "$STUB_DIR/github-output")" == "$(grep -E '^(release|version|prerelease|git_tag|tags)=' <<<"$out")" ]] \
     && grep -q -- "buildx imagetools inspect ${image}:${version}\$" "$STUB_DIR/calls" \
-    && ! grep -q -- 'latest' <<<"$out"; then
+    && ! grep -q -- 'latest' <<<"$out" \
+    && [[ "$(grep -c '^tags=.*,' <<<"$out")" == 0 ]]; then
     pass "$name"
   else
     fail "$name (exit $code, docker calls: $(tr '\n' ';' < "$STUB_DIR/calls"))"
@@ -139,7 +140,7 @@ expect_plan "0.0.0 to 1.0.0-rc.1 plans :1.0.0-rc.1 alone, as a pre-release" true
 
 make_repo 1.0.0-rc.1 1.0.0
 run_plan "$before" "$after"
-expect_plan "1.0.0-rc.1 to 1.0.0 plans :1.0.0 and :1.0, not a pre-release" false "${image}:1.0.0,${image}:1.0" 1.0.0
+expect_plan "1.0.0-rc.1 to 1.0.0 plans :1.0.0 alone, not a pre-release: :1.0 and :latest move on publish" false "${image}:1.0.0" 1.0.0
 
 make_repo 1.4.2 2.10.0-beta.3
 run_plan "$before" "$after"
@@ -147,7 +148,7 @@ expect_plan "a major bump with a suffix plans only its version" true "${image}:2
 
 make_repo 1.0.0 1.0.1
 run_plan "$before" "$after"
-expect_plan "a patch release plans :1.0.1 and :1.0" false "${image}:1.0.1,${image}:1.0" 1.0.1
+expect_plan "a patch release plans :1.0.1 alone, so a build never moves :1.0" false "${image}:1.0.1" 1.0.1
 
 make_repo 1.0.0-rc.1 1.0.0-rc.1
 run_plan "$before" "$after"
@@ -195,6 +196,24 @@ for answer in "ERROR: ghcr.io/mdg-labs/slugbase:1.0.0-rc.1: not found" "manifest
   expect_plan "a registry answer '${answer}' means the tag is free" true "${image}:1.0.0-rc.1" 1.0.0-rc.1
 done
 extra=()
+
+# The three fixtures of the tag computation: 1.0.0-rc.1, 1.0.0 and a repeated 1.0.0.
+# A build plans the version tag alone each time; the repeat is refused because the
+# registry (or the git tag) already has the version.
+make_repo 0.0.0 1.0.0-rc.1
+extra=()
+run_plan "$before" "$after"
+expect_plan "fixture 1.0.0-rc.1: the set is {:1.0.0-rc.1}" true "${image}:1.0.0-rc.1" 1.0.0-rc.1
+make_repo 1.0.0-rc.1 1.0.0
+run_plan "$before" "$after"
+expect_plan "fixture 1.0.0: the set is {:1.0.0}" false "${image}:1.0.0" 1.0.0
+extra=(STUB_INSPECT_EXIT=0 STUB_INSPECT_OUT="Name: ${image}:1.0.0")
+run_plan "$before" "$after"
+expect_refused "fixture repeated 1.0.0: the image tag now exists and the repeat is refused" "already exists in the registry"
+extra=()
+g tag v1.0.0
+run_plan "$before" "$after"
+expect_refused "fixture repeated 1.0.0: the git tag now exists and the repeat is refused" "git tag v1.0.0 already exists"
 
 make_repo 0.0.0 1.0.0-rc.1
 g tag v1.0.0-rc.1
@@ -258,8 +277,8 @@ code_lines="$(grep -vE '^[[:space:]]*#' "$wf")"
 out="$wf"
 if [[ -f "$wf" ]]; then
   triggers="$(awk '/^on:/ { inside = 1; next } /^[^[:space:]]/ { inside = 0 } inside' <<<"$code_lines" | sed -E 's/^[[:space:]]+//')"
-  if [[ "$triggers" == $'push:\nbranches: [main]' ]]; then
-    pass "release.yml runs on a push to main and on nothing else"
+  if [[ "$triggers" == $'push:\nbranches: [main]\nrelease:\ntypes: [published]' ]]; then
+    pass "release.yml runs on a push to main and a published release, and on nothing else"
   else
     fail "release.yml triggers: $(tr '\n' ';' <<<"$triggers")"
   fi
@@ -283,9 +302,32 @@ if [[ -f "$wf" ]]; then
     fail "release.yml permissions: $(tr '\n' ';' <<<"$scopes")"
   fi
   if grep -qE ':latest|tags: *latest|,latest' <<<"$code_lines"; then
-    fail "release.yml names :latest"
+    fail "release.yml names latest: the tags that move are named in scripts/release-publish.sh only"
   else
-    pass "release.yml never names :latest"
+    pass "release.yml never names a floating tag: the publish job leaves them to scripts/release-publish.sh"
+  fi
+  # The job that moves the tags holds packages: write and contents: read, no more,
+  # and runs only on a published release; the build job runs only on a push.
+  publish_scopes="$(awk '/^  publish:$/ { inside = 1; next } inside && /^  [a-z-]+:$/ { inside = 0 } inside && /^      [a-z-]+: (read|write|none)$/ { gsub(/^ +/, ""); print }' <<<"$code_lines" | sort | tr '\n' ' ')"
+  if [[ "$publish_scopes" == "contents: read packages: write " ]]; then
+    pass "the publish job holds contents: read and packages: write only"
+  else
+    fail "the publish job permissions: ${publish_scopes:-none}"
+  fi
+  if grep -qE "^    if: .*github\.event_name == 'release'" <<<"$(awk '/^  publish:$/ { inside = 1; next } inside && /^  [a-z-]+:$/ { inside = 0 } inside' <<<"$code_lines")"; then
+    pass "the publish job runs on a release event only"
+  else
+    fail "the publish job has no release-event condition"
+  fi
+  if [[ "$(grep -cE "^    if: .*github\.event_name == 'push'" <<<"$code_lines")" == 2 ]]; then
+    pass "the plan and build jobs run on a push only"
+  else
+    fail "the plan and build jobs are not both limited to a push"
+  fi
+  if ! grep -E '^[[:space:]]+run:' <<<"$code_lines" | grep -q '\${{'; then
+    pass "no expression in a one-line run: of release.yml"
+  else
+    fail "an expression inside a run: line"
   fi
   # The OIDC token is for keyless signing: only the job that pushes the image holds
   # it, and the plan job, which reads only, does not.
@@ -303,6 +345,7 @@ fi
 bash "$here/release-tag.test.sh" || failures=$((failures + 1))
 bash "$here/release-check-tags.test.sh" || failures=$((failures + 1))
 bash "$here/verify-image.test.sh" || failures=$((failures + 1))
+bash "$here/release-publish.test.sh" || failures=$((failures + 1))
 
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2
