@@ -50,6 +50,13 @@ const PERIODS = new Map([
   [3600, "hour"],
 ]);
 
+// The text with the names of declared keys taken out, since a name of 32 characters or more is a run of token
+// characters. What is left stays joined where a name was, so a credential written on both sides of a name is
+// still one run. A key-shaped name no schema declares stays, and is tested like any other run.
+function withoutDeclaredKeys(text, declared) {
+  return text.replace(KEY_PATTERN, (name) => (declared.has(name) ? "" : name));
+}
+
 function withoutFrontmatter(text) {
   const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n/.exec(text);
   return match === null ? text : text.slice(match[0].length);
@@ -253,7 +260,7 @@ export function checkEnvironment(config, { template, pageText, exampleText }) {
   }
   for (const [key, doc] of Object.entries(config.KEY_DOCS)) {
     const text = `${doc.description} ${doc.defaultText ?? ""}`;
-    if (SECRET_ASSIGNMENT.test(text) || TOKEN_SHAPED.test(text)) {
+    if (SECRET_ASSIGNMENT.test(text) || TOKEN_SHAPED.test(withoutDeclaredKeys(text, declared))) {
       problems.push(`the description of ${key} holds a value that looks like a secret; use a placeholder such as <your secret>`);
     }
   }
@@ -263,7 +270,7 @@ export function checkEnvironment(config, { template, pageText, exampleText }) {
   for (const key of secretsWithValues(page)) {
     problems.push(`the page gives a secret key a value: ${key}`);
   }
-  if (TOKEN_SHAPED.test(page)) {
+  if (TOKEN_SHAPED.test(withoutDeclaredKeys(page, declared))) {
     problems.push(`the page holds a run of characters shaped like a credential; use a placeholder such as <your secret>`);
   }
   return problems;

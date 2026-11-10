@@ -198,6 +198,37 @@ test("a description that holds a value shaped like a secret is reported", () => 
   assertProblem(problems, "the description of LOG_LEVEL holds a value that looks like a secret");
 });
 
+test("a declared key of 32 characters or more is not read as a credential, on the page or in a description", () => {
+  const key = "RATE_LIMIT_TOKEN_REDEEM_WORKSPACE";
+  assert.ok(key.length > 32);
+  const added = withDoc(key, { group: "runtime", type: { kind: "boolean" }, description: `Like ${key}, for the workspace.` });
+  const next = { ...withNewKey(key), KEY_DOCS: added.KEY_DOCS };
+  const problems = checkEnvironment(next, {
+    template: `${template}\nSet \`${key}\` to change it.\n`,
+    pageText: renderPage(next, `${template}\nSet \`${key}\` to change it.\n`),
+    exampleText: `${exampleText}\n${key}=true\n`,
+  });
+  assert.deepEqual(problems, []);
+});
+
+test("a credential beside a declared key, or on both sides of one, is still reported", () => {
+  const half = ["q", "Z", "7", "x"].join("").repeat(5);
+  for (const text of [`SESSION_SECRET-${half}${half}`, `${half}-SESSION_SECRET-${half}`, `${half}${half}-SESSION_SECRET`]) {
+    const changed = `${template}\n${text}\n`;
+    assertProblem(problemsOf(config, { template: changed, pageText: renderPage(config, changed) }), "shaped like a credential");
+    const problems = problemsOf(withDoc("LOG_LEVEL", { ...config.KEY_DOCS.LOG_LEVEL, description: text }));
+    assertProblem(problems, "the description of LOG_LEVEL holds a value that looks like a secret");
+  }
+});
+
+test("an upper-case run with underscores that is no declared key is reported as shaped like a credential", () => {
+  const long = "QZ7X_".repeat(8).slice(0, -1);
+  const changed = `${template}\n${long}\n`;
+  const problems = problemsOf(config, { template: changed, pageText: renderPage(config, changed) });
+  assertProblem(problems, "shaped like a credential");
+  assertProblem(problems, `${long} is on the page but no process schema declares it`);
+});
+
 test("a default given to a secret key is reported", () => {
   const problems = problemsOf(withDoc("SESSION_SECRET", { ...config.KEY_DOCS.SESSION_SECRET, defaultText: "`changeme`" }));
   assertProblem(problems, "SESSION_SECRET is a secret and must have no default on the page");
