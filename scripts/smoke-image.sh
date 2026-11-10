@@ -4,7 +4,8 @@
 # section 6.2): the image migrates, reports ready, serves the probes, the API
 # config and the web app, runs unprivileged on a read-only root filesystem,
 # returns to ready after a restart without applying migrations again, holds no npm,
-# npx or corepack, and refuses to start in production with a weak or missing session
+# npx or corepack, runs `server --with-worker` (Q11) so that one container carries out a
+# job a request queued and stops cleanly on SIGTERM, and refuses to start in production with a weak or missing session
 # secret, a missing or short encryption key, an http origin, and a database role that
 # is a superuser (Q56), unless the operator allows that role, which logs a warning.
 #
@@ -125,11 +126,16 @@ port_in_use() {
   (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
 }
 
-# A free port in 20000-39999 on 127.0.0.1, away from the development database (54329).
+# A free port in 20000-32767 on 127.0.0.1, away from the development database (54329).
+# The range ends below 32768, where Linux's ephemeral range starts (32768-60999, the
+# kernel default that the CE image's container also has). The server connects to
+# PostgreSQL before it calls listen, and a port inside the ephemeral range can be handed
+# to one of those outbound sockets as its local port, so listen fails with EADDRINUSE
+# inside the container, where the check below on the runner's 127.0.0.1 cannot see it.
 pick_port() {
   local candidate
   for _ in $(seq 1 50); do
-    candidate=$((20000 + (RANDOM * 32768 + RANDOM) % 20000))
+    candidate=$((20000 + (RANDOM * 32768 + RANDOM) % 12768))
     if [[ "$candidate" != "${SMOKE_AVOID_PORT:-}" ]] && ! port_in_use "$candidate"; then
       printf '%s' "$candidate"
       return 0
@@ -581,6 +587,80 @@ check_owner_role_allowed() {
   docker rm --force "$name" >/dev/null 2>&1 || true
 }
 
+# What the container of `server --with-worker` must have done by the time it stopped on SIGTERM: exited 0, and logged that
+# the server and the worker each stopped and that the shutdown completed.
+expect_with_worker_stopped() {
+  local exit_code="$1" logs="$2" line
+  [[ "$exit_code" == "0" ]] || fail "the container of server --with-worker exited $exit_code on SIGTERM, expected 0"
+  log "ok: the container of server --with-worker exited 0 on SIGTERM"
+  for line in "Server stopped" "Worker stopped" "Shutdown complete"; do
+    expect_contains "the log of server --with-worker" "$logs" "$line"
+  done
+}
+
+# `server --with-worker` (Q11) in one container, on the database the stack migrated, with the stack's own worker stopped so that
+# nothing else can carry out a job: a registration queues the `workspace.created` event job and the job completes. The container is
+# then stopped with the signal the container runtime sends, and must stop its server and its worker and exit 0.
+check_with_worker() {
+  local name limit="${SMOKE_READY_SECONDS:-120}" deadline password state="" logs exit_code answer
+  name="slugbase-smoke-${run_id}-with-worker"
+  named_containers+=("$name")
+  compose stop slugbase-worker >/dev/null 2>&1 || fail "the worker of the stack could not be stopped"
+  compose_limit=120
+  compose run --detach --no-deps --name "$name" -e PUBLIC_REGISTRATION=true slugbase server --with-worker \
+    >"$work/with-worker.log" 2>&1 ||
+    {
+      compose_limit=""
+      redact <"$work/with-worker.log" | tail -n 20 >&2
+      fail "server --with-worker could not be started"
+    }
+  compose_limit=""
+  deadline=$((SECONDS + limit))
+  # The probe is the compose healthcheck's: node answers from inside, since no port is published.
+  # shellcheck disable=SC2016
+  until timeout 20 docker exec "$name" node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" >/dev/null 2>&1; do
+    state="$(docker inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
+    case "$state" in
+      exited | dead)
+        docker logs "$name" 2>&1 | redact >&2 || true
+        fail "server --with-worker is $state before /ready answered 200"
+        ;;
+    esac
+    ((SECONDS < deadline)) || fail "server --with-worker did not answer /ready within ${limit} seconds"
+    sleep 2
+  done
+  log "ok: server --with-worker answered /ready"
+  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+  expect_contains "the log of server --with-worker" "$logs" "Worker started"
+
+  password="$(random_hex 16)"
+  secrets+=("$password")
+  # The request is made from inside the container, with the origin the server is configured with (the cross-site check).
+  # shellcheck disable=SC2016
+  answer="$(timeout 30 docker exec -e SMOKE_PASSWORD="$password" "$name" node -e "
+    fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: process.env.APP_ORIGIN },
+      body: JSON.stringify({ displayName: 'Smoke', email: 'smoke@example.test', password: process.env.SMOKE_PASSWORD }),
+    }).then((r) => { console.log(r.status); process.exit(0); }, () => process.exit(1))" 2>/dev/null | tr -d '\r')" || answer=""
+  expect_equal "the status of the registration on server --with-worker" "$answer" "202"
+
+  deadline=$((SECONDS + limit))
+  until [[ "$(compose exec -T postgres psql --username slugbase --dbname slugbase --no-psqlrc --tuples-only --no-align \
+    --command "SELECT state FROM pgboss.job WHERE name = 'event.workspace.created'" 2>/dev/null | tr -d '\r')" == "completed" ]]; do
+    ((SECONDS < deadline)) || fail "the job the registration queued did not complete within ${limit} seconds with no worker container"
+    sleep 2
+  done
+  log "ok: the job the registration queued was carried out by server --with-worker alone"
+
+  timeout 60 docker stop --time 30 "$name" >/dev/null 2>&1 || fail "server --with-worker could not be stopped"
+  exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$name" 2>/dev/null || true)"
+  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+  expect_with_worker_stopped "$exit_code" "$logs"
+  expect_lacks "the log of server --with-worker" "$logs" "$password"
+  docker rm --force "$name" >/dev/null 2>&1 || true
+}
+
 # The database answers with the major that was asked for, so that a selection which
 # the compose files ignore cannot pass as a run against that major.
 check_postgres_major() {
@@ -642,6 +722,7 @@ main() {
   check_startup_refusals
   check_owner_role_refused
   check_owner_role_allowed
+  check_with_worker
 
   log "all checks passed"
 }

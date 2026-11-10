@@ -7,6 +7,7 @@ export type {
   MigrationChain,
   MigrationLevel,
   MigrationLevelOptions,
+  MigrationStop,
 } from "./migrate.ts";
 export { TenantContextError, createDatabase } from "./tenant.ts";
 export type {

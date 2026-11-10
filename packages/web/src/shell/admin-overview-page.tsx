@@ -8,6 +8,9 @@ import { useFormat } from "../i18n/use-format.ts";
 import { useAdminReadEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
 import { instanceStatusQuery, type InstanceStatus } from "./instance-status.ts";
 
+/** The public releases page. A static link: the instance asks no host whether a newer version exists (Q18). */
+export const RELEASES_URL = "https://github.com/mdg-labs/slugbase/releases";
+
 function Row({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
@@ -37,6 +40,9 @@ function Overview({ status }: { status: InstanceStatus }): ReactElement {
         <Rows>
           <Row label={t("admin.overview.build.version")}>
             <span className="font-mono">{status.version}</span>
+            <Button render={<a href={RELEASES_URL} rel="noopener noreferrer" target="_blank" />} size="sm" variant="link">
+              {t("admin.overview.build.releases")}
+            </Button>
           </Row>
           <Row label={t("admin.overview.build.migrations")}>
             <span>{t("admin.overview.build.applied", { applied: migrations.applied, expected: migrations.expected })}</span>

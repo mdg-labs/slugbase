@@ -295,4 +295,27 @@ describe("apps/slugbase main", { timeout: 60_000 }, () => {
     expect(status).toBe(2);
     expect(output).toContain("Unknown command");
   });
+
+  it.each([
+    ["worker", "--with-worker"],
+    ["migrate", "--with-worker"],
+    ["server", "--with-worker", "extra"],
+    ["server", "--With-Worker"],
+    ["server", "extra"],
+  ])("exits 2 before loading the configuration for `%s`", (...args) => {
+    const { status, output } = start(valid, ...args);
+    expect(status).toBe(2);
+    expect(output).toContain("Unexpected arguments");
+    expect(output).not.toContain("Configuration loaded");
+  });
+
+  it("validates the configuration of `server --with-worker` before anything starts, naming keys and never values", () => {
+    const incomplete: Record<string, string> = { ...valid };
+    delete incomplete["SESSION_SECRET"];
+    const { status, output } = start(incomplete, "server", "--with-worker");
+    expect(status).toBe(1);
+    expect(output).toContain("SESSION_SECRET");
+    expect(output).not.toContain("Configuration loaded");
+    expect(output).not.toContain("Zq8-prod-app-pw");
+  });
 });

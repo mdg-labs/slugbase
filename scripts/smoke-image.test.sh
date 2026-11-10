@@ -97,6 +97,19 @@ printf 'HTTP/1.1 200 OK\r\nCache-Control: public, max-age=60\r\nContent-Type: te
 if [[ "$(header_value cache-control)" == "public, max-age=60" ]]; then pass "header_value reads a header without case or the line ending"; else fail_test "header_value (got '$(header_value cache-control)')"; fi
 if [[ -z "$(header_value content-security-policy)" ]]; then pass "header_value is empty for an absent header"; else fail_test "header_value for an absent header"; fi
 
+# What the container of `server --with-worker` must have done once SIGTERM stopped it.
+stopped_logs='{"msg":"Shutting down"} {"msg":"Server stopped"} {"msg":"Worker stopped"} {"msg":"Shutdown complete"}'
+run expect_with_worker_stopped 0 "$stopped_logs"
+expect_ok "expect_with_worker_stopped accepts exit 0 with the server, the worker and the shutdown logged"
+run expect_with_worker_stopped 137 "$stopped_logs"
+expect_failed "expect_with_worker_stopped fails when the container was killed"
+run expect_with_worker_stopped "" "$stopped_logs"
+expect_failed "expect_with_worker_stopped fails when the exit code could not be read"
+for missing in "Server stopped" "Worker stopped" "Shutdown complete"; do
+  run expect_with_worker_stopped 0 "${stopped_logs/$missing/}"
+  expect_failed "expect_with_worker_stopped fails when '$missing' was not logged"
+done
+
 secrets=("first-generated-value" "second/generated+value=")
 redacted="$(printf 'url=postgres://u:first-generated-value@h key=second/generated+value= tail' | redact)"
 if [[ "$redacted" == "url=postgres://u:[redacted]@h key=[redacted] tail" ]]; then pass "redact replaces every generated value"; else fail_test "redact (got '$redacted')"; fi
@@ -355,7 +368,17 @@ expect_failed "expect_owner_allowed fails when the log holds the password"
 expect_quiet_about "expect_owner_allowed does not print the password it found" "$smoke_superuser_password"
 
 picked="$(pick_port)"
-if [[ "$picked" =~ ^[0-9]+$ ]] && ((picked >= 20000 && picked < 40000)); then pass "pick_port returns a port in 20000-39999"; else fail_test "pick_port (got '$picked')"; fi
+if [[ "$picked" =~ ^[0-9]+$ ]] && ((picked >= 20000 && picked < 32768)); then pass "pick_port returns a port in 20000-32767"; else fail_test "pick_port (got '$picked')"; fi
+
+# Linux's ephemeral range starts at 32768: a port inside it can be taken by the server's own
+# outbound sockets before it listens. 300 picks all below it; the old 20000-39999 range puts
+# about 36% of its picks at 32768 or above, so the chance that it passes this is below 1e-50.
+outside_range=0
+for _ in $(seq 1 300); do
+  candidate="$(pick_port)"
+  if ((candidate < 20000 || candidate >= 32768)); then outside_range=$((outside_range + 1)); fi
+done
+if ((outside_range == 0)); then pass "pick_port never picks from the ephemeral range"; else fail_test "pick_port picked outside 20000-32767 $outside_range times in 300"; fi
 
 node -e 'const s = require("node:net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); }); setTimeout(() => process.exit(0), 20000);' >"$tmp/port" &
 listener=$!

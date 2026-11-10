@@ -538,6 +538,23 @@ put "$tree" .github/workflows/ci.yml \
 check "$tree"
 expect_pass "a shell line continuation in a run block passes"
 
+# A grep stand-in first on PATH that fails only for the `uses:` extraction (the
+# only call that passes -oE) and runs the real grep for every other call.
+tree="$(new_tree uses-extraction-fails)"
+write_cla "$tree"
+mkdir -p "$tree/bin"
+real_grep="$(command -v grep)"
+put "$tree" bin/grep \
+  '#!/usr/bin/env bash' \
+  'for arg in "$@"; do' \
+  '  if [[ "$arg" == -oE ]]; then exit 2; fi' \
+  'done' \
+  "exec $real_grep \"\$@\""
+chmod +x "$tree/bin/grep"
+code=0
+out="$(cd "$tree" && PATH="$tree/bin:$PATH" bash scripts/check-workflow-triggers.sh 2>&1)" || code=$?
+expect_error "a failing uses: extraction fails the check"
+
 tree="$(new_tree no-folder)"
 rm -r "$tree/.github"
 check "$tree"

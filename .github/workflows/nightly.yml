@@ -1,13 +1,22 @@
 name: Nightly
 
-# The scheduled checks of doc 08 section 5.3 and 6.2 that no developer's gate waits for. Today that is the performance budgets: the
-# CE image, built here from the commit under test and never pulled, and k6 (scripts/perf/run.mjs) against a database that the test
+# The scheduled checks of doc 08 section 5.3, 5.4 and 6.2 that no developer's gate waits for: the performance budgets and the migration
+# timing. The performance budgets: the CE image, built here from the commit under test and never pulled, and k6 (scripts/perf/run.mjs) against a database that the test
 # harness made and filled with the large instance (50 000 bookmarks in one workspace, 2 000 further workspaces), with PostgreSQL on
 # the same runner. It runs every week and on a pull request to `main`, which is the promotion. A budget that is exceeded, or a /go
 # that writes more than the usage buffer allows, is filed under an issue of its scenario (go, go suggest, list, dashboard, search, import, write load; scripts/perf/report.mjs), a new one
 # or a comment on the one that is open, and does not fail the job; a run that could not measure fails it, and so does a filing that did not succeed, so that a
-# regression is never dropped silently. The job holds the workflow token with `issues: write` and nothing else, references no
+# regression is never dropped silently. The performance job holds the workflow token with `issues: write` and nothing else, references no
 # secret, and the workflow never runs on pull_request_target (doc 10 T16).
+#
+# The migration timing (scripts/perf/migrations.mjs, doc 08 section 5.4) builds the large instance at the migration level of the latest
+# release tag, raised to the first level at which it can be written, applies every later migration with `migrate` and fails the job when one
+# holds an ACCESS EXCLUSIVE lock for more than 1 s. It reads the release from git, so it checks out the full history and the tags. It
+# needs no image and holds `contents: read` only.
+#
+# The backup and restore check (scripts/backup-restore-check.sh, doc 08 section 5.1) follows docs/self-hosting/backup-restore.md on a seeded
+# instance of the image built here, once on PostgreSQL 17 and once on 18, and proves that the restored database serves the same data with
+# tenant isolation intact. It starts a stack of its own, which it removes however it ends, holds `contents: read` only and references no secret.
 
 on:
   schedule:
@@ -113,14 +122,18 @@ jobs:
             echo
             echo "| Scenario | p95 server time | Budget | |"
             echo "|---|---|---|---|"
-            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
+            jq -r '.budgets[] | select(.limitRatio == null) | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end)\(if .saturated then " (saturated)" else "" end) |"' perf-results/result.json
             echo
-            jq -r '.importPhase | "Import phase (no budget; the /go and list budgets during an import are in the table above): the load of /go and the list lasted \(.windowSeconds) s from the start of the first import.\n\n| Import | Size | Duration | Created | Skipped | Failed | Slugs dropped (taken, invalid) | Folders created | Tags created |\n|---|---|---|---|---|---|---|---|---|\n" + ([.imports[] | "| \(.import) | \(.bytes) bytes | \(.durationMs) ms | \(.created) | \(.skipped) | \(.failed) | \(.slugsDropped) (\(.slugsDroppedConflict), \(.slugsDroppedInvalid)) | \(.foldersCreated) | \(.tagsCreated) |"] | join("\n")) + "\n\nCreates by another member, \(.creates.rate) a second: p95 server time \(.creates.without.p95Ms) ms without an import (\(.creates.without.completed) requests), \(.creates.during.p95Ms) ms while an import holds the workspace row lock (\(.creates.during.completed) requests, \(.creates.dropped) arrivals dropped)."' perf-results/result.json
+            echo "| Budget during an import | p95 server time | p95 of the same run's steady scenario | Ratio | Limit | |"
+            echo "|---|---|---|---|---|---|"
+            jq -r '.budgets[] | select(.limitRatio != null) | "| \(.name) | \(.p95Ms) ms | \(.baselineP95Ms) ms (\(.of)) | \(if .judged then (.ratio | tostring) else "not judged" end) | \(.limitRatio) | \(if .judged | not then "not judged: " + .notJudged elif .ok then "ok" else "exceeded" end) |"' perf-results/result.json
+            echo
+            jq -r '.importPhase | "Import phase (no budget; the /go and list budgets during an import are the ratio table above): the load of /go and the list lasted \(.windowSeconds) s from the start of the first import.\n\n| Import | Size | Duration | Created | Skipped | Failed | Slugs dropped (taken, invalid) | Folders created | Tags created |\n|---|---|---|---|---|---|---|---|---|\n" + ([.imports[] | "| \(.import) | \(.bytes) bytes | \(.durationMs) ms | \(.created) | \(.skipped) | \(.failed) | \(.slugsDropped) (\(.slugsDroppedConflict), \(.slugsDroppedInvalid)) | \(.foldersCreated) | \(.tagsCreated) |"] | join("\n")) + "\n\nCreates by another member, \(.creates.rate) a second: p95 server time \(.creates.without.p95Ms) ms without an import (\(.creates.without.completed) requests), \(.creates.during.p95Ms) ms while an import holds the workspace row lock (\(.creates.during.completed) requests, \(.creates.dropped) arrivals dropped)."' perf-results/result.json
             echo
             jq -r '"Write load: \(.writeLoad.requests) requests for one slug updated \(.writeLoad.updates) rows of bookmarks in \(.writeLoad.elapsedSeconds) s (at most \(.writeLoad.limit): one for each flush interval of \(.writeLoad.flushIntervalSeconds) s, and one more), \(if .writeLoad.ok then "ok" else "exceeded" end)."' perf-results/result.json
           } >> "$GITHUB_STEP_SUMMARY"
       # What to file is decided by scripts/perf/report.mjs (tested in tooling/test/perf-report.test.ts) from the result and the open issues; this step only runs
-      # its actions. Each exceeded scenario (go, list, search, import: /go and the list during an import) and the write load of /go has one issue titled "Performance budget exceeded: <name>", which a later
+      # its actions. Each exceeded scenario (go, list, search, import: /go and the list during an import, as ratios to the steady ones of the run) and the write load of /go has one issue titled "Performance budget exceeded: <name>", which a later
       # run extends with a comment. Nothing of the result or of an issue reaches the shell as code: the titles and bodies come from files and the arguments are quoted.
       - name: Open an issue for an exceeded budget
         if: ${{ steps.measure.outputs.status == '10' }}
@@ -177,3 +190,124 @@ jobs:
           path: perf-results/
           if-no-files-found: ignore
           retention-days: 30
+
+  migrations:
+    name: migration timing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+        env:
+          POSTGRES_USER: slugbase_ci
+          POSTGRES_PASSWORD: slugbase_ci
+          POSTGRES_DB: postgres
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase_ci -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      # The release tag and the migrations it held are read from git, so the clone is complete.
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: nightly
+      - name: Check the tools the run needs
+        run: |
+          set -euo pipefail
+          command -v psql
+      - name: Build the seed
+        run: pnpm turbo run build --filter=@slugbase/testing
+      # Exit status 10 is a migration that held ACCESS EXCLUSIVE for more than 1 s; any other status is a run that could not measure. Both fail the job.
+      - name: Time the migrations
+        env:
+          SLUGBASE_TEST_PG_URL: postgres://slugbase_ci:slugbase_ci@127.0.0.1:5432/postgres
+          MEASURED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/perf/migrations.mjs --commit "$MEASURED_COMMIT" --out perf-results/migrations
+      - name: Report the result
+        if: ${{ always() && hashFiles('perf-results/migrations/result.json') != '' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Migration timing"
+            echo
+            jq -r '"Commit: `\(.commit // "unknown")`. Baseline: `\(.baseline.level)`, \(if .baseline.raised then "raised from the latest release \(.baseline.release // "(none)") (`\(.baseline.releaseLevel // "none")`), which lacks " + (.baseline.missingAtRelease | join(", ")) else "the latest release \(.baseline.release // "(none)")" end). Database: \(.database.bookmarks) bookmarks, \(.database.workspaces) workspaces, the largest with \(.database.largestWorkspace)."' perf-results/migrations/result.json
+            echo
+            echo "| Migration | Wall time | Longest ACCESS EXCLUSIVE lock | Relation | |"
+            echo "|---|---|---|---|---|"
+            jq -r --argjson limit "$(jq '.lockLimitMs' perf-results/migrations/result.json)" '.migrations[] | "| \(.file) | \(.wallMs) ms | \(if .nonTransactional then "non-transactional" elif .lockHeldMs == null then "none seen" else "\(.lockHeldMs) ms" end) | \(.lockRelation // "") | \(if (.nonTransactional | not) and .lockHeldMs != null and .lockHeldMs > $limit then "exceeds \($limit) ms" else "" end) |"' perf-results/migrations/result.json
+            echo
+            jq -r '.notes[] | "- " + .' perf-results/migrations/result.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: migration-timing
+          path: perf-results/migrations/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The procedure of docs/self-hosting/backup-restore.md, run by scripts/backup-restore-check.sh against the image built from the commit under test: the
+  # guide's dump of a seeded instance, a restore into a server without the roles (which must fail with the documented error), a restore into a new
+  # server with the roles and the image started against it (equal rows, /ready, a member's sign-in, a /go slug, RLS enabled and forced on every tenant
+  # table, slugbase_app owning none), and a restore under another ENCRYPTION_KEY (a member with an authenticator app cannot complete the sign-in).
+  # The script starts the stack of its own on the runner's Docker daemon, as the restore drill of e2e.yml does, and removes it on every way out; the last
+  # step removes one that was left behind when the script was killed. A failing check fails the job and so the leg; nothing is filed.
+  backup-restore:
+    name: backup and restore (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["17", "18"]
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: nightly-backup-restore
+      # Built from the checked-out commit and not pushed or pulled: the instance that is backed up and restored is this image.
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:backup-restore .
+      # The helpers of the check, against stand-ins, before it runs against the stack.
+      - name: Test the check
+        run: bash scripts/backup-restore-check.test.sh
+      - name: Back up and restore
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:backup-restore
+          SMOKE_POSTGRES_MAJOR: ${{ matrix.postgres }}
+        run: bash scripts/backup-restore-check.sh
+      - name: Remove any stack left behind
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          docker ps --all --format '{{.ID}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker ps --all --quiet --filter 'name=^slugbase-backup-' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker volume ls --quiet --filter 'label=com.docker.compose.project' --format '{{.Name}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker volume rm --force

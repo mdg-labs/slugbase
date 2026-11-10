@@ -93,6 +93,8 @@ main_e2e() {
   local code=0 tls_port setup_token="" mailpit_url="" ai_stub_url=""
   (($# > 0)) || fail "usage: with-stack.sh <command> [argument...]"
   command -v openssl >/dev/null 2>&1 || fail "openssl is required and was not found on PATH"
+  # The TLS proxy of the global setup binds this port later, on the host. pick_port stays below the
+  # ephemeral range so that port cannot already be the local port of one of the host's own outbound sockets.
   tls_port="$(pick_port)" || fail "no free port found on 127.0.0.1"
   export SMOKE_APP_ORIGIN="https://127.0.0.1:${tls_port}" SMOKE_AVOID_PORT="$tls_port"
   export SMOKE_EXTRA_COMPOSE_FILES="$root/compose.e2e.yml $root/e2e/compose.ai.yml"

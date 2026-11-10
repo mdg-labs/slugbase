@@ -217,11 +217,12 @@ interface Journal {
   entries: { tag: string }[];
 }
 
-function journalLength(folder: string): number {
-  return (JSON.parse(readFileSync(join(folder, "meta", "_journal.json"), "utf8")) as Journal).entries.length;
+function journalTags(folder: string): string[] {
+  return (JSON.parse(readFileSync(join(folder, "meta", "_journal.json"), "utf8")) as Journal).entries.map((entry) => entry.tag);
 }
 
-const CE_MIGRATIONS = journalLength(CE_CHAIN.folder);
+const CE_TAGS = journalTags(CE_CHAIN.folder);
+const CE_MIGRATIONS = CE_TAGS.length;
 
 // The CE chain builds indexes concurrently too, so a test that holds a snapshot to make the build of a fixture wait applies the CE chain first:
 // the build it waits for is then the fixture's, the first one after the snapshot is taken.
@@ -505,6 +506,50 @@ describe("the session of a run", () => {
     expect(error.message).toContain("connection was replaced");
     expect(["57P01", "CONNECTION_CLOSED"]).toContain(error.code);
   }, 60_000);
+});
+
+describe("until", () => {
+  it("applies the chains up to the named migration only, and a later run applies the rest", async () => {
+    const { name, owner } = await createDatabase();
+    const chains = [fixture("restored")];
+    const stop = CE_TAGS[4] ?? "";
+
+    const first = await migrate({ url: migratorUrl(name), chains, until: { chain: "core", tag: stop } });
+
+    expect(first.applied).toEqual(CE_TAGS.slice(0, 5).map((tag) => ({ chain: "core", tag })));
+    expect(await recordedRows(owner, "migrations_core")).toBe(5);
+    expect(await tableExists(owner, "drizzle.migrations_restored")).toBe(false);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+
+    const next = CE_TAGS[5] ?? "";
+    const second = await migrate({ url: migratorUrl(name), chains, until: { chain: "core", tag: next } });
+    expect(second.applied).toEqual([{ chain: "core", tag: next }]);
+
+    const rest = await migrate({ url: migratorUrl(name), chains });
+    expect(rest.applied).toHaveLength(CE_MIGRATIONS - 6 + 3);
+    expect(await recordedRows(owner, "migrations_core")).toBe(CE_MIGRATIONS);
+    expect(await recordedRows(owner, "migrations_restored")).toBe(3);
+  }, 60_000);
+
+  it("applies a later chain one migration at a time, after the whole CE chain", async () => {
+    const { name, owner } = await createDatabase();
+    const chains = [fixture("restored")];
+
+    const first = await migrate({ url: migratorUrl(name), chains, until: { chain: "restored", tag: "20300101000001_create_restored_target" } });
+
+    expect(first.applied.filter(({ chain }) => chain === "restored").map(({ tag }) => tag)).toEqual(["20300101000001_create_restored_target"]);
+    expect(await recordedRows(owner, "migrations_core")).toBe(CE_MIGRATIONS);
+    expect(await recordedRows(owner, "migrations_restored")).toBe(1);
+    expect(await tableExists(owner, "restored_target")).toBe(true);
+  }, 60_000);
+
+  it("refuses a chain or a migration the run does not have, before it connects", async () => {
+    const unreachable = "postgres://slugbase_migrator:x@127.0.0.1:1/none";
+    const noChain = await rejection(migrate({ url: unreachable, until: { chain: "absent", tag: "x" } }));
+    expect(noChain.message).toContain('there is no chain "absent"');
+    const noTag = await rejection(migrate({ url: unreachable, until: { chain: "core", tag: "20300101000009_absent" } }));
+    expect(noTag.message).toContain("has no migration 20300101000009_absent");
+  });
 });
 
 describe("a failing migration", () => {
@@ -1162,6 +1207,42 @@ describe("an upgrade from the level before the bookmark URL index", () => {
     expect((await indexes(owner, ["bookmarks_owner_url_idx"])).map((index) => [index.name, index.valid])).toEqual([["bookmarks_owner_url_idx", true]]);
     const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.bookmarks_owner_url_idx'::regclass) AS definition`;
     expect(definition?.definition).toContain("(workspace_id, owner_id, url_canonical) WHERE (plan_archived_at IS NULL)");
+  }, 120_000);
+});
+
+describe("an upgrade from the level before the plan-archived bookmark index", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000061";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000062";
+
+  it("builds the index concurrently on a table that holds bookmarks, in a step of its own, and it is valid and partial", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const archivedIndex = journal.entries.filter((entry) => entry.tag.includes("index_bookmark_owner_archived"));
+    expect(archivedIndex).toHaveLength(1);
+    for (const entry of archivedIndex) {
+      expect(readFileSync(join(CE_CHAIN.folder, `${entry.tag}.sql`), "utf8").startsWith("-- slugbase:non-transactional\n")).toBe(true);
+    }
+    await owner.unsafe("DROP INDEX public.bookmarks_owner_archived_idx");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${archivedIndex.map((entry) => String(entry.when)).join(", ")})`);
+    await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SELECT set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${ACCOUNT}, 'archived-index@example.test', 'Archived index')`;
+      await tx`INSERT INTO workspaces (id, name) VALUES (${WORKSPACE}, 'Archived index')`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${WORKSPACE}, ${ACCOUNT}, 'owner')`;
+      await tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, plan_archived_at)
+        SELECT gen_random_uuid(), ${WORKSPACE}, ${ACCOUNT}, 'https://example.com/' || n, 'https://example.com/' || n, 'example.com', 'Title ' || n, CASE WHEN n % 10 = 0 THEN now() END
+        FROM generate_series(1, 500) AS n`;
+    });
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(archivedIndex.map((entry) => entry.tag));
+    expect((await indexes(owner, ["bookmarks_owner_archived_idx"])).map((index) => [index.name, index.valid])).toEqual([["bookmarks_owner_archived_idx", true]]);
+    const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.bookmarks_owner_archived_idx'::regclass) AS definition`;
+    expect(definition?.definition).toContain("(workspace_id, owner_id, id) WHERE (plan_archived_at IS NOT NULL)");
   }, 120_000);
 });
 

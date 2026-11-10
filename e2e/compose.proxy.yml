@@ -1,0 +1,11 @@
+# The reverse proxies that the reverse proxy drill (e2e/reverse-proxy.spec.ts) puts in front of the image, pinned by
+# digest like every other image the repository runs (the tag says which version the digest is, and Renovate keeps both
+# current). It is a list of images and nothing an operator or the stack runs: the drill reads the image of each service
+# from here (e2e/support/reverse-proxy.ts) and starts the container itself with `docker run`, on the host's network so
+# that the proxy sees the real address of each client, with the configuration it takes from
+# docs/self-hosting/reverse-proxy.md. nginx must be 1.25.1 or later, which the guide's file needs for `http2 on`.
+services:
+  nginx:
+    image: nginx:1.29.8-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+  caddy:
+    image: caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee

@@ -1,5 +1,5 @@
 import type { NewTag, TagMergeRequest, TagMergeResult, TagPosition, TagRecord, TagRenameRequest, TagRenameResult, TagSort, TagStore, TagStoreCreationResult } from "@slugbase/core";
-import { and, asc, desc, eq, isNull, not, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, not, sql, type SQL } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -24,7 +24,9 @@ import { defineScopedRepository } from "./scoped.ts";
 // the target (which leaves the links the target has) and deletes the source, whose links go with it by foreign key, all in the transaction of the caller, so a
 // merge that fails or is refused leaves every tag and link as it was. A deletion of a tag takes the tag and its links and no bookmark.
 // A page is at most `limit` tags after the place the previous page ended at; `count` is the capped total of the owner's tags.
-// The count of a tag is the number of bookmarks it is linked to that are not plan-archived, which is what a list of bookmarks shows.
+// The count of a tag is the number of bookmarks it is linked to that are not plan-archived, which is what a list of bookmarks shows. It is read as the links of the tag (an index-only count of
+// `bookmark_tags_tag_idx`) less the links of the owner's plan-archived bookmarks, which are few and are found through `bookmarks_owner_archived_idx`, so the count never visits the bookmark of a link that is
+// not archived. A link is admitted only where its tag and its bookmark are both the owner's (src/sql/550-bookmark-tagging.sql), so the plan-archived bookmarks to subtract are the owner's.
 
 const scoped = defineScopedRepository("tags", tags, {
   insertColumns: ["id", "ownerId", "name"],
@@ -73,11 +75,6 @@ function recordOf(row: TagRow): TagRecord {
   return { id: row.id, name: row.name, bookmarkCount: row.bookmarkCount, createdAt: row.createdAt };
 }
 
-const ORDERS: Readonly<Record<TagSort, readonly SQL[]>> = {
-  name: [asc(tags.name), asc(tags.id)],
-  count: [desc(sql`count(${bookmarks.id})`), asc(tags.name), asc(tags.id)],
-};
-
 interface TagsRequest {
   readonly ownerId: string;
   readonly sort: TagSort;
@@ -88,28 +85,44 @@ interface TagsRequest {
 
 /**
  * The statement of `TagRepository.list`, exported for the test that plans it: the tags of `ownerId` in the workspace of the transaction, or the one tag `tagId`, with their counts,
- * in the order of `sort` and after `after`, at most `limit`. The keyset of the sort by name is (name, id) and is a condition on rows; the
- * keyset of the sort by count is (count descending, name, id) and is a condition on the groups, since the count is an aggregate. Needs a transaction opened with a workspace.
+ * in the order of `sort` and after `after`, at most `limit`. The keyset of the sort by name is (name, id) and the keyset of the sort by count is (count descending, name, id); both are conditions on rows, since the
+ * count is a column of the tag by then. Needs a transaction opened with a workspace.
  */
 export function tagsQuery(tx: TenantTx, request: TagsRequest) {
   const workspaceId = requireWorkspace(tx);
   const { ownerId, sort, after, limit, tagId } = request;
-  const bookmarkCount = sql<number>`count(${bookmarks.id})::int`;
-  const afterName = after === undefined ? undefined : sql`(${tags.name}, ${tags.id}) > (${after.name}::citext, ${after.id}::uuid)`;
-  const rowsAfter = sort === "name" ? afterName : undefined;
-  const groupsAfter =
-    sort === "count" && after !== undefined && after.count !== undefined
-      ? sql`(count(${bookmarks.id}) < ${after.count}::bigint OR (count(${bookmarks.id}) = ${after.count}::bigint AND ${afterName}))`
-      : undefined;
-  const query = tenantHandle(tx)
-    .select({ id: tags.id, name: tags.name, createdAt: tags.createdAt, bookmarkCount })
+  const handle = tenantHandle(tx);
+  // The links of the owner's plan-archived bookmarks by tag: driven from `bookmarks_owner_archived_idx` and probed by the primary key of the links, and computed once for the statement.
+  const archived = handle
+    .select({ tagId: bookmarkTags.tagId, archivedLinks: sql<number>`count(*)`.as("archived_links") })
+    .from(bookmarks)
+    .innerJoin(bookmarkTags, and(eq(bookmarkTags.workspaceId, bookmarks.workspaceId), eq(bookmarkTags.bookmarkId, bookmarks.id)))
+    .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, ownerId), isNotNull(bookmarks.planArchivedAt), tagId === undefined ? undefined : eq(bookmarkTags.tagId, tagId)))
+    .groupBy(bookmarkTags.tagId)
+    .as("archived");
+  const linked = sql`(SELECT count(*) FROM ${bookmarkTags} WHERE ${bookmarkTags.workspaceId} = ${tags.workspaceId} AND ${bookmarkTags.tagId} = ${tags.id})`;
+  const counted = handle
+    .select({ id: tags.id, name: tags.name, createdAt: tags.createdAt, bookmarkCount: sql<number>`(${linked} - coalesce(${archived.archivedLinks}, 0))::int`.as("bookmark_count") })
     .from(tags)
-    .leftJoin(bookmarkTags, and(eq(bookmarkTags.workspaceId, tags.workspaceId), eq(bookmarkTags.tagId, tags.id)))
-    .leftJoin(bookmarks, and(eq(bookmarks.workspaceId, bookmarkTags.workspaceId), eq(bookmarks.id, bookmarkTags.bookmarkId), isNull(bookmarks.planArchivedAt)))
-    .where(and(eq(tags.workspaceId, workspaceId), eq(tags.ownerId, ownerId), tagId === undefined ? undefined : eq(tags.id, tagId), rowsAfter))
-    .groupBy(tags.id)
-    .having(groupsAfter)
-    .orderBy(...ORDERS[sort]);
+    .leftJoin(archived, eq(archived.tagId, tags.id))
+    .where(and(eq(tags.workspaceId, workspaceId), eq(tags.ownerId, ownerId), tagId === undefined ? undefined : eq(tags.id, tagId)))
+    .as("counted");
+  const afterName = after === undefined ? undefined : sql`(${counted.name}, ${counted.id}) > (${after.name}::citext, ${after.id}::uuid)`;
+  const rowsAfter =
+    sort === "name"
+      ? afterName
+      : after !== undefined && after.count !== undefined
+        ? sql`(${counted.bookmarkCount} < ${after.count}::integer OR (${counted.bookmarkCount} = ${after.count}::integer AND ${afterName}))`
+        : undefined;
+  const orders: Readonly<Record<TagSort, readonly SQL[]>> = {
+    name: [asc(counted.name), asc(counted.id)],
+    count: [desc(counted.bookmarkCount), asc(counted.name), asc(counted.id)],
+  };
+  const query = handle
+    .select({ id: counted.id, name: counted.name, createdAt: counted.createdAt, bookmarkCount: counted.bookmarkCount })
+    .from(counted)
+    .where(rowsAfter)
+    .orderBy(...orders[sort]);
   return limit === undefined ? query : query.limit(limit);
 }
 

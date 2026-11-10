@@ -4376,7 +4376,7 @@ export interface ImportAsk {
     readonly actor: AuditActor;
     readonly ceiling: EntitlementLimit;
     // (undocumented)
-    readonly file: Parameters<typeof bookmarksOfFile>[0];
+    readonly file: ImportRequest;
     // (undocumented)
     readonly ipPrefix: string | null;
     readonly skipDuplicates: boolean;
@@ -4409,7 +4409,7 @@ export interface ImportBookmark {
 }
 
 // @public
-export function importBookmarks(input: ImportDependencies, ask: ImportAsk): Promise<ImportOutcome>;
+export function importBookmarks(dependencies: ImportDependencies, ask: ImportAsk): Promise<ImportOutcome>;
 
 // @public (undocumented)
 export interface ImportDependencies {
@@ -4504,6 +4504,14 @@ export type ImportPlaces =
     readonly used: number;
 };
 
+// @public
+export function importPrepared(input: ImportDependencies, input2: ImportPreparedAsk): Promise<ImportOutcome>;
+
+// @public
+export type ImportPreparedAsk = Omit<ImportAsk, "file"> & {
+    readonly prepared: PreparedImport;
+};
+
 // @public (undocumented)
 export interface ImportPreviewAsk {
     readonly ceiling: EntitlementLimit;
@@ -4542,6 +4550,13 @@ export type ImportPreviewOutcome =
     readonly kind: "too_many_links";
     readonly links: number;
 };
+
+// @public
+export interface ImportPreviewPreparedAsk {
+    readonly ceiling: EntitlementLimit;
+    readonly prepared: PreparedImport;
+    readonly skipDuplicates: boolean;
+}
 
 // @public
 export interface ImportPreviewStore {
@@ -6297,6 +6312,9 @@ export function parseDomainEventPayload<Name extends DomainEventName>(name: Name
 export function parseNetscapeBookmarks(file: Uint8Array): NetscapeFile;
 
 // @public
+export function parseNetscapeBookmarksInSlices(file: Uint8Array): Promise<NetscapeFile>;
+
+// @public
 export function parsePageIcons(input: PageMetadataInput): readonly string[];
 
 // @public
@@ -6395,6 +6413,43 @@ export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_una
 export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
 
 // @public
+export interface PreparedChoices {
+    readonly preferences: readonly {
+        readonly slug: string;
+        readonly bookmarkRef: string;
+    }[];
+    readonly refs: readonly {
+        readonly ref: string;
+        readonly place: number | null;
+    }[];
+}
+
+// @public
+export type PreparedImport = {
+    readonly kind: "too_many_distinct_names";
+    readonly names: number;
+} | {
+    readonly kind: "ready";
+    readonly reads: readonly (ImportBookmark | ImportRefusal)[];
+    readonly names: PreparedNames;
+    readonly choices: PreparedChoices;
+};
+
+// @public
+export interface PreparedNames {
+    readonly folders: readonly string[];
+    readonly listedFolders: readonly WantedFolder[];
+    readonly listedTags: readonly string[];
+    readonly tags: readonly string[];
+}
+
+// @public
+export function prepareImport(file: ImportRequest): PreparedImport;
+
+// @public
+export function prepareImportInSlices(file: ImportRequest): Promise<PreparedImport>;
+
+// @public
 export function previewBulkShare(input: BookmarkBulkSharePreviewDependencies, ask: BookmarkBulkSharePreviewAsk): Promise<BookmarkBulkSharePreviewOutcome>;
 
 // @public
@@ -6402,6 +6457,9 @@ export function previewBulkTags(input: BookmarkBulkPreviewDependencies, ask: Boo
 
 // @public
 export function previewImport(input: ImportPreviewDependencies, ask: ImportPreviewAsk): Promise<ImportPreviewOutcome>;
+
+// @public
+export function previewPrepared(input: ImportPreviewDependencies, ask: ImportPreviewPreparedAsk): Promise<ImportPreviewOutcome>;
 
 // @public
 export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string, ownedMax: EntitlementLimit): Promise<PersonalWorkspaceOutcome>;
@@ -6440,6 +6498,9 @@ export function readFolder(input: FolderReadDependencies, ask: FolderReadAsk): P
 
 // @public
 export function readImportBookmark(entry: ImportFileBookmark, position: number): ImportBookmark | ImportRefusal;
+
+// @public
+export function readPreparedImport(value: unknown): PreparedImport | undefined;
 
 // @public
 export function readsShared(ask: {
@@ -7393,6 +7454,14 @@ export const USER_AGENT_MAX_LENGTH = 256;
 
 // @public
 export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): number | undefined;
+
+// @public
+export interface WantedFolder {
+    readonly color: number;
+    readonly icon: string;
+    // (undocumented)
+    readonly name: string;
+}
 
 // @public
 export function withEntitlementChange<T>(writer: EntitlementVersionWriter, change: () => Promise<T>): Promise<T>;

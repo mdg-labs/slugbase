@@ -1,6 +1,6 @@
-import { IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation, importNetscape as importNetscapeOperation, type ImportQuerySchema, type ImportRequest } from "@slugbase/contracts";
+import { IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, importJson as importJsonOperation, importNetscape as importNetscapeOperation, type ImportQuerySchema } from "@slugbase/contracts";
 import type { z } from "zod";
-import { createAuditWriter, importBookmarks, previewImport, type AuditActor, type BookmarkEntitlements, type ImportStore } from "@slugbase/core";
+import { createAuditWriter, importPrepared, previewPrepared, type AuditActor, type BookmarkEntitlements, type ImportStore, type PreparedImport } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, importRepository, type TenantTx } from "@slugbase/db";
 import { ascendingUuidv7, uuidv7 } from "../../auth/uuidv7.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
@@ -9,10 +9,11 @@ import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
 import { route } from "../register.ts";
-import { uploadedBookmarks } from "./upload.ts";
+import { startedImportRead } from "../../import-worker/request.ts";
+import { uploadedImport } from "./upload.ts";
 
 // POST /api/v1/import/json (doc 04 section 10.9, doc 02 section 13.1, doc 01 section 7.5, doc 10 T1, T11 and T13). It acts in the workspace the request is bound to and names none; the authorization stage lets a member
-// through by a session or by an API token of the write scope, the body-limits stage refuses a body over 5 MiB, the validation stage refuses a file that is not the format, and the request is in the `bulk` rate bucket.
+// through by a session or by an API token of the write scope, the body-limits stage refuses a body over 5 MiB, the validation stage refuses a file that is not the format (the body is parsed and checked by the import worker thread, which also reads each bookmark, so that none of that holds the thread that serves the other requests), and the request is in the `bulk` rate bucket.
 // The operation is synchronous. With `dryRun=true` the handler reads the workspace's bookmark counter and the caller's own canonical URLs in one transaction and writes nothing, so a request that carries an
 // `Idempotency-Key` stores its answer under the key (the idempotency stage's own row) and changes nothing else. Otherwise the import is one transaction, the one the idempotency stage opens when there is a key: it takes
 // the places the file needs under the workspace's `bookmarks.max` (the entitlement is decided here, because the room is the counter under the workspace's row lock), inserts the bookmarks in batches in the order of
@@ -95,7 +96,7 @@ export interface ImportRoutesOptions {
 type ImportQuery = z.output<typeof ImportQuerySchema>;
 
 /** The import of a file the caller has read into bookmarks: a dry run, or the one transaction that writes it. Both routes of the import end here. */
-async function runImport(context: ChainContext, query: ImportQuery, file: ImportRequest, entitlements: BookmarkEntitlements) {
+async function runImport(context: ChainContext, query: ImportQuery, prepared: PreparedImport, entitlements: BookmarkEntitlements) {
   const tenant = tenantOf(context);
   const ceiling = await entitlements.limit(tenant.accountId, tenant.workspaceId, context.req.raw);
   if (ceiling === undefined) {
@@ -103,7 +104,7 @@ async function runImport(context: ChainContext, query: ImportQuery, file: Import
   }
   const skipDuplicates = query.skipDuplicates !== "false";
   if (query.dryRun === "true") {
-    const previewed = await tenant.withTenant((tx) => previewImport({ store: importRepository(tx) }, { file, skipDuplicates, ceiling }));
+    const previewed = await tenant.withTenant((tx) => previewPrepared({ store: importRepository(tx) }, { prepared, skipDuplicates, ceiling }));
     if (previewed.kind === "unavailable") {
       throw new ProblemError("not_found", NO_WORKSPACE);
     }
@@ -124,9 +125,9 @@ async function runImport(context: ChainContext, query: ImportQuery, file: Import
     if (profile === undefined) {
       return { kind: "unavailable" } as const;
     }
-    const imported = await importBookmarks(
+    const imported = await importPrepared(
       { store: storeOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newBookmarkId: ascendingUuidv7(), newId: uuidv7 },
-      { file, skipDuplicates, ceiling, workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor: auditActorOf(context, tenant.accountId, profile.displayName), ipPrefix },
+      { prepared, skipDuplicates, ceiling, workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor: auditActorOf(context, tenant.accountId, profile.displayName), ipPrefix },
     );
     if (imported.kind === "too_many_names") {
       throw tooManyNames(imported.newNames);
@@ -147,8 +148,15 @@ async function runImport(context: ChainContext, query: ImportQuery, file: Import
 
 export function importRoutes({ entitlements }: ImportRoutesOptions): RouteBinding[] {
   return [
-    route(importJsonOperation).handle(({ query, body }, context) => runImport(context, query, body, entitlements)),
+    // The body of this route is read by the import worker in the validation stage (`import-worker/request.ts`), so the handler gets no parsed `body`: it takes the file the worker prepared.
+    route(importJsonOperation).handle(async ({ query }, context) => {
+      const read = await startedImportRead(context.req.raw, "json");
+      if (read.kind !== "prepared") {
+        throw new Error("importJson was reached with a body that the import worker did not prepare");
+      }
+      return runImport(context, query, read.prepared, entitlements);
+    }),
     // The only multipart route: the upload is read by the handler, and what it lists goes through the same service as a JSON file.
-    route(importNetscapeOperation).handle(async ({ query }, context) => runImport(context, query, await uploadedBookmarks(context), entitlements), { acceptsMultipart: true }),
+    route(importNetscapeOperation).handle(async ({ query }, context) => runImport(context, query, await uploadedImport(context), entitlements), { acceptsMultipart: true }),
   ];
 }

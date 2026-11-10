@@ -171,7 +171,8 @@ async function openApp(path = "/bookmarks"): Promise<ReturnType<typeof renderApp
   window.history.replaceState(null, "", path);
   const App = createWebApp({ extensions: [] });
   const rendered = renderApp(<App />);
-  await screen.findByRole("link", { name: "Bookmark 1" });
+  // A role query would run again on every change of the list while its 120 rows render, and take the time from the render.
+  await screen.findByText("Bookmark 1");
   return rendered;
 }
 
@@ -182,9 +183,20 @@ async function press(element: HTMLElement): Promise<void> {
   });
 }
 
+// The element of a role and an aria-label. A role query computes the accessible name of every element of the role, which for the checkboxes of a list of 120 took about a quarter of a second a lookup.
+function labelled(role: string, name: string): HTMLElement {
+  const found = document.body.querySelector<HTMLElement>(`[role="${role}"][aria-label="${name}"]`);
+  if (found === null) {
+    throw new Error(`No ${role} named "${name}"`);
+  }
+  return found;
+}
+
+const checkbox = (n: number): HTMLElement => labelled("checkbox", `Select Bookmark ${String(n)}`);
+
 async function select(...numbers: number[]): Promise<void> {
   for (const n of numbers) {
-    await press(screen.getByRole("checkbox", { name: `Select Bookmark ${String(n)}` }));
+    await press(checkbox(n));
   }
 }
 
@@ -195,7 +207,7 @@ async function key(init: KeyboardEventInit): Promise<void> {
   });
 }
 
-const bar = (): HTMLElement => screen.getByRole("toolbar", { name: "Selected bookmarks" });
+const bar = (): HTMLElement => labelled("toolbar", "Selected bookmarks");
 
 async function openExport(title: string): Promise<HTMLElement> {
   await press(within(bar()).getByRole("button", { name: "Export selection" }));
@@ -335,7 +347,7 @@ describe("exporting the selection", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(world.clicks).toEqual([]);
     expect(world.created).toEqual([]);
     expect(within(bar()).getByText("2 selected")).toBeDefined();
-    expect(screen.getByRole("checkbox", { name: "Select Bookmark 1" }).getAttribute("aria-checked")).toBe("true");
+    expect(checkbox(1).getAttribute("aria-checked")).toBe("true");
     // The action is available again.
     expect(within(bar()).getByRole("button", { name: "Export selection" }).getAttribute("aria-disabled")).not.toBe("true");
   });
@@ -483,7 +495,7 @@ describe("exporting what Select all matching selected", { timeout: HEAVY_TEST_TI
     expect(within(bar()).getByRole("button", { name: "Export selection" }).hasAttribute("disabled")).toBe(false);
 
     // Taking one bookmark out leaves 149, which no filter names.
-    await press(screen.getByRole("checkbox", { name: "Select Bookmark 2" }));
+    await press(checkbox(2));
 
     await waitFor(() => {
       expect(within(bar()).getByText("149 selected")).toBeDefined();
@@ -532,7 +544,7 @@ describe("exporting what Select all matching selected", { timeout: HEAVY_TEST_TI
     await waitFor(() => {
       expect(within(bar()).getByText("120 selected")).toBeDefined();
     });
-    await press(screen.getByRole("checkbox", { name: "Select Bookmark 7" }));
+    await press(checkbox(7));
 
     await waitFor(() => {
       expect(within(bar()).getByText("119 selected")).toBeDefined();
@@ -611,13 +623,13 @@ describe("exporting what Select all matching selected", { timeout: HEAVY_TEST_TI
       expect(within(bar()).getByText("120 selected")).toBeDefined();
     });
     // Taking Bookmark 1 out and putting Bookmark 120 in leaves 120 of them, as many as are loaded and match, but not those.
-    await press(screen.getByRole("checkbox", { name: "Select Bookmark 1" }));
-    await press(screen.getByRole("checkbox", { name: "Select Bookmark 120" }));
+    await press(checkbox(1));
+    await press(checkbox(120));
     await waitFor(() => {
       expect(within(bar()).getByText("120 selected")).toBeDefined();
     });
-    expect(screen.getByRole("checkbox", { name: "Select Bookmark 120" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByRole("checkbox", { name: "Select Bookmark 1" }).getAttribute("aria-checked")).toBe("false");
+    expect(checkbox(120).getAttribute("aria-checked")).toBe("true");
+    expect(checkbox(1).getAttribute("aria-checked")).toBe("false");
 
     const action = within(bar()).getByRole("button", { name: "Export selection" });
     expect(action.hasAttribute("disabled")).toBe(true);

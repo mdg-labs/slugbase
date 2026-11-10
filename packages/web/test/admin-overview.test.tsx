@@ -37,14 +37,16 @@ interface ServerOptions {
   noWorkspace?: boolean;
 }
 
-function stubServer({ isInstanceAdmin = true, mfaEnabled = true, status = [() => json(STATUS)], me, noWorkspace = false }: ServerOptions = {}): { statusCalls: () => number } {
+function stubServer({ isInstanceAdmin = true, mfaEnabled = true, status = [() => json(STATUS)], me, noWorkspace = false }: ServerOptions = {}): { statusCalls: () => number; requestUrls: () => string[] } {
   let statusCalls = 0;
   // The account chose the language of the browser, so a test that opens the app in German sees German.
   const locale = globalThis.navigator.languages.some((language) => language.toLowerCase().startsWith("de")) ? "de" : "en";
   const account = { ...ACCOUNT_BODY, locale, isInstanceAdmin, mfaEnabled };
+  const requests: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn<Transport>((request) => {
+      requests.push(request.url);
       const { pathname } = new URL(request.url);
       if (pathname === ME_PATH && request.method === "GET" && me !== undefined) {
         return Promise.resolve(me());
@@ -64,7 +66,7 @@ function stubServer({ isInstanceAdmin = true, mfaEnabled = true, status = [() =>
       });
     }),
   );
-  return { statusCalls: () => statusCalls };
+  return { statusCalls: () => statusCalls, requestUrls: () => requests };
 }
 
 async function open(path: string): Promise<void> {
@@ -129,6 +131,7 @@ describe("the admin area for an account that is not an instance admin", { timeou
     expect(screen.queryByRole("navigation", { name: "Administration" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Overview" })).toBeNull();
     expect(server.statusCalls()).toBe(0);
+    expect(screen.queryByRole("link", { name: "Releases" })).toBeNull();
   });
 
   it("does not show the area while the account cannot be loaded", async () => {
@@ -319,6 +322,32 @@ describe("the overview", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(within(row("Sign-in providers")).getByText("Corp SSO")).toBeTruthy();
     expect(within(row("Error reporting")).getByText("Not configured")).toBeTruthy();
     expect(server.statusCalls()).toBe(1);
+  });
+
+  it("links the public releases page next to the version, in a new tab, and asks no external host", async () => {
+    const server = stubServer();
+    await open("/admin");
+
+    const link = await screen.findByRole("link", { name: "Releases" });
+    expect(link.getAttribute("href")).toBe("https://github.com/mdg-labs/slugbase/releases");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.closest("div")?.textContent).toContain("1.4.2");
+
+    // Q18: the page makes no update check, so every request stays on the app's own origin.
+    expect(server.requestUrls().length).toBeGreaterThan(0);
+    for (const url of server.requestUrls()) {
+      expect(new URL(url, window.location.origin).origin).toBe(window.location.origin);
+    }
+  });
+
+  it("writes the releases link in German", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
+    stubServer();
+    await open("/admin");
+
+    expect(await screen.findByRole("link", { name: "Releases" })).toBeTruthy();
+    expect(screen.getByText("Version und Datenbank")).toBeTruthy();
   });
 
   it("flags failed jobs, an out-of-date database and no sign-in providers", async () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { IMPORT_MAX_BOOKMARKS, type ImportFileBookmark } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
-import { parseNetscapeBookmarks, previewImport, readImportBookmark, type ImportPreviewStore } from "../../src/index.ts";
+import { parseNetscapeBookmarks, parseNetscapeBookmarksInSlices, previewImport, readImportBookmark, type ImportPreviewStore } from "../../src/index.ts";
 
 // The reader of a browser's bookmark file (doc 02 section 13.1, doc 10 T13): the structure each browser writes, and the files that are meant to hurt it. The failure scenario: a file the reader
 // must not trust (unclosed and nested tags, a 5 MiB line, a million nested lists, entity bombs, NUL bytes, scripts and bookmarklets) is read in bounded time and memory, to the bookmarks it
@@ -284,4 +284,34 @@ describe("a file that is meant to hurt", () => {
     expect(parsed(`<A ${"<".repeat(5 * MIB)}`)).toEqual([]);
     expect(() => parsed("<A HREF=".repeat(MIB / 4))).not.toThrow();
   }, 30_000);
+});
+
+describe("parseNetscapeBookmarksInSlices", () => {
+  const file = `<DL><p><DT><H3>Work</H3><DL><p>${Array.from({ length: 3000 }, (_value, index) => `<DT><A HREF="https://e.test/${String(index)}" TAGS="a,b">Title ${String(index)}</A>`).join("")}</DL><p></DL>`;
+
+  it("reads the bookmarks, the refusal and the empty file exactly as parseNetscapeBookmarks does", async () => {
+    for (const html of [file, `<DL>${'<DT><A HREF="x">y</A>'.repeat(IMPORT_MAX_BOOKMARKS + 1)}</DL>`, "", ...["chrome", "edge", "firefox", "safari"].map((name) => new TextDecoder().decode(fixture(name)))]) {
+      await expect(parseNetscapeBookmarksInSlices(encode(html))).resolves.toEqual(parseNetscapeBookmarks(encode(html)));
+    }
+  });
+
+  it("lets the event loop run while it reads a file that takes more than one slice, and not for a file that takes none", async () => {
+    let turns = 0;
+    let spinning = true;
+    const spin = (): void => {
+      if (spinning) {
+        turns += 1;
+        setImmediate(spin);
+      }
+    };
+    setImmediate(spin);
+
+    await parseNetscapeBookmarksInSlices(encode(file));
+    const turnsForLargeFile = turns;
+    await parseNetscapeBookmarksInSlices(encode('<DL><DT><A HREF="https://e.test/">x</A></DL>'));
+    spinning = false;
+
+    expect(turnsForLargeFile).toBeGreaterThanOrEqual(2);
+    expect(turns).toBe(turnsForLargeFile);
+  });
 });

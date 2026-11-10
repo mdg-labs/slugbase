@@ -18,6 +18,11 @@
 -- the text out of a list of bookmarks that hold it. A text of fewer than three characters (after the whitespace around it is removed) has no full-text or trigram term and matches the slug exactly, the
 -- slug by prefix and the title by prefix, without regard to case, only.
 --
+-- The function plans each of its statements with the values of the call (plan_cache_mode = force_custom_plan), as sys_search does. PL/pgSQL plans a statement with its values for the first five runs in a
+-- connection and from the sixth keeps one plan that does not know them if its estimated cost is no worse. For `LIKE`, `ILIKE` and `@@` on a value it does not know the estimate is a single row, so that plan
+-- is costed as if the text matched almost nothing, and it then serves every later text of the connection: the two-letter text `do` of the large instance touches 3 745 blocks in it against 617 in the plan made
+-- for the text, and a text a tenth of the titles hold takes about 3 ms more.
+--
 -- The set is the whole set of matches: it is not cut, so a list that resumes by a keyset misses none of them. The settings of the function turn sequential scans, index scans and index-only scans off for its own
 -- run, so that every branch is read by a bitmap scan of its own index, as in sys_search. The answer is in no order and holds an identifier once (a bookmark is one row of one scan, so no step has to remove repeats). The function answers nothing outside withTenant() (no
 -- account or no workspace is set) and for an empty text, and reads nothing but bookmarks and the share, folder-filing and team-member tables, and writes nothing.
@@ -30,6 +35,7 @@ CREATE OR REPLACE FUNCTION public.sys_bookmark_match(p_query text)
   SET enable_seqscan = off
   SET enable_indexscan = off
   SET enable_indexonlyscan = off
+  SET plan_cache_mode = force_custom_plan
   AS $$
 #variable_conflict use_column
 DECLARE

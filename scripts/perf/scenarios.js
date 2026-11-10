@@ -11,7 +11,8 @@
 // fails by name: k6 would write a p(95) of 0 for it.
 // A second set of one scenario, `go-hot`, requests one forwarding slug 10 000 times for the write-load check of run.mjs (doc 01 section 8.1).
 // A third set, `import`, runs last (a run of its own, after the budgets, so that the bookmarks it adds change none of their measurements): one member imports the largest Netscape
-// file and the largest SlugBase JSON file into the large workspace while the admin's /go and list traffic goes on at the run's rate and another member creates bookmarks.
+// file and the largest SlugBase JSON file into the large workspace, pairs back to back until they have been in flight for IMPORT_TARGET_SECONDS, at most IMPORT_REPEATS pairs (a file of its own for each repeat), while the admin's /go and list traffic goes on at
+// IMPORT_RATE a second and another member creates bookmarks.
 import http from "k6/http";
 import execution from "k6/execution";
 import { check, fail } from "k6";
@@ -56,15 +57,21 @@ const DEEP_FILTER_PAGE = Number(__ENV.DEEP_FILTER_PAGE || 10);
 const GO_HOT_VUS = 20;
 const GO_HOT = __ENV.SCENARIO_SET === "go-hot";
 const IMPORT = __ENV.SCENARIO_SET === "import";
-// The import run: the creates go on for DURATION_SECONDS before the first import (their baseline), and the load of /go and the list lasts for IMPORT_WINDOW_SECONDS from the start
-// of the import, which must end within it. The state of the import is kept by run.mjs (budgets.js IMPORT_STATES), which this run reaches at SIGNAL_URL.
-const IMPORT_WINDOW_SECONDS = Number(__ENV.IMPORT_WINDOW_SECONDS || 60);
+// The import run: the creates go on for DURATION_SECONDS before the first import (their baseline), and the load of /go and the list, at IMPORT_RATE a second, lasts for IMPORT_WINDOW_SECONDS
+// from the start of the first import, and the pairs of imports must end within it. The state of the import is kept by run.mjs (budgets.js IMPORT_STATES), which this run reaches at SIGNAL_URL.
+const IMPORT_WINDOW_SECONDS = Number(__ENV.IMPORT_WINDOW_SECONDS || 90);
+// The most pairs of imports, which have a file of their own each, and the time in flight after which the importer stops with the pair it has just made: the imports are repeated until the other scenarios
+// have had that long to be measured in, so the sample of a run does not depend on how fast the runner imports (budgets.js IMPORT_PHASE).
+const IMPORT_REPEATS = Number(__ENV.IMPORT_REPEATS || 1);
+const IMPORT_TARGET_SECONDS = Number(__ENV.IMPORT_TARGET_SECONDS || 0);
+const IMPORT_RATE = Number(__ENV.IMPORT_RATE || RATE);
 const SIGNAL_URL = __ENV.SIGNAL_URL;
 
 const fixtures = JSON.parse(open("/data/fixtures.json"));
-// The files are read once and shared by the VUs; only the importer sends them.
-const netscapeFile = IMPORT ? new SharedArray("netscape", () => [open("/data/import-netscape.html")]) : [];
-const jsonFile = IMPORT ? new SharedArray("json", () => [open("/data/import.json")]) : [];
+// The files are read once and shared by the VUs; only the importer sends them. The pair of repeat `n` is `import-netscape-<n>.html` and `import-<n>.json` (run.mjs makes them, with names of their own).
+const repeats = Array.from({ length: IMPORT_REPEATS }, (_, repeat) => repeat);
+const netscapeFiles = IMPORT ? new SharedArray("netscape", () => repeats.map((repeat) => open(`/data/import-netscape-${repeat}.html`))) : [];
+const jsonFiles = IMPORT ? new SharedArray("json", () => repeats.map((repeat) => open(`/data/import-${repeat}.json`))) : [];
 
 // A slug nobody has, or one whose bookmark is plan-archived, is answered 404 on purpose, so that is not a failed request.
 http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 404));
@@ -108,13 +115,13 @@ const thresholds = GO_HOT
       ...(IMPORT ? createThresholds() : {}),
     };
 
-// The import run: the creates start with the run; the load of /go and the list starts when they have had their baseline, and lasts the window and a second; the import starts a second after
-// the load and has the window to end in (importer() fails the run if it does not).
+// The import run: the creates start with the run; the load of /go and the list starts when they have had their baseline, and lasts the window and a second; the imports start a second after
+// the load and have the window to end in (importer() fails the run if they do not).
 function importScenarios() {
   const baseline = DURATION_SECONDS;
   const load = (exec, tags) => ({
     executor: "constant-arrival-rate",
-    rate: RATE,
+    rate: IMPORT_RATE,
     timeUnit: "1s",
     duration: `${IMPORT_WINDOW_SECONDS + 1}s`,
     startTime: `${baseline}s`,
@@ -208,7 +215,7 @@ export function setup() {
     return { headers };
   }
   if (IMPORT) {
-    if (netscapeFile.length !== 1 || jsonFile.length !== 1 || SIGNAL_URL === undefined) {
+    if (netscapeFiles.length !== IMPORT_REPEATS || jsonFiles.length !== IMPORT_REPEATS || SIGNAL_URL === undefined) {
       fail("the import run has no files to import or no address for the state of the import");
     }
     // The importer and the member that creates are signed in once, here, as the admin is; the creates' addresses are made of a number of this run.
@@ -470,14 +477,17 @@ export function createDuringImport(data) {
   check(response, { "a bookmark is created": (r) => r.status === 201 });
 }
 
-// What the import answered, as the run keeps it (run.mjs reads it back and judges it): the counts of the answer, its status and how long the request took.
-function importRecord(name, bytes, response) {
+// What the import answered, as the run keeps it (run.mjs reads it back and judges it): the repeat it belongs to, the counts of the answer, its status, how long the request took, and how long the
+// import was in flight for the other scenarios (`inFlightMs`: from the state `importing` taken to the answer, the time in which their requests were made and tagged by it).
+function importRecord(name, repeat, bytes, response, inFlightMs) {
   const answer = response.status === 200 ? response.json() : null;
   const dropped = answer === null ? [] : answer.droppedSlugs;
   return {
     import: name,
+    repeat,
     bytes,
     status: response.status,
+    inFlightMs,
     durationMs: Math.round(response.timings.duration * 100) / 100,
     replayed: response.headers["Idempotency-Replayed"] !== undefined,
     detected: answer === null ? null : answer.detected,
@@ -492,40 +502,53 @@ function importRecord(name, bytes, response) {
   };
 }
 
-// perf-member-1 imports the Netscape file and then the JSON file, each with an Idempotency-Key of its own, and the state tells the other scenarios which time to measure. An import that is
-// not answered 200 or is replayed, or that does not end within the window of the load, ends the run: it would be measured as fast, or without the load.
+// perf-member-1 imports the Netscape file and then the JSON file, pair after pair, until the imports have been in flight for IMPORT_TARGET_SECONDS or IMPORT_REPEATS pairs are made, each import with an Idempotency-Key of its own, and the state tells the other
+// scenarios which time to measure. An import that is not answered 200 or is replayed, or that does not end within the window of the load, ends the run: it would be measured as fast, or without the load.
+// The state is `importing` for each import and `between` for the moment from one answer to the next request; it is `after` when the last import of the last pair has answered, the pair that took the time in flight to IMPORT_TARGET_SECONDS or the last one there is a file for.
 export function importer(data) {
   const deadline = execution.scenario.startTime + IMPORT_WINDOW_SECONDS * 1000;
   const headers = { ...data.importer, Origin: ORIGIN };
-  const imports = [
-    {
-      name: "netscape",
-      bytes: netscapeFile[0].length,
-      send: (key) =>
-        http.post(`${BASE_URL}/api/v1/import/netscape`, { file: http.file(netscapeFile[0], "bookmarks.html", "text/html") }, { headers: { ...headers, "Idempotency-Key": key }, timeout: "300s", tags: { kind: "import", import: "netscape" } }),
-    },
-    {
-      name: "json",
-      bytes: jsonFile[0].length,
-      send: (key) =>
-        http.post(`${BASE_URL}/api/v1/import/json`, jsonFile[0], { headers: { ...headers, "Content-Type": "application/json", "Idempotency-Key": key }, timeout: "300s", tags: { kind: "import", import: "json" } }),
-    },
-  ];
-  imports.forEach((entry, index) => {
-    setImportState("importing");
-    const response = entry.send(uuid());
-    const record = importRecord(entry.name, entry.bytes, response);
-    const ended = Date.now();
-    if (record.status !== 200 || record.replayed || ended > deadline) {
-      setImportState("failed", record);
-      execution.test.abort(
-        record.status !== 200
-          ? `the ${entry.name} import answered ${record.status}`
-          : record.replayed
-            ? `the ${entry.name} import was answered from an earlier request`
-            : `the ${entry.name} import did not end within the ${IMPORT_WINDOW_SECONDS} s of the load`,
-      );
+  let inFlightMs = 0;
+  for (const repeat of repeats) {
+    // Taken out of the shared arrays before the state says `importing`, so that reading a file is not part of the time that is measured.
+    const netscape = netscapeFiles[repeat];
+    const json = jsonFiles[repeat];
+    const imports = [
+      {
+        name: "netscape",
+        bytes: netscape.length,
+        send: (key) =>
+          http.post(`${BASE_URL}/api/v1/import/netscape`, { file: http.file(netscape, "bookmarks.html", "text/html") }, { headers: { ...headers, "Idempotency-Key": key }, timeout: "300s", tags: { kind: "import", import: "netscape" } }),
+      },
+      {
+        name: "json",
+        bytes: json.length,
+        send: (key) =>
+          http.post(`${BASE_URL}/api/v1/import/json`, json, { headers: { ...headers, "Content-Type": "application/json", "Idempotency-Key": key }, timeout: "300s", tags: { kind: "import", import: "json" } }),
+      },
+    ];
+    for (const [index, entry] of imports.entries()) {
+      setImportState("importing");
+      const began = Date.now();
+      const response = entry.send(uuid());
+      const ended = Date.now();
+      const record = importRecord(entry.name, repeat, entry.bytes, response, ended - began);
+      if (record.status !== 200 || record.replayed || ended > deadline) {
+        setImportState("failed", record);
+        execution.test.abort(
+          record.status !== 200
+            ? `the ${entry.name} import of repeat ${repeat} answered ${record.status}`
+            : record.replayed
+              ? `the ${entry.name} import of repeat ${repeat} was answered from an earlier request`
+              : `the ${entry.name} import of repeat ${repeat} did not end within the ${IMPORT_WINDOW_SECONDS} s of the load`,
+        );
+      }
+      inFlightMs += record.inFlightMs;
+      const last = index === imports.length - 1 && (repeat === IMPORT_REPEATS - 1 || inFlightMs >= IMPORT_TARGET_SECONDS * 1000);
+      setImportState(last ? "after" : "between", record);
+      if (last) {
+        return;
+      }
     }
-    setImportState(index === imports.length - 1 ? "after" : "between", record);
-  });
+  }
 }

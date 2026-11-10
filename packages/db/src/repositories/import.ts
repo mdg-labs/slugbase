@@ -4,7 +4,7 @@ import { bookmarks } from "../schema/bookmarks.ts";
 import { slugPreferences } from "../schema/slug-preferences.ts";
 import { folders } from "../schema/folders.ts";
 import { tags } from "../schema/tags.ts";
-import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
+import { QueueMissingError, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import { bookmarkReadableBy } from "./bookmark-access.ts";
 import { insertLinkPairs, requireIdentifiers } from "./folder-links.ts";
@@ -14,7 +14,7 @@ import { insertTagLinkPairs } from "./tag-links.ts";
 // transaction as the owner as well, so another member's bookmark, a bookmark with no owner and anything of another workspace is never a duplicate. A plan-archived bookmark is not one either: the
 // lookup walks `bookmarks_owner_url_idx`, which holds the bookmarks that are not archived. The room under the workspace's ceiling is read from the counter of its row, which a creation keeps in step with the bookmarks
 // that are not archived, and never from a count of the bookmarks. The import takes its places under the ceiling with `sys_bookmark_count_take_many`, which locks the workspace's row and raises the counter once for the
-// whole import, and inserts the bookmarks in batches of one statement each in the same transaction, so a failure of any of them leaves neither a bookmark nor a place taken. A bookmark is written for the account of the
+// whole import, and inserts the bookmarks in batches of one statement each in the same transaction, with the jobs that announce a batch's bookmarks in one statement of their own (`enqueueJobs`: the transaction holds the workspace's row lock until it commits, and every write to the workspace waits for it on a connection of the pool), so a failure of any of them leaves neither a bookmark nor a place taken. A bookmark is written for the account of the
 // transaction in the workspace of the transaction and for no other.
 //
 // The slugs, folders and tags of the file (doc 02 section 13.1, Q30, doc 10 T2) are the account's alone as well. A slug is a conflict when the account has it on any of its bookmarks of the workspace, plan-archived or not
@@ -31,6 +31,9 @@ import { insertTagLinkPairs } from "./tag-links.ts";
 
 /** The most choices one statement stores. */
 const IMPORT_CHOICE_BATCH_SIZE = 500;
+
+/** The most canonical URLs one lookup of the caller's existing bookmarks names: the statement of a longer list is built in several short runs of the event loop, and its answers are the same. */
+const CANONICALS_PER_QUERY = 500;
 
 function requireWorkspace(tx: TenantTx): string {
   if (tx.workspaceId === undefined) {
@@ -201,6 +204,46 @@ async function insertRows(tx: TenantTx, workspaceId: string, batch: NewBookmarks
   return lowerIds(inserted.map((row) => row.id));
 }
 
+/**
+ * Queues the jobs in the open transaction with the settings `enqueueInTenantTransaction` gives a job of its queue, in one statement for all of them: the transaction holds the workspace's row lock while it runs, and a statement for each job
+ * would keep the lock for as many round trips as the file has bookmarks. A job whose queue does not exist queues none of them and fails with `QueueMissingError`. The import's jobs carry no singleton key.
+ */
+async function enqueueJobs(tx: TenantTx, jobs: readonly QueuedJob[]): Promise<void> {
+  if (jobs.length === 0) {
+    return;
+  }
+  requireIdentifiers(
+    jobs.map((job) => job.id),
+    "queueing the jobs of an import",
+  );
+  if (jobs.some((job) => job.singletonKey !== undefined)) {
+    throw new Error("the jobs of an import take no singleton key");
+  }
+  const handle = tenantHandle(tx);
+  const asked = JSON.stringify(jobs.map((job, n) => ({ n, id: job.id, queue: job.queue, data: job.data })));
+  const queued = await handle.execute<{ id: string }>(sql`
+    INSERT INTO pgboss.job (
+      id, name, data, keep_until, expire_seconds, deletion_seconds,
+      retry_limit, retry_delay, retry_backoff, retry_delay_max, policy, dead_letter, heartbeat_seconds)
+    SELECT r.id, q.name, r.data,
+           now() + q.retention_seconds * interval '1 second', q.expire_seconds, q.deletion_seconds,
+           q.retry_limit, q.retry_delay, q.retry_backoff, q.retry_delay_max, q.policy, q.dead_letter, q.heartbeat_seconds
+    FROM jsonb_to_recordset(${asked}::text::jsonb) AS r(n integer, id uuid, queue text, data jsonb)
+    INNER JOIN pgboss.queue q ON q.name = r.queue
+    ORDER BY r.n
+    RETURNING pgboss.job.id`);
+  if (queued.length === jobs.length) {
+    return;
+  }
+  const present = await handle.execute<{ name: string }>(sql`SELECT name FROM pgboss.queue WHERE name IN (SELECT DISTINCT q FROM jsonb_array_elements_text(${JSON.stringify(jobs.map((job) => job.queue))}::text::jsonb) AS v(q))`);
+  const known = new Set(present.map((row) => row.name));
+  const unknown = jobs.find((job) => !known.has(job.queue));
+  if (unknown === undefined) {
+    throw new Error("the jobs of an import were not all queued");
+  }
+  throw new QueueMissingError(unknown.queue);
+}
+
 /** The reads and writes of the import bound to the open transaction; every method needs a transaction opened with a workspace. */
 export function importRepository(tx: TenantTx): ImportRepository {
   return {
@@ -217,11 +260,17 @@ export function importRepository(tx: TenantTx): ImportRepository {
       if (canonicals.length === 0) {
         return new Set<string>();
       }
-      const rows = await tenantHandle(tx)
-        .selectDistinct({ canonical: bookmarks.urlCanonical })
-        .from(bookmarks)
-        .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, tx.accountId), isNull(bookmarks.planArchivedAt), inArray(bookmarks.urlCanonical, [...canonicals])));
-      return new Set(rows.map((row) => row.canonical));
+      const existing = new Set<string>();
+      for (let from = 0; from < canonicals.length; from += CANONICALS_PER_QUERY) {
+        const rows = await tenantHandle(tx)
+          .selectDistinct({ canonical: bookmarks.urlCanonical })
+          .from(bookmarks)
+          .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, tx.accountId), isNull(bookmarks.planArchivedAt), inArray(bookmarks.urlCanonical, canonicals.slice(from, from + CANONICALS_PER_QUERY))));
+        for (const row of rows) {
+          existing.add(row.canonical);
+        }
+      }
+      return existing;
     },
 
     async takePlaces(ceiling, wanted) {
@@ -265,9 +314,7 @@ export function importRepository(tx: TenantTx): ImportRepository {
           slugsLost.push(...left.map((bookmark) => bookmark.id));
         }
       }
-      for (const job of jobs) {
-        await enqueueInTenantTransaction(tx, job);
-      }
+      await enqueueJobs(tx, jobs);
       return { slugsLost };
     },
 

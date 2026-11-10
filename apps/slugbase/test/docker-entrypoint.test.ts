@@ -201,6 +201,52 @@ describe("server without migrate-on-start", () => {
   });
 });
 
+describe("server --with-worker", () => {
+  // The flag only changes the process: the migrator runs first and is gone from the environment of the one process
+  // that then serves and works, exactly as for `server`.
+  it.each<Record<string, string>>([{ MIGRATE_ON_START: "true" }, { MIGRATE_ON_START: "1" }, {}])(
+    "migrates as the migrator, then starts one process with the flag and without the migrator URL (%j)",
+    (extra) => {
+      writeStub();
+      const given = { ...BASE_ENV, ...extra };
+      expect(run(["server", "--with-worker"], given).status).toBe(0);
+
+      const [migrate, server, ...rest] = invocations();
+      expect(rest).toEqual([]);
+      expect(migrate?.argv).toEqual([join(APP, "dist", "main.js"), "migrate"]);
+      expect(migrate?.env).toEqual(given);
+
+      expect(server?.argv).toEqual([join(APP, "dist", "main.js"), "server", "--with-worker"]);
+      expect(server?.env).toEqual({ ...without(given, "DATABASE_MIGRATE_URL"), MIGRATE_ON_START: "false" });
+      expect(Object.values(server?.env ?? {}).join("\n")).not.toContain("migrator");
+    },
+  );
+
+  it("exits with the failure of migrate and never starts the process", () => {
+    writeStub({ migrateExit: 7 });
+    expect(run(["server", "--with-worker"], BASE_ENV).status).toBe(7);
+    expect(subcommands()).toEqual(["migrate"]);
+  });
+
+  it.each(["false", "0"])("starts at once without the migrator URL (MIGRATE_ON_START=%s)", (value) => {
+    writeStub();
+    const given = { ...BASE_ENV, MIGRATE_ON_START: value };
+    expect(run(["server", "--with-worker"], given).status).toBe(0);
+    const [server, ...rest] = invocations();
+    expect(rest).toEqual([]);
+    expect(server?.argv).toEqual([join(APP, "dist", "main.js"), "server", "--with-worker"]);
+    expect(server?.env).toEqual({ ...without(given, "DATABASE_MIGRATE_URL"), MIGRATE_ON_START: "false" });
+  });
+
+  it("does not start when the migrator URL is missing while MIGRATE_ON_START is true", () => {
+    writeStub();
+    const { status, output } = run(["server", "--with-worker"], without(BASE_ENV, "DATABASE_MIGRATE_URL"));
+    expect(status).not.toBe(0);
+    expect(subcommands()).toEqual([]);
+    expect(output).toContain("DATABASE_MIGRATE_URL");
+  });
+});
+
 describe("worker", () => {
   it.each<Record<string, string>>([{}, { MIGRATE_ON_START: "true" }, { MIGRATE_ON_START: "false" }])(
     "never receives the migrator URL and never migrates (%j)",
@@ -233,7 +279,18 @@ describe("migrate", () => {
 });
 
 describe("unknown commands", () => {
-  it.each([{ args: ["bogus"] }, { args: ["Server"] }, { args: ["--with-worker"] }, { args: [""] }, { args: ["server", "extra"] }, { args: [] }])(
+  it.each([
+    { args: ["bogus"] },
+    { args: ["Server"] },
+    { args: ["--with-worker"] },
+    { args: [""] },
+    { args: ["server", "extra"] },
+    { args: ["server", "--with-worker", "extra"] },
+    { args: ["server", "--With-Worker"] },
+    { args: ["worker", "--with-worker"] },
+    { args: ["migrate", "--with-worker"] },
+    { args: [] },
+  ])(
     "exit 2 and run nothing (%j)",
     ({ args }) => {
       writeStub();
@@ -247,9 +304,13 @@ describe("unknown commands", () => {
 describe("signals", () => {
   // `exec` replaces the shell with node, so the process the container runtime
   // signals (PID 1) is node itself: the stub must run under the entrypoint's pid.
-  it.each([["server", { MIGRATE_ON_START: "false" }], ["worker", {}]] as const)("reach node itself for %s", async (command, extra) => {
+  it.each([
+    [["server"], { MIGRATE_ON_START: "false" }],
+    [["server", "--with-worker"], { MIGRATE_ON_START: "false" }],
+    [["worker"], {}],
+  ] as const)("reach node itself for %j", async (command, extra) => {
     writeStub({ hold: true });
-    const child = spawn(ENTRYPOINT, [command], { env: { PATH: `${join(dir, "bin")}:/usr/bin:/bin`, ...BASE_ENV, ...extra } });
+    const child = spawn(ENTRYPOINT, [...command], { env: { PATH: `${join(dir, "bin")}:/usr/bin:/bin`, ...BASE_ENV, ...extra } });
     const exited = new Promise<number | null>((done) => {
       child.on("close", (code) => {
         done(code);

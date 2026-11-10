@@ -12,10 +12,9 @@ import { bookmarkReadableBy, bookmarkSharedByOwner, sharedBookmarks } from "./bo
 // The reads of the dashboard (doc 02 section 9.3, doc 04 section 10.8, doc 05 section 2.4, doc 10 T1 and T2) in the active workspace. Every statement names the workspace and the owner as
 // well as the policy, and the owner is always the account of the transaction: a request that names another account is a programming error and throws. A plan-archived bookmark is neither
 // counted nor listed. The quick access walks `bookmarks_owner_popular_idx` in the order of its key and stops at the limit, and the pinned bookmarks walk `bookmarks_pinned_idx`; the counts and
-// the three facts of the checklist are one statement over the owner's keys. The count of bookmarks is read in the order of `bookmarks_owner_popular_idx` (the `OFFSET 0` keeps the order from
-// being planned away), which makes an index-only walk of the owner's entries cheaper than any plan that must sort them; the two "has any" facts ask for the first row of an index in the order of
-// that index (`bookmarks_owner_title_idx`, `bookmarks_owner_slug_key`) and, being scalar subqueries, are not rewritten into a test of existence that ignores the order. None of the three is a
-// scan of the table, whatever the planner thinks of its statistics.
+// the three facts of the checklist are one statement over the owner's keys. The count of bookmarks is a plain `count(*)` of the owner's bookmarks that are not plan-archived: with the visibility map of the
+// table marked it is an index-only walk of `bookmarks_owner_popular_idx`, and where the map is not it is one pass over the pages of the table, and neither sorts the owner's bookmarks. The two "has any" facts ask for the
+// first row of an index in the order of that index (`bookmarks_owner_title_idx`, `bookmarks_owner_slug_key`) and, being scalar subqueries, are not rewritten into a test of existence that ignores the order.
 //
 // The quick access also holds the forwarding bookmarks of other members that are shared with the account. They are driven from the set of the grants to the account (`sharedBookmarks`, the
 // one rule of reading, doc 05 section 4) and probed by primary key, as the shared lists are, so the table is never scanned for them; the account's own bookmarks are the index walk above, and
@@ -61,7 +60,7 @@ export function summaryStatement(tx: TenantTx, ownerId: string): SQL {
   const own = sql`${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.ownerId} = ${owner}::uuid`;
   return sql`
     SELECT
-      (SELECT count(*) FROM (SELECT 1 FROM ${bookmarks} WHERE ${own} AND ${bookmarks.planArchivedAt} IS NULL ORDER BY ${bookmarks.openCount} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST OFFSET 0) AS own_bookmarks)::int AS bookmarks,
+      (SELECT count(*) FROM ${bookmarks} WHERE ${own} AND ${bookmarks.planArchivedAt} IS NULL)::int AS bookmarks,
       (SELECT count(*) FROM ${folders} WHERE ${folders.workspaceId} = ${workspaceId}::uuid AND ${folders.ownerId} = ${owner}::uuid)::int AS folders,
       (SELECT count(*) FROM ${tags} WHERE ${tags.workspaceId} = ${workspaceId}::uuid AND ${tags.ownerId} = ${owner}::uuid)::int AS tags,
       (SELECT 1 FROM ${bookmarks} WHERE ${own} ORDER BY lower(${bookmarks.title}), ${bookmarks.id} LIMIT 1) IS NOT NULL AS has_bookmark,

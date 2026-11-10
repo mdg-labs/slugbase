@@ -1,5 +1,6 @@
 #!/bin/sh
-# The command of the one image (doc 01 sections 2.1 and 3): server, worker or migrate.
+# The command of the one image (doc 01 sections 2.1 and 3): server, worker or migrate,
+# and `server --with-worker`, which is the server and the worker in one process (Q11).
 #
 #   migrate  passes through with the environment as it is.
 #   worker   starts without DATABASE_MIGRATE_URL.
@@ -7,7 +8,9 @@
 #            migrator role; a failure exits here, before anything serves. The server
 #            then starts without DATABASE_MIGRATE_URL and with its own in-process
 #            migration off, so a compromised server process holds no credentials
-#            that can change the schema (D25, doc 05 section 5.3).
+#            that can change the schema (D25, doc 05 section 5.3). With
+#            `--with-worker` it does exactly the same and passes the flag on, so
+#            the one process holds no migrator credentials either.
 #
 # Every start `exec`s node, so the signals of the container runtime reach node.
 set -eu
@@ -21,9 +24,22 @@ die() {
   exit "$status"
 }
 
-if [ "$#" -ne 1 ]; then
-  die 2 "Expected exactly one command; use one of server, worker, migrate"
-fi
+usage="Expected exactly one command; use one of server, worker, migrate, or server --with-worker"
+
+with_worker=false
+case "$#" in
+  1) ;;
+  2)
+    if [ "$1" = server ] && [ "$2" = --with-worker ]; then
+      with_worker=true
+    else
+      die 2 "$usage"
+    fi
+    ;;
+  *)
+    die 2 "$usage"
+    ;;
+esac
 
 case "$1" in
   migrate)
@@ -35,7 +51,7 @@ case "$1" in
     ;;
   server) ;;
   *)
-    die 2 "Unknown command; use one of server, worker, migrate"
+    die 2 "Unknown command; use one of server, worker, migrate, or server --with-worker"
     ;;
 esac
 
@@ -56,4 +72,7 @@ esac
 unset DATABASE_MIGRATE_URL
 MIGRATE_ON_START=false
 export MIGRATE_ON_START
+if [ "$with_worker" = true ]; then
+  exec node "$main" server --with-worker
+fi
 exec node "$main" server

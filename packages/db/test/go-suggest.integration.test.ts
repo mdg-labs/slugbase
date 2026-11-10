@@ -316,7 +316,7 @@ describe("the system operation", () => {
       SELECT p.prosecdef AS definer, pg_get_userbyid(p.proowner) AS owner, p.proconfig AS config, p.provolatile = 's' AS stable,
              has_function_privilege('slugbase_app', p.oid, 'EXECUTE') AS app, has_function_privilege('public', p.oid, 'EXECUTE') AS pub
       FROM pg_proc p WHERE p.oid = 'public.sys_go_suggest(text)'::regprocedure`;
-    expect(row).toEqual({ definer: true, owner: "slugbase_system", config: ["search_path=pg_catalog, public, pg_temp", "enable_seqscan=off", "enable_indexscan=off", "enable_indexonlyscan=off"], stable: true, app: true, pub: false });
+    expect(row).toEqual({ definer: true, owner: "slugbase_system", config: ["search_path=pg_catalog, public, pg_temp", "enable_seqscan=off", "enable_indexscan=off", "enable_indexonlyscan=off", "plan_cache_mode=force_custom_plan"], stable: true, app: true, pub: false });
   });
 
   it("takes the workspace and the account from the transaction: it has no parameter for either, and answers nothing where one is not set", async () => {

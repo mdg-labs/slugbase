@@ -105,11 +105,14 @@ export function faviconRepository(tx: TenantTx): FaviconRepository {
       const png64 = result.status === "ok" ? Buffer.from(result.png64) : null;
       const png32 = result.status === "ok" ? Buffer.from(result.png32) : null;
       await tenantHandle(tx).execute(sql`SELECT sys_favicon_put(${host}::text, ${result.status}::text, ${png64}::bytea, ${png32}::bytea)`);
-      const written = { fetchedAt: sql`clock_timestamp()`, expiresAt: sql`clock_timestamp() + ${FAVICON_LIFETIME_DAYS}::integer * interval '1 day'` };
-      await tenantHandle(tx)
-        .insert(workspaceFavicons)
-        .values({ workspaceId, accountId: tx.accountId, host, ...written })
-        .onConflictDoUpdate({ target: [workspaceFavicons.workspaceId, workspaceFavicons.accountId, workspaceFavicons.host], set: written });
+      // One statement, one clock read: both dates come from the single row of `clock`, so `expires_at` is exactly seven days after `fetched_at` however long
+      // the statement takes; two `clock_timestamp()` calls would be two reads that can straddle a millisecond.
+      await tenantHandle(tx).execute(sql`
+        INSERT INTO workspace_favicons (workspace_id, account_id, host, fetched_at, expires_at)
+        SELECT ${workspaceId}::uuid, ${tx.accountId}::uuid, ${host}::text, clock.at, clock.at + ${FAVICON_LIFETIME_DAYS}::integer * interval '1 day'
+        FROM (SELECT clock_timestamp() AS at) AS clock
+        ON CONFLICT (workspace_id, account_id, host) DO UPDATE
+        SET fetched_at = EXCLUDED.fetched_at, expires_at = EXCLUDED.expires_at`);
     },
 
     async enqueue(job) {

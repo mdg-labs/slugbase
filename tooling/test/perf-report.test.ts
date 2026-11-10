@@ -10,13 +10,20 @@ interface Budget {
   name: string;
   scenario: string;
   metric: string;
-  limitMs: number;
+  limitMs?: number;
+  of?: string;
+  limitRatio?: number;
 }
 
 interface Row extends Budget {
   p95Ms: number;
   ok: boolean;
   saturated: boolean;
+  baselineP95Ms?: number;
+  baselineSaturated?: boolean;
+  ratio?: number | null;
+  judged?: boolean;
+  notJudged?: string;
 }
 
 interface Load {
@@ -60,11 +67,21 @@ interface ReportModule {
 // Plain JavaScript that node runs as a script and the tests import; it has no declaration file, so a computed specifier keeps tsc from resolving it.
 const budgetsSpecifier = pathToFileURL(resolve(ROOT, "scripts/perf/budgets.js")).href;
 const reportSpecifier = pathToFileURL(resolve(ROOT, "scripts/perf/report.mjs")).href;
-const { SCENARIOS, budgets } = (await import(budgetsSpecifier)) as { SCENARIOS: string[]; budgets: () => Budget[] };
+const { SCENARIOS, RATIO_BUDGETS, budgets } = (await import(budgetsSpecifier)) as { SCENARIOS: string[]; RATIO_BUDGETS: Record<string, { of: string; ratio: number }>; budgets: () => Budget[] };
 const { TITLE_PREFIX, ISSUE_OF, parseResult, parseIssues, plan } = (await import(reportSpecifier)) as ReportModule;
 
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const RUN_URL = "https://github.com/mdg-labs/slugbase/actions/runs/42";
+
+// The row of a budget that holds: half its limit in milliseconds, or, for a ratio budget (the import phase), a p95 at half its limit times the steady p95 of the scenario it is judged against (10 ms of go, 20 ms of list).
+const STEADY_P95 = { go: 10, list: 20 } as Record<string, number>;
+function withinLimit(budget: Budget): Row {
+  if (budget.limitRatio === undefined || budget.of === undefined) {
+    return { ...budget, p95Ms: (budget.limitMs ?? 0) / 2, ok: true, saturated: false };
+  }
+  const baselineP95Ms = STEADY_P95[budget.of] ?? 1;
+  return { ...budget, p95Ms: (baselineP95Ms * budget.limitRatio) / 2, baselineP95Ms, baselineSaturated: false, ratio: budget.limitRatio / 2, judged: true, ok: true, saturated: false };
+}
 
 // A run in which every budget holds: each at half its limit, no scenario saturated, the write load within its limit.
 function withinBudgets(): PerfResult {
@@ -74,7 +91,7 @@ function withinBudgets(): PerfResult {
     rate: 40,
     durationSeconds: 30,
     scenarios: Object.fromEntries(SCENARIOS.map((scenario) => [scenario, { completed: 1200, dropped: 0, peakVus: 3, maxVus: 100, saturated: false }])),
-    budgets: budgets().map((budget) => ({ ...budget, p95Ms: budget.limitMs / 2, ok: true, saturated: false })),
+    budgets: budgets().map((budget) => withinLimit(budget)),
     writeLoad: { requests: 10_000, updates: 2, elapsedSeconds: 8.1, flushIntervalSeconds: 10, limit: 2, ok: true },
   };
 }
@@ -85,7 +102,9 @@ function exceeding(result: PerfResult, ...names: string[]): PerfResult {
   for (const name of names) {
     expect(known.has(name), name).toBe(true);
   }
-  return { ...result, budgets: result.budgets.map((budget) => (names.includes(budget.name) ? { ...budget, p95Ms: budget.limitMs * 2, ok: false } : budget)) };
+  const doubled = (budget: Row): Row =>
+    budget.limitRatio === undefined ? { ...budget, p95Ms: (budget.limitMs ?? 0) * 2, ok: false } : { ...budget, p95Ms: (budget.baselineP95Ms ?? 1) * budget.limitRatio * 2, ratio: budget.limitRatio * 2, ok: false };
+  return { ...result, budgets: result.budgets.map((budget) => (names.includes(budget.name) ? doubled(budget) : budget)) };
 }
 
 const goAt230 = (): PerfResult => exceeding(withinBudgets(), "go");
@@ -214,8 +233,13 @@ describe("the issues a performance run files", () => {
     const only = exceeding(withinBudgets(), "go during import");
     expect(summary(plain(only))).toEqual(["create: Performance budget exceeded: import"]);
     const body = plain(only)[0]?.body ?? "";
+    const goLimit = RATIO_BUDGETS.go_import?.ratio ?? 0;
     expect(body).toContain("the `import` budget");
-    expect(body).toContain("| go during import | 60 ms | 30 ms | exceeded |");
+    // Both p95 in milliseconds, the ratio and its limit, and the status.
+    expect(body).toContain(`| go during import | ${String(10 * goLimit * 2)} ms | 10 ms (go) | ${String(goLimit * 2)} | ${String(goLimit)} | exceeded |`);
+    // The ratio rows that hold are listed too, to be read against the one that does not.
+    expect(body).toMatch(/\| list during import \| [\d.]+ ms \| 20 ms \(list\) \| [\d.]+ \| [\d.]+ \| within the limit \|/);
+    expect(body.match(/\| exceeded \|/g)).toHaveLength(1);
     expect(body).toContain("| go_import |");
     expect(body).toContain("| list_import |");
     // Both of them at once are one issue, and an open issue of go or list is never extended with them.
@@ -229,6 +253,27 @@ describe("the issues a performance run files", () => {
     expect(summary(plain(both, issues.slice(0, 2)))).toEqual(["create: Performance budget exceeded: import"]);
     // A go budget and the go budget during an import are two issues.
     expect(summary(plain(exceeding(withinBudgets(), "go", "go during import")))).toEqual(["create: Performance budget exceeded: go", "create: Performance budget exceeded: import"]);
+  });
+
+  it("files a ratio miss with the saturation of neither side, and a ratio that was not judged only beside one that was exceeded, saying that it was not judged and why", () => {
+    // A ratio within its limit is a pass: nothing is filed.
+    expect(plain(withinBudgets())).toEqual([]);
+    // A saturated baseline: the ratio is not judged, which is neither a pass nor a miss, so nothing is filed for it alone.
+    const saturated = withinBudgets();
+    const notJudged: Partial<Row> = { ratio: null, judged: false, notJudged: "go (the steady baseline) was saturated", baselineSaturated: true, ok: true };
+    saturated.budgets = saturated.budgets.map((row) => (row.name === "go during import" ? { ...row, ...notJudged } : row));
+    saturated.scenarios.go = { completed: 1200, dropped: 4, peakVus: 100, maxVus: 100, saturated: true };
+    expect(plain(saturated)).toEqual([]);
+    // Beside a miss of the list during an import, the issue says that go was not judged, and why.
+    const listMissed = { ...exceeding(saturated, "list during import") };
+    const body = plain(listMissed)[0]?.body ?? "";
+    const listLimit = RATIO_BUDGETS.list_import?.ratio ?? 0;
+    expect(summary(plain(listMissed))).toEqual(["create: Performance budget exceeded: import"]);
+    expect(body).toContain(`| list during import | ${String(20 * listLimit * 2)} ms | 20 ms (list) | ${String(listLimit * 2)} | ${String(listLimit)} | exceeded |`);
+    expect(body).toMatch(/\| go during import \| [\d.]+ ms \| 10 ms \(go\) \| not judged \| [\d.]+ \| not judged: go \(the steady baseline\) was saturated \|/);
+    expect(body).toContain("It is not judged when either side is saturated or dropped arrivals.");
+    // The load of the baseline that was saturated is in the issue, beside the import scenarios'.
+    expect(body).toContain("| go | 1200 | 4 | 100 of 100 | saturated |");
   });
 
   it("names the commit measured, or says that it is unknown", () => {
@@ -273,6 +318,24 @@ describe("a result or a list of issues that cannot be read", () => {
     const result = withinBudgets();
     Object.assign(result.writeLoad, { ok: "no" });
     expect(() => parseResult(text(result))).toThrow(/writeLoad has no ok/);
+  });
+
+  it("refuses a ratio row that is judged without a ratio, or is not judged without a reason, or has no baseline, so a ratio is never read as a pass it did not make", () => {
+    const withRow = (change: Partial<Row>): string => {
+      const result = withinBudgets();
+      result.budgets = result.budgets.map((row) => (row.name === "go during import" ? { ...row, ...change } : row));
+      return text(result);
+    };
+    expect(parseResult(withRow({}))).toBeDefined();
+    for (const change of [{ ratio: null }, { ratio: "5" }, { judged: undefined }, { baselineP95Ms: undefined }, { baselineSaturated: undefined }, { of: "nowhere" }, { limitRatio: "5" }]) {
+      expect(() => parseResult(withRow(change as unknown as Partial<Row>)), JSON.stringify(change)).toThrow(/budget go during import|judged against/);
+    }
+    // Not judged: a reason in plain words, a null ratio and ok; a not judged row that is exceeded, or has no reason, or one with markup in it, is refused.
+    const notJudged = { judged: false, ratio: null, ok: true, notJudged: "go (the steady baseline) was saturated" };
+    expect(parseResult(withRow(notJudged)).budgets.find((row) => row.name === "go during import")?.judged).toBe(false);
+    for (const change of [{ ok: false }, { notJudged: undefined }, { notJudged: "x\n- [ ] injected" }, { ratio: 1 }]) {
+      expect(() => parseResult(withRow({ ...notJudged, ...change })), JSON.stringify(change)).toThrow(/not judged without a reason/);
+    }
   });
 
   it("refuses a scenario that has no issue, so it is never filed under another scenario's", () => {

@@ -8,7 +8,26 @@ interface Budget {
   name: string;
   scenario: string;
   metric: string;
-  limitMs: number;
+  limitMs?: number;
+  of?: string;
+  limitRatio?: number;
+}
+
+interface RatioRow {
+  name: string;
+  scenario: string;
+  metric: string;
+  p95Ms: number;
+  ok: boolean;
+  saturated: boolean;
+  limitMs?: number;
+  of?: string;
+  limitRatio?: number;
+  baselineP95Ms?: number;
+  baselineSaturated?: boolean;
+  ratio?: number | null;
+  judged?: boolean;
+  notJudged?: string;
 }
 
 interface BudgetsModule {
@@ -25,12 +44,16 @@ interface BudgetsModule {
   IMPORTER_EMAIL: string;
   CREATOR_EMAIL: string;
   IMPORT_STATES: string[];
+  IMPORT_PHASE: { maxRepeats: number; targetSeconds: number; rate: number; windowSeconds: number; minSeconds: number; minRequests: number };
+  importSampleShortfalls: (sample: { inFlightSeconds: number; completed: Record<string, number> }) => string[];
   createMetrics: (phase: string) => { p95: string; completed: string };
   createThresholds: () => Record<string, string[]>;
   SEARCH_TERMS: string[];
   SHARED_TERM: string;
   MAX_VUS: number;
   BUDGETS_MS: Record<string, number>;
+  RATIO_BUDGETS: Record<string, { of: string; ratio: number }>;
+  judgeRatios: (rows: RatioRow[], loads: Record<string, { dropped: number; saturated: boolean }>) => RatioRow[];
   GO_HOT_REQUESTS: number;
   GO_HOT_METRIC: string;
   FLUSH_INTERVAL_SECONDS: number;
@@ -58,12 +81,16 @@ const {
   IMPORTER_EMAIL,
   CREATOR_EMAIL,
   IMPORT_STATES,
+  IMPORT_PHASE,
+  importSampleShortfalls,
   createMetrics,
   createThresholds,
   SEARCH_TERMS,
   SHARED_TERM,
   MAX_VUS,
   BUDGETS_MS,
+  RATIO_BUDGETS,
+  judgeRatios,
   GO_HOT_REQUESTS,
   GO_HOT_METRIC,
   FLUSH_INTERVAL_SECONDS,
@@ -88,7 +115,7 @@ interface Load {
 }
 
 interface Evaluated {
-  budgets: { name: string; p95Ms: number; ok: boolean; saturated: boolean }[];
+  budgets: { name: string; p95Ms: number; limitMs?: number; ok: boolean; saturated: boolean }[];
   scenarios: Record<string, Load>;
 }
 
@@ -106,7 +133,7 @@ function summaryOf(ids: string[], { requests = 20, without = [], peakVus = 3 }: 
   const metrics: Summary["metrics"] = {};
   for (const { metric, limitMs } of budgets(ids)) {
     const none = without.includes(metric);
-    metrics[metric] = { "p(95)": none ? 0 : limitMs / 2 };
+    metrics[metric] = { "p(95)": none ? 0 : (limitMs ?? 20) / 2 };
     metrics[metric.replace(/^http_req_waiting/, "http_reqs")] = { count: none ? 0 : requests };
   }
   for (const scenario of ids) {
@@ -120,6 +147,10 @@ function summaryOf(ids: string[], { requests = 20, without = [], peakVus = 3 }: 
 
 // The summary with one entry left out, as when k6 writes none.
 const omitting = (summary: Summary, key: string): Summary => ({ metrics: Object.fromEntries(Object.entries(summary.metrics).filter(([name]) => name !== key)) });
+
+// The committed ratios, set by the rule of #806 over the nightly runs on the runner (scripts/perf/README.md, "The import phase").
+const GO_RATIO = 8.4;
+const LIST_RATIO = 9.0;
 
 const read = (file: string): string => readFileSync(resolve(ROOT, "scripts/perf", file), "utf8");
 
@@ -256,7 +287,7 @@ describe("performance budgets", () => {
       for (const { name, scenario, metric, limitMs } of budgets(ids)) {
         const summary = summaryOf(ids, { without: [metric] });
         expect(summary.metrics[metric], metric).toEqual({ "p(95)": 0 });
-        expect(0 < limitMs).toBe(true);
+        expect(limitMs === undefined || 0 < limitMs).toBe(true);
         // A scenario with no request at all is caught by its load, one shape of it by the budget's own count.
         const wholeScenario = metric === `http_req_waiting{kind:${scenario}}`;
         expect(() => evaluate(summary, ids), metric).toThrow(wholeScenario ? /made no request/ : `no request was made for "${name}"`);
@@ -336,19 +367,27 @@ describe("performance budgets", () => {
   });
 
   it("limits each budget to its scenario's", () => {
-    for (const { metric, limitMs, scenario } of budgets()) {
+    for (const { metric, limitMs, limitRatio, of, scenario } of budgets()) {
       const kind = /kind:(\w+)/.exec(metric)?.[1] ?? "";
       expect(kind, metric).toBe(scenario);
-      expect(limitMs, metric).toBe(BUDGETS_MS[kind]);
+      // A scenario has a limit in milliseconds or a ratio to a steady scenario, never both.
+      if (RATIO_BUDGETS[kind] === undefined) {
+        expect(limitMs, metric).toBe(BUDGETS_MS[kind]);
+        expect(limitRatio, metric).toBeUndefined();
+      } else {
+        expect(limitMs, metric).toBeUndefined();
+        expect({ of, limitRatio }, metric).toEqual({ of: RATIO_BUDGETS[kind].of, limitRatio: RATIO_BUDGETS[kind].ratio });
+      }
     }
-    expect(Object.keys(BUDGETS_MS).sort()).toEqual([...SCENARIOS].sort());
+    expect([...Object.keys(BUDGETS_MS), ...Object.keys(RATIO_BUDGETS)].sort()).toEqual([...SCENARIOS].sort());
   });
 
   it("is exactly the set of budget thresholds the scenarios set, so none can end k6 with 99 unreported", () => {
     const thresholds = budgetThresholds();
     expect(Object.keys(thresholds).sort()).toEqual(budgets().map((budget) => budget.metric).sort());
     for (const { metric, limitMs } of budgets()) {
-      expect(thresholds[metric], metric).toEqual([`p(95)<${String(limitMs)}`]);
+      // k6 enforces a limit in milliseconds; a ratio has none k6 could hold, so its threshold is one no value fails and k6 only exports the p(95).
+      expect(thresholds[metric], metric).toEqual([limitMs === undefined ? "p(95)>=0" : `p(95)<${String(limitMs)}`]);
     }
     // The budgets run and the import run each set the thresholds of their own scenarios, and together they are all of them.
     expect([...STEADY_SCENARIOS, ...IMPORT_SCENARIOS]).toEqual(SCENARIOS);
@@ -359,16 +398,153 @@ describe("performance budgets", () => {
     expect([...steady, ...imported].sort()).toEqual(Object.keys(thresholds).sort());
   });
 
-  it("has the /go and list budgets during an import, named for it, at the limits of /go and of the list", () => {
+  it("has the /go and list budgets during an import as ratios to the same run's steady /go and list, named for the import, with the steady budgets in milliseconds and unchanged", () => {
     expect(IMPORT_SCENARIOS).toEqual(["go_import", "list_import"]);
+    expect(RATIO_BUDGETS).toEqual({ go_import: { of: "go", ratio: GO_RATIO }, list_import: { of: "list", ratio: LIST_RATIO } });
     expect(budgets(IMPORT_SCENARIOS)).toEqual([
-      { name: "go during import", scenario: "go_import", metric: "http_req_waiting{kind:go_import}", limitMs: 30 },
-      { name: "list during import", scenario: "list_import", metric: "http_req_waiting{kind:list_import}", limitMs: 100 },
+      { name: "go during import", scenario: "go_import", metric: "http_req_waiting{kind:go_import}", of: "go", limitRatio: GO_RATIO },
+      { name: "list during import", scenario: "list_import", metric: "http_req_waiting{kind:list_import}", of: "list", limitRatio: LIST_RATIO },
     ]);
-    expect(BUDGETS_MS.go_import).toBe(BUDGETS_MS.go);
-    expect(BUDGETS_MS.list_import).toBe(BUDGETS_MS.list);
-    expect(budgetThresholds(IMPORT_SCENARIOS)).toEqual({ "http_req_waiting{kind:go_import}": ["p(95)<30"], "http_req_waiting{kind:list_import}": ["p(95)<100"] });
+    expect(BUDGETS_MS).toEqual({ go: 30, go_suggest: 50, list: 100, search: 100, list_q: 100, list_filter: 100, dashboard: 100 });
+    // There is no millisecond limit of the import scenarios for k6 to fail the run on: its thresholds only put the p(95) in the summary, and run.mjs judges the ratio.
+    expect(budgetThresholds(IMPORT_SCENARIOS)).toEqual({ "http_req_waiting{kind:go_import}": ["p(95)>=0"], "http_req_waiting{kind:list_import}": ["p(95)>=0"] });
     expect(budgets(STEADY_SCENARIOS).map((budget) => budget.scenario)).not.toContain("go_import");
+    // Both are ratios of the steady scenarios that are budgets of the budgets run, one decimal each, above 1 (an import may not make a request faster than none).
+    for (const { of, ratio } of Object.values(RATIO_BUDGETS)) {
+      expect(STEADY_SCENARIOS).toContain(of);
+      expect(ratio).toBeGreaterThan(1);
+      expect(Math.round(ratio * 10) / 10).toBe(ratio);
+    }
+    expect(read("run.mjs")).toContain("judgeRatios([...steady.budgets, ...importRun.budgets], scenarios)");
+  });
+
+  describe("the ratio budgets of the import phase", () => {
+    const load = { dropped: 0, saturated: false };
+    const loads = { go: load, list: load, go_import: load, list_import: load };
+    // The rows of one run as run.mjs hands them to `judgeRatios`: the steady budgets of go and list with the p95 of the run, and the import budgets as `evaluate` leaves them (the p95 and nothing judged).
+    const rows = (p95: { go: number; list: number; goImport: number; listImport: number }): RatioRow[] =>
+      budgets()
+        .filter((budget) => ["go", "list", "go_import", "list_import"].includes(budget.scenario) && /^http_req_waiting\{kind:\w+\}$/.test(budget.metric))
+        .map((budget) => ({ ...budget, p95Ms: { go: p95.go, list: p95.list, go_import: p95.goImport, list_import: p95.listImport }[budget.scenario] ?? 0, ok: true, saturated: false }));
+    const importRows = (judged: RatioRow[]): RatioRow[] => judged.filter((row) => row.limitRatio !== undefined);
+
+    it("passes a ratio under its limit, with both p95, the ratio and the limit on the row", () => {
+      const [go, list] = importRows(judgeRatios(rows({ go: 10, list: 15, goImport: 10 * GO_RATIO - 1, listImport: 15 * LIST_RATIO - 1 }), loads));
+      expect(go).toMatchObject({ name: "go during import", of: "go", p95Ms: 10 * GO_RATIO - 1, baselineP95Ms: 10, limitRatio: GO_RATIO, judged: true, ok: true });
+      expect(go?.ratio).toBeCloseTo(GO_RATIO - 0.1, 5);
+      expect(list).toMatchObject({ name: "list during import", of: "list", baselineP95Ms: 15, limitRatio: LIST_RATIO, judged: true, ok: true });
+    });
+
+    it("passes a ratio exactly at its limit and misses one above it, whatever the milliseconds are", () => {
+      const at = importRows(judgeRatios(rows({ go: 10, list: 20, goImport: 10 * GO_RATIO, listImport: 20 * LIST_RATIO }), loads));
+      expect(at.map((row) => [row.ratio, row.ok])).toEqual([[GO_RATIO, true], [LIST_RATIO, true]]);
+      const miss = importRows(judgeRatios(rows({ go: 10, list: 20, goImport: 10 * GO_RATIO + 1, listImport: 20 * LIST_RATIO + 1 }), loads));
+      expect(miss.map((row) => [row.judged, row.ok])).toEqual([[true, false], [true, false]]);
+      expect(miss[0]?.ratio).toBeGreaterThan(GO_RATIO);
+      // A slow runner: 150 ms during an import is far above the 55 ms the budget was, and it passes against a steady go of 50 ms; the same 150 ms against a steady go of 10 ms does not.
+      const slow = importRows(judgeRatios(rows({ go: 50, list: 60, goImport: 150, listImport: 180 }), loads));
+      expect(slow.every((row) => row.judged && row.ok)).toBe(true);
+      expect(importRows(judgeRatios(rows({ go: 10, list: 60, goImport: 150, listImport: 180 }), loads))[0]).toMatchObject({ judged: true, ok: false });
+    });
+
+    it("does not judge a ratio whose baseline is saturated or dropped arrivals, nor one whose own scenario is, and says which", () => {
+      const slow = rows({ go: 10, list: 15, goImport: 1000, listImport: 1000 });
+      // Saturated baseline: the p95 of go is the time of a queue, so no ratio to it is a measurement; the miss it would be is not reported as one.
+      const baseline = importRows(judgeRatios(slow, { ...loads, go: { dropped: 0, saturated: true } }));
+      expect(baseline[0]).toMatchObject({ judged: false, ratio: null, ok: true, notJudged: "go (the steady baseline) was saturated", baselineP95Ms: 10, baselineSaturated: false });
+      expect(baseline[1]).toMatchObject({ judged: true, ok: false });
+      // Dropped arrivals, in the baseline and in the import scenario, and both sides at once.
+      const dropped = importRows(judgeRatios(slow, { ...loads, list: { dropped: 3, saturated: true }, list_import: { dropped: 7, saturated: true } }));
+      expect(dropped[0]).toMatchObject({ judged: true, ok: false });
+      expect(dropped[1]).toMatchObject({ judged: false, ratio: null, ok: true, notJudged: "list_import dropped 7 arrivals; list (the steady baseline) dropped 3 arrivals" });
+      expect(importRows(judgeRatios(slow, { ...loads, go_import: { dropped: 0, saturated: true } }))[0]).toMatchObject({ judged: false, notJudged: "go_import was saturated" });
+    });
+
+    it("never takes a missing baseline, a missing load or a baseline of 0 ms for a ratio", () => {
+      expect(() => judgeRatios(rows({ go: 10, list: 15, goImport: 20, listImport: 30 }).filter((row) => row.scenario !== "go"), loads)).toThrow(/go_import|go during import.*scenario go/);
+      const { go, ...withoutGo } = loads;
+      expect(go).toBe(load);
+      expect(() => judgeRatios(rows({ go: 10, list: 15, goImport: 20, listImport: 30 }), withoutGo)).toThrow(/no load for the scenario go/);
+      expect(importRows(judgeRatios(rows({ go: 0, list: 15, goImport: 20, listImport: 30 }), loads))[0]).toMatchObject({ judged: false, ok: true, ratio: null });
+    });
+
+    it("leaves the steady rows as they are, and judges the rows that run.mjs evaluates from two k6 summaries, the import run's own p95 in milliseconds being no budget", () => {
+      const steady = evaluate(summaryOf(STEADY_SCENARIOS), STEADY_SCENARIOS);
+      // The import run: go during import at 90 ms, which a limit of 55 ms would have failed and a steady go of 15 ms (the p95 of summaryOf is half the limit) allows.
+      const imported = summaryOf(IMPORT_SCENARIOS);
+      imported.metrics["http_req_waiting{kind:go_import}"] = { "p(95)": 15 * GO_RATIO - 0.5 };
+      imported.metrics["http_req_waiting{kind:list_import}"] = { "p(95)": 50 * LIST_RATIO + 5 };
+      const importRun = evaluate(imported, IMPORT_SCENARIOS, { capacity: 301, of: "run" });
+      expect(importRun.budgets.every((row) => row.ok && row.limitMs === undefined)).toBe(true);
+      const judged = judgeRatios([...steady.budgets, ...importRun.budgets] as RatioRow[], { ...steady.scenarios, ...importRun.scenarios });
+      expect(judged.slice(0, steady.budgets.length)).toEqual(steady.budgets);
+      expect(importRows(judged).map((row) => [row.name, row.baselineP95Ms, row.ok])).toEqual([
+        ["go during import", 15, true],
+        ["list during import", 50, false],
+      ]);
+    });
+  });
+
+  describe("the length of the import phase", () => {
+    // The quickest and the slowest pair of the two largest imports seen on the runner (netscape + JSON, scripts/perf/README.md, "The import phase"), in seconds.
+    const QUICKEST_PAIR = 1.188 + 0.922;
+    const SLOWEST_PAIR = 2.54 + 2.108;
+
+    it("repeats the pairs until the imports have been in flight long enough for the requests the phase needs, at the rate the steady scenarios keep up with, and a runner as quick as the quickest seen has the pairs for it", () => {
+      expect(IMPORT_PHASE.minSeconds).toBeGreaterThanOrEqual(10);
+      expect(IMPORT_PHASE.minRequests).toBeGreaterThanOrEqual(1000);
+      // The requests follow the rate times the time in flight: the target is a fifth over the minimum, and the minimum of seconds is far under it.
+      expect(IMPORT_PHASE.targetSeconds).toBeGreaterThanOrEqual(IMPORT_PHASE.minSeconds * 2);
+      expect(IMPORT_PHASE.targetSeconds * IMPORT_PHASE.rate).toBeGreaterThanOrEqual(IMPORT_PHASE.minRequests * 1.2);
+      // The rate is the steady one: 60 a second saturated two runner runs (28 to 33 arrivals dropped, a queue for a p95), and the run's default rate is this one.
+      expect(IMPORT_PHASE.rate).toBe(40);
+      expect(read("run.mjs")).toContain(`rate: { type: "string", default: "${String(IMPORT_PHASE.rate)}" }`);
+      // The pairs there are files for: enough at the quickest pair for the target to within a pair and for the minimum of requests with 15 % to spare.
+      expect(Number.isInteger(IMPORT_PHASE.maxRepeats)).toBe(true);
+      expect(IMPORT_PHASE.maxRepeats * QUICKEST_PAIR).toBeGreaterThanOrEqual(IMPORT_PHASE.targetSeconds - QUICKEST_PAIR);
+      expect(IMPORT_PHASE.maxRepeats * QUICKEST_PAIR * IMPORT_PHASE.rate).toBeGreaterThanOrEqual(IMPORT_PHASE.minRequests * 1.15);
+      // The slowest runner seen reaches the target in whole pairs and ends them in the window with room to spare: twice over.
+      expect((IMPORT_PHASE.targetSeconds + SLOWEST_PAIR) * 2).toBeLessThanOrEqual(IMPORT_PHASE.windowSeconds);
+    });
+
+    it("holds a sample to its minimums, and names each one it falls short of", () => {
+      const ok = { inFlightSeconds: IMPORT_PHASE.minSeconds, completed: { go_import: IMPORT_PHASE.minRequests, list_import: IMPORT_PHASE.minRequests } };
+      expect(importSampleShortfalls(ok)).toEqual([]);
+      expect(importSampleShortfalls({ ...ok, inFlightSeconds: IMPORT_PHASE.minSeconds - 0.1 })).toEqual([expect.stringMatching(/in flight for 9\.9 s, not the 10 s/)]);
+      expect(importSampleShortfalls({ ...ok, completed: { go_import: IMPORT_PHASE.minRequests - 1, list_import: IMPORT_PHASE.minRequests } })).toEqual([expect.stringMatching(/^go_import made 999 requests, not the 1000/)]);
+      expect(importSampleShortfalls({ inFlightSeconds: 2, completed: { go_import: 147, list_import: 146 } })).toHaveLength(3);
+      // A sample that is not a number is a shortfall, never a pass.
+      expect(importSampleShortfalls({ inFlightSeconds: Number.NaN, completed: {} })).toHaveLength(3);
+    });
+
+    it("is read by the scripts from budgets.js, runs the imports back to back in one workspace with files of their own, and holds a run to the sample unless it is a trial", () => {
+      const runner = read("run.mjs");
+      const scenarios = read("scenarios.js");
+      expect(runner).toMatch(/const DEFAULT_IMPORT_WINDOW_SECONDS = String\(IMPORT_PHASE\.windowSeconds\)/);
+      expect(runner).toMatch(/IMPORT_REPEATS: String\(importMaxRepeats\),\s*IMPORT_TARGET_SECONDS: String\(IMPORT_PHASE\.targetSeconds\),\s*IMPORT_RATE: String\(importRate\),\s*SIGNAL_URL/);
+      expect(runner).toMatch(/importSampleShortfalls\(\{ inFlightSeconds, completed: requests \}\)/);
+      expect(runner).toMatch(/importRun\.sample\.enforced && importRun\.sample\.shortfalls\.length > 0/);
+      expect(runner).toMatch(/buildImportFiles\(\{ collidingSlugs: \[\.\.\.collidingSlugs, \.\.\.slugs\], repeat \}\)/);
+      // The result records the window, the number of imports and the requests of each scenario.
+      expect(runner).toMatch(/phase: \{ windowSeconds: Number\(args\["import-window"\]\), maxRepeats: importMaxRepeats, repeats: imports\.length \/ 2, importCount: imports\.length, targetSeconds: IMPORT_PHASE\.targetSeconds, rate: importRate, inFlightSeconds, requests,/);
+      // k6: the load of /go and the list is at the rate of the phase, the files are read by repeat, and the state is `after` only when the last import of the last repeat has answered.
+      expect(scenarios).toMatch(/rate: IMPORT_RATE,/);
+      expect(scenarios).toMatch(/const IMPORT_RATE = Number\(__ENV\.IMPORT_RATE \|\| RATE\)/);
+      expect(scenarios).toMatch(/open\(`\/data\/import-netscape-\$\{repeat\}\.html`\)/);
+      expect(scenarios).toMatch(/open\(`\/data\/import-\$\{repeat\}\.json`\)/);
+      // The importer stops after the pair that takes the time in flight to the target, or at the last pair there is a file for, and that import is the one that says `after`.
+      expect(scenarios).toMatch(/index === imports\.length - 1 && \(repeat === IMPORT_REPEATS - 1 \|\| inFlightMs >= IMPORT_TARGET_SECONDS \* 1000\)/);
+      expect(scenarios).toMatch(/setImportState\(last \? "after" : "between", record\);\s*if \(last\) \{\s*return;/);
+      expect(runner).toMatch(/held\.imports\.length % 2 !== 0 \|\| held\.imports\.length < 2 \|\| held\.imports\.length > files\.length \* 2/);
+      expect(scenarios).toMatch(new RegExp(`__ENV\\.IMPORT_WINDOW_SECONDS \\|\\| ${String(IMPORT_PHASE.windowSeconds)}\\)`));
+    });
+
+    it("judges every import of every repeat as it judged the pair: its own success, the bookmarks of its file created, none skipped or refused", () => {
+      const runner = read("run.mjs");
+      expect(runner).toMatch(/answered\?\.import !== name \|\| answered\.repeat !== repeat \|\| answered\.status !== 200 \|\| answered\.replayed !== false/);
+      expect(runner).toMatch(/answered\.created !== file\.bookmarks \|\| answered\.skipped !== 0 \|\| answered\.failed !== 0/);
+      expect(runner).toMatch(/files\.flatMap\(\(pair, repeat\) => \[\s*\["netscape", pair\.netscape, repeat\],\s*\["json", pair\.json, repeat\]/);
+    });
   });
 
   it("reports the creates beside an import, with and without it, by thresholds that no value can fail and that are no budget", () => {

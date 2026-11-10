@@ -1,8 +1,9 @@
 import { IMPORT_MAX_DISTINCT_NAMES, ImportResultSchema } from "@slugbase/contracts";
 import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { importWorker, ImportWorker } from "../../src/import-worker/client.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
-import { NETSCAPE, bookmarkFile, multipart, upload, type FileLink } from "./netscape-upload.ts";
+import { NETSCAPE, bookmarkFile, multipart, upload, uploadRequest, type FileLink } from "./netscape-upload.ts";
 
 // POST /api/v1/import/netscape (doc 04 sections 5, 6.3 and 10.9, doc 02 section 13.1, doc 10 T1, T5 and T13), through the whole chain over the migrated database. The failure scenario: an upload that is
 // not judged by the rules of the JSON import (another answer for the same bookmarks, a dry run that writes, an import.completed that is missing or twice), a request another site can make, a token that
@@ -17,7 +18,10 @@ const harness = workspaceHarness(database);
 
 beforeAll(() => harness.start(), HOOK_TIMEOUT_MS);
 
-afterAll(() => harness.stop());
+afterAll(async () => {
+  importWorker().terminate();
+  await harness.stop();
+});
 
 beforeEach(async () => {
   await database().owner`TRUNCATE accounts CASCADE`;
@@ -309,6 +313,35 @@ describe("POST /import/netscape", { timeout: TEST_TIMEOUT_MS }, () => {
         expect(await refused.json()).toMatchObject({ code: "idempotency_conflict" });
       }
       expect(await stored(shared.workspaceId)).toMatchObject({ bookmarks: 3, counter: 3, completed: 1 });
+    });
+
+    it.each<{ name: string; headers: Record<string, string> }>([
+      { name: "with a key", headers: { [KEY_HEADER]: crypto.randomUUID() } },
+      { name: "without one", headers: {} },
+    ])("reads the upload once per request, on the import worker and never on the request thread, $name, the first request and the repeat of it alike", async ({ headers }) => {
+      const world = harness.serve({ env: RELAXED });
+      const { a } = await setup(world);
+      const html = bookmarkFile(LINKS);
+      // The request is built first: the test's own serialiser of the form is no part of what the server decodes.
+      const requests = [await uploadRequest(world, a, html, { headers }), await uploadRequest(world, a, html, { headers })];
+      const decodes = [vi.spyOn(Request.prototype, "formData"), vi.spyOn(Response.prototype, "formData")];
+      const decoded = (): number => decodes.reduce((total, spy) => total + spy.mock.calls.length, 0);
+      const jobs = vi.spyOn(ImportWorker.prototype, "run");
+
+      try {
+        for (const request of requests) {
+          const answered = await world.server.fetch(request);
+          expect(answered.status).toBe(200);
+          expect(jobs).toHaveBeenCalledTimes(1);
+          jobs.mockClear();
+        }
+        expect(decoded()).toBe(0);
+      } finally {
+        jobs.mockRestore();
+        for (const spy of decodes) {
+          spy.mockRestore();
+        }
+      }
     });
 
     it("does not give a key of the JSON import to the upload, or the other way round", async () => {

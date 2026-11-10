@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_REPLAYED_HEADER, type AuthPolicy } from "@slugbase/contracts";
 import { IdempotencyBusyError, idempotencyRepository, type Database, type StoredResponse, type TenantTx } from "@slugbase/db";
-import type { ChainContext, RequestStage } from "./chain.ts";
+import { canonical } from "../import-worker/canonical.ts";
+import { isImportOperation } from "../import-worker/operations.ts";
+import { importRead, startedImportRead, wantsDigest } from "../import-worker/request.ts";
+import type { ChainContext, MatchedRoute, RequestStage } from "./chain.ts";
 import { ProblemError, requestIdOf } from "./problem.ts";
 
 // Stage 9a of the chain (doc 01 section 4, doc 04 section 6.3, doc 10 T1): an operation that declares
@@ -22,6 +25,8 @@ import { ProblemError, requestIdOf } from "./problem.ts";
 // 7.1), so the two requests take the rows in one order and cannot deadlock.
 // The body of a route that declares `acceptsMultipart` is not in the validated input, so its request hash also covers the parts of the upload (`uploadDigest`): the same key with another file is a
 // conflict and not a replay of the first answer. The digest is of the content of the parts and not of the bytes of the request, which carry a boundary the client picks anew on every attempt.
+// The parts are decoded once for the request, by the import worker thread (`import-worker/request.ts`), which also makes the digest; the handler reads the same decoded form. The body of a JSON import is read by the worker too, in the
+// validation stage, and hashes by the canonical text the worker made of it.
 // A request without the header runs as usual. The handler of an operation that declares idempotency must
 // open its transaction through `tenant.withTenant` for a workspace operation, or `withTenant` with the
 // account alone for an account operation, which is what this stage opens.
@@ -51,27 +56,19 @@ class NotStored extends Error {
   }
 }
 
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(canonical);
-  }
-  if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([name, member]) => [name, canonical(member)]),
-    );
-  }
-  return value === undefined ? null : value;
-}
-
 /**
  * SHA-256 of what the request asks for: the operation, the workspace it acts in and the parameters, query and
  * body as validated, with object members in a fixed order, so the same request spelled differently hashes the same.
  * An upload, which is no part of the validated input, adds its digest (`uploadDigest`); a request without one hashes as it always did.
+ * The body of a JSON import is read by the import worker and is no part of the validated input either: the worker serialises it the way the hash does (`canonicalBody`), and the hash is of the same text as if the body
+ * had been in the input, so a request hashes the same whichever thread read it.
  */
-export function requestHash(context: ChainContext, operationId: string, upload?: string): Buffer {
+export function requestHash(context: ChainContext, operationId: string, upload?: string, canonicalBody?: Uint8Array): Buffer {
   const input = context.get("input");
+  if (canonicalBody !== undefined) {
+    const head = JSON.stringify(canonical([operationId, context.get("workspaceId") ?? null, input?.params, input?.query]));
+    return createHash("sha256").update(head.slice(0, -1)).update(",").update(canonicalBody).update("]").digest();
+  }
   const asked = canonical([operationId, context.get("workspaceId") ?? null, input?.params, input?.query, input?.body, ...(upload === undefined ? [] : [upload])]);
   return createHash("sha256").update(JSON.stringify(asked)).digest();
 }
@@ -79,29 +76,14 @@ export function requestHash(context: ChainContext, operationId: string, upload?:
 /**
  * SHA-256 of the parts of a multipart request, in order: each part's name, whether it is text or a file, and its content, each length-prefixed so that no two requests share a digest by where one part
  * ends. The filename and the part headers are left out, and so is the boundary. A body that is not multipart (the handler answers it `415` or `400`, which stores nothing) is digested as the bytes it is.
+ * The import worker makes the digest (`import-worker/job.ts`) from the form it decodes for the import, once for the request.
  */
 export async function uploadDigest(request: Request): Promise<string> {
-  const digest = createHash("sha256");
-  const add = (bytes: Uint8Array): void => {
-    digest.update(`${String(bytes.byteLength)}:`);
-    digest.update(bytes);
-  };
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the body-limits stage has already read the whole request, at most the route's limit, into memory, so this parses bytes the server holds
-    for (const [name, value] of await request.clone().formData()) {
-      add(new TextEncoder().encode(name));
-      if (typeof value === "string") {
-        digest.update("s");
-        add(new TextEncoder().encode(value));
-      } else {
-        digest.update("f");
-        add(new Uint8Array(await value.arrayBuffer()));
-      }
-    }
-    return `parts:${digest.digest("hex")}`;
-  } catch {
-    return `bytes:${createHash("sha256").update(new Uint8Array(await request.clone().arrayBuffer())).digest("hex")}`;
+  const read = await importRead(request, "netscape", true);
+  if (read.uploadDigest === undefined) {
+    throw new Error("the import worker made no digest of the upload");
   }
+  return read.uploadDigest;
 }
 
 function replay({ status, body }: StoredResponse): Response {
@@ -117,6 +99,18 @@ async function storable(response: Response): Promise<StoredResponse> {
     return { status: response.status, body: null };
   }
   return { status: response.status, body: JSON.parse(text) as unknown };
+}
+
+/** The canonical JSON of the body of a JSON import, which the import worker read in the validation stage; undefined for every other operation. */
+async function canonicalBodyOf(context: ChainContext, route: MatchedRoute): Promise<Uint8Array | undefined> {
+  if (route.acceptsMultipart === true || !isImportOperation(route.operation) || !wantsDigest(context.req.raw, route.operation)) {
+    return undefined;
+  }
+  const read = await startedImportRead(context.req.raw, "json");
+  if (read.kind !== "prepared" || read.canonicalBody === undefined) {
+    throw new Error(`${route.operation.operationId} reached the idempotency stage without a body the import worker read`);
+  }
+  return read.canonicalBody;
 }
 
 export function createIdempotency({ withTenant }: IdempotencyOptions): RequestStage {
@@ -143,7 +137,7 @@ export function createIdempotency({ withTenant }: IdempotencyOptions): RequestSt
       inWorkspace && tenant !== undefined ? tenant.withTenant(fn) : withTenant({ accountId: principal.accountId, requestId: requestIdOf(context) }, fn);
 
     const operationId = route.operation.operationId;
-    const hash = requestHash(context, operationId, route.acceptsMultipart === true ? await uploadDigest(context.req.raw) : undefined);
+    const hash = requestHash(context, operationId, route.acceptsMultipart === true ? await uploadDigest(context.req.raw) : undefined, await canonicalBodyOf(context, route));
     try {
       return await run(async (tx) => {
         const repository = idempotencyRepository(tx);

@@ -274,6 +274,20 @@ describe("socket and DNS confinement (T6)", () => {
     await failsWith("packages/contracts/scripts/other.ts", 'import { spawnSync } from "node:child_process";\nvoid spawnSync;\n', IMPORT);
   });
 
+  it.each(["packages/server/src/import-worker/client.ts", "packages/server/src/import-worker/worker.ts"])("exempts the import worker file %s for worker_threads only", async (file) => {
+    await passes(file, 'import { Worker, parentPort } from "node:worker_threads";\nvoid Worker;\nvoid parentPort;\n');
+    await failsWith(file, 'import "node:net";\n', IMPORT);
+    await failsWith(file, 'import "node:child_process";\n', IMPORT);
+    await failsWith(file, 'import "node:vm";\n', IMPORT);
+    await failsWith(file, 'void process.getBuiltinModule("node:net");\n', RAW_IO);
+  });
+
+  it("scopes the worker_threads exemption to the two import worker files", async () => {
+    await failsWith("packages/server/src/import-worker/job.ts", 'import { Worker } from "node:worker_threads";\nvoid Worker;\n', IMPORT);
+    await failsWith("packages/server/src/fixture.ts", 'import { Worker } from "node:worker_threads";\nvoid Worker;\n', IMPORT);
+    await failsWith("packages/server/src/http/body-limits.ts", 'import { Worker } from "node:worker_threads";\nvoid Worker;\n', IMPORT);
+  });
+
   it("still bans the HTTP builtins in test code", async () => {
     await failsWith(TEST_DIR, 'import "node:http";\n', IMPORT);
   });

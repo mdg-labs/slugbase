@@ -26,8 +26,15 @@ The people you invite use SlugBase as described in [Get started](../user/getting
 
 | Page | What it covers |
 | ---- | -------------- |
+| [Install SlugBase](install.md) | Start SlugBase from the published compose file and finish first-run setup. |
 | [Back up and restore](backup-restore.md) | Back up the database and your secrets, and restore them into an empty database. |
-| [Environment settings](environment.md) | Set up AI suggestions, audit retention and rate limits, and see which limits are fixed. |
+| [Put SlugBase behind a reverse proxy](reverse-proxy.md) | Serve SlugBase over HTTPS with nginx or Caddy, and set the origin and the trusted proxy hops. |
+| [Set up mail](mail.md) | Connect an SMTP relay, set up the sending domain, send a test email, and run without mail. |
+| [Set up OIDC sign-in](oidc.md) | Add OpenID Connect providers, register the redirect address, and learn how accounts are linked and created. |
+| [Upgrade SlugBase](upgrade.md) | Upgrade to a new release, run migrations yourself, roll back, and see the supported versions. |
+| [Run SlugBase day to day](operations.md) | Check health, read logs, rotate secrets, see what is deleted by itself, and plan connections and size. |
+| [Account recovery and security checklist](security.md) | Get people back into locked accounts, and check the security settings an operator must get right. |
+| [Environment settings](environment.md) | Look up every environment key, its default and what it sets, and see which limits are fixed. |
 | [Check the bookmark counter](check-bookmark-counter.md) | Find workspaces whose bookmark counter differs from the number of their bookmarks, without changing anything. |
 
 ## Next steps

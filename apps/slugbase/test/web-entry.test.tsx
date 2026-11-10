@@ -4,6 +4,9 @@ import { act, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
+// Loading the built @slugbase/web is the slow part of the entry's import and has no side effect: it defines createWebApp and touches neither fetch, matchMedia nor #root. Importing it here loads it while the file is collected, outside the test's bound; the test's own import of ../src/web.tsx then finds it loaded and only runs the entry, after the test has stubbed fetch and matchMedia and added #root.
+import "@slugbase/web";
+
 // The CE web entry: it builds the app with createWebApp, mounts it on #root, and
 // the app asks /api/config before it renders, then checks the session, loads the account
 // for its first page, the list of its workspaces for the switcher, the list of its folders for the sidebar and the dashboard for the Home screen. The server side of the configuration

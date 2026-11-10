@@ -1,16 +1,18 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { constants } from "node:os";
 import { createRequire } from "node:module";
+import { runSequence } from "./support/run-sequence.ts";
 
 // `pnpm test:e2e -- --grep <title>` reaches the script as `-- --grep <title>`,
 // and Playwright reads everything after a `--` as a file filter. The separator
 // is dropped here so that its options work as they do on its own command line.
 //
 // Without arguments the journeys run first, then the backup and restore drill
-// (restore-drill.spec.ts), which starts a stack of its own. With arguments only the
-// journeys run, with Playwright's own options, unless the first one is `restore-drill`,
-// which runs only the drill: `pnpm test:e2e restore-drill`. The drill needs docker on the
-// machine, so a run in the Playwright image (e2e/in-image.sh) leaves it to a run on the host.
+// (restore-drill.spec.ts) and the reverse proxy drill (reverse-proxy.spec.ts), which each start a
+// stack of their own. With arguments only the journeys run, with Playwright's own options, unless
+// the first one is `restore-drill` or `reverse-proxy`, which runs only that drill:
+// `pnpm test:e2e restore-drill`. The drills need docker on the machine, so a run in the
+// Playwright image (e2e/in-image.sh) leaves them to a run on the host.
 const args = process.argv.slice(2);
 const forwarded = args[0] === "--" ? args.slice(1) : args;
 
@@ -43,23 +45,12 @@ function playwright(playwrightArgs: readonly string[]): Promise<number> {
   });
 }
 
-const DRILL = ["--config", "restore-drill.config.ts"];
-
-async function main(): Promise<number> {
-  if (forwarded[0] === "restore-drill") {
-    return playwright([...DRILL, ...forwarded.slice(1)]);
-  }
-  const journeys = await playwright(forwarded);
-  if (forwarded.length > 0 || interrupted) {
-    return journeys;
-  }
-  if (process.env.E2E_IN_IMAGE === "1") {
-    process.stderr.write("the restore drill needs docker and is not run in the Playwright image; run `pnpm test:e2e restore-drill` on the host\n");
-    return journeys;
-  }
-  // The drill runs even when a journey failed, so that one run reports both.
-  const drill = await playwright(DRILL);
-  return journeys !== 0 ? journeys : drill;
-}
-
-process.exit(await main());
+process.exit(
+  await runSequence({
+    forwarded,
+    inImage: process.env.E2E_IN_IMAGE === "1",
+    run: playwright,
+    interrupted: () => interrupted,
+    note: (message) => process.stderr.write(message),
+  }),
+);

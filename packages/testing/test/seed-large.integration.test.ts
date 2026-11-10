@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createTestDatabase } from "@slugbase/db/testing";
 import { describe, expect, it } from "vitest";
 import { assertBookmarkCountMatches } from "../src/bookmark-count.ts";
 import { useTestDatabase } from "../src/db.ts";
@@ -14,7 +15,8 @@ const MAX_STOP_MS = 10_000;
 const PASSWORD_HASH = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0$c3RhbmQtaW4taGFzaC1mb3ItdGVzdHMtb25seS0wMDAwMDAwMDAw";
 
 const harnessUrl = process.env["SLUGBASE_TEST_PG_URL"];
-const server = perfServer(harnessUrl ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev", process.env["PATH"] ?? "", harnessUrl);
+const DEV_SERVER_URL = "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev";
+const server = perfServer(harnessUrl ?? DEV_SERVER_URL, process.env["PATH"] ?? "", harnessUrl);
 const instance = buildLargeInstance({ bookmarks: 600, workspaces: 6 });
 const [large] = instance.workspaces;
 const admin = instance.accounts.find((account) => account.email === instance.fixtures.email);
@@ -56,6 +58,23 @@ describe("seeding the large instance into a harness database", () => {
     expect(large.bookmarkShares.length).toBeGreaterThan(0);
     expect(rows[0]?.archived).toBeGreaterThan(0);
     await assertBookmarkCountMatches(db);
+  });
+
+  it("leaves the visibility map of every table full after the seed, as autovacuum would", { timeout: HOOK_TIMEOUT_MS }, async () => {
+    // A database of its own: the shared one already holds the instance the first test seeded.
+    const db = await createTestDatabase({ serverUrl: harnessUrl ?? DEV_SERVER_URL });
+    try {
+      await seedLargeInstance(db, server, buildLargeInstance({ bookmarks: 600, workspaces: 6 }), PASSWORD_HASH);
+      const tables = await db.owner<{ name: string; pages: number; visible: number }[]>`
+        SELECT relname AS name, relpages AS pages, relallvisible AS visible FROM pg_class
+        WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'm') ORDER BY relname`;
+      const read = new Map(tables.map((table) => [table.name, table]));
+      expect(read.get("bookmarks")?.pages).toBeGreaterThan(0);
+      expect(read.get("bookmark_tags")?.pages).toBeGreaterThan(0);
+      expect(tables.filter((table) => table.visible < table.pages)).toEqual([]);
+    } finally {
+      await db.drop();
+    }
   });
 
   it("leaves row-level security enabled and forced on every tenant table, and hands the server a role that bypasses nothing and owns no table", { timeout: HOOK_TIMEOUT_MS }, async () => {

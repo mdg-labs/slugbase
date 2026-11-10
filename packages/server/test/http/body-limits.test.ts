@@ -1,8 +1,8 @@
 import { defineOperation, jsonResponse, problemResponse } from "@slugbase/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createServer, type ServerModule } from "../../src/create-server.ts";
-import { DEFAULT_MAX_BODY_BYTES } from "../../src/http/body-limits.ts";
+import { DEFAULT_MAX_BODY_BYTES, bodyBytes, decodedForm } from "../../src/http/body-limits.ts";
 import { acceptAnyBearer, adapters, fakeDatabase, recordingLogger, serverConfig, documentOf, fakeAuthStore } from "../support.ts";
 
 // Stage 3 of the chain (doc 01 section 4), exercised through test routes a test
@@ -245,5 +245,44 @@ describe("the body-limits stage", () => {
       request("/api/v1/nowhere", { method: "POST", headers: JSON_HEADERS, body: "a".repeat(DEFAULT_MAX_BODY_BYTES + 1) }),
     );
     expect(response.status).toBe(413);
+  });
+});
+
+describe("the decoded form of a request", () => {
+  const multipart = async (): Promise<Request> => {
+    const form = new FormData();
+    form.set("file", new File(["<DL></DL>"], "bookmarks.html", { type: "text/html" }));
+    const serialised = new Response(form);
+    return new Request("http://localhost/upload", {
+      method: "POST",
+      headers: { "content-type": serialised.headers.get("content-type") ?? "" },
+      body: new Uint8Array(await serialised.arrayBuffer()),
+    });
+  };
+
+  it("is decoded once however many callers ask, and the decode leaves the request's body unread", async () => {
+    const request = await multipart();
+    const decodes = [vi.spyOn(Request.prototype, "formData"), vi.spyOn(Response.prototype, "formData")];
+
+    try {
+      const first = await decodedForm(request);
+      const second = await decodedForm(request);
+
+      expect(second).toBe(first);
+      expect(decodes.reduce((total, spy) => total + spy.mock.calls.length, 0)).toBe(1);
+      expect(await request.clone().text()).toContain("bookmarks.html");
+    } finally {
+      for (const spy of decodes) {
+        spy.mockRestore();
+      }
+    }
+  });
+
+  it("rejects for every caller when the body is no well-formed multipart, and the bytes stay readable for a caller that digests them", async () => {
+    const request = new Request("http://localhost/upload", { method: "POST", headers: { "content-type": "multipart/form-data; boundary=b" }, body: "no parts" });
+
+    await expect(decodedForm(request)).rejects.toThrow();
+    await expect(decodedForm(request)).rejects.toThrow();
+    expect(new TextDecoder().decode(await bodyBytes(request))).toBe("no parts");
   });
 });
