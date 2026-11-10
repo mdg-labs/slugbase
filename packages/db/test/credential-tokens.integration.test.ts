@@ -14,6 +14,9 @@ import { asSystem, freshId, freshToken, seedAccount, sha256 } from "./support/au
 const HOOK_TIMEOUT_MS = 300_000;
 const PARALLEL_CALLS = 8;
 const DAY_SECONDS = 86_400;
+const BLOCKED_DEADLINE_MS = 20_000;
+const POLL_MS = 25;
+const TEST_TIMEOUT_MS = 60_000;
 
 let db: TestDatabase;
 let store: AuthStore;
@@ -89,6 +92,24 @@ async function consume(purpose: string, hash: Buffer): Promise<{ account_id: str
   return [...result];
 }
 
+/** Waits until a backend of this database is queued behind a lock, which is where an issue waiting for the account row stands. */
+async function waitUntilBlocked(): Promise<void> {
+  const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+  for (;;) {
+    const rows = await db.owner<{ waiting: string }[]>`
+      SELECT count(DISTINCT l.pid)::text AS waiting
+      FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
+      WHERE NOT l.granted AND s.datname = current_database()`;
+    if (Number(rows[0]?.waiting ?? 0) > 0) {
+      return;
+    }
+    if (Date.now() > deadline) {
+      throw new Error("the issue never waited for a lock");
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+}
+
 describe("sys_credential_token_issue", () => {
   it("stores the SHA-256 of the token, the purpose and the account, and an expiry the ttl after now on the database clock", async () => {
     const owner = await account();
@@ -108,6 +129,65 @@ describe("sys_credential_token_issue", () => {
     expect(expiresAt).toBeGreaterThanOrEqual(before + DAY_SECONDS * 1000 - 5000);
     expect(expiresAt).toBeLessThanOrEqual(after + DAY_SECONDS * 1000 + 5000);
   });
+
+  it(
+    "writes created_at and expires_at from one read of the clock taken after the wait for the account row, so the lifetime is exactly the ttl",
+    async () => {
+      const owner = await account();
+      let release: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let locked: () => void = () => undefined;
+      const accountLocked = new Promise<void>((resolve) => {
+        locked = resolve;
+      });
+      let releasedAt = "";
+
+      // A transaction that holds the account row, as another issue or a redemption for the account would.
+      const holding = db.owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`SELECT 1 FROM accounts WHERE id = ${owner} FOR UPDATE`;
+        locked();
+        await released;
+        const read = await tx<{ at: string }[]>`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at`;
+        releasedAt = read[0]?.at ?? "";
+      });
+      const holdingSettled = holding.then(
+        () => undefined,
+        (error: unknown) => ({ error }),
+      );
+      await accountLocked;
+
+      // The issuing transaction starts while the row is held, so its start time is earlier than the end of the wait.
+      const issuing = db.app.begin(async (tx) => {
+        const issued = await tx<{ issued: boolean }[]>`
+          SELECT sys_credential_token_issue(${freshId()}::uuid, 'email_verify'::text, ${owner}::uuid, ${freshToken().hash}::bytea, NULL::text, ${DAY_SECONDS}::integer) AS issued`;
+        return issued[0]?.issued;
+      });
+      const issuingSettled = issuing.then(
+        (issued) => ({ issued }),
+        (error: unknown) => ({ error }),
+      );
+      try {
+        await waitUntilBlocked();
+      } finally {
+        release();
+      }
+
+      expect(await holdingSettled).toBeUndefined();
+      expect(await issuingSettled).toEqual({ issued: true });
+      const dates = await asSystem(
+        db,
+        (tx) => tx<{ exact: boolean; after_wait: boolean }[]>`
+          SELECT expires_at - created_at = ${DAY_SECONDS}::integer * interval '1 second' AS exact, created_at >= ${releasedAt}::timestamptz AS after_wait
+          FROM credential_tokens WHERE account_id = ${owner}`,
+      );
+      expect(releasedAt).not.toBe("");
+      expect(dates).toEqual([{ exact: true, after_wait: true }]);
+    },
+    TEST_TIMEOUT_MS,
+  );
 
   it("deletes the account's older unused tokens of the purpose and keeps used ones, other purposes and other accounts' tokens", async () => {
     const owner = await account();

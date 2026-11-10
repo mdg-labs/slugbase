@@ -107,7 +107,8 @@ $$;
 -- holds (or none), so the cancel token of a confirmed change, which targets the
 -- address that change replaced, is not replaced by the notice of a newer request and
 -- both links work. A confirmation is stored by sys_credential_token_issue, a cancel
--- token by the insert below, in the same transaction and under the same account lock.
+-- token by the insert below, in the same transaction and under the same account lock,
+-- with created_at and expires_at from one read of the clock taken under that lock.
 -- When the confirmation is declined for an address that is not free, the account's
 -- unused confirmation tokens are deleted, so a link mailed by an earlier run of the job
 -- does not outlive the run that found the address taken.
@@ -124,6 +125,7 @@ CREATE OR REPLACE FUNCTION public.sys_email_change_token_issue(
 DECLARE
   v_email public.citext;
   v_pending public.citext;
+  v_now timestamptz;
 BEGIN
   IF NOT coalesce(
     p_id IS NOT NULL AND p_account_id IS NOT NULL AND p_purpose IN ('email_change', 'email_change_cancel')
@@ -160,11 +162,12 @@ BEGIN
       RETURN NULL;
     END IF;
   ELSE
+    v_now := clock_timestamp();
     DELETE FROM public.credential_tokens
     WHERE account_id = p_account_id AND purpose = 'email_change_cancel' AND used_at IS NULL
       AND (target_email IS NULL OR target_email = v_email);
     INSERT INTO public.credential_tokens (id, purpose, account_id, token_hash, target_email, expires_at, created_at)
-    VALUES (p_id, p_purpose, p_account_id, p_token_hash, v_email, clock_timestamp() + p_ttl_seconds * interval '1 second', clock_timestamp());
+    VALUES (p_id, p_purpose, p_account_id, p_token_hash, v_email, v_now + p_ttl_seconds * interval '1 second', v_now);
   END IF;
   RETURN v_pending::text;
 END

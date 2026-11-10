@@ -36,6 +36,12 @@ const DELETE_QUEUE = "workspace.delete";
 const EVENT_QUEUE = "event.workspace.created";
 const JOINED_QUEUE = "event.member.joined";
 const MAIL_QUEUE = "invitation.send";
+const BLOCKED_DEADLINE_MS = 20_000;
+const POLL_MS = 25;
+const TEST_TIMEOUT_MS = 60_000;
+const SLEEP_SECONDS = 0.1;
+const OWNER_INVITATION_SECONDS = 3_600;
+const CLOCK_FORMAT = `YYYY-MM-DD"T"HH24:MI:SS.US"Z"`;
 
 let db: TestDatabase;
 let store: AuthStore;
@@ -919,6 +925,110 @@ describe("sys_instance_reissue_owner_invitation", () => {
       expect(await refusedWith(reissued())).toBe(INSUFFICIENT_PRIVILEGE);
     });
   });
+});
+
+// The two dates of an owner invitation come from one read of the database clock (doc 05 sections 2.9 and 3.3): the
+// invitation's lifetime is then exactly the one asked for, and it is dated by the call that wrote it, not by the start of
+// the transaction the call ran in. The failure scenario: a call that waited, or ran late in its transaction, writes
+// created_at from the transaction's start and expires_at from the later clock, so the lifetime is longer than asked for.
+describe("the dates of an owner invitation", () => {
+  const dateChecks = (workspaceId: string, instant: string) =>
+    asSystem(
+      db,
+      (tx) =>
+        tx<{ exact: boolean; after: boolean }[]>`
+          SELECT expires_at - created_at = ${OWNER_INVITATION_SECONDS}::integer * interval '1 second' AS exact, created_at >= ${instant}::timestamptz AS after
+          FROM workspace_invitations WHERE workspace_id = ${workspaceId} AND status = 'pending'`,
+    );
+
+  async function waitUntilBlocked(): Promise<void> {
+    const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+    for (;;) {
+      const rows = await db.owner<{ waiting: string }[]>`
+        SELECT count(DISTINCT l.pid)::text AS waiting
+        FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
+        WHERE NOT l.granted AND s.datname = current_database()`;
+      if (Number(rows[0]?.waiting ?? 0) > 0) {
+        return;
+      }
+      if (Date.now() > deadline) {
+        throw new Error("the call never waited for a lock");
+      }
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
+  }
+
+  it(
+    "writes an invitation created with the workspace from one clock read, after the transaction was already running",
+    async () => {
+      const caller = await admin();
+      const workspaceId = freshId();
+      const instant = await asAdmin(caller, async (tx) => {
+        await tx`SELECT pg_sleep(${SLEEP_SECONDS})`;
+        const read = await tx<{ at: string }[]>`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', ${CLOCK_FORMAT}) AS at`;
+        const created = await tx`
+          SELECT * FROM sys_instance_create_workspace(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, 'Dated', NULL::uuid, 'dated.owner@example.test'::citext, ${freshId()}::uuid, ${freshToken().hash}::bytea, ${OWNER_INVITATION_SECONDS}::integer, true)`;
+        expect(created[0]).toMatchObject({ outcome: "created" });
+        return read[0]?.at ?? "";
+      });
+
+      expect(instant).not.toBe("");
+      expect(await dateChecks(workspaceId, instant)).toEqual([{ exact: true, after: true }]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "writes a reissued invitation from one clock read taken after the wait for the invitation it revokes",
+    async () => {
+      const caller = await admin();
+      const first = invited("dated.again@example.test");
+      await create(caller, first);
+
+      let release: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let locked: () => void = () => undefined;
+      const invitationLocked = new Promise<void>((resolve) => {
+        locked = resolve;
+      });
+      let releasedAt = "";
+      // A transaction that holds the pending invitation, as a concurrent acceptance of it would.
+      const holding = db.owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`SELECT 1 FROM workspace_invitations WHERE workspace_id = ${first.workspaceId} FOR UPDATE`;
+        locked();
+        await released;
+        const read = await tx<{ at: string }[]>`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', ${CLOCK_FORMAT}) AS at`;
+        releasedAt = read[0]?.at ?? "";
+      });
+      const holdingSettled = holding.then(
+        () => undefined,
+        (error: unknown) => ({ error }),
+      );
+      await invitationLocked;
+
+      const reissuing = asAdmin(caller, (tx) =>
+        tx<{ outcome: string }[]>`SELECT * FROM sys_instance_reissue_owner_invitation(${freshId()}::uuid, NULL::cidr, ${first.workspaceId}::uuid, NULL::citext, ${freshId()}::uuid, ${freshToken().hash}::bytea, ${OWNER_INVITATION_SECONDS}::integer, true)`,
+      );
+      const reissuingSettled = reissuing.then(
+        (rows) => ({ outcome: rows[0]?.outcome }),
+        (error: unknown) => ({ error }),
+      );
+      try {
+        await waitUntilBlocked();
+      } finally {
+        release();
+      }
+
+      expect(await holdingSettled).toBeUndefined();
+      expect(await reissuingSettled).toEqual({ outcome: "issued" });
+      expect(releasedAt).not.toBe("");
+      expect(await dateChecks(first.workspaceId, releasedAt)).toEqual([{ exact: true, after: true }]);
+    },
+    TEST_TIMEOUT_MS,
+  );
 });
 
 describe("sys_instance_delete_workspace", () => {
