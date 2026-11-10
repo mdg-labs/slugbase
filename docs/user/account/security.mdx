@@ -1,0 +1,179 @@
+---
+title: "Security"
+description: "Change your password, turn on two-factor authentication, manage your sessions and linked sign-in methods, and choose sign-in alerts."
+edition: both
+order: 30
+---
+
+**Security** holds everything that protects how you sign in: your password, two-factor authentication, the devices you are signed in on, the identity providers you can sign in with, and alerts for new devices.
+
+<Screenshot alt="The Security page with the password, two-factor authentication, sessions and sign-in alerts" />
+
+## Prerequisites
+
+- You are signed in.
+
+## Open the security settings
+
+1. Open the account menu in the top bar and choose **Security**.
+
+Or choose **Account settings**, then **Security** under **Account**.
+
+## Confirm it is you
+
+SlugBase asks you to confirm it is you before it changes a credential. The dialog **Confirm it is you** says "This change needs your password again."
+
+1. Enter your **Password**.
+2. Choose **Confirm**.
+
+**Result:** the change goes ahead. SlugBase remembers the confirmation for ten minutes, so you are not asked again for each change in that time.
+
+If you cancel, nothing changes. A wrong password shows "The password is not right."
+
+The prompt appears when you:
+
+- change or add a password
+- change your email address
+- set up two-factor authentication, replace its backup codes or turn it off
+- create an API token
+- link or unlink a sign-in method
+- delete your account
+
+A few workspace actions ask too, such as deleting a workspace or transferring its ownership.
+
+If your account has no password, the dialog says "This change needs you to confirm it is you with your sign-in provider." Choose **Confirm with** and the provider's name. You come back to this page. Repeat the action there. If no provider is available, the dialog says "No sign-in provider is available to confirm it is you. Ask your administrator."
+
+## Change your password
+
+1. Under **Password**, enter your **Current password**.
+2. Enter a **New password**. Use at least 12 characters. A long phrase works well.
+3. Watch the **Password strength** bar, from **Very weak** to **Strong**.
+4. Choose **Change password**.
+
+**Result:** SlugBase says "Your password was changed. Your other sessions were signed out." This device stays signed in. Where email is set up, SlugBase also emails you about the change.
+
+SlugBase refuses a password that is too short or too long (up to 256 characters), that is too weak, or, where your SlugBase checks for it, one that appeared in a known data breach. The message names the reason. There are no other rules, such as needing a digit.
+
+### Add a password
+
+If you sign in only through an identity provider, the card is called **Add a password**. It asks for a **New password** only, after you confirm it is you through your provider.
+
+**Result:** SlugBase says "Your password was added. Your other sessions were signed out." You can then sign in with your email address and password too. SlugBase has no way to remove a password again.
+
+## Turn on two-factor authentication
+
+Two-factor authentication asks for a six-digit code from an authenticator app each time you sign in with your password. At sign-in it appears as **Two-step verification**. See [Sign In](../access/sign-in.mdx).
+
+1. Under **Two-factor authentication**, choose **Set up**. The **Status** shows **Off**.
+2. Confirm it is you if SlugBase asks.
+3. In step 1, **Scan the code**, scan the QR code with your authenticator app. If you cannot scan it, choose **Copy the setup key** and enter the **Setup key** in your app.
+4. Choose **Next**.
+5. In step 2, **Enter a code**, type the six-digit code your app shows now.
+6. Choose **Turn on**.
+7. In step 3, **Save your backup codes**, copy or write down the ten codes. Choose **Copy all backup codes** to copy them.
+8. Select **I have saved these backup codes**, then choose **Done**.
+
+**Result:** the **Status** shows **On**. From now on, signing in with your password also asks for a code.
+
+### Keep your backup codes
+
+Each backup code works once. Use one on the sign-in page when you cannot use your authenticator app. SlugBase shows the codes only now: "Keep them somewhere safe. They are not shown again." A password manager is a good place.
+
+### Replace your backup codes
+
+1. Choose **Replace backup codes**.
+2. Enter a code from your authenticator app. A backup code does not work here.
+3. Choose **Replace codes**.
+4. Save the new codes as above, then choose **Done**.
+
+**Result:** the ten new codes work. Every old code stops working, used or not.
+
+### Turn off two-factor authentication
+
+1. Choose **Turn off**.
+2. Enter a code from your authenticator app, or choose **Use a backup code instead** and enter a **Backup code**.
+3. Enter your **Password**.
+4. Choose **Turn off**, then confirm **Turn off two-factor authentication?**.
+
+**Result:** SlugBase says **Two-factor authentication is off**. Your account is protected by its password alone, and your backup codes stop working.
+
+### If you lose your app and your backup codes
+
+SlugBase cannot let you in without a code. On a self-hosted SlugBase, ask an instance admin to reset two-factor authentication for your account. SlugBase emails you when they do. On SlugBase Cloud, contact support. After the reset you sign in with your password alone and can set it up again.
+
+## Check your sessions
+
+A session is one device or browser where you are signed in. **Sessions** lists them so you can spot one you do not recognise.
+
+| Column | What it shows |
+| ------ | ------------- |
+| **Device** | The browser, for example "Firefox". **This device** marks the one you are using. |
+| **Network** | The first part of the network address the session came from. SlugBase never stores a full address and shows no location. |
+| **Signed in** | When the session started. |
+| **Last active** | When it was last used. |
+
+To end one session, choose **Revoke** in its row. The session is signed out at once. If it is the session you are using, SlugBase asks **Sign out of this device?** first and then shows the sign-in page.
+
+To end all the others:
+
+1. Choose **Sign out everywhere else**.
+2. Confirm **Sign out everywhere else?**.
+
+**Result:** SlugBase says **Signed out everywhere else**. This device stays signed in. The button is off when you have no other session. Choose **Show more** to see older sessions.
+
+## Manage linked sign-in methods
+
+**Linked sign-in methods** lists the identity providers you can sign in with. It appears only when the operator of your SlugBase set up a provider, or when one is already linked to your account.
+
+1. To add a provider, choose **Link** next to its name. Confirm it is you if SlugBase asks, then sign in at the provider. You come back to this page.
+2. To remove one, choose **Unlink** in its row and confirm **Unlink** and the provider's name.
+
+**Result:** SlugBase says **Sign-in method unlinked** after an unlink. The table shows each provider, the **Email at link** and when it was **Last used**.
+
+You always keep at least one way to sign in. If the provider is your only way in, SlugBase says **This is your only way to sign in**. Add a password or link another provider first.
+
+If linking fails, the page says "Linking or confirming with that provider did not work. Try again." Choose **Dismiss** and try again.
+
+## Choose sign-in alerts
+
+1. Under **Sign-in alerts**, turn **Email me when a new device signs in** on or off.
+
+It is on by default. SlugBase sends the email when you sign in with your password from a device it has not seen before. The email shows the time, the browser and the network of the sign-in, never a full address. A sign-in through an identity provider sends none.
+
+If your SlugBase sends no email, the card says so. Your choice is kept, and alerts start once email is set up.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Current password | Your password now. Not shown when you have none. | Yes, to change it |
+| New password | At least 12 characters, at most 256. | Yes |
+| Authentication code | A six-digit code from your authenticator app. | Yes, in the steps above |
+| Backup code | One unused backup code, instead of the code. | Only when you cannot use the app |
+| Setup key | The text version of the QR code, for an app that cannot scan. | No |
+| Email me when a new device signs in | An alert for password sign-ins from a new device. | No |
+
+## Troubleshooting
+
+### The page says "The current password is not right."
+
+Check the current password and try again. If you forgot it, sign out and use **Forgot password?**. See [Reset Your Password](../access/reset-your-password.mdx).
+
+### The page says "This password appeared in a known data breach."
+
+Choose another password. Where this check is on, SlugBase compares new passwords with a list of breached passwords stored on its own server. It does not send your password anywhere.
+
+### The code is not valid
+
+The page says "That code is not valid. Check it and try again." Check that the clock of your phone is right and that you enter the code your app shows now. A code works once.
+
+### Your sessions or linked sign-in methods could not be loaded
+
+Choose **Try again**. If it continues, tell the person who runs your SlugBase.
+
+## Related pages
+
+- [Profile](profile.mdx)
+- [API Tokens](api-tokens.mdx)
+- [Sign In](../access/sign-in.mdx)
+- [Reset Your Password](../access/reset-your-password.mdx)

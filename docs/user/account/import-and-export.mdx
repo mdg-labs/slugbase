@@ -1,0 +1,151 @@
+---
+title: "Import and Export"
+description: "Bring bookmarks in from a browser file or a SlugBase export, and download your bookmarks as a file."
+edition: both
+order: 50
+---
+
+**Import & export** adds bookmarks to a workspace from a file, and downloads your bookmarks from a workspace as a file. Use it to move in from a browser, to keep a backup and to move to another SlugBase.
+
+<Screenshot alt="The Import & export page with the import wizard and the export card" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open. Import adds bookmarks to that workspace, and export reads from it.
+
+## The two file formats
+
+| Format | What it keeps | Use it for |
+| ------ | ------------- | ---------- |
+| **SlugBase JSON** (`.json`) | Everything of your own: titles, addresses, descriptions, folders with their icons and colours, tags, slugs, forwarding, pins and your remembered choices for slugs. It is lossless. | A backup, and moving to another SlugBase. Importing it into an empty workspace gives you the same bookmarks. |
+| **Netscape HTML** (`.html`) | Titles, addresses, folders and tags. Descriptions, pins and forwarding are left out. It is lossy. | A browser or another bookmark tool. Every major browser exports and imports it. |
+
+Choose JSON whenever you can. A SlugBase import reads a Netscape file for its bookmarks, folders and tags, but not for slugs. The slugs in an exported HTML file are for browsers that use them as keywords, and a SlugBase import does not restore them.
+
+## Open the page
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Account**, choose **Import & export**.
+
+Or open the [command palette](../command-palette.mdx) and run **Import bookmarks** or **Export bookmarks**.
+
+## Import bookmarks
+
+The import is a wizard with three steps: **Choose a file**, **Check what will be imported** and **Importing**.
+
+1. Choose a file with **Choose file**, or drop it on the field. Use a browser bookmark file (`.html`) or a SlugBase JSON export (`.json`), up to 5 MiB. Nothing is added yet.
+2. Choose **Preview**. The preview shows what the import would do, and still adds nothing.
+3. Check the preview. Leave **Skip duplicates** selected, or clear it.
+4. Choose **Import**. The page says "Keep this page open until the import is finished."
+
+**Result:** **Import finished** shows what the import did. The bookmarks are in the workspace you had open, as the preview says: "Bookmarks are added to" and the workspace's name. The **Getting started** checklist on [Home](../home.mdx) ticks **Import from your browser**.
+
+### Read the preview
+
+| Line | Meaning |
+| ---- | ------- |
+| **In the file**: **Bookmarks**, **Folders**, **Tags** | What the file holds. |
+| **Add bookmarks** | How many bookmarks the import would add. |
+| **Create folders**, **Create tags** | How many it would create. Folders and tags match your own by name, without regard to capitals. SlugBase uses the ones you have and creates the rest. |
+| **Skip as duplicates** | Bookmarks whose address you already have. |
+| **Skip because the workspace is full** | Bookmarks that do not fit where your plan limits the number of bookmarks. This applies to SlugBase Cloud. |
+| **Leave out because the address is not valid** | Entries that are not an `http` or `https` address, such as a browser bookmarklet. |
+| **Drop slugs** | Slugs in the file that SlugBase cannot keep. The bookmark is still added. |
+
+Changing **Skip duplicates** checks the file again.
+
+### How duplicates work
+
+SlugBase compares addresses in a plain form: it ignores tracking parameters such as `utm_` ones, a trailing slash and the capitals of the host. **Skip duplicates** is selected by default. With it selected, a bookmark you already have is skipped, and so is a second copy of an address inside the file. Clear it to add every bookmark, duplicates included.
+
+### Read the result
+
+The result shows four counts: **Added**, **Skipped**, **Failed** and **Slugs dropped**. Below them, SlugBase says how many folders and tags it created. For example, "2 folders and 5 tags were created." If nothing was left out, it says "Nothing was skipped and nothing failed."
+
+Groups list the bookmarks that were left out, each with its title, address and its place in the file. Open a group to read it:
+
+- **Skipped as duplicates**
+- **Skipped because the workspace was full**
+- **Failed: the address is not an http or https address**
+- **Failed: the address is empty, too long or malformed**
+- **Slug dropped: not a valid slug**
+- **Slug dropped: already taken**
+
+Choose **Download report** to save the whole result as a file. Choose **Import another file** to start again.
+
+A bookmark whose slug is dropped is still imported, without the slug. Give it a slug afterwards. See [Add and Edit Bookmarks](../add-and-edit-bookmarks.mdx).
+
+### Limits
+
+- **5 MiB** per file.
+- **5 000 bookmarks** per import. A bigger file is refused. Split it into smaller files.
+- A file that would create too many new folders and tags, or too many uses of them, is refused whole. Nothing is added, and the page says to split the file.
+- Where your plan limits the number of bookmarks, the import adds bookmarks up to the limit and lists the rest as skipped.
+- Nothing runs from the file: SlugBase reads titles and addresses as plain text, and only `http` and `https` addresses become bookmarks.
+
+If the import fails before the end, nothing is added. Choose **Try again**. SlugBase does not add a file twice when a repeat reaches it.
+
+## Export bookmarks
+
+1. Under **Export bookmarks**, choose a **File format**: **SlugBase JSON (recommended)** or **Netscape HTML**.
+2. Optional: select **Include bookmarks shared with me**. It appears only where your workspace can share bookmarks.
+3. Choose **Download**.
+
+**Result:** SlugBase says **Preparing your export…**, then **Download started** with the file name.
+
+The export holds your own bookmarks of the open workspace, plan-archived ones included. With **Include bookmarks shared with me**, it also lists the bookmarks other members shared with you that you can read: only the address, title, description, slug and the owner's name. A SlugBase import ignores that list, so a re-import never copies another member's bookmarks. In a Netscape file, those bookmarks sit at the top level, and a browser takes them as its own.
+
+To export only some bookmarks, select them in [Bookmarks](../bookmarks.mdx) and choose **Export selection**.
+
+An export is made when you ask for it. SlugBase does not keep the file. To back up a whole self-hosted SlugBase, the operator also backs up the database. See [Backup and Restore](/docs/self-hosting/backup-restore).
+
+## When your account can only export
+
+If an administrator ended your access, SlugBase shows the banner **Your account can only export its data**, with the end date, and replaces the app with this page. You can sign in, look at your bookmarks and export them. **Import bookmarks** is not shown, and **Include bookmarks shared with me** is offered. With several workspaces, choose the **Workspace to export from**. After the end date, the account is disabled or deleted.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Bookmark file | A `.html` or `.json` file up to 5 MiB. | Yes, to import |
+| Skip duplicates | Skips bookmarks whose address you already have. On by default. | No |
+| File format | **SlugBase JSON (recommended)** or **Netscape HTML**. | Yes, to export |
+| Include bookmarks shared with me | Adds the bookmarks shared with you, in read-only form. | No |
+
+## Troubleshooting
+
+### The page says "This file is larger than 5 MiB."
+
+Split the file into smaller files, and import them one by one.
+
+### The page says "This file holds more than 5 000 bookmarks."
+
+Split the file. One import takes at most 5 000 bookmarks.
+
+### The page says "This is not a valid SlugBase JSON file or browser bookmark file."
+
+The file is not in a format SlugBase reads. Export it again, or choose another file. The page asks for a `.json` or `.html` file.
+
+### The page says the file was made by a newer version
+
+The message says: "This file was made by a newer version of SlugBase than this one can read." Update SlugBase, or export the file again from this one.
+
+### The page says "Too many imports" or "Too many exports"
+
+You tried too often. Wait for the time the message names.
+
+### The export is too large for one file
+
+The message says "The export is too large for one file." Export a smaller selection from [Bookmarks](../bookmarks.mdx).
+
+### Some bookmarks were skipped or failed
+
+Open the groups under **Import finished** to see which ones and why. Download the report to keep the list.
+
+## Related pages
+
+- [Bookmarks](../bookmarks.mdx)
+- [Add and Edit Bookmarks](../add-and-edit-bookmarks.mdx)
+- [Forwarding](../forwarding.mdx)
+- [Profile](profile.mdx)
+- [Home](../home.mdx)

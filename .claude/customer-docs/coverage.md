@@ -15,11 +15,11 @@
 | command palette | docs/user/command-palette.mdx | current | e0010e65 | overlay |
 | keyboard shortcut sheet | docs/user/keyboard-shortcuts.mdx | current | e0010e65 | overlay |
 | workspace switcher, create-workspace dialog | docs/user/workspace/switching-workspaces.mdx | missing | — | overlay |
-| `/settings/account` | docs/user/account/profile.mdx | missing | — | |
-| `/settings/account/security` | docs/user/account/security.mdx | missing | — | |
-| `/settings/account/tokens` | docs/user/account/api-tokens.mdx | missing | — | |
-| `/settings/account/preferences` | docs/user/account/preferences.mdx | missing | — | |
-| `/settings/account/data` | docs/user/account/import-and-export.mdx | missing | — | |
+| `/settings/account` | docs/user/account/profile.mdx | current | f60e2b5e | |
+| `/settings/account/security` | docs/user/account/security.mdx | current | f60e2b5e | |
+| `/settings/account/tokens` | docs/user/account/api-tokens.mdx | current | f60e2b5e | |
+| `/settings/account/preferences` | docs/user/account/preferences.mdx | current | f60e2b5e | |
+| `/settings/account/data` | docs/user/account/import-and-export.mdx | current | f60e2b5e | |
 | `/settings/workspace` | docs/user/workspace/general.mdx | missing | — | |
 | `/settings/workspace/members` | docs/user/workspace/members.mdx | missing | — | |
 | `/settings/workspace/teams` | docs/user/workspace/teams.mdx | missing | — | |
