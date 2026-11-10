@@ -247,6 +247,64 @@ expect_failed "a dump file with another substitution is refused"
 run require_guide_commands "$(mutated_command dump-backtick.md "$DUMP_TOOL" "\$(date +%F)" "\`id\`")"
 expect_failed "a dump file with a backtick is refused"
 
+# Cron turns every % that is not escaped into a newline, so a crontab line with one would never take a dump: the only
+# % of the crontab line is the \% of the date, and the other forms keep the plain $(date +%F).
+run require_guide_commands "$(mutated_matching cron-date-unescaped.md "$CRON_LINE" "+\\%F" "+%F")"
+expect_failed "a crontab dump whose date is not escaped is refused"
+run require_guide_commands "$(mutated_matching cron-date-other.md "$CRON_LINE" "+\\%F" "+\\%Y")"
+expect_failed "a crontab dump with another escaped date format is refused"
+run require_guide_commands "$(mutated_matching cron-percent-cd.md "$CRON_LINE" "cd /opt/slugbase" "cd /opt/slug%base")"
+expect_failed "a crontab directory with a % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-cd-escaped.md "$CRON_LINE" "cd /opt/slugbase" "cd /opt/slug\\%base")"
+expect_failed "a crontab directory with an escaped % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-word.md "$CRON_LINE" "\"backups/slugbase-\$(date +\\%F).dump\"" "backups/slugbase-%F.dump")"
+expect_failed "a crontab dump to a one-word file with a % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-word-escaped.md "$CRON_LINE" "\"backups/slugbase-\$(date +\\%F).dump\"" "backups/slugbase-\\%F.dump")"
+expect_failed "a crontab dump to a one-word file with an escaped % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-text.md "$CRON_LINE" ").dump\"" ")-\\%x.dump\"")"
+expect_failed "a crontab dump to a quoted text with a second % beside the date is refused"
+run require_guide_commands "$(mutated_matching cron-percent-twice.md "$CRON_LINE" ").dump\"" ")\$(date +%F).dump\"")"
+expect_failed "a crontab dump with an unescaped date beside the escaped one is refused"
+run require_guide_commands "$(mutated_matching cron-escaped-backslash.md "$CRON_LINE" "+\\%F" "+\\\\%F")"
+expect_failed "a crontab dump whose date has a doubled backslash is refused"
+run require_guide_commands "$(mutated_command dump-date-escaped.md "$DUMP_TOOL" "+%F" "+\\%F")"
+expect_failed "a dump outside a crontab whose date is escaped is refused"
+run require_guide_commands "$(mutated_command restore-date-escaped.md "$RESTORE_TOOL" "backups/slugbase-2026-11-04.dump" "\"backups/slugbase-\$(date +\\%F).dump\"")"
+expect_failed "a restore outside a crontab whose date is escaped is refused"
+run require_guide_commands "$(mutated_command restore-date.md "$RESTORE_TOOL" "backups/slugbase-2026-11-04.dump" "\"backups/slugbase-\$(date +%F).dump\"")"
+expect_ok "a restore that reads the dump of a date is the same restore"
+{
+  cat "$GUIDE"
+  printf '\n```sh\n%s\n```\n' 'docker compose exec -T postgres pg_restore --list < "backups/slugbase-$(date +\%F).dump"'
+} >"$tmp/list-date-escaped.md"
+run require_guide_commands "$tmp/list-date-escaped.md"
+expect_failed "a listing outside a crontab whose date is escaped is refused"
+
+# The schedule is five valid cron fields.
+bad_cron=0
+good_cron=0
+cron_schedule() {
+  local name="$1" schedule="$2"
+  mutated_matching "$name" "$CRON_LINE" "17 3 * * *" "$schedule"
+}
+for schedule in "99 99 99 99 99" "*/0 * * * *" "5-1 * * * *" "60 * * * *" "* 24 * * *" "* * 0 * *" "* * 32 * *" "* * * 0 *" \
+  "* * * 13 *" "* * * * 8" "1,,2 * * * *" "1, * * * *" ",1 * * * *" "*/ * * * *" "*/5/2 * * * *" "5/2 * * * *" "1-5/0 * * * *" \
+  "1-2-3 * * * *" "-1 * * * *" "1- * * * *" "*-5 * * * *" "7-0 * * * *" "1-60 * * * *" "0-5,*/0 * * * *" "* * * * * *" "* * * *"; do
+  bad_cron=$((bad_cron + 1))
+  run require_guide_commands "$(cron_schedule "cron-bad-${bad_cron}.md" "$schedule")"
+  expect_failed "a crontab schedule of '$schedule' is refused"
+  expect_output "the refusal of '$schedule' is the one of a line in another form" "in another form"
+done
+for schedule in "*/5 1 * * 1-5" "0,30 0-23/2 1-31 1-12 0-7" "1-5/2 * * * *" "59 23 31 12 7" "00 03 01 01 00" "*/1 * * * *" "1,2,3 * * * *"; do
+  good_cron=$((good_cron + 1))
+  run require_guide_commands "$(cron_schedule "cron-good-${good_cron}.md" "$schedule")"
+  expect_ok "a crontab schedule of '$schedule' is valid"
+done
+run require_guide_commands "$(cron_schedule cron-name.md "17 3 * * mon")"
+expect_failed "a crontab schedule with a day name is refused"
+run require_guide_commands "$(cron_schedule cron-at.md "@daily")"
+expect_failed "a crontab with an @ form instead of five fields is refused"
+
 # The dump is written to a partial file and renamed only when pg_dump succeeded: the old form, which truncates the dated
 # file before pg_dump starts, and every variant of the new one are refused.
 PARTIAL_REDIRECT="> backups/slugbase.partial && mv backups/slugbase.partial "

@@ -26,9 +26,11 @@
 #     listing of a dump, so the tool inside a sh -c, a here-document, docker-compose or a pipe fails; guide_tool_lines in
 #     this file lists the forms. What may differ in them is the file the dump is renamed to or the restore reads (one
 #     word, or a quoted text whose only substitution is $(date +%F); no /dev/ or /proc/), and, in the crontab line, the
-#     schedule, the directory of `cd` (one word) and the number of days of the `find ... -mtime +<days> -delete`
-#     clean-up. A tool whose name is not written out in the code is not found, and prose, tables and headings are not
-#     read;
+#     schedule (five valid cron fields: numbers in range, `*`, lists, ranges and steps of at least 1; no names or @
+#     forms), the directory of `cd` (one word) and the number of days of the `find ... -mtime +<days> -delete`
+#     clean-up. Cron turns every % that is not escaped into a newline, so in the crontab line the only % is the \% of
+#     $(date +\%F) in the dated file, and in the other forms the date is $(date +%F) and \%F is refused. A tool whose
+#     name is not written out in the code is not found, and prose, tables and headings are not read;
 #   - the guide has that dump and that restore, and `docker compose up -d postgres` and `docker compose up -d` as lines
 #     of their own;
 #   - the wait for the database is the guide's own single pg_isready line, which the script runs;
@@ -163,11 +165,14 @@ guide_has() {
 #   - the dump: `(umask 077; docker compose <GUIDE_DUMP> > <GUIDE_PARTIAL> && mv <GUIDE_PARTIAL> <file>)`;
 #   - the scheduled dump: five cron fields, `cd <directory> && `, the dump as above, and ` && find backups -name
 #     'slugbase-*.dump' -mtime +<days> -delete` (GUIDE_FIND) as the whole clean-up: the schedule, the directory and the
-#     number of days are free;
+#     number of days are free. The schedule is five valid cron fields (minute 0-59, hour 0-23, day of month 1-31, month
+#     1-12, day of week 0-7; each a list of `*`, numbers and ranges with the low end not above the high end, and `*` or a
+#     range may take a step of at least 1); names and @ forms are refused. The directory has no %;
 #   - the restore: `docker compose <GUIDE_RESTORE> < <file>`;
 #   - the listing of a dump: `docker compose exec -T postgres pg_restore --list < <file>`, optionally with ` | head`.
-# A file is one word, or one double-quoted text whose only substitution is $(date +%F) (or $(date +\%F) in a crontab);
-# it has no $ or backtick outside that, and no /dev/ or /proc/ in it. The file the dump is written to is GUIDE_PARTIAL
+# A file is one word, or one double-quoted text whose only substitution is $(date +%F) (or $(date +\%F) in a crontab,
+# where cron would otherwise read the % as a newline and the line would never take a dump); it has no $ or backtick
+# outside that, no /dev/ or /proc/ in it, and in a crontab no other % anywhere in the line. The file the dump is written to is GUIDE_PARTIAL
 # itself, in both places. The guide must hold the dump and the restore of its steps. The check is made by the awk named in GUIDE_AWK (awk by default).
 # shellcheck disable=SC2016
 guide_tool_lines() {
@@ -191,21 +196,64 @@ guide_tool_lines() {
       after = substr(rest, RLENGTH + 1)
       return 1
     }
-    function file_ok(text,    inner) {
+    # A file: no device, and no substitution but the date. A crontab turns every unescaped % into a newline, so there the
+    # date is $(date +\%F) and any other % is refused; elsewhere it is $(date +%F) and a one-word file may hold a %.
+    function file_ok(text, scheduled,    inner, forbidden) {
       if (text ~ /\/(dev|proc)\//) {
         return 0
       }
+      forbidden = scheduled ? "[$`%]" : "[$`]"
       if (substr(text, 1, 1) == "\042") {
         inner = substr(text, 2, length(text) - 2)
-        gsub(/\$\(date \+\\?%F\)/, "", inner)
-        return inner !~ /[$`]/
+        if (scheduled) {
+          gsub(/\$\(date \+\\%F\)/, "", inner)
+        } else {
+          gsub(/\$\(date \+%F\)/, "", inner)
+        }
+        return inner !~ forbidden
       }
-      return text !~ /[$`]/
+      return text !~ forbidden
+    }
+    # One cron field with the numbers between lo and hi: comma-separated items, each `*`, a number or a range low-high
+    # (low not above high), and for `*` or a range a step /n of at least 1.
+    function cron_field_ok(field, lo, hi,    items, count, i, item, step, base, bounds) {
+      count = split(field, items, ",")
+      for (i = 1; i <= count; i++) {
+        item = items[i]
+        if (split(item, step, "/") > 2) {
+          return 0
+        }
+        base = step[1]
+        if (base == "*") {
+          if (item != "*" && (item !~ /^\*\/[0-9]+$/ || step[2] + 0 < 1)) {
+            return 0
+          }
+          continue
+        }
+        if (base ~ /^[0-9]+$/) {
+          if (item != base || base + 0 < lo || base + 0 > hi) {
+            return 0
+          }
+          continue
+        }
+        if (base !~ /^[0-9]+-[0-9]+$/ || (item != base && (item !~ /^[0-9]+-[0-9]+\/[0-9]+$/ || step[2] + 0 < 1))) {
+          return 0
+        }
+        split(base, bounds, "-")
+        if (bounds[1] + 0 < lo || bounds[2] + 0 > hi || bounds[1] + 0 > bounds[2] + 0) {
+          return 0
+        }
+      }
+      return 1
+    }
+    function cron_schedule_ok(schedule,    fields) {
+      return split(schedule, fields, " ") == 5 && cron_field_ok(fields[1], 0, 59) && cron_field_ok(fields[2], 0, 23) \
+        && cron_field_ok(fields[3], 1, 31) && cron_field_ok(fields[4], 1, 12) && cron_field_ok(fields[5], 0, 7)
     }
     # The dump after its command: ` > <partial> && mv <partial> <file>)`, and for the scheduled dump the clean-up after it.
     function dump_rest_ok(rest, scheduled,    lead) {
       lead = " > " partial " && mv " partial
-      if (index(rest, lead) != 1 || !split_file(substr(rest, length(lead) + 1), " ") || !file_ok(file) || substr(after, 1, 1) != ")") {
+      if (index(rest, lead) != 1 || !split_file(substr(rest, length(lead) + 1), " ") || !file_ok(file, scheduled) || substr(after, 1, 1) != ")") {
         return 0
       }
       after = substr(after, 2)
@@ -221,8 +269,11 @@ guide_tool_lines() {
       if (index(line, "(umask 077; " dump) == 1) {
         return dump_rest_ok(substr(line, length("(umask 077; " dump) + 1), 0) ? "dump" : ""
       }
-      if (match(line, /^[0-9*\/,-]+ [0-9*\/,-]+ [0-9*\/,-]+ [0-9*\/,-]+ [0-9*\/,-]+ cd [^ ;&|$`\042\047()<>]+ && \(umask 077; /)) {
+      if (match(line, /^[0-9*\/,-]+ [0-9*\/,-]+ [0-9*\/,-]+ [0-9*\/,-]+ [0-9*\/,-]+ cd [^ ;&|$`\042\047()<>%]+ && \(umask 077; /)) {
         remainder = substr(line, RLENGTH + 1)
+        if (!cron_schedule_ok(substr(line, 1, index(line, " cd ") - 1))) {
+          return ""
+        }
         if (index(remainder, dump) == 1) {
           return dump_rest_ok(substr(remainder, length(dump) + 1), 1) ? "cron" : ""
         }
@@ -230,11 +281,11 @@ guide_tool_lines() {
       }
       if (index(line, restore) == 1) {
         rest = substr(line, length(restore) + 1)
-        return (split_file(rest, " < ") && file_ok(file) && after == "") ? "restore" : ""
+        return (split_file(rest, " < ") && file_ok(file, 0) && after == "") ? "restore" : ""
       }
       if (index(line, list) == 1) {
         rest = substr(line, length(list) + 1)
-        return (split_file(rest, " < ") && file_ok(file) && (after == "" || after == " | head")) ? "list" : ""
+        return (split_file(rest, " < ") && file_ok(file, 0) && (after == "" || after == " | head")) ? "list" : ""
       }
       return ""
     }
