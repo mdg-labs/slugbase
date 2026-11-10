@@ -7,7 +7,9 @@
 #   {"ref":"main","inputs":{"docs_sha":"<the commit of this run>"}}
 #
 # Environment:
-#   DOCS_SITE_REPOSITORY      owner/name of the site repository (repository variable).
+#   DOCS_SITE_REPOSITORY      owner/name of the site repository (secret, so that Actions masks
+#                             it in the run log). It is never printed: no message, summary line
+#                             or error output of this script contains it.
 #   DOCS_SITE_WORKFLOW        file name of its workflow, such as deploy.yml (repository variable).
 #   DOCS_SITE_DISPATCH_TOKEN  a token with Actions: write on that one repository (secret).
 #                             It reaches only the `gh` call below, as GH_TOKEN, and is never printed.
@@ -17,7 +19,7 @@
 #
 # It does nothing, and says so in the job summary, when the repository it runs in
 # is not the upstream Community Edition repository (forks and self-hosters send
-# nothing), or when the variables or the secret are unset. A malformed value, or
+# nothing), or when the variable or either secret is unset. A malformed value, or
 # an API answer other than success, fails the run.
 set -euo pipefail
 
@@ -48,7 +50,7 @@ site_repository="${DOCS_SITE_REPOSITORY:-}"
 site_workflow="${DOCS_SITE_WORKFLOW:-}"
 
 if [[ -z "$site_repository" ]]; then
-  skip "The repository variable DOCS_SITE_REPOSITORY is not set."
+  skip "The secret DOCS_SITE_REPOSITORY is not set."
 fi
 if [[ -z "$site_workflow" ]]; then
   skip "The repository variable DOCS_SITE_WORKFLOW is not set."
@@ -62,7 +64,7 @@ workflow_pattern='^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$'
 sha_pattern='^[0-9a-f]{40}$'
 
 if [[ ! "$site_repository" =~ $repository_pattern ]]; then
-  die "The repository variable DOCS_SITE_REPOSITORY is not of the form owner/name."
+  die "The secret DOCS_SITE_REPOSITORY is not of the form owner/name."
 fi
 if [[ ! "$site_workflow" =~ $workflow_pattern ]]; then
   die "The repository variable DOCS_SITE_WORKFLOW is not a workflow file name ending in .yml or .yaml."
@@ -75,11 +77,15 @@ fi
 
 payload="$(printf '{"ref":"main","inputs":{"docs_sha":"%s"}}' "$sha")"
 
-if ! printf '%s' "$payload" | GH_TOKEN="$DOCS_SITE_DISPATCH_TOKEN" gh api \
+# gh's own error text names the request URL, which holds the repository, so it is
+# captured and only its HTTP status is reported.
+gh_errors=""
+if ! gh_errors="$(printf '%s' "$payload" | GH_TOKEN="$DOCS_SITE_DISPATCH_TOKEN" gh api \
   --method POST \
   "repos/${site_repository}/actions/workflows/${site_workflow}/dispatches" \
-  --input - > /dev/null; then
-  die "The dispatch request to ${site_repository} (${site_workflow}) was refused or did not complete."
+  --input - 2>&1 > /dev/null)"; then
+  status="$(printf '%s' "$gh_errors" | grep -o -m1 'HTTP [0-9]\{3\}' || true)"
+  die "The dispatch request to the site repository (${site_workflow}) was refused or did not complete${status:+ (${status})}."
 fi
 
-note "docs-published: asked ${site_repository} to run ${site_workflow} for ${sha}."
+note "docs-published: asked the site repository to run ${site_workflow} for ${sha}."

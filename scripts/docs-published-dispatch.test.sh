@@ -20,12 +20,17 @@ cat > "$tmp/bin/gh" <<'STUB'
 printf '%s\n' "$*" >> "$STUB_DIR/args"
 cat > "$STUB_DIR/body"
 printf '%s' "${GH_TOKEN:-}" > "$STUB_DIR/token"
+if [[ "${STUB_GH_EXIT:-0}" != 0 ]]; then
+  # Like the real CLI, a refusal names the request URL, which holds the repository.
+  printf 'gh: Not Found (HTTP 404) https://api.github.com/repos/%s\n' "${4:-}" >&2
+fi
 exit "${STUB_GH_EXIT:-0}"
 STUB
 chmod +x "$tmp/bin/gh"
 
 sha="0123456789abcdef0123456789abcdef01234567"
 token="stub-token-value"
+repository="example-org/site-repo"
 
 # Runs the script with a clean environment: only the variables named in the
 # call and the stub's directory on PATH. A new stub directory per case.
@@ -62,6 +67,15 @@ expect_no_call_and_ok() {
   fi
 }
 
+# The site repository's name stays out of the output and the job summary.
+expect_quiet_about_repository() {
+  if [[ "$out" != *"$repository"* ]] && ! grep -q -- "$repository" "$STUB_DIR/summary"; then
+    pass "$1"
+  else
+    fail "$1 (the repository name is in the output or the summary)"
+  fi
+}
+
 expect_no_call_and_failed() {
   local name="$1"
   if ((code != 0)) && [[ "$(calls)" == 0 ]] && grep -q -- "failed" "$STUB_DIR/summary"; then
@@ -82,7 +96,7 @@ expect_quiet_about_token() {
 good=(
   GITHUB_REPOSITORY=mdg-labs/slugbase
   GITHUB_SHA="$sha"
-  DOCS_SITE_REPOSITORY=example-org/site-repo
+  DOCS_SITE_REPOSITORY="$repository"
   DOCS_SITE_WORKFLOW=deploy.yml
   DOCS_SITE_DISPATCH_TOKEN="$token"
 )
@@ -120,15 +134,16 @@ else
   fail "a complete configuration sends one dispatch (exit $code, calls $(calls), args: $(cat "$STUB_DIR/args" 2>/dev/null), body: $(cat "$STUB_DIR/body" 2>/dev/null))"
 fi
 expect_quiet_about_token "the token is not printed and not on the command line"
+expect_quiet_about_repository "a successful dispatch does not print the repository name"
 
 run_with < <(without DOCS_SITE_REPOSITORY)
-expect_no_call_and_ok "an unset repository variable sends nothing" "DOCS_SITE_REPOSITORY is not set"
+expect_no_call_and_ok "an unset repository secret sends nothing" "secret DOCS_SITE_REPOSITORY is not set"
 
 run_with < <(with DOCS_SITE_REPOSITORY "")
-expect_no_call_and_ok "an empty repository variable sends nothing" "DOCS_SITE_REPOSITORY is not set"
+expect_no_call_and_ok "an empty repository secret sends nothing" "secret DOCS_SITE_REPOSITORY is not set"
 
 run_with < <(without DOCS_SITE_WORKFLOW)
-expect_no_call_and_ok "an unset workflow variable sends nothing" "DOCS_SITE_WORKFLOW is not set"
+expect_no_call_and_ok "an unset workflow variable sends nothing" "variable DOCS_SITE_WORKFLOW is not set"
 
 run_with < <(without DOCS_SITE_DISPATCH_TOKEN)
 expect_no_call_and_ok "an unset secret sends nothing" "DOCS_SITE_DISPATCH_TOKEN is not set"
@@ -147,7 +162,7 @@ expect_no_call_and_ok "a run with no repository sends nothing" "not the upstream
 
 for bad in "no-slash" "a/b/c" "owner/" "/name" "owner/na me" 'owner/name;rm' '-owner/name' 'owner/na$(id)me' '../name' 'owner/..%2f'; do
   run_with < <(with DOCS_SITE_REPOSITORY "$bad")
-  expect_no_call_and_failed "a malformed repository variable (${bad}) fails"
+  expect_no_call_and_failed "a malformed repository secret (${bad}) fails"
 done
 
 for bad in "deploy" "deploy.txt" "dir/deploy.yml" "../deploy.yml" ".hidden.yml" "deploy.yml?x=1" "de ploy.yml" 'a$(id).yml'; do
@@ -180,6 +195,24 @@ else
   fail "a failing API call fails the run (exit $code, calls $(calls), summary: $(cat "$STUB_DIR/summary"))"
 fi
 expect_quiet_about_token "a failing call does not print the token"
+expect_quiet_about_repository "a failing call does not print the repository name, even when gh's error does"
+if grep -q -- "HTTP 404" "$STUB_DIR/summary"; then
+  pass "a failing call reports its HTTP status"
+else
+  fail "a failing call reports its HTTP status (summary: $(cat "$STUB_DIR/summary"))"
+fi
+
+# Nothing sent, with the repository set but the token unset: still no name.
+run_with < <(without DOCS_SITE_DISPATCH_TOKEN)
+expect_quiet_about_repository "a skipped run does not print the repository name"
+
+# A malformed value is the one case that is not a name: it must not be echoed either.
+run_with < <(with DOCS_SITE_REPOSITORY "no-slash-secret-value")
+if [[ "$out" != *"no-slash-secret-value"* ]] && ! grep -q -- "no-slash-secret-value" "$STUB_DIR/summary"; then
+  pass "a malformed repository secret is not echoed"
+else
+  fail "a malformed repository secret is not echoed"
+fi
 
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2
