@@ -1388,6 +1388,7 @@ export type StageName = (typeof CHAIN_STAGES)[number];
 export interface StartOptions {
     readonly metricsPort?: number;
     readonly port?: number;
+    readonly workerMetrics?: WorkerMetrics;
 }
 
 // @public
@@ -1442,6 +1443,7 @@ export function validateEnvironment<Shape extends z.ZodRawShape, Collected exten
 export interface Worker {
     // (undocumented)
     readonly jobs: readonly JobDefinition[];
+    readonly metrics: WorkerMetrics;
     // (undocumented)
     readonly schedules: readonly ScheduleDefinition[];
     start(options?: WorkerStartOptions): Promise<RunningWorker>;
@@ -1539,6 +1541,12 @@ SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }, object>];
+
+// @public
+export interface WorkerMetrics {
+    // (undocumented)
+    readonly kind: "worker-metrics";
+}
 
 // @public (undocumented)
 export interface WorkerStartOptions {

@@ -1,7 +1,7 @@
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import type { Logger } from "../create-server.ts";
 import type { Metrics } from "./metrics.ts";
-import { PROMETHEUS_CONTENT_TYPE } from "./registry.ts";
+import { PROMETHEUS_CONTENT_TYPE, type AttachedRegistry } from "./registry.ts";
 
 // The internal listener of doc 01 section 3: `/metrics` on its own port, never
 // on the public one. It serves nothing else, and nothing scrapes it unless an
@@ -19,10 +19,12 @@ function plain(status: number, body: string, headers: Record<string, string> = {
 
 export async function startMetricsListener(options: {
   readonly metrics: Metrics;
+  /** Registries served in the same exposition, for a process that runs the worker beside the server. */
+  readonly attached?: readonly AttachedRegistry[];
   readonly port: number;
   readonly logger: Logger;
 }): Promise<MetricsListener> {
-  const { metrics, port: requested, logger } = options;
+  const { metrics, attached, port: requested, logger } = options;
 
   const listener: ServerType = createAdaptorServer({
     overrideGlobalObjects: false,
@@ -34,7 +36,7 @@ export async function startMetricsListener(options: {
         return plain(405, "method not allowed\n", { allow: "GET, HEAD" });
       }
       try {
-        const body = await metrics.registry.render();
+        const body = await metrics.registry.render(attached);
         return new Response(request.method === "HEAD" ? null : body, {
           headers: { "cache-control": "no-store", "content-type": PROMETHEUS_CONTENT_TYPE },
         });

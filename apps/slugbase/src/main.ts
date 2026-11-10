@@ -394,20 +394,22 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
 // thing the sides share is the process's budget of host-name lookups (see `composeWithWorkerAdapters`).
 // The server starts first: with MIGRATE_ON_START it migrates and installs the pg-boss schema before `start` resolves,
 // and the worker never migrates, so it has to start after that. The worker opens no metrics listener here, because
-// the one `METRICS_PORT` belongs to the server's; /metrics then reports the server's samples only. A worker that
-// fails to start stops the server again, so a failed start leaves nothing listening.
+// the one `METRICS_PORT` belongs to the server's; that listener serves the worker's samples too, labelled
+// `process="worker"`, from the worker object built before the server starts. A worker that fails to start stops the
+// server again, so a failed start leaves nothing listening.
 async function runServerWithWorker(serverConfig: ServerConfig, workerConfig: WorkerConfig, trap: SignalTrap): Promise<void> {
   const logger = createLogger({ level: serverConfig.LOG_LEVEL });
   const adapters = composeWithWorkerAdapters(serverConfig, workerConfig, logger);
   const server = composeServer(serverConfig, logger, adapters.server);
   const workerWithoutMetrics: WorkerConfig = { ...workerConfig, METRICS_PORT: undefined };
+  const worker = composeWorker(workerWithoutMetrics, logger, adapters.worker);
   await runUntilSignal(
     trap,
     async () => {
-      const runningServer = await server.start();
+      const runningServer = await server.start({ workerMetrics: worker.metrics });
       let runningWorker: RunningWorker;
       try {
-        runningWorker = await composeWorker(workerWithoutMetrics, logger, adapters.worker).start();
+        runningWorker = await worker.start();
       } catch (error) {
         await runningServer.shutdown().catch((cleanup: unknown) => {
           logger.error("Cleanup after a failed start failed", { error: cleanup instanceof Error ? cleanup.name : typeof cleanup });

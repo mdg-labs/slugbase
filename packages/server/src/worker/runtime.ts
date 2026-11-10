@@ -12,7 +12,7 @@ import {
 } from "../create-server.ts";
 import { subscribersOf, type RegisteredSubscriber } from "../events/subscriber.ts";
 import { assertApplicationRole } from "../migrate/role-guard.ts";
-import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
+import { createMetrics, exposeWorkerMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot, type WorkerMetrics } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
 import { createBuiltInModules } from "./built-in.ts";
 import { queueSettings, queueUpdates } from "./queues.ts";
@@ -59,6 +59,11 @@ export interface RunningWorker {
 }
 
 export interface Worker {
+  /**
+   * The worker's metrics. A process that runs the worker beside the server hands them to the server's metrics
+   * listener (`StartOptions.workerMetrics`) instead of giving the worker a listener of its own.
+   */
+  readonly metrics: WorkerMetrics;
   readonly jobs: readonly JobDefinition[];
   readonly schedules: readonly ScheduleDefinition[];
   /**
@@ -146,6 +151,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   }
 
   return {
+    metrics: exposeWorkerMetrics(metrics.registry),
     jobs: composition.jobs,
     schedules: composition.schedules,
 

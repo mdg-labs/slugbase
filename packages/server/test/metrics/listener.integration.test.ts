@@ -1,6 +1,7 @@
 import { createServer as createNetServer, connect, type Server as NetServer } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { createServer, type ModuleContext, type RunningServer, type ServerModule } from "../../src/create-server.ts";
+import { createServer, type ModuleContext, type RunningServer, type ServerModule, type StartOptions } from "../../src/create-server.ts";
+import { createMetrics, exposeWorkerMetrics } from "../../src/metrics/metrics.ts";
 import { adapters, fakeAuthStore, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "../support.ts";
 import { get, sample } from "./support.ts";
 
@@ -78,7 +79,7 @@ afterEach(async () => {
   );
 });
 
-async function start(env: Record<string, string | undefined> = {}, ports: { port?: number; metricsPort?: number } = { port: 0, metricsPort: 0 }) {
+async function start(env: Record<string, string | undefined> = {}, ports: StartOptions = { port: 0, metricsPort: 0 }) {
   const database = fakeDatabase();
   const logger = recordingLogger();
   const held = gate();
@@ -130,6 +131,51 @@ describe("the internal metrics listener", () => {
     expect(response.body).toContain("# TYPE slugbase_http_request_duration_seconds histogram");
     expect(response.body).toContain("# TYPE slugbase_db_tenant_transactions_in_flight gauge");
     expect(response.body).toContain("# TYPE slugbase_rate_limit_rejections_total counter");
+  });
+
+  it("serves the samples of a worker in the same process in one exposition, labelled apart from the server's", async () => {
+    const worker = createMetrics();
+    worker.setPoolSize(5);
+    worker.observeJobQueues(() => Promise.resolve([{ queue: "mail.send", deferred: 0, ready: 3, active: 1, oldestReadySeconds: 2 }]));
+    const { listening } = await start({}, { port: 0, metricsPort: 0, workerMetrics: exposeWorkerMetrics(worker.registry) });
+
+    const body = await scrape(listening.metricsPort ?? 0);
+
+    expect(sample(body, "slugbase_db_pool_size", { process: "worker" })).toBe(5);
+    expect(sample(body, "slugbase_db_tenant_transactions_in_flight", { process: "worker" })).toBe(0);
+    expect(sample(body, "slugbase_job_queue_depth", { queue: "mail.send", state: "ready", process: "worker" })).toBe(3);
+    expect(sample(body, "slugbase_job_queue_oldest_ready_age_seconds", { queue: "mail.send", process: "worker" })).toBe(2);
+    expect(body.match(/^# (HELP|TYPE) slugbase_db_pool_size /gm)).toHaveLength(2);
+    expect(body.match(/^# (HELP|TYPE) slugbase_job_queue_depth /gm)).toHaveLength(2);
+    const lines = body.split("\n").filter((line) => line !== "" && !line.startsWith("#"));
+    expect(new Set(lines.map((line) => line.slice(0, line.lastIndexOf(" ")))).size).toBe(lines.length);
+  });
+
+  it("answers 500 with no partial text, and logs it, when the worker's queue source fails", async () => {
+    const worker = createMetrics();
+    worker.observeJobQueues(() => Promise.reject(new Error("queue source down")));
+    const { listening, logger } = await start({}, { port: 0, metricsPort: 0, workerMetrics: exposeWorkerMetrics(worker.registry) });
+
+    const response = await get(listening.metricsPort ?? 0, "/metrics");
+
+    expect(response.status).toBe(500);
+    expect(response.body).toBe("metrics unavailable\n");
+    expect(logger.entries).toContainEqual({ level: "error", message: "Rendering the metrics failed", fields: { error: "Error" } });
+  });
+
+  it("refuses to start when the worker metrics it is given are not a worker's, and listens on nothing", async () => {
+    const database = fakeDatabase();
+    const server = createServer({
+      config: serverConfig(),
+      adapters: adapters(),
+      modules: [],
+      openApiDocument: documentOf([]),
+      migrations: [],
+      logger: recordingLogger(),
+      database,
+    });
+    await expect(server.start({ port: 0, metricsPort: 0, workerMetrics: { kind: "worker-metrics" } })).rejects.toThrow("workerMetrics must be the metrics of a worker");
+    expect(database.closed.count).toBe(1);
   });
 
   it("answers 404 for anything but /metrics and 405 for another method", async () => {

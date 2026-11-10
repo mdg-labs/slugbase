@@ -238,7 +238,7 @@ What differs from two containers:
 
 - **Migration.** The entrypoint runs `migrate` first, as `slugbase_migrator`, and then starts the process without `DATABASE_MIGRATE_URL`, exactly as for `server`. The one process holds no migrator login.
 - **Connections.** The process holds the pools of both sides: up to 10 connections for the server and 5 for the worker, 15 in these two pools, plus the few small connections each side opens for its own tasks. See [Run SlugBase day to day](operations.md) when you plan the connections of PostgreSQL.
-- **Metrics.** With `METRICS_PORT` set, the process opens one metrics listener, the server's. `/metrics` shows the samples of the server only, and the two job queue series have no samples. [Run SlugBase day to day](operations.md) says what is there.
+- **Metrics.** With `METRICS_PORT` set, the process opens one metrics listener, the server's. `/metrics` shows the samples of the server and, in the same response, those of the worker, which carry the label `process="worker"`. [Run SlugBase day to day](operations.md) says what is there.
 - **Lookups.** The server and the worker share one small budget of simultaneous host-name lookups, so a slow name server can slow both.
 - **Load.** Jobs and requests share one process. Go back to two containers if jobs slow the pages down.
 

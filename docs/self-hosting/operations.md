@@ -64,9 +64,9 @@ Set `METRICS_PORT` in `.env` to a port that is not `PORT`, and the server and th
 
 The metrics hold request counts and durations for each route template and status, rate-limit rejections, the size of the database pool and the transactions in flight, and the depth and the age of the oldest ready job of each queue (`slugbase_job_queue_depth` and `slugbase_job_queue_oldest_ready_age_seconds`). They hold no member data.
 
-In the one-container mode, `server --with-worker` (see [One container or two](install.md#one-container-or-two)), there is one listener, the server's, and it serves the server's samples only. The request, rate-limit and database series are there. The database series describe the server's pool of 10 connections. The two job queue series are listed, but have no samples, because only the worker reads the queues. Watch the jobs in **Admin**, **Overview**, **Background jobs** instead.
+In the one-container mode, `server --with-worker` (see [One container or two](install.md#one-container-or-two)), there is one listener, the server's, and it serves both sides in one response. The server's samples have no `process` label. The worker's samples carry `process="worker"`: the two job queue series, the worker's pool of 5 connections and its transactions in flight. The server's pool series describe its pool of 10 connections. The worker's job queue series appear once the worker has started. If the worker cannot read the queues, the scrape fails with `500` and returns no samples at all.
 
-**Do not expose this port to the internet.** `compose.yml` does not publish it. Scrape it from a container on the same Docker network, such as `slugbase:<METRICS_PORT>` and `slugbase-worker:<METRICS_PORT>`. Never add a rule for `/metrics` to your reverse proxy. See [Put SlugBase Behind a Reverse Proxy](reverse-proxy.md).
+**Do not expose this port to the internet.** `compose.yml` does not publish it. Scrape it from a container on the same Docker network, such as `slugbase:<METRICS_PORT>` and `slugbase-worker:<METRICS_PORT>`. In the one-container mode, scrape `slugbase:<METRICS_PORT>` only. Never add a rule for `/metrics` to your reverse proxy. See [Put SlugBase Behind a Reverse Proxy](reverse-proxy.md).
 
 ## Rotate secrets
 

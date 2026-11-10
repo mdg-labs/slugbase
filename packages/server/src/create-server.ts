@@ -29,7 +29,7 @@ import { invalidSubscriber, registeredSubscriber, type EventSubscriber, type Reg
 import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
 import { ProblemError, responseStage } from "./http/problem.ts";
 import { validation } from "./http/validation.ts";
-import { createMetrics, startMetricsListener, type MetricsListener } from "./metrics/index.ts";
+import { attachWorkerMetrics, createMetrics, startMetricsListener, type MetricsListener, type WorkerMetrics } from "./metrics/index.ts";
 import { assertApplicationRole, runMigrations } from "./migrate/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
@@ -241,6 +241,12 @@ export interface StartOptions {
   readonly port?: number;
   /** Overrides `METRICS_PORT`, which also turns the metrics listener on; 0 picks a free port. */
   readonly metricsPort?: number;
+  /**
+   * The metrics of a worker that runs in this process (`Worker.metrics`). The metrics listener then also serves its samples, in the same
+   * exposition and labelled `process="worker"`, because the one `METRICS_PORT` belongs to the server (doc 01 section 2.1).
+   * They are read at each scrape, so they may belong to a worker that has not started yet.
+   */
+  readonly workerMetrics?: WorkerMetrics;
 }
 
 export interface RunningServer {
@@ -887,7 +893,12 @@ export function createServer(options: CreateServerOptions): Server {
 
       if (metricsRequested !== undefined) {
         try {
-          metricsListener = await startMetricsListener({ metrics, port: metricsRequested, logger });
+          metricsListener = await startMetricsListener({
+            metrics,
+            ...(startOptions.workerMetrics === undefined ? {} : { attached: [attachWorkerMetrics(startOptions.workerMetrics)] }),
+            port: metricsRequested,
+            logger,
+          });
         } catch (error) {
           await (shutdown ??= stop());
           throw error;
