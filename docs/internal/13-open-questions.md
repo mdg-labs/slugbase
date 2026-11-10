@@ -83,7 +83,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q8 | AI suggestions through the OpenAI-compatible adapter; the provider is configuration | Decided (maintainer) |
 | Q9 | One generic SMTP adapter for every deployment | Decided (maintainer) |
 | Q66 | Errors through `ErrorReportPort`; internal `/metrics` endpoint; no metrics stack required | Settled → D27 (maintainer) |
-| Q90 | An AI endpoint on a private address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`, and a plain-`http` endpoint is accepted only on that host; the allowance covers that one origin, on the AI adapter's egress instance only | Decided (default) |
+| Q90 | An AI endpoint on a loopback, private, CGNAT or unique-local address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`, and a plain-`http` endpoint is accepted only on that host; the allowance covers that one origin, on the AI adapter's egress instance only | Decided (default) |
 | Q120 | An OIDC provider on a loopback, private, CGNAT or unique-local address is refused unless the operator names the exact host of its `ISSUER_URL` in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`; the allowance covers that issuer's origin, on the OIDC adapter's egress instance only, and extends Q90 | Decided (maintainer) |
 
 ### Infrastructure and operations
