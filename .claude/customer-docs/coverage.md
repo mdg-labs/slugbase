@@ -8,12 +8,12 @@
 | `/bookmarks` | docs/user/bookmarks.mdx | current | e0010e65 | |
 | bookmark modal (`?bookmark`, `?new`) | docs/user/add-and-edit-bookmarks.mdx | current | e0010e65 | overlay |
 | share dialog | docs/user/sharing.mdx | missing | — | overlay |
-| `/folders` | docs/user/folders.mdx | missing | — | |
-| `/tags` | docs/user/tags.mdx | missing | — | |
-| `/forwarding` | docs/user/forwarding.mdx | missing | — | |
-| `/go/$slug`, `/go/$` | docs/user/go.mdx | missing | — | |
-| command palette | docs/user/command-palette.mdx | missing | — | overlay |
-| keyboard shortcut sheet | docs/user/keyboard-shortcuts.mdx | missing | — | overlay |
+| `/folders` | docs/user/folders.mdx | current | e0010e65 | |
+| `/tags` | docs/user/tags.mdx | current | e0010e65 | |
+| `/forwarding` | docs/user/forwarding.mdx | current | e0010e65 | |
+| `/go/$slug`, `/go/$` | docs/user/go.mdx | current | e0010e65 | |
+| command palette | docs/user/command-palette.mdx | current | e0010e65 | overlay |
+| keyboard shortcut sheet | docs/user/keyboard-shortcuts.mdx | current | e0010e65 | overlay |
 | workspace switcher, create-workspace dialog | docs/user/workspace/switching-workspaces.mdx | missing | — | overlay |
 | `/settings/account` | docs/user/account/profile.mdx | missing | — | |
 | `/settings/account/security` | docs/user/account/security.mdx | missing | — | |

@@ -1,0 +1,90 @@
+---
+title: "Go Pages"
+description: "What you see when a slug matches several bookmarks, or none."
+edition: both
+order: 90
+---
+
+When you go to `go/mail`, SlugBase usually forwards you straight to the bookmark. These pages appear when it cannot, because the slug matches several bookmarks, or none.
+
+<Screenshot alt="The page go/mail matches 2 bookmarks with Always use this for mail" />
+
+## Prerequisites
+
+- You are signed in. If you are not, SlugBase asks you to sign in first and brings you back to the same slug.
+- You opened the slug in the workspace you have open.
+
+## How SlugBase decides
+
+SlugBase looks at the bookmarks in your open workspace that have this slug and forwarding on, and that you can read: your own, and those shared with you. Then:
+
+1. If you remembered a choice for this slug and that bookmark still fits, it opens that one.
+2. Otherwise, if you own a bookmark with this slug, it opens yours.
+3. Otherwise, if exactly one bookmark shared with you has it, it opens that one.
+4. If several shared bookmarks have it, you see the page that asks which one you mean.
+5. If none has it, you see the page that says so.
+
+Nothing is forwarded to another workspace on its own.
+
+## Choose between several bookmarks
+
+The page says **go/mail matches 2 bookmarks**: "Several bookmarks shared with you have this slug. Choose the one you mean."
+
+1. Read each candidate. It shows the title, the host it opens, who owns it and how it is shared: **directly**, **through a team** or **through a shared folder**.
+2. Optional: select **Always use this for** and the slug to remember your choice.
+3. Choose the bookmark you mean.
+
+**Result:** SlugBase opens it. The page briefly says **Opening** and the title. If you remembered the choice, the slug opens it from now on.
+
+Choose **Manage remembered choices →** to open **Forwarding**, where you can remove a remembered choice.
+
+The same choice appears in the command palette when you use it in `go` mode.
+
+## When no bookmark has the slug
+
+The page says: "No bookmark has the slug mail in" and the name of the workspace, or **this workspace**. It adds: "Check the spelling, or create a bookmark with this slug yourself."
+
+- Choose **Create a bookmark with this slug** to open the bookmark dialog with the slug filled in.
+- If the same slug works in another of your workspaces, a button says **Found in:** and the workspace's name, then "switch and continue". Choose it to switch workspace and carry on.
+- Choose **Go to Home** to leave.
+
+## A path or a query after the slug
+
+SlugBase does not pass anything after the slug on to the destination. An address such as `go/mail/inbox`, or one with a query after the slug, is not a different address. It shows **This page doesn't exist**.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Always use this for | Remembers your choice for this slug, in this workspace. | No |
+| Manage remembered choices → | Opens **Forwarding**. | No |
+| Create a bookmark with this slug | Opens the bookmark dialog with the slug filled in. | No |
+| Found in | Switches to another workspace where the slug exists. | No |
+
+## Troubleshooting
+
+### The page says "This slug could not be looked up"
+
+Check your connection and choose **Try again**.
+
+### The page says "That bookmark could not be opened"
+
+The bookmarks with this slug may have changed. SlugBase says to load them again and choose once more.
+
+### The page says "The bookmark could not be opened"
+
+Try again. If this continues, the bookmark may have changed.
+
+### A slug I know exists is not found
+
+You may be in another workspace, or its forwarding is off. Switch workspace, or turn forwarding on under **Your slugs** on **Forwarding**.
+
+### The page asks me to sign in
+
+You are signed out. Sign in, and SlugBase brings you back to the same slug. See [Sign In](access/sign-in.mdx).
+
+## Related pages
+
+- [Forwarding](forwarding.mdx)
+- [Command Palette](command-palette.mdx)
+- [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx)

@@ -1,0 +1,101 @@
+---
+title: "Keyboard Shortcuts"
+description: "Every keyboard shortcut in SlugBase, and how to turn off the single-key ones."
+edition: both
+order: 110
+---
+
+SlugBase works from the keyboard. This page lists every shortcut. Press `?` in the app to open the same list as **Keyboard shortcuts**.
+
+<Screenshot alt="The Keyboard shortcuts sheet with the two groups of shortcuts" />
+
+On macOS, `⌘` is the Command key. Elsewhere, use `Ctrl`.
+
+## Prerequisites
+
+- You are signed in.
+
+## When shortcuts work
+
+The sheet says: "Single-key shortcuts work anywhere except in a text field or inside an open dialog, menu or list box."
+
+- A shortcut that holds `⌘` or `Ctrl` always works, including in a text field.
+- A single-key shortcut is quiet while you type, and while a dialog is open.
+
+## Anywhere in the app
+
+| Keys | What they do |
+| ---- | ------------ |
+| `⌘ K` or `Ctrl K` | Open the command palette. |
+| `/` | Open the command palette, on **Bookmarks**, **Folders** and **Tags**. |
+| `C` | New bookmark. |
+| `G` then `H` | Go to Home. |
+| `G` then `B` | Go to Bookmarks. |
+| `G` then `F` | Go to Folders. |
+| `G` then `T` | Go to Tags. |
+| `G` then `W` | Go to Forwarding. |
+| `N` | New folder, on **Folders**. |
+| `?` | Show this list. |
+
+For `G` then a letter, press `G`, release it, and press the second key within a moment.
+
+## In the bookmark list
+
+These work on **Bookmarks**.
+
+| Keys | What they do |
+| ---- | ------------ |
+| `J` or `K`, `↑` or `↓` | Move focus to the next or previous bookmark. |
+| `Enter` | Open the focused bookmark. |
+| `⌘ Enter` or `Ctrl Enter` | Open the focused bookmark in a new tab. |
+| `E` | Edit the focused bookmark. |
+| `P` | Pin or unpin the focused bookmark. |
+| `X` | Select or deselect the focused bookmark. |
+| `⇧ A` | Select every loaded bookmark. |
+| `V` | Switch between grid and table. |
+| `Esc` | Close the overlay that has focus, then clear the selection, then clear the filters. One step for each press. |
+
+`E` and `P` act on your own bookmarks only. A bookmark shared with you can be opened, not changed.
+
+## In the command palette
+
+The palette has its own keys: the arrow keys, Enter, `⌘ Enter` or `Ctrl Enter` for a new tab, `⌥ Enter` or `Alt Enter` to edit, and Esc. See [Command Palette](command-palette.mdx).
+
+## Turn off single-key shortcuts
+
+Turn them off if keys are triggered by accident. Shortcuts that hold `⌘` or `Ctrl` keep working.
+
+1. Open the account menu, then **Preferences**.
+2. Under **Keyboard**, turn off **Single-key shortcuts**.
+
+**Result:** `C`, `N`, `G` then a letter, `?`, `/` and the keys of the bookmark list that do not hold `⌘` or `Ctrl` stop acting. `⌘ K` or `Ctrl K` still opens the command palette. Turn the switch on again to bring them back.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Single-key shortcuts | In **Preferences**, under **Keyboard**. "Act with one key, for example C to create a bookmark." Turn it off if keys are triggered by accident. | No |
+
+## Troubleshooting
+
+### A shortcut does nothing
+
+Check that no text field has focus and no dialog is open. Check that **Single-key shortcuts** is on in **Preferences**.
+
+### `G` then a letter does not go anywhere
+
+Press the second key right after `G`. If you wait too long, or press another key in between, the sequence ends.
+
+### `N` does nothing
+
+`N` creates a folder on the **Folders** page only. Press `G` then `F` to get there.
+
+### `/` does nothing
+
+`/` opens the palette on **Bookmarks**, **Folders** and **Tags** only. Use `⌘ K` or `Ctrl K` on other pages.
+
+## Related pages
+
+- [Command Palette](command-palette.mdx)
+- [Bookmarks](bookmarks.mdx)
+- [Folders](folders.mdx)
