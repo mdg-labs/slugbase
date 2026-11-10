@@ -101,6 +101,19 @@ describe("the two messages", () => {
   });
 });
 
+describe("the turn-off message", () => {
+  it("says signing in no longer asks for a code but for the password or the sign-in provider, in both languages", async () => {
+    const english = (await render("mfaDisabled", "en")).rendered.text;
+    expect(english).toContain("Signing in no longer asks for a code: you sign in with your password or through your sign-in provider");
+    expect(english).toContain("Your backup codes no longer work");
+    expect(english).not.toContain("password only");
+    const german = (await render("mfaDisabled", "de")).rendered.text;
+    expect(german).toContain("fragt nicht mehr nach einem Code: Du meldest dich mit deinem Passwort oder über deinen Anmeldeanbieter an");
+    expect(german).toContain("Deine Backup-Codes funktionieren nicht mehr");
+    expect(german).not.toContain("nur noch nach deinem Passwort");
+  });
+});
+
 describe("the reset message", () => {
   it("says an administrator did it and that signing in no longer asks for a code but for the password or the sign-in provider, in both languages", async () => {
     const english = (await render("mfaReset", "en")).rendered.text;

@@ -22,7 +22,7 @@
     "subject": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet",
     "greeting": "Hallo {name},",
     "greetingAnonymous": "Hallo,",
-    "body": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet. Die Anmeldung fragt jetzt nur noch nach deinem Passwort, und deine Backup-Codes funktionieren nicht mehr.",
+    "body": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet. Die Anmeldung fragt nicht mehr nach einem Code: Du meldest dich mit deinem Passwort oder über deinen Anmeldeanbieter an. Deine Backup-Codes funktionieren nicht mehr.",
     "notYou": "Falls du diese Änderung nicht vorgenommen hast, wende dich sofort an die Administration dieser {appName}-Instanz.",
     "action": "Kontosicherheit prüfen"
   },
