@@ -229,7 +229,9 @@ const LOOKUP_RESERVE = 1;
 // requests at once and queues the rest in order: a long provider list or a burst of sign-ins is served in turns
 // and its own requests do not refuse one another. The instance keeps a lookup's slot until the lookup finishes,
 // even after the request that started it timed out, so while a resolver hangs a later request can still be
-// refused. The instance carries no allowance, as the shared one does not.
+// refused. The instance carries the operator's allowance for a provider on a private address (Q120) and nothing else: the
+// issuer origin of each provider whose `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` the configuration accepted, so a provider that
+// names no host, the shared instance and the AI instance get no exemption from it.
 export function composeIdentity(
   config: ServerConfig | WorkerConfig,
   logger: Logger,
@@ -240,8 +242,14 @@ export function composeIdentity(
   if (providers.length === 0) {
     return unconfigured().identity;
   }
-  logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug) });
-  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV, lookups: lookups.share(LOOKUP_RESERVE) });
+  const privateOrigins = "OIDC_PRIVATE_ORIGINS" in config ? config.OIDC_PRIVATE_ORIGINS : [];
+  const egress = new HttpEgress({
+    ...egressOptions,
+    nodeEnv: config.NODE_ENV,
+    lookups: lookups.share(LOOKUP_RESERVE),
+    ...(privateOrigins.length === 0 ? {} : { privateOrigin: privateOrigins }),
+  });
+  logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug), privateProviders: privateOrigins.length });
   return createOidcIdentity({ providers, egress, logger, maxConcurrentRequests: LOOKUP_RESERVE });
 }
 

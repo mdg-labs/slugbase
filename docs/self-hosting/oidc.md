@@ -10,7 +10,7 @@ SlugBase can let people sign in with an identity provider that you run or trust,
 ## Prerequisites
 
 - A `compose.yml` installation that runs over HTTPS. See [Put SlugBase Behind a Reverse Proxy](reverse-proxy.md).
-- An OIDC provider that you can register an application at, and that your SlugBase server can reach on a public address. See [Where the provider may be](#where-the-provider-may-be).
+- An OIDC provider that you can register an application at, and that your SlugBase server can reach, on a public address or on a private one that you name. See [Where the provider may be](#where-the-provider-may-be).
 - Docker Compose 2.24 or later, which `compose.yml` needs to read the optional `.env.oidc` file.
 
 ## What the provider must supply
@@ -69,6 +69,7 @@ docker compose up -d
 | `OIDC_<SLUG>_ENABLED` | No | `true` or `false`. The default is `true`. Set `false` to switch a provider off and keep its keys. |
 | `OIDC_<SLUG>_AUTO_CREATE` | No | `true` or `false`. The default is `false`. See [Auto-create](#auto-create-accounts). |
 | `OIDC_<SLUG>_ALLOWED_DOMAINS` | No | Comma-separated email domains, such as `example.com,example.org`. They limit which accounts auto-create may make. The default is any domain. |
+| `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` | No | The host of this provider's `ISSUER_URL`, when the provider is on a private address. See [Where the provider may be](#where-the-provider-may-be). The default is none: the provider must be on a public address. |
 
 A provider exists as soon as any of its keys has a value. An enabled provider that lacks `ISSUER_URL`, `CLIENT_ID` or `CLIENT_SECRET` stops SlugBase from starting, and the log names the missing key. It never prints a value.
 
@@ -80,9 +81,24 @@ You can configure as many providers as you want, each with its own `<SLUG>`.
 
 SlugBase fetches the discovery document, the signing keys and the token endpoint through its one guarded path for outbound requests. That path refuses an address that is not public: loopback, private (RFC 1918), shared CGNAT (such as the networks Tailscale uses), unique-local and link-local addresses. It also refuses a redirect from `https` to plain `http`.
 
-For an OIDC provider there is **no setting that allows a private address**. `AI_ALLOWED_PRIVATE_HOST`, described in [Environment Settings](environment.md), covers the AI endpoint and nothing else. A provider whose issuer host name resolves to a private address, or whose discovery document points its token endpoint or key set at one, is left unavailable. The log then shows `discovery_failed` or `keys_failed` for it.
+A provider on a public address needs nothing more. If your provider runs on a private network, or its public name resolves to a private address inside your network, name its host in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`. For example, a Keycloak server next to SlugBase:
 
-If your provider runs on a private network, give it a public address that the SlugBase server can reach, with a host name and a certificate for it. Only the server fetches these addresses. Your members' browsers need to reach the provider's authorization page only, and they may do that on your private network.
+```sh
+OIDC_COMPANY_SSO_ISSUER_URL=https://sso.internal.example/realms/main
+OIDC_COMPANY_SSO_ALLOWED_PRIVATE_HOST=sso.internal.example
+```
+
+The key follows these rules:
+
+- It is one bare host name or IP address, with no scheme, port, path, wildcard or range.
+- It must be the host of the same provider's `OIDC_<SLUG>_ISSUER_URL`. If it is not, SlugBase does not start and names the key. Each provider that is on a private address needs its own key.
+- It covers one origin: the scheme, host and port of that issuer. The same host on another port, or another host on your network, is an ordinary address and is refused when it is not public.
+- It lifts the refusal only for loopback, private (RFC 1918), CGNAT and unique-local addresses. Link-local addresses stay refused, including the one that cloud providers use for instance metadata, and so do unspecified, multicast and reserved ones.
+- The issuer still uses `https` in production, with a certificate that the SlugBase server trusts. SlugBase has no setting that skips certificate checks. If your provider uses a certificate from your own authority, make the server trust that authority.
+
+The discovery document is read from the issuer's origin, and the key set and the token endpoint that it names are fetched too. They work when they are on that origin. If the document names a key set or a token endpoint on another private host, or on a link-local address, SlugBase refuses the request and leaves the provider unavailable. The log then shows `keys_failed` for it, or the code exchange fails. A redirect from the issuer to another private host is refused in the same way. If your provider serves its endpoints on another private host, that host is not covered by the key, and the provider does not work until the endpoints are on the issuer's origin or on a public address.
+
+Without the key, a provider whose issuer host name resolves to a private address is left unavailable. The log then shows `discovery_failed` or `keys_failed` for it. Only the server fetches these addresses. Your members' browsers need to reach the provider's authorization page only, and they may do that on your private network.
 
 ## How accounts are linked and created
 

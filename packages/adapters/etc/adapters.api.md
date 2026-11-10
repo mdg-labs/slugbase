@@ -41,7 +41,7 @@ export interface BucketLimit {
 export interface CreateEgressOptions {
     readonly lookups?: LookupShare;
     readonly nodeEnv: string;
-    readonly privateOrigin?: string;
+    readonly privateOrigin?: string | readonly string[];
     readonly resolve?: EgressResolver;
     readonly testOnly?: {
         readonly allowNonPublicAddresses?: boolean;

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { createServer, type Server, type Socket } from "node:net";
-import { EgressError, IdentityError } from "@slugbase/core";
+import { AiSuggestError, EgressBlocked, EgressError, IdentityError } from "@slugbase/core";
 import { loadConfig, type Logger } from "@slugbase/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { composeAdapters } from "../src/main.ts";
@@ -136,5 +136,109 @@ describe("OIDC sign-in beside the lookups a member can start", () => {
     const exchanges = provider.requests.filter((request) => request.method === "POST" && request.target === "/token");
     expect(exchanges).toHaveLength(1);
     expect(exchanges[0]?.body).toContain("code=code-1");
+  });
+});
+
+// Q120: a provider whose issuer is on a private address works when the operator names its host, on the identity instance alone. The
+// resolver answers loopback for every name here and the options carry no allowance of their own, so a server is reached only through
+// the origin the composition names for the identity instance.
+describe("a provider on a private address", () => {
+  const onLoopback = {
+    resolve: (hostname: string): Promise<readonly string[]> =>
+      hostname.endsWith(".example.test") ? Promise.resolve(["127.0.0.1"]) : new Promise<readonly string[]>(() => undefined),
+  };
+
+  async function twoProviders(named: boolean) {
+    const lan = await startProvider();
+    const plain = await startProvider();
+    providers.push(lan, plain);
+    const lanOrigin = `http://idp.example.test:${String(lan.port)}`;
+    const config = loadConfig("server", {
+      ...environment,
+      OIDC_LAN_CLIENT_ID: "client-id-qx92",
+      OIDC_LAN_CLIENT_SECRET: "client-secret-qx93",
+      OIDC_LAN_ISSUER_URL: lanOrigin,
+      ...(named ? { OIDC_LAN_ALLOWED_PRIVATE_HOST: "idp.example.test" } : {}),
+      OIDC_PLAIN_CLIENT_ID: "client-id-qx94",
+      OIDC_PLAIN_CLIENT_SECRET: "client-secret-qx95",
+      OIDC_PLAIN_ISSUER_URL: `http://other.example.test:${String(plain.port)}`,
+    }).config;
+    return { lan, plain, lanOrigin, config };
+  }
+
+  it("lists the provider that names its host and leaves out the one that does not, which sees no connection", async () => {
+    const { lan, plain, config } = await twoProviders(true);
+    const { identity } = composeAdapters(config, logger, onLoopback);
+    expect((await identity.listProviders()).map((info) => info.id)).toEqual(["lan"]);
+    expect(lan.requests.map((request) => request.target)).toEqual(["/.well-known/openid-configuration", "/keys"]);
+    expect(plain.requests).toEqual([]);
+
+    const begun = await identity.begin({ providerId: "lan", redirectUri: REDIRECT, state: "state-1", nonce: "nonce-1", codeChallenge: "challenge-1" });
+    expect(new URL(begun.authorizationUrl).pathname).toBe("/authorize");
+    await expect(
+      identity.complete({ providerId: "lan", redirectUri: REDIRECT, code: "code-1", nonce: "nonce-1", codeVerifier: "verifier-1" }),
+    ).rejects.toMatchObject({ reason: "exchange_failed" });
+    expect(lan.requests.filter((request) => request.target === "/token")).toHaveLength(1);
+  });
+
+  it("leaves the provider out when the operator names no host", async () => {
+    const { lan, config } = await twoProviders(false);
+    expect(config.OIDC_PRIVATE_ORIGINS).toEqual([]);
+    const { identity } = composeAdapters(config, logger, onLoopback);
+    expect(await identity.listProviders()).toEqual([]);
+    expect(lan.requests).toEqual([]);
+  });
+
+  it("gives the shared egress instance no exemption for that origin", async () => {
+    const { lan, lanOrigin, config } = await twoProviders(true);
+    expect(config.OIDC_PRIVATE_ORIGINS).toEqual([lanOrigin]);
+    const { egress, identity } = composeAdapters(config, logger, onLoopback);
+    expect((await identity.listProviders()).map((info) => info.id)).toEqual(["lan"]);
+    const before = lan.requests.length;
+    const shared = await egress.request({ url: `${lanOrigin}/`, timeoutMs: 1_000, maxBytes: 100 }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(shared).toBeInstanceOf(EgressBlocked);
+    expect(lan.requests).toHaveLength(before);
+  });
+
+  // An https AI endpoint on the very origin a provider names: the AI instance takes its allowance from AI_ALLOWED_PRIVATE_HOST alone,
+  // so it refuses the address before any connection is made.
+  it("gives the AI instance no exemption for that origin", async () => {
+    const lan = await startProvider();
+    providers.push(lan);
+    const origin = `https://idp.example.test:${String(lan.port)}`;
+    const { ai } = composeAdapters(
+      loadConfig("server", {
+        ...environment,
+        OIDC_LAN_CLIENT_ID: "client-id-qx92",
+        OIDC_LAN_CLIENT_SECRET: "client-secret-qx93",
+        OIDC_LAN_ISSUER_URL: origin,
+        OIDC_LAN_ALLOWED_PRIVATE_HOST: "idp.example.test",
+        AI_BASE_URL: `${origin}/v1`,
+        AI_MODEL: "small-model",
+        AI_PROVIDER_NAME: "Example AI",
+      }).config,
+      logger,
+      onLoopback,
+    );
+    const suggestion = await ai.suggest({ url: "https://example.com/", language: "en", tags: [] }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(suggestion).toBeInstanceOf(AiSuggestError);
+    expect((suggestion as AiSuggestError).cause).toBeInstanceOf(EgressBlocked);
+    expect(lan.requests).toEqual([]);
+  });
+
+  it("exempts no other origin of the same host", async () => {
+    const { lan, config } = await twoProviders(true);
+    const { identity } = composeAdapters(
+      { ...config, OIDC_PROVIDERS: config.OIDC_PROVIDERS.map((p) => (p.slug === "plain" ? { ...p, issuerUrl: `http://idp.example.test:${String(lan.port + 1)}` } : p)) },
+      logger,
+      onLoopback,
+    );
+    expect((await identity.listProviders()).map((info) => info.id)).toEqual(["lan"]);
   });
 });

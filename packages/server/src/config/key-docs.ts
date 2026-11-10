@@ -342,6 +342,12 @@ const OIDC_DOCS = {
     description: "The email domains an automatically created account may have.",
     defaultText: "Any domain",
   },
+  ALLOWED_PRIVATE_HOST: {
+    type: { kind: "text", label: "one bare host" },
+    description:
+      "The host of `OIDC_<SLUG>_ISSUER_URL`, when the provider is on a private address. SlugBase then reaches that one origin, and no other, on a loopback, private, CGNAT or unique-local address. It has no scheme, port, path, wildcard or range, and the issuer still uses `https` in production.",
+    defaultText: "None: the provider must be on a public address",
+  },
 } as const satisfies Record<(typeof OIDC_REQUIRED_FIELDS)[number] | (typeof OIDC_OPTIONAL_FIELDS)[number], Omit<OidcKeyDoc, "field" | "required">>;
 
 /** The `OIDC_<SLUG>_*` keys in the order the page lists them: the required ones first. */

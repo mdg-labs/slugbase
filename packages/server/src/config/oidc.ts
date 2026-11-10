@@ -1,6 +1,7 @@
 import type { IdentityProviderConfig } from "@slugbase/core";
 import { z } from "zod";
 import { envBoolean } from "./env-boolean.ts";
+import { bareHost } from "./fields.ts";
 import { envFragment, type EnvironmentVariables, type RefineContext } from "./fragment.ts";
 
 // The OIDC providers of the operator (doc 02 section 2.8). Each is configured by `OIDC_<SLUG>_*` keys,
@@ -10,7 +11,7 @@ import { envFragment, type EnvironmentVariables, type RefineContext } from "./fr
 // refuses the start, naming the key. Messages name keys only, never a value (T7).
 
 export const OIDC_REQUIRED_FIELDS = ["CLIENT_ID", "CLIENT_SECRET", "ISSUER_URL"] as const;
-export const OIDC_OPTIONAL_FIELDS = ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS"] as const;
+export const OIDC_OPTIONAL_FIELDS = ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS", "ALLOWED_PRIVATE_HOST"] as const;
 const FIELDS: readonly string[] = [...OIDC_REQUIRED_FIELDS, ...OIDC_OPTIONAL_FIELDS];
 
 // <SLUG> is upper-case letters and digits in groups separated by single underscores.
@@ -91,7 +92,29 @@ const domains = z
   .transform((value) => value.split(",").map((domain) => domain.trim().toLowerCase()))
   .refine((list) => list.every((domain) => DOMAIN.test(domain)), { error: "must be comma-separated email domains such as example.com" });
 
-function provider(slug: string, raw: RawProvider, context: RefineContext): IdentityProviderConfig | undefined {
+/** An enabled provider and, when the operator named its issuer host as allowed on a private address, the origin of its issuer (Q120). */
+interface ParsedProvider {
+  readonly config: IdentityProviderConfig;
+  readonly privateOrigin?: string;
+}
+
+// `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` is one bare host that must be the host of the same provider's issuer, so a changed
+// `ISSUER_URL` never keeps an allowance meant for the old host. The issuer's origin, not the host alone, is what the egress
+// adapter exempts.
+function privateOrigin(key: string, raw: RawProvider, issuer: string | undefined, context: RefineContext): string | undefined {
+  const host = check(key, bareHost().optional(), raw.get("ALLOWED_PRIVATE_HOST"), context);
+  if (host === undefined || issuer === undefined) {
+    return undefined;
+  }
+  const url = new URL(issuer);
+  if (url.hostname !== host) {
+    context.issue(key, "must be the host of the provider's ISSUER_URL");
+    return undefined;
+  }
+  return url.origin;
+}
+
+function provider(slug: string, raw: RawProvider, context: RefineContext): ParsedProvider | undefined {
   const key = (field: string): string => `OIDC_${slug}_${field}`;
   const enabled = check(key("ENABLED"), envBoolean().default(true), raw.get("ENABLED"), context);
   if (enabled !== true) {
@@ -108,6 +131,8 @@ function provider(slug: string, raw: RawProvider, context: RefineContext): Ident
   const scopeList = check(key("SCOPES"), scopes.default([...DEFAULT_OIDC_SCOPES]), raw.get("SCOPES"), context);
   const autoCreate = check(key("AUTO_CREATE"), envBoolean().default(false), raw.get("AUTO_CREATE"), context);
   const allowedDomains = check(key("ALLOWED_DOMAINS"), domains.default([]), raw.get("ALLOWED_DOMAINS"), context);
+  const allowedOrigin = privateOrigin(key("ALLOWED_PRIVATE_HOST"), raw, issuer, context);
+  const hostRefused = raw.has("ALLOWED_PRIVATE_HOST") && allowedOrigin === undefined;
   if (
     missing.length > 0 ||
     clientId === undefined ||
@@ -115,41 +140,58 @@ function provider(slug: string, raw: RawProvider, context: RefineContext): Ident
     issuer === undefined ||
     scopeList === undefined ||
     autoCreate === undefined ||
-    allowedDomains === undefined
+    allowedDomains === undefined ||
+    hostRefused
   ) {
     return undefined;
   }
   const publicSlug = slug.toLowerCase().replaceAll("_", "-");
   return {
-    slug: publicSlug,
-    name: name ?? publicSlug,
-    clientId,
-    clientSecret,
-    issuerUrl: issuer,
-    scopes: scopeList,
-    autoCreate,
-    allowedDomains,
+    config: {
+      slug: publicSlug,
+      name: name ?? publicSlug,
+      clientId,
+      clientSecret,
+      issuerUrl: issuer,
+      scopes: scopeList,
+      autoCreate,
+      allowedDomains,
+    },
+    ...(allowedOrigin === undefined ? {} : { privateOrigin: allowedOrigin }),
   };
 }
 
-/** Every enabled provider the `OIDC_<SLUG>_*` keys of `env` configure, in slug order; problems go to `context`. */
-export function parseOidcProviders(env: EnvironmentVariables, context: RefineContext): readonly IdentityProviderConfig[] {
+function parseProviders(env: EnvironmentVariables, context: RefineContext): readonly ParsedProvider[] {
   return [...group(env)]
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .flatMap(([slug, raw]) => {
       const parsed = provider(slug, raw, context);
       return parsed === undefined ? [] : [parsed];
     })
-    .sort((left, right) => (left.slug < right.slug ? -1 : left.slug > right.slug ? 1 : 0));
+    .sort((left, right) => (left.config.slug < right.config.slug ? -1 : left.config.slug > right.config.slug ? 1 : 0));
+}
+
+/** Every enabled provider the `OIDC_<SLUG>_*` keys of `env` configure, in slug order; problems go to `context`. */
+export function parseOidcProviders(env: EnvironmentVariables, context: RefineContext): readonly IdentityProviderConfig[] {
+  return parseProviders(env, context).map(({ config }) => config);
 }
 
 /**
  * The OIDC providers (doc 02 section 2.8), for the server. No key set means no provider and the sign-in
  * page offers none; the sign-in handshake is served by the server alone, so the worker does not read them.
+ * `OIDC_PRIVATE_ORIGINS` holds the issuer origin of each provider whose `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` the
+ * configuration accepted (Q120), which the composition hands to the OIDC adapter's egress instance and to nothing else.
  */
 export const oidcFragment = envFragment({
   shape: {},
-  collect: (env, context): { readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[] } => ({
-    OIDC_PROVIDERS: parseOidcProviders(env, context),
-  }),
+  collect: (
+    env,
+    context,
+  ): { readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[]; readonly OIDC_PRIVATE_ORIGINS: readonly string[] } => {
+    const parsed = parseProviders(env, context);
+    return {
+      OIDC_PROVIDERS: parsed.map(({ config }) => config),
+      OIDC_PRIVATE_ORIGINS: [...new Set(parsed.flatMap(({ privateOrigin: origin }) => (origin === undefined ? [] : [origin])))],
+    };
+  },
 });

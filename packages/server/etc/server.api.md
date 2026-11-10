@@ -409,6 +409,7 @@ export const envSchemas: {
         AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string | undefined, string>> & z.ZodType<string, string, z.core.$ZodTypeInternals<string, string>>>, unknown>;
     } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object & {
         readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
+        readonly OIDC_PRIVATE_ORIGINS: readonly string[];
     }>;
     readonly worker: EnvSchema<{
         NODE_ENV: z.ZodEnum<{
@@ -753,7 +754,7 @@ export class NotIdempotentError extends Error {
 }
 
 // @public (undocumented)
-export const OIDC_OPTIONAL_FIELDS: readonly ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS"];
+export const OIDC_OPTIONAL_FIELDS: readonly ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS", "ALLOWED_PRIVATE_HOST"];
 
 // @public (undocumented)
 export const OIDC_REQUIRED_FIELDS: readonly ["CLIENT_ID", "CLIENT_SECRET", "ISSUER_URL"];
@@ -761,6 +762,7 @@ export const OIDC_REQUIRED_FIELDS: readonly ["CLIENT_ID", "CLIENT_SECRET", "ISSU
 // @public
 export const oidcFragment: EnvFragment<    {}, {
 readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
+readonly OIDC_PRIVATE_ORIGINS: readonly string[];
 }>;
 
 // @public
@@ -1248,6 +1250,7 @@ export const serverEnvSchema: EnvSchema<{
     AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string | undefined, string>> & z.ZodType<string, string, z.core.$ZodTypeInternals<string, string>>>, unknown>;
 } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object & {
     readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
+    readonly OIDC_PRIVATE_ORIGINS: readonly string[];
 }>;
 
 // @public
@@ -1313,6 +1316,7 @@ SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }, object>, EnvFragment<    {}, {
 readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
+readonly OIDC_PRIVATE_ORIGINS: readonly string[];
 }>, EnvFragment<    {
 AI_BASE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>, unknown>;
 AI_API_KEY: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;

@@ -195,3 +195,118 @@ describe("the OIDC_<SLUG>_* keys", () => {
     expect(config.OIDC_PROVIDERS).toEqual([]);
   });
 });
+
+// Q120: an operator names, per provider, the host of its issuer when the provider is on a private address.
+describe("OIDC_<SLUG>_ALLOWED_PRIVATE_HOST", () => {
+  const LAN = { ...GOOGLE, OIDC_GOOGLE_ISSUER_URL: "https://idp.lan:8443/realms/main" };
+  const keysOf = (overrides: Record<string, string | undefined>): string[] => issues(overrides).map((issue) => issue.key).sort();
+
+  it("leaves the origins empty when no provider names a host, and does not put the host into the provider", () => {
+    const { config } = loadConfig("server", productionEnv(GOOGLE));
+    expect(config.OIDC_PRIVATE_ORIGINS).toEqual([]);
+    const named = loadConfig("server", productionEnv({ ...LAN, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan" })).config;
+    expect(named.OIDC_PROVIDERS[0]).not.toHaveProperty("allowedPrivateHost");
+  });
+
+  it("yields the origin of the issuer of the provider that names its host, and of no other provider", () => {
+    const { config } = loadConfig(
+      "server",
+      productionEnv({
+        ...LAN,
+        OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan",
+        OIDC_CORP_CLIENT_ID: "id-2",
+        OIDC_CORP_CLIENT_SECRET: "secret-2",
+        OIDC_CORP_ISSUER_URL: "https://sso.lan/realms/main",
+        OIDC_OTHER_CLIENT_ID: "id-3",
+        OIDC_OTHER_CLIENT_SECRET: "secret-3",
+        OIDC_OTHER_ISSUER_URL: "https://sso.example.com",
+        OIDC_OTHER_ALLOWED_PRIVATE_HOST: "sso.example.com",
+      }),
+    );
+    expect(config.OIDC_PRIVATE_ORIGINS).toEqual(["https://idp.lan:8443", "https://sso.example.com"]);
+  });
+
+  it("treats an empty value as unset", () => {
+    expect(loadConfig("server", productionEnv({ ...LAN, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "" })).config.OIDC_PRIVATE_ORIGINS).toEqual([]);
+  });
+
+  it("gives a disabled provider no origin", () => {
+    const { config } = loadConfig("server", productionEnv({ ...LAN, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan", OIDC_GOOGLE_ENABLED: "false" }));
+    expect(config.OIDC_PRIVATE_ORIGINS).toEqual([]);
+  });
+
+  it("is not part of the worker", () => {
+    expect(loadConfig("worker", productionEnv({ ...LAN, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan" })).config).not.toHaveProperty("OIDC_PRIVATE_ORIGINS");
+  });
+
+  it.each([
+    ["a scheme", "https://idp.lan"],
+    ["a port", "idp.lan:8443"],
+    ["a path", "idp.lan/realms/main"],
+    ["userinfo", "user@idp.lan"],
+    ["a wildcard", "*.lan"],
+    ["a comma", "idp.lan,other.lan"],
+    ["a network range", "10.0.0.0/8"],
+    ["a space", "idp.lan other.lan"],
+    ["a percent escape", "idp%2elan"],
+    ["a malformed IPv6 literal", "[::1"],
+  ])("refuses a value with %s, naming only that key and no value", (_label, value) => {
+    const env = { ...LAN, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: value };
+    expect(issues(env)).toEqual([{ key: "OIDC_GOOGLE_ALLOWED_PRIVATE_HOST", message: expect.not.stringContaining(value) as string }]);
+    let thrown: unknown;
+    try {
+      loadConfig("server", productionEnv(env));
+    } catch (error) {
+      thrown = error;
+    }
+    expect(inspect(thrown, { depth: null, showHidden: true })).not.toContain(value);
+  });
+
+  it("refuses a host that is not the host of the provider's own issuer, so a changed issuer never keeps an allowance meant for the old host", () => {
+    const found = issues({ ...LAN, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "other.lan" });
+    expect(found).toEqual([{ key: "OIDC_GOOGLE_ALLOWED_PRIVATE_HOST", message: "must be the host of the provider's ISSUER_URL" }]);
+    expect(JSON.stringify(found)).not.toContain("other.lan");
+    expect(keysOf({ ...LAN, OIDC_GOOGLE_ISSUER_URL: "https://other.lan", OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan" })).toEqual([
+      "OIDC_GOOGLE_ALLOWED_PRIVATE_HOST",
+    ]);
+  });
+
+  it("refuses the host of another provider's issuer", () => {
+    const env = {
+      ...LAN,
+      OIDC_CORP_CLIENT_ID: "id-2",
+      OIDC_CORP_CLIENT_SECRET: "secret-2",
+      OIDC_CORP_ISSUER_URL: "https://sso.lan",
+      OIDC_CORP_ALLOWED_PRIVATE_HOST: "idp.lan",
+    };
+    expect(keysOf(env)).toEqual(["OIDC_CORP_ALLOWED_PRIVATE_HOST"]);
+  });
+
+  it("does not fold a trailing dot: it is another host", () => {
+    expect(keysOf({ ...LAN, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan." })).toEqual(["OIDC_GOOGLE_ALLOWED_PRIVATE_HOST"]);
+    expect(keysOf({ ...LAN, OIDC_GOOGLE_ISSUER_URL: "https://idp.lan./", OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan" })).toEqual([
+      "OIDC_GOOGLE_ALLOWED_PRIVATE_HOST",
+    ]);
+  });
+
+  it.each([
+    ["case", "https://idp.lan", "IDP.Lan", "https://idp.lan"],
+    ["the default port", "https://idp.lan:443", "idp.lan", "https://idp.lan"],
+    ["an IPv4 notation", "https://0300.168.1.20:8443", "192.168.1.20", "https://192.168.1.20:8443"],
+    ["IDNA", "https://bücher.lan", "xn--bcher-kva.lan", "https://xn--bcher-kva.lan"],
+    ["an IPv6 literal", "https://[0:0:0:0:0:0:0:1]:8443", "[::1]", "https://[::1]:8443"],
+  ])("matches after URL normalisation: %s", (_label, issuer, host, origin) => {
+    const { config } = loadConfig("server", productionEnv({ ...GOOGLE, OIDC_GOOGLE_ISSUER_URL: issuer, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: host }));
+    expect(config.OIDC_PRIVATE_ORIGINS).toEqual([origin]);
+  });
+
+  it("does not relax the https rule of production: an http issuer is still refused there, with or without the host", () => {
+    const http = { ...GOOGLE, OIDC_GOOGLE_ISSUER_URL: "http://idp.lan:8080" };
+    expect(keysOf(http)).toEqual(["OIDC_GOOGLE_ISSUER_URL"]);
+    expect(keysOf({ ...http, OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan" })).toEqual(["OIDC_GOOGLE_ISSUER_URL"]);
+  });
+
+  it("names the key when the issuer is also invalid, and reports no origin", () => {
+    expect(keysOf({ ...GOOGLE, OIDC_GOOGLE_ISSUER_URL: "not a url", OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan" })).toEqual(["OIDC_GOOGLE_ISSUER_URL"]);
+  });
+});

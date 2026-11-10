@@ -100,3 +100,19 @@ describe("the privateOrigin option", () => {
     expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: origin })).toThrow();
   });
 });
+
+// Q120: the option takes a list, which the OIDC adapter's instance is given, one origin per provider that names its host.
+describe("the privateOrigin option as a list", () => {
+  it("accepts no origin, one and several, as an origin of the list or as a bare string", () => {
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: [] })).not.toThrow();
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: ["https://idp.lan"] })).not.toThrow();
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: ["https://idp.lan", "https://sso.lan:8443", "https://idp.lan:443"] })).not.toThrow();
+  });
+
+  it.each([["llm.lan"], ["ftp://llm.lan"], ["http://llm.lan/v1"], ["http://user:pw@llm.lan"], [""]])(
+    "refuses a list in which one entry, %j, is not an http or https origin",
+    (entry) => {
+      expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: ["https://idp.lan", entry] })).toThrow();
+    },
+  );
+});
