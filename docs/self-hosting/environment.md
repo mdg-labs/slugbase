@@ -177,12 +177,12 @@ A key ends in the scope it limits. `IP` is the address of the client. `ACCOUNT` 
 | Key | Read by | Required | Default | Type | What it sets |
 | --- | ------- | -------- | ------- | ---- | ------------ |
 | `RATE_LIMIT_LOGIN_IP` | server, worker | No | `10/min` | count and period, such as `5/hour` | Signing in, for each address. |
-| `RATE_LIMIT_LOGIN_EMAIL` | server, worker | No | `20/hour` | count and period, such as `5/hour` | Signing in, for each email address the message or link is for. |
+| `RATE_LIMIT_LOGIN_EMAIL` | server, worker | No | `20/hour` | count and period, such as `5/hour` | Signing in, for each email address. |
 | `RATE_LIMIT_MFA_IP` | server, worker | No | `10/min` | count and period, such as `5/hour` | Entering a second-factor code, for each address. |
 | `RATE_LIMIT_MFA_ACCOUNT` | server, worker | No | `30/hour` | count and period, such as `5/hour` | Entering a second-factor code, for each account. |
 | `RATE_LIMIT_REGISTER_IP` | server, worker | No | `5/hour` | count and period, such as `5/hour` | Creating an account by public registration, for each address. |
 | `RATE_LIMIT_RESET_IP` | server, worker | No | `5/hour` | count and period, such as `5/hour` | Asking for a password reset, for each address. |
-| `RATE_LIMIT_RESET_EMAIL` | server, worker | No | `3/hour` | count and period, such as `5/hour` | Asking for a password reset, for each email address the message or link is for. |
+| `RATE_LIMIT_RESET_EMAIL` | server, worker | No | `3/hour` | count and period, such as `5/hour` | Asking for a password reset, for each email address. |
 | `RATE_LIMIT_TOKEN_REDEEM_IP` | server, worker | No | `10/hour` | count and period, such as `5/hour` | Using a one-time link from an email, such as to verify an address or accept an invitation, for each address. |
 | `RATE_LIMIT_TOKEN_REDEEM_ACCOUNT` | server, worker | No | `10/hour` | count and period, such as `5/hour` | Using a one-time link from an email, such as to verify an address or accept an invitation, for each account. |
 | `RATE_LIMIT_TOKEN_CREATE_IP` | server, worker | No | `20/hour` | count and period, such as `5/hour` | Creating an API token, for each address. |

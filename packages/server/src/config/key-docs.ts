@@ -281,7 +281,7 @@ const SCOPE_COUNTS: Readonly<Record<RateScope, string>> = {
   ip: "each address",
   account: "each account",
   workspace: "each workspace",
-  email: "each email address the message or link is for",
+  email: "each email address",
 };
 
 function rateLimitDocs(): Readonly<Record<string, KeyDoc>> {

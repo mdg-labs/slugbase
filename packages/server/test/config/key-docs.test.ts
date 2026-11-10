@@ -110,6 +110,16 @@ describe("the documentation of the environment keys", () => {
     });
   });
 
+  it("counts a rate limit by an email address without saying a message or a link is sent", () => {
+    const byEmail = entries.filter(([key]) => key.endsWith("_EMAIL") && key.startsWith("RATE_LIMIT_"));
+
+    expect(byEmail.map(([key]) => key)).toEqual(["RATE_LIMIT_LOGIN_EMAIL", "RATE_LIMIT_RESET_EMAIL"]);
+    for (const [key, doc] of byEmail) {
+      expect(doc.description, key).toMatch(/, for each email address\.$/);
+      expect(doc.description, key).not.toMatch(/message|link/);
+    }
+  });
+
   describe("required", () => {
     it("gives a requiredWhen note only to a key that is optional in some process", () => {
       for (const [key, doc] of entries) {
