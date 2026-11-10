@@ -123,6 +123,13 @@ async function until(check: () => boolean | Promise<boolean>, what: string, time
   }
 }
 
+// How long a start that migrates an unmigrated database waits for /ready, which answers 503 until the whole chain is
+// applied (D25). Applying it takes about 10 s on an idle host and was seen taking over 30 s on a runner that was also
+// running other database tests, so it gets 90 s; an already-migrated database is ready in a second or two and keeps
+// the 30 s default. With the 30 s to listen and the 30 s for the worker that follow, a start that is slow at every
+// step still fits the test's 180 s timeout together with the job and the shutdown.
+const MIGRATING_READY_TIMEOUT_MS = 90_000;
+
 // Starts `server` with `args` and waits until it listens and answers /ready 200, which is after the migration level is
 // checked; with the worker, also until it logged `Worker started`.
 async function startServer(
@@ -156,7 +163,11 @@ async function startServer(
   try {
     await until(() => boundPort(output, "Listening") !== undefined, "the server to listen");
     const port = boundPort(output, "Listening") ?? 0;
-    await until(async () => (await get(port, "/ready")).startsWith("HTTP/1.1 200 "), "/ready to answer 200");
+    await until(
+      async () => (await get(port, "/ready")).startsWith("HTTP/1.1 200 "),
+      "/ready to answer 200",
+      migrateOnStart ? MIGRATING_READY_TIMEOUT_MS : undefined,
+    );
     if (args.includes("--with-worker")) {
       await until(() => output.includes('"Worker started"'), "the worker to start");
     }
@@ -327,7 +338,7 @@ describe("apps/slugbase main server --with-worker", () => {
     } finally {
       await fresh.drop();
     }
-  }, 120_000);
+  }, 180_000);
 
   it("shuts down what started when the signal arrives while it starts", async () => {
     const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server", "--with-worker"], {
