@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { APIRequestContext, APIResponse, Dialog, Locator, Page } from "@playwright/test";
 import { findViolations, loadAllowlist } from "../support/axe.ts";
 import { bookmarkBody, bookmarkShape } from "../support/bookmark-fixtures.ts";
+import { closeFilters, filterChips, filtersButton, openFilters } from "../support/bookmarks-filters.ts";
 import { message } from "../support/catalog.ts";
 import { appOrigin } from "../support/environment.ts";
 import { tabTo, waitForInitialFocus } from "../support/keyboard.ts";
@@ -279,10 +280,18 @@ test.describe("folders and tags journey", () => {
           await expect(card(page, title)).toBeVisible();
         }
 
-        const folderField = page.getByRole("combobox", { name: en("bookmarks.list.filters.folder.label"), exact: true });
-        const chips = page.getByRole("list", { name: en("bookmarks.list.filters.active"), exact: true });
-        await pick(folderField, page.getByRole("option", { name: names.folder, exact: true }));
+        // The folder and the tags are in the Filters panel, a sheet over the page that hides the list from assistive technology while it is
+        // open: each filter is set with the panel open, and the panel is closed again before the list behind it is read.
+        const chips = filterChips(page);
+        const filtersPicked = async (choose: (panel: Locator) => Promise<void>): Promise<void> => {
+          await choose(await openFilters(page));
+          await closeFilters(page);
+        };
+        const folderField = (panel: Locator): Locator => panel.getByRole("combobox", { name: en("bookmarks.list.filters.folder.label"), exact: true });
+        const tagField = (panel: Locator): Locator => panel.getByRole("combobox", { name: en("bookmarks.list.filters.tags.label"), exact: true });
+        await filtersPicked((panel) => pick(folderField(panel), page.getByRole("option", { name: names.folder, exact: true })));
         await expect(page).toHaveURL(new RegExp(`folderId=${folderId}`));
+        await expect(filtersButton(page, 1)).toBeVisible();
         await expect(chips.getByText(en("bookmarks.list.filters.folderChip", { name: names.folder }), { exact: true })).toBeVisible();
         await expect(card(page, titles.a)).toBeVisible();
         await expect(card(page, titles.b)).toBeVisible();
@@ -293,20 +302,28 @@ test.describe("folders and tags journey", () => {
         await chips.getByRole("button", { name: en("bookmarks.list.filters.remove", { label: en("bookmarks.list.filters.folderChip", { name: names.folder }) }), exact: true }).click();
         await expect(page).not.toHaveURL(/folderId=/);
         await expect(card(page, titles.d)).toBeVisible();
+        await expect(filtersButton(page)).toBeVisible();
 
-        const tagField = page.getByRole("combobox", { name: en("bookmarks.list.filters.tags.label"), exact: true });
-        await pick(tagField, page.getByRole("option", { name: names.alpha, exact: true }));
-        await page.keyboard.press("Escape");
-        await expect(page.locator("[data-slot='multi-pick-popup']")).toHaveCount(0);
+        await filtersPicked(async (panel) => {
+          await pick(tagField(panel), page.getByRole("option", { name: names.alpha, exact: true }));
+          await page.keyboard.press("Escape");
+          await expect(page.locator("[data-slot='multi-pick-popup']")).toHaveCount(0);
+        });
+        await expect(chips.getByText(en("bookmarks.list.filters.tagChip", { name: names.alpha }), { exact: true })).toBeVisible();
+        await expect(filtersButton(page, 1)).toBeVisible();
         await expect(card(page, titles.a)).toBeVisible();
         await expect(card(page, titles.b)).toBeVisible();
         await expect(card(page, titles.c)).toBeVisible();
         await expect(card(page, titles.d)).toHaveCount(0);
         await scan();
 
-        await pick(tagField, page.getByRole("option", { name: names.beta, exact: true }));
-        await page.keyboard.press("Escape");
-        await expect(page.locator("[data-slot='multi-pick-popup']")).toHaveCount(0);
+        await filtersPicked(async (panel) => {
+          await pick(tagField(panel), page.getByRole("option", { name: names.beta, exact: true }));
+          await page.keyboard.press("Escape");
+          await expect(page.locator("[data-slot='multi-pick-popup']")).toHaveCount(0);
+        });
+        await expect(chips.getByText(en("bookmarks.list.filters.tagChip", { name: names.beta }), { exact: true })).toBeVisible();
+        await expect(filtersButton(page, 2)).toBeVisible();
         // A bookmark must carry both tags: B has only the first.
         await expect(card(page, titles.a)).toBeVisible();
         await expect(card(page, titles.c)).toBeVisible();
@@ -315,7 +332,8 @@ test.describe("folders and tags journey", () => {
         await scan();
 
         // The folder narrows the two tags further: only A is in the folder.
-        await pick(folderField, page.getByRole("option", { name: names.folder, exact: true }));
+        await filtersPicked((panel) => pick(folderField(panel), page.getByRole("option", { name: names.folder, exact: true })));
+        await expect(filtersButton(page, 3)).toBeVisible();
         await expect(card(page, titles.a)).toBeVisible();
         await expect(card(page, titles.c)).toHaveCount(0);
         await scan();

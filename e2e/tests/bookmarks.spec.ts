@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Dialog, Locator, Page, Request, Response } from "@playwright/test";
 import { bookmarkBody, bookmarkShape } from "../support/bookmark-fixtures.ts";
+import { closeFilters, filterChips, filtersButton, openFilters } from "../support/bookmarks-filters.ts";
 import { message } from "../support/catalog.ts";
 import { appOrigin } from "../support/environment.ts";
 import { tabTo, waitForInitialFocus } from "../support/keyboard.ts";
@@ -352,8 +353,13 @@ for (const { name, viewport } of [
         });
 
         await test.step("selects every matching bookmark and deletes them in bulk", async () => {
-          await page.getByRole("button", { name: en("bookmarks.list.filter.pinned"), exact: true }).click();
+          // The Pinned checkbox is in the Filters panel, a sheet over the page: it is closed again so that the list behind it is reachable.
+          const panel = await openFilters(page);
+          await panel.getByRole("checkbox", { name: en("bookmarks.list.filter.pinned"), exact: true }).check();
           await expect(page).toHaveURL(/\?pinned=true$/);
+          await closeFilters(page);
+          await expect(filterChips(page).getByText(en("bookmarks.list.filter.pinned"), { exact: true })).toBeVisible();
+          await expect(filtersButton(page, 1)).toBeVisible();
           await expect(page.locator("[data-item-id]")).toHaveCount(ids.size);
           await scan();
 
