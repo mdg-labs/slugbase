@@ -90,6 +90,7 @@ describe("the package entry point", () => {
         "createAccessModeStore",
         "createAuthStore",
         "createDatabase",
+        "createMfaResealStore",
         "createRateLimitStore",
         "createRetentionStore",
         "createUsageStore",

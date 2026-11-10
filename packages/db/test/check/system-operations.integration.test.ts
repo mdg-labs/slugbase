@@ -208,6 +208,9 @@ describe("the shipped chain", () => {
       "sys_account_access_mode",
       "sys_account_access_mode_due",
       "sys_account_access_mode_end",
+      "sys_mfa_secret_key_ids",
+      "sys_mfa_secrets_under_key",
+      "sys_mfa_reseal_swept",
     ]);
     expect(internalSystemOperations).toEqual(["sys_create_workspace"]);
     expect(internalSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);

@@ -1,5 +1,5 @@
 import type { Adapters, DomainEventName } from "@slugbase/core";
-import { createAccessModeStore, createDatabase, createRateLimitStore, createRetentionStore, createWorkspaceDeletionStore, type Database } from "@slugbase/db";
+import { createAccessModeStore, createDatabase, createMfaResealStore, createRateLimitStore, createRetentionStore, createWorkspaceDeletionStore, type Database } from "@slugbase/db";
 import { PgBoss } from "pg-boss";
 import type { WorkerConfig } from "../config/index.ts";
 import {
@@ -104,6 +104,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   // as the role of DATABASE_URL; it connects on first use.
   const maintenanceStores = {
     accessMode: createAccessModeStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
+    mfaReseal: createMfaResealStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
     rateLimit: createRateLimitStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
     retention: createRetentionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE, auditRetentionDays: config.AUDIT_RETENTION_DAYS }),
     workspaceDeletion: createWorkspaceDeletionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
@@ -118,7 +119,11 @@ export function createWorker(options: CreateWorkerOptions): Worker {
         try {
           await maintenanceStores.workspaceDeletion.close();
         } finally {
-          await maintenanceStores.accessMode.close();
+          try {
+            await maintenanceStores.mfaReseal.close();
+          } finally {
+            await maintenanceStores.accessMode.close();
+          }
         }
       }
     }

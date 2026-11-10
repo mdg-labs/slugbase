@@ -1,4 +1,4 @@
 {
-  "sha256": "69a0d6b456c5b7599c9de96a78aee7d3d56fd7573292a542940e8b3733701c21",
-  "migration": "20261110123346_add_token_dates_one_clock_read"
+  "sha256": "7170ee4a36ee04087141f8641751a21bbfc86680685770c8a0e5be06fde30c71",
+  "migration": "20261110144218_add_mfa_reseal_sweep"
 }

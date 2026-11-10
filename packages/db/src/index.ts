@@ -94,6 +94,8 @@ export { createRateLimitStore } from "./system/rate-limit.ts";
 export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTaken } from "./system/rate-limit.ts";
 export { createAccessModeStore } from "./system/access-mode.ts";
 export type { AccessModeStore, AccessModeStoreOptions, DueAccessMode } from "./system/access-mode.ts";
+export { createMfaResealStore } from "./system/mfa-reseal.ts";
+export type { MfaKeyUse, MfaResealStore, MfaResealStoreOptions, MfaSweptSecret } from "./system/mfa-reseal.ts";
 export { createRetentionStore } from "./system/retention.ts";
 export type { RetentionPurgeCount, RetentionStore, RetentionStoreOptions } from "./system/retention.ts";
 export { USAGE_FLUSH_BATCH_SIZE, createUsageStore } from "./system/usage.ts";

@@ -43,6 +43,11 @@ export function createBuiltInModules(stores: MaintenanceStores, subscribersFor: 
 
 const NEVER_RUN: MaintenanceStores = {
   accessMode: { due: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
+  mfaReseal: {
+    keyIds: () => Promise.reject(new Error("a job list read for its queues does not run jobs")),
+    secretsUnderKey: () => Promise.reject(new Error("a job list read for its queues does not run jobs")),
+    reseal: () => Promise.reject(new Error("a job list read for its queues does not run jobs")),
+  },
   rateLimit: { purgeIdle: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
   retention: { purge: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
   workspaceDeletion: {

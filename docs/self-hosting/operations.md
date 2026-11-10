@@ -97,13 +97,13 @@ Plan for rotation before you need it. Keep every secret in your password manager
    docker compose up -d
    ```
 
-5. Keep the old key until nothing is sealed with it. SlugBase seals a member's secret with the new key the next time the member uses the second factor, which means at a sign-in with a code or at a confirmation of a sensitive action. There is no background job that does it for members who do not sign in. List which keys the stored secrets still use. The command reads the database as its administrator and changes nothing.
+5. Keep the old key until nothing is sealed with it. The worker runs a job named `secrets.reseal` once an hour, at 40 minutes past, which seals the secret of every member with the new key. It includes members who do not sign in and accounts that are disabled. The worker has to be running for it to happen. Within about an hour after the start, the stored secrets use the new key alone. The job writes a log line, `Secret reseal finished`, with the number of secrets it sealed and the names of the keys that are still in use. See [Read the logs](#read-the-logs). The short-lived state of a sign-in through a provider needs no sweep: it is gone after ten minutes. List which keys the stored secrets still use. The command reads the database as its administrator and changes nothing.
 
    ```sh
    docker compose exec -T postgres psql -U slugbase -d slugbase -c "SELECT mfa_secret_key_id AS key_name, count(*) FROM accounts WHERE mfa_secret IS NOT NULL GROUP BY 1 ORDER BY 1"
    ```
 
-6. When every row shows the new name, remove the old pair from `ENCRYPTION_KEY_PREVIOUS` and start the containers again. If rows with the old name stay for a long time, because those members do not sign in, you can still remove the old key. Each of those members then cannot use their code, and an instance admin must choose **Reset two-factor authentication** for them in **Admin**, **Accounts**. They can then enrol again.
+6. When only the new name shows, remove the old pair from `ENCRYPTION_KEY_PREVIOUS` and start the containers again. Do not remove it earlier: a member whose secret is still under the old key then cannot use their code. If a row with the old name stays after several runs of the job, the job could not open that secret, for example because its key is not in `ENCRYPTION_KEY_PREVIOUS`. It logs a warning with the account and leaves the secret as it is. Add the key it was sealed with, or, if you no longer have it, an instance admin chooses **Reset two-factor authentication** for that member in **Admin**, **Accounts**. They can then enrol again.
 
 A dump of the database made before the rotation holds secrets sealed with the old key. To restore it, you need that key as the current key or in `ENCRYPTION_KEY_PREVIOUS`. Keep the old key with the backups that need it.
 
