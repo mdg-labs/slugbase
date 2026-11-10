@@ -160,6 +160,13 @@ async function eventJobs(database: TestDatabase): Promise<JobRow[]> {
   return [...(await database.app<JobRow[]>`SELECT name, state FROM pgboss.job WHERE name = 'event.workspace.created' ORDER BY created_on`)];
 }
 
+// The connections of the worker's pool, which sets this `application_name` (packages/server/src/worker/runtime.ts).
+async function workerConnections(database: TestDatabase): Promise<number> {
+  const open = await database.owner<{ count: string }[]>`
+    SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND application_name = 'slugbase-worker'`;
+  return Number(open[0]?.count);
+}
+
 describe("apps/slugbase main server --with-worker", () => {
   let database: TestDatabase;
 
@@ -177,6 +184,8 @@ describe("apps/slugbase main server --with-worker", () => {
     try {
       expect(running.output()).toContain("Configuration loaded");
       expect((await register(running.port, "ada@example.test")).split("\r\n")[0]).toBe("HTTP/1.1 202 Accepted");
+      // The control for the next test's count of zero: a worker that runs shows up in the same query.
+      expect(await workerConnections(database)).toBeGreaterThan(0);
       await until(async () => (await eventJobs(database)).some((job) => job.state === "completed"), "the queued job to complete");
     } finally {
       expect(await stop(running), running.output()).toBe(0);
@@ -191,7 +200,9 @@ describe("apps/slugbase main server --with-worker", () => {
       const running = await startServer(other, []);
       try {
         expect((await register(running.port, "grace@example.test")).split("\r\n")[0]).toBe("HTTP/1.1 202 Accepted");
-        // Longer than the worker's polling interval, within which the job above completed.
+        expect(await workerConnections(other)).toBe(0);
+        // Nothing can be polled for here, so this waits longer than the worker's polling interval, within which the
+        // job above completed; the count above is the proof that no worker ran.
         await sleep(5_000);
         expect(await eventJobs(other)).toEqual([{ name: "event.workspace.created", state: "created" }]);
       } finally {
@@ -220,9 +231,7 @@ describe("apps/slugbase main server --with-worker", () => {
     expect(at("Shutdown complete")).toBeGreaterThanOrEqual(at("Server stopped"));
     expect(at("Shutdown complete")).toBeGreaterThanOrEqual(at("Worker stopped"));
     expect(await canConnect(running.port)).toBe(false);
-    const open = await database.owner<{ count: string }[]>`
-      SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND application_name = 'slugbase-worker'`;
-    expect(Number(open[0]?.count)).toBe(0);
+    expect(await workerConnections(database)).toBe(0);
   }, 90_000);
 
   it("shuts down what started when the signal arrives while it starts", async () => {
