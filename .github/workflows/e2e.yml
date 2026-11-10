@@ -18,7 +18,11 @@ name: E2E
 # docs/self-hosting/reverse-proxy.md, taken from the guide, in front of the image over https, and
 # the cookie, origin and client-address behaviour that depends on them. It starts a stack of its
 # own and proxies pinned by digest (e2e/compose.proxy.yml) on the runner's network, and what it
-# proves does not depend on the PostgreSQL major, so it runs once. No job references a secret, the workflow never runs on pull_request_target,
+# proves does not depend on the PostgreSQL major, so it runs once. A job of its own, `upgrade-drill`, runs
+# the upgrade drill (e2e/upgrade-drill.spec.ts): the published 1.0.0-rc.1 image, pinned by digest, started
+# with seeded data and replaced by the image built here on the same database, by the steps of
+# docs/self-hosting/upgrade.md; it runs on PostgreSQL 18 only, since the migration chain is proved on both
+# majors elsewhere. No job references a secret, the workflow never runs on pull_request_target,
 # and the secrets of the stack are generated per run by scripts/smoke-image.sh and
 # never printed (doc 10 T16).
 
@@ -241,13 +245,66 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The upgrade drill of docs/self-hosting/upgrade.md (doc 08 section 5.1, D25, Q52): a stack of its own on the
+  # published release candidate image, pulled anonymously and pinned by digest, is seeded through the API and then
+  # moved to the image built from this commit on the same database, once by `docker compose up -d` and once with
+  # the migration run by hand. The registry is public, so the job holds no credential and logs in to nothing. The
+  # drill removes its stacks however it ends. It uses the HTTP API and docker compose alone, so no browser and no
+  # Playwright image are needed here.
+  upgrade-drill:
+    name: upgrade drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: e2e-upgrade-drill
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:e2e .
+      # The step fails when the drill does, and so does the check of the leg.
+      - name: Run the upgrade drill
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:e2e
+        run: pnpm --filter @slugbase/e2e test:e2e upgrade-drill
+      - name: Remove any stack left behind
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          docker ps --all --format '{{.ID}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker volume ls --quiet --filter 'label=com.docker.compose.project' --format '{{.Name}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker volume rm --force
+      - name: Upload the artifacts of a failed run
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upgrade-drill-artifacts
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The check each leg has always reported, which the ruleset of `main` requires by
   # name ("e2e (PostgreSQL 17)", "e2e (PostgreSQL 18)"). It fails unless every shard,
-  # every restore drill and the reverse proxy drill succeeded: a failed, cancelled or skipped job is not a pass,
+  # every restore drill, the reverse proxy drill and the upgrade drill succeeded: a failed, cancelled or skipped job is not a pass,
   # and `needs` waits for the jobs of both legs, so one failing job fails the check of both.
   e2e:
     name: e2e (PostgreSQL ${{ matrix.postgres }})
-    needs: [shards, restore-drill, reverse-proxy]
+    needs: [shards, restore-drill, reverse-proxy, upgrade-drill]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -260,6 +317,7 @@ jobs:
           SHARDS_RESULT: ${{ needs.shards.result }}
           RESTORE_DRILL_RESULT: ${{ needs.restore-drill.result }}
           REVERSE_PROXY_RESULT: ${{ needs.reverse-proxy.result }}
+          UPGRADE_DRILL_RESULT: ${{ needs.upgrade-drill.result }}
         run: |
           set -euo pipefail
           if [[ "$SHARDS_RESULT" != "success" ]]; then
@@ -272,5 +330,9 @@ jobs:
           fi
           if [[ "$REVERSE_PROXY_RESULT" != "success" ]]; then
             echo "the reverse proxy drill ended '$REVERSE_PROXY_RESULT', not 'success'" >&2
+            exit 1
+          fi
+          if [[ "$UPGRADE_DRILL_RESULT" != "success" ]]; then
+            echo "the upgrade drill ended '$UPGRADE_DRILL_RESULT', not 'success'" >&2
             exit 1
           fi

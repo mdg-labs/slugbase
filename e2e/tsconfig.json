@@ -6,5 +6,5 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["playwright.config.ts", "restore-drill.config.ts", "restore-drill.spec.ts", "reverse-proxy.config.ts", "reverse-proxy.spec.ts", "global-setup.ts", "run-tests.ts", "support", "tests"]
+  "include": ["playwright.config.ts", "restore-drill.config.ts", "restore-drill.spec.ts", "upgrade-drill.config.ts", "upgrade-drill.spec.ts", "reverse-proxy.config.ts", "reverse-proxy.spec.ts", "global-setup.ts", "run-tests.ts", "support", "tests"]
 }

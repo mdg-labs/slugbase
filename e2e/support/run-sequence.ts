@@ -1,5 +1,6 @@
 export const DRILL = ["--config", "restore-drill.config.ts"];
 export const PROXY_DRILL = ["--config", "reverse-proxy.config.ts"];
+export const UPGRADE_DRILL = ["--config", "upgrade-drill.config.ts"];
 
 export interface Sequence {
   /** The arguments after the script name, with a leading `--` already dropped. */
@@ -21,6 +22,9 @@ export async function runSequence({ forwarded, inImage, run, interrupted, note }
   }
   if (forwarded[0] === "reverse-proxy") {
     return run([...PROXY_DRILL, ...forwarded.slice(1)]);
+  }
+  if (forwarded[0] === "upgrade-drill") {
+    return run([...UPGRADE_DRILL, ...forwarded.slice(1)]);
   }
   const journeys = await run(forwarded);
   if (forwarded.length > 0 || interrupted()) {

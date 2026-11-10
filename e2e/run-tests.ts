@@ -12,7 +12,10 @@ import { runSequence } from "./support/run-sequence.ts";
 // stack of their own. With arguments only the journeys run, with Playwright's own options, unless
 // the first one is `restore-drill` or `reverse-proxy`, which runs only that drill:
 // `pnpm test:e2e restore-drill`. The drills need docker on the machine, so a run in the
-// Playwright image (e2e/in-image.sh) leaves them to a run on the host.
+// Playwright image (e2e/in-image.sh) leaves them to a run on the host. The upgrade drill
+// (upgrade-drill.spec.ts) runs only when named, `pnpm test:e2e upgrade-drill`: it pulls the
+// published release candidate image and needs the image of the commit under test and its
+// commit, SLUGBASE_IMAGE and BUILD_COMMIT, as the `upgrade-drill` job of e2e.yml sets them.
 const args = process.argv.slice(2);
 const forwarded = args[0] === "--" ? args.slice(1) : args;
 
