@@ -85,7 +85,7 @@ If mail is not configured, the page says **No test email was queued** and that t
 The page cannot tell you whether the relay took the message, because the worker sends it afterwards. If the test email does not arrive:
 
 1. Wait a minute and check the spam folder of the admin's mailbox.
-2. Read the log of the worker with `docker compose logs slugbase-worker`. A message that the relay refused or that could not be delivered shows as a `Job failed` line for the job `mail.send` with `MailError` as its error. SlugBase logs no more than that, because the answer of a relay can contain addresses. The log of your relay says why it refused the message.
+2. Read the log of the worker with `docker compose logs slugbase-worker`. If you run one container (see [One container or two](install.md#one-container-or-two)), there is no `slugbase-worker` service, and the worker's lines are in `docker compose logs slugbase`. A message that the relay refused or that could not be delivered shows as a `Job failed` line for the job `mail.send` with `MailError` as its error. SlugBase logs no more than that, because the answer of a relay can contain addresses. The log of your relay says why it refused the message.
 3. Look at **Admin**, **Overview**, **Background jobs**. A message that failed every attempt counts under **Failed jobs**.
 4. Check the keys against your relay's documentation: the host, the port, `SMTP_SECURITY` for that port, the login, and that the relay allows `SMTP_FROM` as a sender.
 
