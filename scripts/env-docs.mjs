@@ -37,8 +37,21 @@ const REGENERATE = "run `pnpm env:docs` and commit the result";
 const KEY_PATTERN = /(?<![A-Za-z0-9_<])[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?![A-Za-z0-9_<>*])/g;
 // Provider slugs the prose gives as examples; they have the shape of a key but are values of `<SLUG>`.
 const SLUG_EXAMPLES = new Set(["COMPANY_SSO"]);
-const SECRET_KEY = /^(?:[A-Z][A-Z0-9]*_)*(?:KEY|SECRET|PASS|PASSWORD|TOKEN|DSN)$/;
-const SECRET_ASSIGNMENT = /(?<![A-Za-z0-9_])(?:[A-Z][A-Z0-9]*_)*(?:KEY|SECRET|PASS|PASSWORD|TOKEN|DSN)\s*=\s*[^\s<`]/;
+// The names of secret keys, for the check of a default and of a table cell and for the check of an assignment alike:
+// a name that ends in one of these words, and the old keys of a rotation.
+const SECRET_NAMES = "(?:(?:[A-Z][A-Z0-9]*_)*(?:KEY|SECRET|PASS|PASSWORD|TOKEN|DSN)|ENCRYPTION_KEY_PREVIOUS)";
+const SECRET_KEY = new RegExp(`^${SECRET_NAMES}$`);
+const SECRET_ASSIGNMENT = new RegExp(`(?<![A-Za-z0-9_])${SECRET_NAMES}\\s*=\\s*[^\\s<\`]`, "g");
+// A database URL is secret through the password of its userinfo. A `<placeholder>` is not a value, whether in the
+// user name or in the password; a `<` that opens none is an ordinary character.
+const URL_PLACEHOLDER = "<[^<>\\n`]*>";
+const URL_PASSWORD = `[A-Za-z][A-Za-z0-9+.-]*://(?:${URL_PLACEHOLDER}|[^\\s/:@<\\x60]|<(?![^<>\\n\\x60]*>))*:((?:${URL_PLACEHOLDER}|[^\\s/@<\\x60]|<(?![^<>\\n\\x60]*>))+)@`;
+// A value may be quoted, as in a shell or an env file.
+const QUOTE = `["']?`;
+const DATABASE_URL_KEY = "DATABASE(?:_MIGRATE)?_URL";
+const DATABASE_URL_KEY_NAME = new RegExp(`^${DATABASE_URL_KEY}$`);
+const DATABASE_URL_ASSIGNMENT = new RegExp(`(?<![A-Za-z0-9_])(${DATABASE_URL_KEY})\\s*=\\s*${QUOTE}${URL_PASSWORD}`, "g");
+const DATABASE_URL_VALUE = new RegExp(`^${QUOTE}${URL_PASSWORD}`);
 // Something that looks like a credential: a long run of base64, hex or token characters.
 const TOKEN_SHAPED = /[A-Za-z0-9+/=_-]{32,}/;
 // A placeholder such as `<your secret>`, and another key's name, are not values.
@@ -75,6 +88,17 @@ function soleCode(cell) {
   return parts.length === 1 && parts[0].type === "inlineCode" ? parts[0].value : undefined;
 }
 
+/** The secret keys that `text` gives a value as `KEY=value`: a database URL counts when it carries a password. */
+function assignedSecrets(text) {
+  const found = [...text.matchAll(SECRET_ASSIGNMENT)].map((match) => match[0].split("=")[0].trim());
+  for (const match of text.matchAll(DATABASE_URL_ASSIGNMENT)) {
+    if (!PLACEHOLDER.test(match[2])) {
+      found.push(match[1]);
+    }
+  }
+  return found;
+}
+
 /** The secret keys a table row of `page` gives a value in the cell after its own. */
 function secretsWithValues(page) {
   const found = [];
@@ -85,8 +109,16 @@ function secretsWithValues(page) {
     const cells = (node.children ?? []).map(soleCode);
     cells.forEach((code, index) => {
       const next = cells[index + 1];
-      if (code !== undefined && SECRET_KEY.test(code) && next !== undefined && !PLACEHOLDER.test(next.trim()) && !KEY_NAME.test(next)) {
+      if (code === undefined || next === undefined) {
+        return;
+      }
+      if (SECRET_KEY.test(code) && !PLACEHOLDER.test(next.trim()) && !KEY_NAME.test(next)) {
         found.push(code);
+      } else if (DATABASE_URL_KEY_NAME.test(code)) {
+        const password = DATABASE_URL_VALUE.exec(next.trim())?.[1];
+        if (password !== undefined && !PLACEHOLDER.test(password)) {
+          found.push(code);
+        }
       }
     });
   });
@@ -260,14 +292,11 @@ export function checkEnvironment(config, { template, pageText, exampleText }) {
   }
   for (const [key, doc] of Object.entries(config.KEY_DOCS)) {
     const text = `${doc.description} ${doc.defaultText ?? ""}`;
-    if (SECRET_ASSIGNMENT.test(text) || TOKEN_SHAPED.test(withoutDeclaredKeys(text, declared))) {
+    if (assignedSecrets(text).length > 0 || TOKEN_SHAPED.test(withoutDeclaredKeys(text, declared))) {
       problems.push(`the description of ${key} holds a value that looks like a secret; use a placeholder such as <your secret>`);
     }
   }
-  if (SECRET_ASSIGNMENT.test(page)) {
-    problems.push(`the page gives a secret key a value: ${page.match(SECRET_ASSIGNMENT)[0].split("=")[0].trim()}`);
-  }
-  for (const key of secretsWithValues(page)) {
+  for (const key of [...assignedSecrets(page), ...secretsWithValues(page)]) {
     problems.push(`the page gives a secret key a value: ${key}`);
   }
   if (TOKEN_SHAPED.test(withoutDeclaredKeys(page, declared))) {

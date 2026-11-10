@@ -229,6 +229,79 @@ test("an upper-case run with underscores that is no declared key is reported as 
   assertProblem(problems, `${long} is on the page but no process schema declares it`);
 });
 
+/** The check on the template with `prose` added to it, which the page carries over. */
+function problemsWith(prose, withConfig = config) {
+  const changed = `${template}\n${prose}\n`;
+  return problemsOf(withConfig, { template: changed, pageText: renderPage(withConfig, changed) });
+}
+
+test("a value given to ENCRYPTION_KEY_PREVIOUS is reported, in the prose and in a table row, and a placeholder is accepted", () => {
+  assertProblem(problemsWith("For example `ENCRYPTION_KEY_PREVIOUS=old-1:not-a-real-key`."), "the page gives a secret key a value: ENCRYPTION_KEY_PREVIOUS");
+  assertProblem(
+    problemsWith("| Key | Value |\n| --- | ----- |\n| `ENCRYPTION_KEY_PREVIOUS` | `old-1:not-a-real-key` |"),
+    "the page gives a secret key a value: ENCRYPTION_KEY_PREVIOUS",
+  );
+  assert.deepEqual(problemsWith("For example `ENCRYPTION_KEY_PREVIOUS=<old id>:<old key>`."), []);
+  assert.deepEqual(problemsWith("| Key | Value |\n| --- | ----- |\n| `ENCRYPTION_KEY_PREVIOUS` | `<your old keys>` |"), []);
+});
+
+test("a default or a description that gives ENCRYPTION_KEY_PREVIOUS a value is reported", () => {
+  assertProblem(
+    problemsOf(withDoc("ENCRYPTION_KEY_PREVIOUS", { ...config.KEY_DOCS.ENCRYPTION_KEY_PREVIOUS, defaultText: "`old-1:not-a-real-key`" })),
+    "ENCRYPTION_KEY_PREVIOUS is a secret and must have no default on the page",
+  );
+  assertProblem(
+    problemsOf(withDoc("LOG_LEVEL", { ...config.KEY_DOCS.LOG_LEVEL, description: "Set ENCRYPTION_KEY_PREVIOUS=old-1:not-a-real-key." })),
+    "the description of LOG_LEVEL holds a value that looks like a secret",
+  );
+});
+
+for (const key of ["DATABASE_URL", "DATABASE_MIGRATE_URL"]) {
+  test(`a password in the URL given to ${key} is reported, in the prose and in a table row`, () => {
+    const url = "postgres://slugbase_app:not-a-real-password@db:5432/slugbase";
+    assertProblem(problemsWith(`For example \`${key}=${url}\`.`), `the page gives a secret key a value: ${key}`);
+    assertProblem(problemsWith(`${key}=${url}`), `the page gives a secret key a value: ${key}`);
+    assertProblem(problemsWith(`| Key | Value |\n| --- | ----- |\n| \`${key}\` | \`${url}\` |`), `the page gives a secret key a value: ${key}`);
+    assertProblem(
+      problemsOf(withDoc("LOG_LEVEL", { ...config.KEY_DOCS.LOG_LEVEL, description: `Set ${key}=${url}.` })),
+      "the description of LOG_LEVEL holds a value that looks like a secret",
+    );
+    assertProblem(problemsWith(`${key}=postgres://<your user>:not-a-real-password@db/slugbase`), `the page gives a secret key a value: ${key}`);
+    assertProblem(problemsWith(`${key}=postgres://slugbase_app:<your pass>word@db/slugbase`), `the page gives a secret key a value: ${key}`);
+  });
+}
+
+for (const key of ["DATABASE_URL", "DATABASE_MIGRATE_URL"]) {
+  test(`a password in a quoted URL given to ${key} is reported`, () => {
+    const url = "postgres://slugbase_app:not-a-real-password@db:5432/slugbase";
+    const expected = `the page gives a secret key a value: ${key}`;
+    for (const quote of ['"', "'"]) {
+      assertProblem(problemsWith(`${key}=${quote}${url}${quote}`), expected);
+      assertProblem(problemsWith(`${key} = ${quote}${url}${quote}`), expected);
+      assertProblem(problemsWith(`| Key | Value |\n| --- | ----- |\n| \`${key}\` | \`${quote}${url}${quote}\` |`), expected);
+      assertProblem(
+        problemsOf(withDoc("LOG_LEVEL", { ...config.KEY_DOCS.LOG_LEVEL, description: `Set ${key}=${quote}${url}${quote}.` })),
+        "the description of LOG_LEVEL holds a value that looks like a secret",
+      );
+    }
+  });
+
+  test(`a placeholder for the password in a quoted URL given to ${key} is accepted`, () => {
+    for (const quote of ['"', "'"]) {
+      assert.deepEqual(problemsWith(`${key}=${quote}postgres://slugbase_app:<your password>@db/slugbase${quote}`), []);
+      assert.deepEqual(problemsWith(`| Key | Value |\n| --- | ----- |\n| \`${key}\` | \`${quote}postgres://slugbase_app:<your password>@db/slugbase${quote}\` |`), []);
+    }
+  });
+
+  test(`a placeholder for the password in the URL given to ${key}, or no password, is accepted`, () => {
+    assert.deepEqual(problemsWith(`For example \`${key}=postgres://slugbase_app:<your password>@db:5432/slugbase\`.`), []);
+    assert.deepEqual(problemsWith(`${key}=postgres://<your user>:<your password>@db/slugbase`), []);
+    assert.deepEqual(problemsWith(`${key}=postgres://slugbase_app@db/slugbase`), []);
+    assert.deepEqual(problemsWith(`| Key | Value |\n| --- | ----- |\n| \`${key}\` | \`postgres://slugbase_app:<your password>@db/slugbase\` |`), []);
+    assert.deepEqual(problemsWith(`| Key | Value |\n| --- | ----- |\n| \`${key}\` | \`postgres://slugbase_app@db/slugbase\` |`), []);
+  });
+}
+
 test("a default given to a secret key is reported", () => {
   const problems = problemsOf(withDoc("SESSION_SECRET", { ...config.KEY_DOCS.SESSION_SECRET, defaultText: "`changeme`" }));
   assertProblem(problems, "SESSION_SECRET is a secret and must have no default on the page");
