@@ -20,9 +20,9 @@ SlugBase is published as one image, `ghcr.io/mdg-labs/slugbase`, which runs as t
 | --- | ----------------- |
 | `:<semver>`, such as `:1.2.3` | Exactly that release. It never moves. A pre-release such as `1.0.0-rc.1` has this tag only. |
 | `:<major>.<minor>`, such as `:1.2` | The newest patch release of that minor version, so it moves from one patch release to the next. A pre-release never has it. |
-| `:latest` | The newest published release. It moves only when a release is published, never because of a build, and never for a pre-release. |
+| `:latest` | Not pushed yet, so it does not exist today. The design is that it points at the newest published release and moves only when a release is published, never because of a build, and never for a pre-release. |
 
-`compose.yml` runs the `:latest` tag unless you set `SLUGBASE_IMAGE`. Pin a version instead. A pinned installation changes only when you decide to, and you know which release a backup belongs to.
+`compose.yml` runs `ghcr.io/mdg-labs/slugbase:latest` unless you set `SLUGBASE_IMAGE`. The release workflow pushes version tags only, so that default does not pull today. Set `SLUGBASE_IMAGE` to a version tag or to an image digest, as in [Choose the image](install.md#choose-the-image). A pinned installation changes only when you decide to, and you know which release a backup belongs to.
 
 ```sh
 SLUGBASE_IMAGE=ghcr.io/mdg-labs/slugbase:1.2.3
