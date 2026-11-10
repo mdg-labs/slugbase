@@ -60,8 +60,14 @@ The roles belong to the PostgreSQL server, not to the database, so a dump does n
 
 The roles must exist before you restore, with the memberships and privileges that the script gives. Step 2 of [Restore from a dump](#restore-from-a-dump) does this for a `compose.yml` installation. For a PostgreSQL server that you run yourself, run the script once as a superuser against the empty `slugbase` database before the restore. The two passwords are the ones in the `DATABASE_URL` and `DATABASE_MIGRATE_URL` of your installation.
 
+Give them to `psql` in its environment, not on its command line. Other users on the server can read a command line, and a shell keeps what you type in its history. In bash or zsh, `read -rs` takes each password at a prompt without showing it or saving it. The script reads `PROVISION_APP_PASSWORD` and `PROVISION_MIGRATOR_PASSWORD` with the `\getenv` command of `psql`, which needs `psql` 15 or newer. Remove the variables when the script is done.
+
 ```sh
-psql -U <superuser> -d slugbase -v ON_ERROR_STOP=1 -v app_password=<the slugbase_app password> -v migrator_password=<the slugbase_migrator password> -f packages/db/provision/roles.sql
+printf 'slugbase_app password: '; read -rs PROVISION_APP_PASSWORD; echo
+printf 'slugbase_migrator password: '; read -rs PROVISION_MIGRATOR_PASSWORD; echo
+export PROVISION_APP_PASSWORD PROVISION_MIGRATOR_PASSWORD
+psql -U <superuser> -d slugbase -v ON_ERROR_STOP=1 -f packages/db/provision/roles.sql
+unset PROVISION_APP_PASSWORD PROVISION_MIGRATOR_PASSWORD
 ```
 
 ## Keep the secrets

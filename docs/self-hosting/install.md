@@ -159,8 +159,14 @@ So in production the server and the worker check the role of `DATABASE_URL` when
 
 You meet it when you run the image yourself against a PostgreSQL you manage, with `DATABASE_URL` set to an owner login. The right fix is to run `roles.sql` there as a superuser and connect as `slugbase_app`:
 
+Give the two passwords to `psql` in its environment, not on its command line. Other users on the server can read a command line, and a shell keeps what you type in its history. In bash or zsh, `read -rs` takes each password at a prompt without showing it or saving it. The script reads `PROVISION_APP_PASSWORD` and `PROVISION_MIGRATOR_PASSWORD` with the `\getenv` command of `psql`, which needs `psql` 15 or newer. Remove the variables when the script is done.
+
 ```sh
-psql -h <your database host> -U <your superuser> -d <your database> -v ON_ERROR_STOP=1 -v app_password='<your app password>' -v migrator_password='<your migrator password>' -f packages/db/provision/roles.sql
+printf 'slugbase_app password: '; read -rs PROVISION_APP_PASSWORD; echo
+printf 'slugbase_migrator password: '; read -rs PROVISION_MIGRATOR_PASSWORD; echo
+export PROVISION_APP_PASSWORD PROVISION_MIGRATOR_PASSWORD
+psql -h <your database host> -U <your superuser> -d <your database> -v ON_ERROR_STOP=1 -f packages/db/provision/roles.sql
+unset PROVISION_APP_PASSWORD PROVISION_MIGRATOR_PASSWORD
 ```
 
 Some managed PostgreSQL services make extra roles awkward. For those, set `SLUGBASE_ALLOW_OWNER_CONNECTION=true` in the environment of the server and the worker. They then start with a warning in the log, and the separation between workspaces rests on the application alone. `compose.yml` does not hand this key to the containers, because it never needs it.
