@@ -2444,11 +2444,13 @@
     "goHome": "Go home",
     "notFound": {
       "title": "This page doesn't exist",
-      "description": "The address may be mistyped, or the page may have moved."
+      "description": "The address may be mistyped, or the page may have moved.",
+      "search": "Search"
     },
     "forbidden": {
       "title": "You don't have access",
-      "description": "You are not a member of this workspace, or this page is only for administrators."
+      "description": "You are not a member of this workspace, or this page is only for administrators.",
+      "switchWorkspace": "Switch workspace"
     },
     "serverError": {
       "title": "Something went wrong",

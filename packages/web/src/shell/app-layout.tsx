@@ -32,7 +32,7 @@ import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
 import { ExportOnlyLayout, useRefreshOnExportOnly } from "./export-only.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
 import { SidebarFolders } from "./sidebar-folders.tsx";
-import { useWorkspaceSwitcher } from "./workspace-switcher.tsx";
+import { WorkspaceSwitcherOpenProvider, useWorkspaceSwitcher } from "./workspace-switcher.tsx";
 
 function AppLayoutShell(): ReactElement {
   const { t } = useTranslation();
@@ -227,7 +227,9 @@ export function AppLayout(): ReactElement {
   return (
     <AccountPreferences>
       <PaletteProvider>
-        <AppLayoutShell />
+        <WorkspaceSwitcherOpenProvider>
+          <AppLayoutShell />
+        </WorkspaceSwitcherOpenProvider>
       </PaletteProvider>
     </AccountPreferences>
   );

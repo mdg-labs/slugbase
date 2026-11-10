@@ -15,15 +15,15 @@ None.
 
 | What you see | What it means | What to do |
 | ------------ | ------------- | ---------- |
-| **This page doesn't exist** | No page lives at this address. | Choose **Go home**. |
-| **You don't have access** | Your role does not allow this page. | Ask an owner or admin, or choose **Go home**. |
+| **This page doesn't exist** | No page lives at this address. | Choose **Go home**. Inside the app, with the sidebar, you can also choose **Search**. |
+| **You don't have access** | Your role does not allow this page. | Ask an owner or admin, choose **Switch workspace**, or choose **Go home**. |
 | **Something went wrong** | The page could not be shown. | Choose **Reload**. If it continues, send the **Request ID** to your administrator. |
 | **You are offline** | Your browser has no connection. | Wait for the connection. Nothing is saved until it is back. |
 | **Your session has ended** | You are signed out. | Sign in again. SlugBase brings you back to the page. |
 
 ## This page doesn't exist
 
-The page says "The address may be mistyped, or the page may have moved." Choose **Go home** to open Home.
+The page says "The address may be mistyped, or the page may have moved." Choose **Go home** to open Home. Inside the app, where the sidebar is, the page also has **Search**. It opens the command palette, the same one the **Search or run a command…** button in the top bar opens, so you can look for the bookmark you wanted. See [Command Palette](command-palette.mdx). A `go/` address, such as `go/mail/inbox`, has no sidebar and no command palette, so there the page has only **Go home**.
 
 It appears when:
 
@@ -39,6 +39,8 @@ A different page says "No bookmark has the slug" and a slug. That page means the
 ## You don't have access
 
 The page says "You are not a member of this workspace, or this page is only for administrators." Choose **Go home** to leave.
+
+If you belong to more than one workspace, the page also has **Switch workspace**. Choose it to open the workspace switcher from the sidebar, then pick the workspace you mean. On a narrow screen SlugBase opens the sidebar first. If you belong to only one workspace, there is nothing to switch to, so the page has no **Switch workspace**.
 
 It appears when you open a page that your role does not allow:
 
@@ -89,6 +91,8 @@ A session ends when:
 | Field / option | Description | Required |
 | -------------- | ----------- | -------- |
 | Go home | Opens Home. On **This page doesn't exist** and **You don't have access**. | No |
+| Search | Opens the command palette. On **This page doesn't exist**, inside the app with its sidebar. Not on a `go/` address. | No |
+| Switch workspace | Opens the workspace switcher. On **You don't have access**, when you belong to more than one workspace. | No |
 | Reload | Loads the page again. On **Something went wrong**. | No |
 | Request ID | The ID of the request that failed. Shown when the server answered the failed request. | No |
 | Copy request ID | Copies the ID, so you can paste it into a message. | No |

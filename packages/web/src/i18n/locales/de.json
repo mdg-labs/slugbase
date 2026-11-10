@@ -2444,11 +2444,13 @@
     "goHome": "Zur Startseite",
     "notFound": {
       "title": "Diese Seite gibt es nicht",
-      "description": "Die Adresse ist möglicherweise falsch geschrieben, oder die Seite wurde verschoben."
+      "description": "Die Adresse ist möglicherweise falsch geschrieben, oder die Seite wurde verschoben.",
+      "search": "Suchen"
     },
     "forbidden": {
       "title": "Du hast keinen Zugriff",
-      "description": "Du bist kein Mitglied dieses Workspace, oder diese Seite ist nur für Administratoren."
+      "description": "Du bist kein Mitglied dieses Workspace, oder diese Seite ist nur für Administratoren.",
+      "switchWorkspace": "Workspace wechseln"
     },
     "serverError": {
       "title": "Etwas ist schiefgelaufen",

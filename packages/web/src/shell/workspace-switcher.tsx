@@ -1,7 +1,7 @@
 import { feedbackToast, type WorkspaceSwitcherAction, type WorkspaceSwitcherProps } from "@slugbase/ui/patterns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useState, type ReactElement } from "react";
+import { createContext, useContext, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery } from "../account/me.ts";
 import { ENTITLEMENTS_QUERY_KEY, WorkspaceLimitDialog, useWorkspaceLimitReached } from "../entitlements/index.ts";
@@ -11,6 +11,38 @@ import { useSwitchFailureMessage, useWorkspaceSwitch, workspacesQuery } from "./
 
 const WORKSPACE_SETTINGS_PATH = "/settings/workspace";
 const ADMIN_WORKSPACES_PATH = "/admin/workspaces";
+
+interface SwitcherOpenState {
+  readonly open: boolean;
+  readonly setOpen: (open: boolean) => void;
+}
+
+const SwitcherOpenContext = createContext<SwitcherOpenState | undefined>(undefined);
+
+/** Holds whether the workspace switcher's menu is open, so the sidebar's switcher and a page can both drive it. It sits above the shell. */
+export function WorkspaceSwitcherOpenProvider({ children }: { readonly children: ReactNode }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const value = useMemo(() => ({ open, setOpen }), [open]);
+  return <SwitcherOpenContext.Provider value={value}>{children}</SwitcherOpenContext.Provider>;
+}
+
+/**
+ * A function that opens the sidebar's workspace switcher, for a page inside the shell (below the `md` breakpoint it opens the
+ * drawer that holds it first). Absent where there is no shell around the page.
+ */
+export function useOpenWorkspaceSwitcher(): (() => void) | undefined {
+  const state = useContext(SwitcherOpenContext);
+  const setOpen = state?.setOpen;
+  return useMemo(
+    () =>
+      setOpen === undefined
+        ? undefined
+        : () => {
+            setOpen(true);
+          },
+    [setOpen],
+  );
+}
 
 /**
  * What the sidebar header's workspace switcher shows and does (doc 03 "App shell"), and the create-workspace
@@ -24,6 +56,7 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
   const api = router.options.context.api;
   const me = useQuery({ ...meQuery(api), staleTime: Number.POSITIVE_INFINITY });
   const list = useQuery(workspacesQuery(api));
+  const openState = useContext(SwitcherOpenContext);
   const { pending, switchTo } = useWorkspaceSwitch();
   const switchFailureMessage = useSwitchFailureMessage();
   const limitReached = useWorkspaceLimitReached();
@@ -104,6 +137,7 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
       });
     },
     actions,
+    ...(openState === undefined ? {} : { open: openState.open, onOpenChange: openState.setOpen }),
   };
 
   return {

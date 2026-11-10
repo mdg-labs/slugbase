@@ -1538,10 +1538,12 @@ export interface WorkspaceSwitcherProps {
     loading?: boolean;
     // (undocumented)
     loadingLabel: string;
+    onOpenChange?: (open: boolean) => void;
     // (undocumented)
     onRetry: () => void;
     // (undocumented)
     onSelect: (workspaceId: string) => void;
+    open?: boolean;
     plan?: ReactNode;
     // (undocumented)
     retryLabel: string;

@@ -7,6 +7,7 @@ import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createApiClient } from "../src/api/client.ts";
 import { createWebApp, type WebExtension } from "../src/index.ts";
 import { PRODUCT_NAME, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { HOME, stubWorkspaceServer } from "./workspace-server.ts";
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -61,6 +62,22 @@ describe("the 404 page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(window.location.pathname).toBe("/");
   });
 
+  it("offers a search beside Go home that opens the command palette", async () => {
+    stubApi();
+    await open("/no/such/page");
+
+    const main = await screen.findByRole("main");
+    const actions = within(main).getByRole("link", { name: "Go home" }).parentElement;
+    const search = within(main).getByRole("button", { name: "Search" });
+    expect(search.parentElement).toBe(actions);
+    expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+
+    fireEvent.click(search);
+
+    expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/no/such/page");
+  });
+
   it("does not take over a page an extension owns", async () => {
     stubApi();
     await open("/plan", [pageAt("/plan", () => <h1>Plan page</h1>)]);
@@ -76,6 +93,7 @@ describe("the 404 page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "Diese Seite gibt es nicht" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Zur Startseite" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Suchen" })).toBeTruthy();
   });
 });
 
@@ -92,13 +110,54 @@ describe("the 403 page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(screen.queryByText("This page doesn't exist")).toBeNull();
   });
 
+  it("offers Switch workspace beside Go home to a member of several workspaces, and it opens the workspace switcher", async () => {
+    stubWorkspaceServer();
+    await open("/403");
+
+    const main = await screen.findByRole("main");
+    const actions = within(main).getByRole("link", { name: "Go home" }).parentElement;
+    const switchWorkspace = await within(main).findByRole("button", { name: "Switch workspace" });
+    expect(switchWorkspace.parentElement).toBe(actions);
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    fireEvent.click(switchWorkspace);
+
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitemradio").map((item) => item.textContent)).toEqual(["Home", "Team"]);
+    expect(window.location.pathname).toBe("/403");
+  });
+
+  it("leaves Switch workspace out for a member of one workspace, who has nowhere to switch to", async () => {
+    stubWorkspaceServer({ workspaces: [HOME] });
+    await open("/403");
+
+    const main = await screen.findByRole("main");
+    await screen.findByRole("button", { name: "Workspace: Home" });
+    expect(within(main).getByRole("link", { name: "Go home" })).toBeTruthy();
+    expect(within(main).queryByRole("button", { name: "Switch workspace" })).toBeNull();
+  });
+
+  it("opens the drawer that holds the workspace switcher on a narrow screen", async () => {
+    stubMatchMedia(true);
+    stubWorkspaceServer();
+    await open("/403");
+
+    fireEvent.click(await within(await screen.findByRole("main")).findByRole("button", { name: "Switch workspace" }));
+
+    const drawer = await screen.findByRole("dialog", { name: "Navigation" });
+    expect(drawer.querySelector("[data-slot='sidebar-header']")).not.toBeNull();
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitemradio").map((item) => item.textContent)).toEqual(["Home", "Team"]);
+  });
+
   it("is written in German", async () => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
-    stubApi();
+    stubWorkspaceServer();
     await open("/403");
 
     expect(await screen.findByRole("heading", { level: 1, name: "Du hast keinen Zugriff" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Zur Startseite" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Workspace wechseln" })).toBeTruthy();
   });
 });
 
