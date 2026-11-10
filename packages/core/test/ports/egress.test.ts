@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EgressBlocked,
+  EgressBusy,
   EgressError,
   EgressTimeout,
   EgressTooLarge,
@@ -13,12 +14,17 @@ describe("the egress errors", () => {
     [new EgressBlocked(), "egress_blocked", "EgressBlocked"],
     [new EgressTimeout(), "egress_timeout", "EgressTimeout"],
     [new EgressTooLarge(), "egress_too_large", "EgressTooLarge"],
+    [new EgressBusy(), "egress_busy", "EgressBusy"],
     [new EgressError(), "egress_failed", "EgressError"],
   ])("%s is an EgressError with a fixed code and no cause", (error, code, name) => {
     expect(error).toBeInstanceOf(EgressError);
     expect(error.code).toBe(code);
     expect(error.name).toBe(name);
     expect(error.cause).toBeUndefined();
+  });
+
+  it("gives a busy refusal a fixed message that names no network detail", () => {
+    expect(new EgressBusy().message).toBe("The request could not be started now");
   });
 });
 

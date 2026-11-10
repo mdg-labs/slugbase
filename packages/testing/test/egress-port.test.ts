@@ -1,4 +1,4 @@
-import { EgressBlocked, EgressError, EgressTimeout, EgressTooLarge, type EgressPort } from "@slugbase/core";
+import { EgressBlocked, EgressBusy, EgressError, EgressTimeout, EgressTooLarge, type EgressPort } from "@slugbase/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { FakeEgress, FakeEgressError } from "../src/index.ts";
 
@@ -16,6 +16,7 @@ describe("FakeEgress against EgressPort", () => {
       ["egress_blocked", new EgressBlocked()],
       ["egress_timeout", new EgressTimeout()],
       ["egress_too_large", new EgressTooLarge()],
+      ["egress_busy", new EgressBusy()],
       ["egress_failed", new EgressError()],
     ] as const;
     for (const [code, real] of pairs) {

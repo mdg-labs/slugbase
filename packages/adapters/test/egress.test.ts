@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import {
   EGRESS_MAX_REQUEST_BODY_BYTES,
   EgressBlocked,
+  EgressBusy,
   EgressError,
   EgressTimeout,
   EgressTooLarge,
@@ -872,9 +873,17 @@ describe("limits", () => {
     }
 
     const typed = (error: unknown): string =>
-      error instanceof EgressTimeout ? "timeout" : error instanceof EgressBlocked ? "blocked" : error instanceof EgressError ? "error" : "other";
+      error instanceof EgressTimeout
+        ? "timeout"
+        : error instanceof EgressBlocked
+          ? "blocked"
+          : error instanceof EgressBusy
+            ? "busy"
+            : error instanceof EgressError
+              ? "error"
+              : "other";
 
-    it("starts at most the cap of lookups and refuses the rest at once with an egress error", async () => {
+    it("starts at most the cap of lookups and refuses the rest at once with egress_busy", async () => {
       const dns = stalling();
       const egress = new HttpEgress({ nodeEnv: "test", resolve: dns.resolve });
       const held = Array.from({ length: CAP }, (_, index) => rejection(egress, get(`http://held${String(index)}.example.test/`, { timeoutMs: 400 })));
@@ -886,10 +895,47 @@ describe("limits", () => {
         Array.from({ length: 6 }, (_, index) => rejection(egress, get(`http://extra${String(index)}.example.test/`, { timeoutMs: 5_000 }))),
       );
       expect(Date.now() - started).toBeLessThan(200);
-      expect(extras.map(typed)).toEqual(Array.from({ length: 6 }, () => "error"));
+      expect(extras.map(typed)).toEqual(Array.from({ length: 6 }, () => "busy"));
       expect(dns.calls).toHaveLength(CAP);
 
       expect((await Promise.all(held)).map(typed)).toEqual(Array.from({ length: CAP }, () => "timeout"));
+    });
+
+    it("refuses with a fixed egress_busy error that names no host or address", async () => {
+      const dns = stalling();
+      const egress = new HttpEgress({ nodeEnv: "test", resolve: dns.resolve });
+      const held = Array.from({ length: CAP }, (_, index) => rejection(egress, get(`http://fixed${String(index)}.example.test/`, { timeoutMs: 100 })));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const refused = await rejection(egress, get("http://refused.example.test/"));
+      expect(refused).toBeInstanceOf(EgressBusy);
+      expect(refused).toMatchObject({ code: "egress_busy", name: "EgressBusy", message: new EgressBusy().message });
+      expect((refused as Error).message).not.toMatch(/refused|example|\d+\.\d+/);
+      await Promise.all(held);
+    });
+
+    it("refuses a redirect hop to a host name with egress_busy after the first hop, to a literal address, was sent", async () => {
+      const dns = stalling();
+      const egress = new HttpEgress({ nodeEnv: "test", resolve: dns.resolve, testOnly: { allowAddresses: ["127.0.0.1"] } });
+      const origin = await serve(redirect("http://landing.example.test/page", 303));
+      const held = Array.from({ length: CAP }, (_, index) => rejection(egress, get(`http://hop-held${String(index)}.example.test/`, { timeoutMs: 200 })));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(dns.calls).toHaveLength(CAP);
+
+      const refused = await rejection(egress, {
+        url: `http://127.0.0.1:${String(origin.port)}/start`,
+        method: "POST",
+        headers: { "content-type": "text/plain" },
+        body: new TextEncoder().encode("payload"),
+        timeoutMs: 2_000,
+        maxBytes: 100,
+      });
+      expect(refused).toBeInstanceOf(EgressBusy);
+      expect(origin.requests).toHaveLength(1);
+      expect(origin.requests[0]?.method).toBe("POST");
+      expect(origin.requests[0]?.body.toString()).toBe("payload");
+      expect(dns.calls).toHaveLength(CAP);
+      await Promise.all(held);
     });
 
     it("keeps a slot until its lookup settles, not until the request's deadline", async () => {
@@ -900,14 +946,14 @@ describe("limits", () => {
       );
       expect(first.map(typed)).toEqual(Array.from({ length: CAP }, () => "timeout"));
 
-      expect(typed(await rejection(egress, get("http://after-deadline.example.test/")))).toBe("error");
+      expect(typed(await rejection(egress, get("http://after-deadline.example.test/")))).toBe("busy");
       expect(dns.calls).toHaveLength(CAP);
 
       dns.pending[0]?.(["8.8.8.8"]);
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(typed(await rejection(egress, get("http://freed.example.test/", { timeoutMs: 50 })))).toBe("timeout");
       expect(dns.calls).toHaveLength(CAP + 1);
-      expect(typed(await rejection(egress, get("http://full-again.example.test/")))).toBe("error");
+      expect(typed(await rejection(egress, get("http://full-again.example.test/")))).toBe("busy");
       expect(dns.calls).toHaveLength(CAP + 1);
     });
 
@@ -945,7 +991,8 @@ describe("limits", () => {
   describe("sharing one lookup budget across instances", () => {
     // The threadpool is one per process, so instances built for one process draw on one budget; a share
     // reserves slots for its instance so that a stall on another instance cannot take them.
-    const typed = (error: unknown): string => (error instanceof EgressTimeout ? "timeout" : error instanceof EgressError ? "error" : "other");
+    const typed = (error: unknown): string =>
+      error instanceof EgressTimeout ? "timeout" : error instanceof EgressBusy ? "busy" : error instanceof EgressError ? "error" : "other";
 
     function stallingFor(calls: string[]) {
       return (hostname: string): Promise<readonly string[]> => {
@@ -971,13 +1018,13 @@ describe("limits", () => {
       expect(aiCalls).toHaveLength(2);
       expect(sharedCalls).toHaveLength(1);
 
-      expect(typed(await rejection(ai, get("http://ai-extra.example.test/")))).toBe("error");
-      expect(typed(await rejection(shared, get("http://shared-extra.example.test/")))).toBe("error");
+      expect(typed(await rejection(ai, get("http://ai-extra.example.test/")))).toBe("busy");
+      expect(typed(await rejection(shared, get("http://shared-extra.example.test/")))).toBe("busy");
       expect(aiCalls).toHaveLength(2);
       expect(sharedCalls).toHaveLength(1);
       expect((await Promise.all(held)).map(typed)).toEqual(["timeout", "timeout", "timeout"]);
 
-      expect(typed(await rejection(shared, get("http://after-deadline.example.test/")))).toBe("error");
+      expect(typed(await rejection(shared, get("http://after-deadline.example.test/")))).toBe("busy");
       expect(sharedCalls).toHaveLength(1);
     });
 
@@ -999,7 +1046,7 @@ describe("limits", () => {
       await wait(20);
       expect(aiCalls).toHaveLength(1);
       expect(oidcCalls).toHaveLength(1);
-      expect(typed(await rejection(ai, get("http://provider-2.example.test/")))).toBe("error");
+      expect(typed(await rejection(ai, get("http://provider-2.example.test/")))).toBe("busy");
       expect(aiCalls).toHaveLength(1);
       await Promise.all([...stalled, aiTry, oidcTry]);
     });
@@ -1024,7 +1071,7 @@ describe("limits", () => {
         lookups: budget.share(0),
       });
       expect(typed(await rejection(egress, get("http://one.example.test/", { timeoutMs: 30 })))).toBe("timeout");
-      expect(typed(await rejection(egress, get("http://two.example.test/")))).toBe("error");
+      expect(typed(await rejection(egress, get("http://two.example.test/")))).toBe("busy");
       pending[0]?.(["8.8.8.8"]);
       await wait(20);
       expect(typed(await rejection(egress, get("http://three.example.test/", { timeoutMs: 30 })))).toBe("timeout");

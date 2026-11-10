@@ -51,7 +51,7 @@ export interface EgressResponse {
   readonly body: Uint8Array;
 }
 
-export type EgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large";
+export type EgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large" | "egress_busy";
 
 /**
  * A request the port could not complete. The messages are fixed texts: they
@@ -93,6 +93,19 @@ export class EgressTooLarge extends EgressError {
 }
 
 /**
+ * The port refused a hop of the request because its share of the host-name lookups has no free slot. That hop was not sent and its target was not judged,
+ * so the refusal says nothing about the URL: a caller that stores an answer must not store this one as the target's, and may try again later. A hop
+ * that was already answered with a redirect may have been sent, so a caller that repeats a request with side effects must not rely on this error
+ * to mean that nothing was sent. The message names no host, address or limit.
+ */
+export class EgressBusy extends EgressError {
+  constructor() {
+    super("egress_busy", "The request could not be started now");
+    this.name = "EgressBusy";
+  }
+}
+
+/**
  * All server-initiated HTTP: resolves the host, validates the address, pins the
  * resolved IP and enforces timeouts and size caps (doc 01 section 6). Redirects
  * (301, 302, 303, 307, 308) are followed, at most five per request; every hop
@@ -101,7 +114,7 @@ export class EgressTooLarge extends EgressError {
  * chain and a response outside `acceptContentTypes` fail with an `EgressError`;
  * a hop to an address or scheme the port refuses, or an `https` to `http` hop of a request
  * that sets `refuseHttpDowngrade`, fails with `EgressBlocked`.
- * Failures are `EgressError`s.
+ * Failures are `EgressError`s; `EgressBusy` is the one that says the hop it refused was never started (an earlier hop of a redirect chain may have been sent), and every other one says it was tried.
  */
 export interface EgressPort extends Port {
   request(request: EgressRequest): Promise<EgressResponse>;

@@ -2922,6 +2922,11 @@ export interface EgressBodylessRequest extends EgressRequestBase {
 }
 
 // @public
+export class EgressBusy extends EgressError {
+    constructor();
+}
+
+// @public
 export class EgressError extends Error {
     constructor(code?: EgressErrorCode, message?: string);
     // (undocumented)
@@ -2929,7 +2934,7 @@ export class EgressError extends Error {
 }
 
 // @public (undocumented)
-export type EgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large";
+export type EgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large" | "egress_busy";
 
 // @public
 export interface EgressPort extends Port {
@@ -6238,6 +6243,10 @@ export type PageFetchOutcome = {
 | {
     readonly kind: "blocked";
 }
+/** The port refused a hop of the request for lack of a lookup slot: the refused hop asked nothing of its host, so this says nothing about the page and a caller does not store it. */
+| {
+    readonly kind: "busy";
+}
 /** Anything else: no connection, a timeout, a status outside 2xx, a page of another type or one that cannot be read. */
 | {
     readonly kind: "failed";
@@ -6294,7 +6303,7 @@ export type PageMetadataLookupOutcome = {
 | {
     readonly kind: "blocked";
 }
-/** The page could not be read, or the budget ran out. */
+/** The page could not be read, the budget ran out, or the port had no lookup slot for the request; the member cannot tell these apart. */
 | {
     readonly kind: "failed";
 };

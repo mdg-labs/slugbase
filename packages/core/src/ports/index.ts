@@ -51,6 +51,7 @@ export type { EntitlementSource, WorkspaceEntitlementGrant } from "./entitlement
 export {
   EGRESS_MAX_REQUEST_BODY_BYTES,
   EgressBlocked,
+  EgressBusy,
   EgressError,
   EgressTimeout,
   EgressTooLarge,

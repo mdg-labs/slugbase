@@ -1,6 +1,7 @@
 import { FakeEgress } from "@slugbase/testing-ports";
 import { describe, expect, it } from "vitest";
 import {
+  EgressBusy,
   FAVICON_CONTENT_TYPES,
   FAVICON_LINK_CANDIDATES_MAX,
   FAVICON_MAX_BYTES,
@@ -200,5 +201,66 @@ describe("a port that cannot answer", () => {
     const imageCodec: ImageCodecPort = { available: true, reencodeIcon: () => Promise.reject(new Error("the codec crashed")) };
 
     await expect(fetchFavicon({ egress, imageCodec }, "example.test")).rejects.toThrow("the codec crashed");
+  });
+});
+
+describe("a lookup the port refuses for lack of a slot", () => {
+  /** A port that answers from `FakeEgress` except for the URLs it refuses as busy, and records every URL it is asked for. */
+  function busyAt(busy: readonly string[], routes: ConstructorParameters<typeof FakeEgress>[0]) {
+    const inner = new FakeEgress(routes);
+    const asked: string[] = [];
+    return {
+      asked,
+      available: true as const,
+      request: (request: Parameters<FakeEgress["request"]>[0]) => {
+        asked.push(request.url);
+        return busy.includes(request.url) ? Promise.reject(new EgressBusy()) : inner.request(request);
+      },
+    };
+  }
+
+  it("rejects at /favicon.ico, so the caller retries instead of recording none, and asks for no further candidate", async () => {
+    const egress = busyAt(["https://example.test/favicon.ico"], {
+      "http://example.test/favicon.ico": ico(),
+      "https://example.test/": html('<link rel="icon" href="/real.png">'),
+      "https://example.test/real.png": { contentType: "image/png", body: ICON_BYTES },
+    });
+    const images = codec();
+
+    await expect(fetchFavicon({ egress, imageCodec: images }, "example.test")).rejects.toBeInstanceOf(EgressBusy);
+
+    expect(egress.asked).toEqual(["https://example.test/favicon.ico"]);
+    expect(images.seen).toEqual([]);
+  });
+
+  it("rejects when the home page is refused, and asks for no icon after it", async () => {
+    const egress = busyAt(["https://example.test/"], {
+      "https://example.test/favicon.ico": { status: 404, contentType: "image/png" },
+      "http://example.test/favicon.ico": { status: 404, contentType: "image/png" },
+      "http://example.test/": html('<link rel="icon" href="/real.png">'),
+    });
+
+    await expect(fetchFavicon({ egress, imageCodec: codec() }, "example.test")).rejects.toBeInstanceOf(EgressBusy);
+
+    expect(egress.asked).toEqual(["https://example.test/favicon.ico", "http://example.test/favicon.ico", "https://example.test/"]);
+  });
+
+  it("rejects when a link candidate is refused, instead of trying the next one", async () => {
+    const egress = busyAt(["https://example.test/one.png"], {
+      "https://example.test/favicon.ico": { status: 404, contentType: "image/png" },
+      "http://example.test/favicon.ico": { status: 404, contentType: "image/png" },
+      "https://example.test/": html('<link rel="icon" href="/one.png"><link rel="icon" href="/two.png">'),
+      "https://example.test/two.png": { contentType: "image/png", body: ICON_BYTES },
+    });
+
+    await expect(fetchFavicon({ egress, imageCodec: codec() }, "example.test")).rejects.toBeInstanceOf(EgressBusy);
+
+    expect(egress.asked).not.toContain("https://example.test/two.png");
+  });
+
+  it("recognises the refusal by its code, as the fake of the port throws it", async () => {
+    const egress = { available: true as const, request: () => Promise.reject(Object.assign(new Error("The request could not be started now"), { code: "egress_busy" })) };
+
+    await expect(fetchFavicon({ egress, imageCodec: codec() }, "example.test")).rejects.toMatchObject({ code: "egress_busy" });
   });
 });

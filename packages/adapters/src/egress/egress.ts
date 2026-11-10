@@ -6,6 +6,7 @@ import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import {
   EGRESS_MAX_REQUEST_BODY_BYTES,
   EgressBlocked,
+  EgressBusy,
   EgressError,
   EgressTimeout,
   EgressTooLarge,
@@ -279,7 +280,7 @@ function decodersFor(header: string | undefined): Readable[] | undefined {
  * hop's resolving, connecting and reading, and the decoded body is cut off at
  * `maxBytes`. An instance runs host-name lookups only within its share of the process's lookup budget (three in all, with
  * a reserve for each instance of the process), counted until each lookup itself settles and not until the request's
- * deadline, and refuses a further one at once. A response outside the caller's content-type allowlist is refused
+ * deadline, and refuses a further one at once with `EgressBusy`, which no other failure uses. A response outside the caller's content-type allowlist is refused
  * once its headers arrive. An instance built with `privateOrigin` also connects to
  * the loopback, private, CGNAT and unique-local addresses of that one origin.
  */
@@ -404,7 +405,7 @@ export class HttpEgress implements EgressPort {
     if (target.literal === undefined) {
       const release = this.#lookups.acquire();
       if (release === undefined) {
-        throw new EgressError();
+        throw new EgressBusy();
       }
       let texts: readonly string[];
       try {

@@ -1,6 +1,6 @@
 import { FakeEgress } from "@slugbase/testing-ports";
 import { describe, expect, it } from "vitest";
-import { lookupPageMetadata, type CachedPageMetadata, type PageMetadata, type PageMetadataCache, type PageMetadataLookupDependencies } from "../../src/index.ts";
+import { EgressBusy, fetchPageMetadata, lookupPageMetadata, type CachedPageMetadata, type PageMetadata, type PageMetadataCache, type PageMetadataLookupDependencies } from "../../src/index.ts";
 
 // The synchronous metadata lookup (doc 02 section 5.4, doc 10 T6 and T13): the URL is judged as a bookmark's URL is before anything is read or
 // requested; a successful cached result is served without a request; a target the port refuses is `blocked` and any other failure `failed`, and
@@ -151,6 +151,25 @@ describe("lookupPageMetadata", () => {
 
     expect(await lookup(new FakeEgress(), cache, CANONICAL)).toEqual({ kind: "failed" });
     expect(cache.writes).toEqual([]);
+  });
+
+  it("answers failed, the same as for any failure, and caches nothing, when the port refuses for lack of a lookup slot", async () => {
+    const cache = memoryCache();
+    const busy = { available: true as const, request: () => Promise.reject(new EgressBusy()) };
+    const failing = { available: true as const, request: () => Promise.reject(new Error("unclassified")) };
+
+    const refused = await lookupPageMetadata({ egress: busy, cache, budgetMs: 3_000, now: () => 0 }, CANONICAL);
+
+    expect(refused).toEqual({ kind: "failed" });
+    expect(refused).toEqual(await lookupPageMetadata({ egress: failing, cache, budgetMs: 3_000, now: () => 0 }, CANONICAL));
+    expect(cache.writes).toEqual([]);
+    expect(cache.rows.size).toBe(0);
+  });
+
+  it("reports the refusal to its other caller as its own outcome, not as a failed fetch", async () => {
+    const busy = { available: true as const, request: () => Promise.reject(Object.assign(new Error("busy"), { code: "egress_busy" })) };
+
+    expect(await fetchPageMetadata(busy, CANONICAL, 1_000)).toEqual({ kind: "busy" });
   });
 
   it("gives the fetch what is left of the budget after the cache read, and the page's size and type limits", async () => {

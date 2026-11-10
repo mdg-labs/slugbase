@@ -14,8 +14,8 @@ import { defineJob } from "../job.ts";
 // The fetch (`fetchFavicon` of `@slugbase/core`) goes through the egress port and nowhere else: `/favicon.ico` and the `<link rel=icon>` targets of the home page,
 // each read to at most 64 KiB (a longer body is refused, never cut), only image content types, every body handed to the image codec, which refuses an SVG and anything
 // but a PNG, JPEG, GIF, WebP or ICO and an image above its pixel cap, and encodes the PNGs afresh. A host none of whose candidates gives a usable icon is stored as
-// `none`; that is an answer, not an error of the job. An egress port or a codec that is not configured, and a database error, are errors of the job and are retried;
-// nothing is stored for them. No transaction is open while the requests run, so a slow site holds no database connection.
+// `none`; that is an answer, not an error of the job. An egress port or a codec that is not configured, a request the port refused for lack of a lookup slot (`egress_busy`, which says nothing
+// about the host), and a database error, are errors of the job and are retried; nothing is stored for them. No transaction is open while the requests run, so a slow site holds no database connection.
 //
 // The queue keeps one waiting job for each host, workspace and account (`dedupe`), so a host asked for by one member again and again is fetched once, and a waiting job of
 // one member never stands in for another's.
