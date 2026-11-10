@@ -296,6 +296,9 @@ else
   fail "release.yml does not exist"
 fi
 
+# The tag step of the same workflow has its own test.
+bash "$here/release-tag.test.sh" || failures=$((failures + 1))
+
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2
   exit 1

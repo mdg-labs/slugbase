@@ -18,11 +18,15 @@
 #
 # A pre-release carries `:<version>` only. A version without a suffix also carries
 # `:<major>.<minor>`. `:latest` is never planned: it moves only when a release is
-# published (Q92). The script refuses, with a non-zero exit and no `release=true`,
-# when it cannot read either version, when the new version is not valid semver
-# (build metadata is not allowed: it is not a valid image tag), when a git tag
-# `v<version>` or an image `:<version>` already exists, or when the registry
-# answers anything other than "not found" to the existence check.
+# published (Q92). The git tag `git_tag` is not created here: the build job creates
+# it (scripts/release-tag.sh) on the pushed commit after the image is pushed and
+# before it opens the draft release from that tag, because GitHub creates the tag of
+# a draft only when the draft is published. The script refuses, with a non-zero
+# exit and no `release=true`, when it cannot read either version, when the new
+# version is not valid semver (build metadata is not allowed: it is not a valid
+# image tag), when a git tag `v<version>` or an image `:<version>` already exists,
+# or when the registry answers anything other than "not found" to the existence
+# check.
 #
 # Environment:
 #   RELEASE_IMAGE    image name without a tag; default ghcr.io/mdg-labs/slugbase.
@@ -88,6 +92,8 @@ fi
 major="${BASH_REMATCH[1]}"
 minor="${BASH_REMATCH[2]}"
 
+# The tag is made after the image push, so a tag that exists before then belongs
+# to an earlier run or to someone else, and the version is refused.
 git_tag="v${new_version}"
 if git rev-parse --quiet --verify "refs/tags/${git_tag}" > /dev/null; then
   die "the git tag ${git_tag} already exists."
