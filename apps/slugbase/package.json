@@ -1,6 +1,6 @@
 {
   "name": "slugbase",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0",
   "private": true,
   "description": "SlugBase Community Edition composition root",
   "license": "AGPL-3.0-only",
