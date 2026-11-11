@@ -27,9 +27,6 @@ export interface BookmarksToolbarProps {
 
 const ALL_SCOPE = "all";
 
-// A segmented choice made as high as the buttons and selects beside it, with its label kept for assistive technology alone.
-const COMPACT_SEGMENTS = "[&>span:first-child]:sr-only [&_[data-slot=segmented-choice-option]]:h-7.5 sm:[&_[data-slot=segmented-choice-option]]:h-6.5";
-
 function isView(value: string): value is BookmarkView {
   return value === "grid" || value === "table";
 }
@@ -164,7 +161,8 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
     <section aria-label={t("bookmarks.list.toolbar")} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <SearchField
-          className="w-full sm:w-auto sm:min-w-48 sm:flex-1 [&_label]:sr-only"
+          className="w-full sm:w-auto sm:min-w-48 sm:flex-1"
+          hideLabel
           label={t("bookmarks.list.search.label")}
           onSearch={(text) => {
             controls.update({ q: text === "" ? undefined : text }, { replace: true });
@@ -173,10 +171,11 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
           value={search.q ?? ""}
         />
         <SegmentedChoice
-          className={COMPACT_SEGMENTS}
+          hideLabel
           label={t("bookmarks.list.scope.label")}
           onValueChange={changeScope}
           options={scopeOptions}
+          size="sm"
           value={search.scope ?? ALL_SCOPE}
         />
         <Button
@@ -206,7 +205,16 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
           options={sortOptions}
           value={search.sort ?? DEFAULT_SORT}
         />
-        <SegmentedChoice className={`${COMPACT_SEGMENTS} ms-auto`} iconOnly label={t("bookmarks.list.view.label")} onValueChange={changeView} options={viewOptions} value={search.view} />
+        <SegmentedChoice
+          className="ms-auto"
+          hideLabel
+          iconOnly
+          label={t("bookmarks.list.view.label")}
+          onValueChange={changeView}
+          options={viewOptions}
+          size="sm"
+          value={search.view}
+        />
       </div>
       {chips.length === 0 ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2">

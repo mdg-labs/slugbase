@@ -69,4 +69,34 @@ describe("LoadMore", () => {
 
     expect(onValueChange).toHaveBeenCalledExactlyOnceWith("48");
   });
+
+  it("keeps a hidden size label as the name of the select, for assistive technology only", async () => {
+    const { container } = render(
+      <LoadMore
+        count="Showing 24 of 100"
+        hasMore
+        loadMoreLabel="Load more"
+        onLoadMore={() => undefined}
+        pageSize={{ hideLabel: true, label: "Per load", value: "24", options: [{ value: "24", label: "24 per load" }], onValueChange: () => undefined }}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "Per load" })).toBeTruthy();
+    expect(screen.getByText("Per load").className).toContain("sr-only");
+    await expectNoViolations(container);
+  });
+
+  it("shows the size label unless it is hidden", () => {
+    render(
+      <LoadMore
+        count="Showing 24 of 100"
+        hasMore
+        loadMoreLabel="Load more"
+        onLoadMore={() => undefined}
+        pageSize={{ label: "Per load", value: "24", options: [{ value: "24", label: "24 per load" }], onValueChange: () => undefined }}
+      />,
+    );
+
+    expect(screen.getByText("Per load").className).not.toContain("sr-only");
+  });
 });

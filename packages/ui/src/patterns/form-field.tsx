@@ -4,6 +4,8 @@ import { cn } from "../lib/utils.ts";
 
 export interface FormFieldProps {
   label: ReactNode;
+  /** Keeps the label from showing while it still names the control to assistive technology, for a field whose purpose its placeholder shows. */
+  hideLabel?: boolean;
   /** Names the field as it is posted. */
   name?: string;
   /** Help shown under the field; the field is described by it. */
@@ -16,11 +18,11 @@ export interface FormFieldProps {
 }
 
 /** A label, a control and the message that says what is wrong with its value, tied together for assistive technology. */
-export function FormField({ label, name, description, error, children, className }: FormFieldProps): ReactElement {
+export function FormField({ label, hideLabel = false, name, description, error, children, className }: FormFieldProps): ReactElement {
   const invalid = error !== undefined && error !== null && error !== false;
   return (
     <Field className={cn("items-stretch gap-1.5", className)} invalid={invalid} name={name}>
-      <FieldLabel>{label}</FieldLabel>
+      <FieldLabel className={hideLabel ? "sr-only" : undefined}>{label}</FieldLabel>
       {children}
       {description === undefined ? null : <FieldDescription>{description}</FieldDescription>}
       <FieldError className="text-destructive-text" match={invalid}>

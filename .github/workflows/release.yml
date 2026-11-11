@@ -278,7 +278,10 @@ jobs:
           done
       # The release is a draft made from the existing tag, a pre-release when the
       # version has a suffix. --verify-tag aborts if the tag is missing instead of
-      # letting GitHub create one from the default branch.
+      # letting GitHub create one from the default branch. The notes are
+      # docs/releases/<version>.md of the built commit, when it exists, followed by
+      # the lines that name the image (scripts/release-notes.sh), whose digest line
+      # the publish job reads.
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -290,17 +293,7 @@ jobs:
         run: |
           set -euo pipefail
           notes="$RUNNER_TEMP/release-notes.md"
-          {
-            echo "Image: $IMAGE@$DIGEST"
-            echo
-            echo "Tags: ${TAGS//,/, }"
-            echo
-            echo "Publishing this release points the tags latest and <major>.<minor> at this image after the signature is verified again. A pre-release moves neither."
-            echo
-            echo "Built from $SHA with an SPDX SBOM and provenance attestations. The image and both attestations are signed with cosign, keyless, by the release workflow of this repository on main."
-            echo
-            echo "Verify the image before you run it, with scripts/verify-image.sh from this release: bash scripts/verify-image.sh $IMAGE@$DIGEST"
-          } > "$notes"
+          bash scripts/release-notes.sh "$notes"
           flags=(--draft --verify-tag --title "$VERSION" --notes-file "$notes")
           if [[ "$PRERELEASE" == "true" ]]; then
             flags+=(--prerelease)

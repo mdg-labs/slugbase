@@ -69,6 +69,7 @@ import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
 import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import { createUsageBuffer, type UsageBuffer } from "./usage/buffer.ts";
+import { createReadReserve } from "./read-reserve.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
@@ -596,11 +597,13 @@ export function createServer(options: CreateServerOptions): Server {
   if (options.database === undefined) {
     metrics.setPoolSize(DEFAULT_SERVER_POOL_SIZE);
   }
+  const readReserve = createReadReserve({ poolSize: DEFAULT_SERVER_POOL_SIZE });
   const context: ModuleContext = Object.freeze({
     config,
     logger,
     adapters,
-    withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
+    // The gauge counts every transaction, the ones that wait for a place of the reserve included; a pool handed in by a test is taken to have the pool size of the composition.
+    withTenant: metrics.instrumentTenant(readReserve.limit(database.withTenant.bind(database))),
   });
   // The entitlement engine is part of the server: it asks the composition's source for the values of the catalog, keyed by the
   // version each workspace's row carries (doc 01 section 7.5). Stage 9 and `GET /entitlements` both read it.
@@ -815,7 +818,7 @@ export function createServer(options: CreateServerOptions): Server {
     migrations: composition.migrations,
     jobs: composition.jobs,
     schedules: composition.schedules,
-    fetch: async (request) => app.fetch(request),
+    fetch: async (request) => readReserve.inRequest(request.method, () => app.fetch(request)),
 
     async start(startOptions = {}) {
       if (config.NODE_ENV === "production" && options.database === undefined) {
@@ -839,7 +842,7 @@ export function createServer(options: CreateServerOptions): Server {
       const listener = createAdaptorServer({
         overrideGlobalObjects: false,
         fetch: async (request, env) => {
-          const response = await app.fetch(request, env);
+          const response = await readReserve.inRequest(request.method, () => app.fetch(request, env));
           if (!draining) {
             return response;
           }

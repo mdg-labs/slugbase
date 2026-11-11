@@ -10,7 +10,8 @@
 //   search       the `search` scenario and each of its terms
 //   import       `go_import` and `list_import`, the /go and list budgets while an import is in flight, which are ratios to the same run's steady /go and list p95 (budgets.js RATIO_BUDGETS): their
 //                cause is the import (its lock, its load), not /go or the list on their own, so they are not filed under `go` or `list`, whose budgets hold with no import. The issue lists every ratio row of
-//                the run, with both p95, the ratio and the limit, and says which missed because the import scenario was saturated or dropped arrivals, and which were not judged (only the steady side saturated, or dropped arrivals) and why
+//                the run, with both p95, the ratio and the limit, and says which missed because the import scenario was saturated or dropped arrivals, and which were not judged (only the steady side saturated, or dropped arrivals) and why,
+//                and the pool and the lock waits sampled while an import was in flight (`importPhase.pool`, `importPhase.lockWaits` of the result): they say whether the creates that wait for the import's lock held the server's connections
 //   write load   the write-load check of /go (doc 01 section 8.1), which is not a p95 and has its own issue
 // A run that exceeds a budget whose issue is open comments on that issue (the lowest number when the title is on several), and one whose issue is not open creates
 // it. The title must match exactly: an issue of another scenario, or one that names several, is never extended. A result that cannot be read, a budget of a scenario
@@ -134,6 +135,17 @@ export function parseResult(text) {
       fail(`budget ${budget.name} has no ok and saturated flags`);
     }
   }
+  // The pool and the lock waits sampled while an import was in flight (run.mjs): a result without them, or with a figure that is not a number, is not one the report can explain an import budget with.
+  if (!isRecord(result.importPhase)) {
+    fail("result.json has no importPhase");
+  }
+  requireCounts(result.importPhase.pool, ["intervalMs", "samples", "size", "max", "p95", "samplesAboveSize"], "importPhase.pool");
+  requireCounts(result.importPhase.lockWaits, ["intervalMs", "samples", "max", "p95"], "importPhase.lockWaits");
+  for (const [name, figure] of [["importPhase.pool", result.importPhase.pool], ["importPhase.lockWaits", result.importPhase.lockWaits]]) {
+    if (figure.samples < 1 || figure.p95 > figure.max) {
+      fail(`${name} has no sample, or a p95 above its maximum`);
+    }
+  }
   requireCounts(result.writeLoad, ["requests", "updates", "elapsedSeconds", "flushIntervalSeconds", "limit"], "writeLoad");
   if (typeof result.writeLoad.ok !== "boolean") {
     fail("writeLoad has no ok flag");
@@ -192,6 +204,13 @@ function describe(result, group, rows, runUrl, event) {
       lines.push(
         "",
         "A ratio is the p95 while an import is in flight over the p95 of the steady scenario of the same run (budgets.js `RATIO_BUDGETS`), so that the speed of the runner machine cancels. An import scenario that is saturated or dropped arrivals is a miss, since its p95 is the time of a queue; a ratio is not judged when only its steady scenario is saturated or dropped arrivals (that scenario has a budget of its own).",
+        "",
+      );
+    }
+    if (group === "import") {
+      const { pool, lockWaits } = result.importPhase;
+      lines.push(
+        `Sampled every ${String(pool.intervalMs)} ms while an import was in flight: the server had at most ${String(pool.max)} tenant transactions open or waiting (p95 ${String(pool.p95)}) against a pool of ${String(pool.size)} connections, and ${String(pool.samplesAboveSize)} of ${String(pool.samples)} samples were above the pool, which is transactions queueing; at most ${String(lockWaits.max)} backends of the database waited for a lock (p95 ${String(lockWaits.p95)}, ${String(lockWaits.samples)} samples).`,
         "",
       );
     }

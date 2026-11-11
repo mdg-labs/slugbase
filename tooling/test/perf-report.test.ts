@@ -35,6 +35,11 @@ interface Load {
   saturated: boolean;
 }
 
+interface ImportPhase {
+  pool: { intervalMs: number; samples: number; size: number; max: number; p95: number; samplesAboveSize: number };
+  lockWaits: { intervalMs: number; samples: number; max: number; p95: number };
+}
+
 interface PerfResult {
   commit: string | null;
   database: { bookmarks: number; workspaces: number; largestWorkspace: number };
@@ -42,6 +47,7 @@ interface PerfResult {
   durationSeconds: number;
   scenarios: Record<string, Load>;
   budgets: Row[];
+  importPhase: ImportPhase;
   writeLoad: { requests: number; updates: number; elapsedSeconds: number; flushIntervalSeconds: number; limit: number; ok: boolean };
 }
 
@@ -93,6 +99,10 @@ function withinBudgets(): PerfResult {
     durationSeconds: 30,
     scenarios: Object.fromEntries(SCENARIOS.map((scenario) => [scenario, { completed: 1200, dropped: 0, peakVus: 3, maxVus: 100, saturated: false }])),
     budgets: budgets().map((budget) => withinLimit(budget)),
+    importPhase: {
+      pool: { intervalMs: 250, samples: 120, size: 10, max: 8, p95: 6, samplesAboveSize: 0 },
+      lockWaits: { intervalMs: 250, samples: 120, max: 3, p95: 2 },
+    },
     writeLoad: { requests: 10_000, updates: 2, elapsedSeconds: 8.1, flushIntervalSeconds: 10, limit: 2, ok: true },
   };
 }
@@ -256,6 +266,19 @@ describe("the issues a performance run files", () => {
     expect(summary(plain(exceeding(withinBudgets(), "go", "go during import")))).toEqual(["create: Performance budget exceeded: go", "create: Performance budget exceeded: import"]);
   });
 
+  it("says in the import issue how many tenant transactions the server had open against its pool and how many backends waited for a lock while an import was in flight", () => {
+    const queueing: PerfResult = {
+      ...exceeding(withinBudgets(), "go during import"),
+      importPhase: { pool: { intervalMs: 250, samples: 118, size: 10, max: 17, p95: 15, samplesAboveSize: 41 }, lockWaits: { intervalMs: 250, samples: 118, max: 10, p95: 9 } },
+    };
+    const body = plain(queueing)[0]?.body ?? "";
+    expect(body).toContain(
+      "Sampled every 250 ms while an import was in flight: the server had at most 17 tenant transactions open or waiting (p95 15) against a pool of 10 connections, and 41 of 118 samples were above the pool, which is transactions queueing; at most 10 backends of the database waited for a lock (p95 9, 118 samples).",
+    );
+    // Only the import issue carries them: the issue of go does not.
+    expect(plain(goAt230())[0]?.body).not.toContain("Sampled every");
+  });
+
   it("files a ratio miss with the saturation of neither side, and a ratio that was not judged (only its steady baseline saturated) only beside one that was exceeded, saying that it was not judged and why", () => {
     // A ratio within its limit is a pass: nothing is filed.
     expect(plain(withinBudgets())).toEqual([]);
@@ -353,6 +376,26 @@ describe("a result or a list of issues that cannot be read", () => {
     expect(() => parseResult(text({ ...withinBudgets(), scenarios: undefined }))).toThrow(/no scenarios/);
     expect(parseResult(text(withinBudgets())).commit).toBe(COMMIT);
     expect(parseResult(text({ ...withinBudgets(), commit: null })).commit).toBeNull();
+  });
+
+  it("refuses a result without the pool and the lock waits of the import phase, or with a figure that is not a number or a sample that was never taken", () => {
+    const sampled = withinBudgets();
+    expect(parseResult(text(sampled)).importPhase).toEqual(sampled.importPhase);
+    expect(() => parseResult(text({ ...sampled, importPhase: undefined }))).toThrow(/no importPhase/);
+    expect(() => parseResult(text({ ...sampled, importPhase: {} }))).toThrow(/importPhase\.pool is missing/);
+    expect(() => parseResult(text({ ...sampled, importPhase: { pool: sampled.importPhase.pool } }))).toThrow(/importPhase\.lockWaits is missing/);
+    expect(() => parseResult(text({ ...sampled, importPhase: { lockWaits: sampled.importPhase.lockWaits } }))).toThrow(/importPhase\.pool is missing/);
+    for (const key of ["intervalMs", "samples", "size", "max", "p95", "samplesAboveSize"] as const) {
+      for (const bad of [undefined, null, "8", Number.NaN]) {
+        expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, pool: { ...sampled.importPhase.pool, [key]: bad } } })), `pool ${key} ${String(bad)}`).toThrow(/importPhase\.pool has no number/);
+      }
+    }
+    for (const key of ["intervalMs", "samples", "max", "p95"] as const) {
+      expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, lockWaits: { ...sampled.importPhase.lockWaits, [key]: undefined } } })), `lockWaits ${key}`).toThrow(/importPhase\.lockWaits has no number/);
+    }
+    // A figure with no sample behind it is a phase that was never measured, and a p95 above the maximum is no distribution.
+    expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, pool: { ...sampled.importPhase.pool, samples: 0 } } }))).toThrow(/no sample/);
+    expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, lockWaits: { ...sampled.importPhase.lockWaits, p95: 9 } } }))).toThrow(/above its maximum/);
   });
 
   it("refuses a budget with a flag or a number that is not one, so an exceeded budget is never read as ok", () => {
@@ -569,6 +612,13 @@ describe("the script and the job that run it", () => {
     expect(listing.status).toBe(1);
     expect(listing.calls.filter((call) => call.includes("create") || call.includes("comment"))).toEqual([]);
   }, SUBPROCESS_TIMEOUT_MS);
+
+  it("writes the pool and the lock waits of the import phase to the job summary, from the names the result has them under", () => {
+    for (const field of ["pool.intervalMs", "pool.samples", "pool.max", "pool.p95", "pool.size", "pool.samplesAboveSize", "lockWaits.samples", "lockWaits.max", "lockWaits.p95"]) {
+      expect(workflow, field).toContain(`\\(.${field})`);
+    }
+    expect(workflow).toMatch(/jq -r '\.importPhase \| "Pool while an import was in flight/);
+  });
 
   it("names the commit in the result and in the job summary", () => {
     expect(readFileSync(resolve(ROOT, "scripts/perf/run.mjs"), "utf8")).toMatch(/commit: await measuredCommit\(\),\n\s+database: instance\.counts,/);

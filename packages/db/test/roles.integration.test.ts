@@ -78,6 +78,8 @@ interface RolesSqlOptions {
   env?: Record<string, string>;
   // Statements the same psql session runs before the script, in order.
   before?: string[];
+  // Statements the same psql session runs after the script, in order.
+  after?: string[];
 }
 
 function rolesSqlCommand(options: RolesSqlOptions): { args: string[]; env: Record<string, string> } {
@@ -90,6 +92,7 @@ function rolesSqlCommand(options: RolesSqlOptions): { args: string[]; env: Recor
       ...(options.before ?? []).flatMap((statement) => ["-c", statement]),
       "-f",
       ROLES_SQL,
+      ...(options.after ?? []).flatMap((statement) => ["-c", statement]),
     ],
     env: {
       PATH: process.env.PATH ?? "",
@@ -278,6 +281,21 @@ describe("provisioning script", () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("roles.sql must be run by a superuser");
     expect(await snapshot(owner)).toEqual(before);
+  });
+
+  // The server's statistics and log settings would otherwise keep the CREATE
+  // ROLE statements with their passwords; the settings stay on for the rest of
+  // the session, which ends with the script.
+  it("turns off statement tracking and statement logging for its session", () => {
+    const result = runRolesSql({
+      login: superuser,
+      args: ["-q", "-A", "-t", "-v", `app_password=${APP_PASSWORD}`, "-v", `migrator_password=${MIGRATOR_PASSWORD}`],
+      after: [
+        "SELECT current_setting('track_activities'), current_setting('pg_stat_statements.track_utility'), current_setting('log_statement'), current_setting('log_min_duration_statement'), current_setting('log_min_duration_sample'), current_setting('log_transaction_sample_rate'), current_setting('log_min_error_statement')",
+      ],
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout.split("\n")).toContain("off|off|none|-1|-1|0|panic");
   });
 
   it("refuses to run without the passwords, with a clear message", () => {

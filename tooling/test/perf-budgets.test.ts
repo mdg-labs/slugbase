@@ -1,7 +1,10 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { ROOT } from "./run.ts";
 
 interface Budget {
@@ -120,12 +123,20 @@ interface Evaluated {
   scenarios: Record<string, Load>;
 }
 
-// The runner is a script that does nothing but export `evaluate`, `loadOf` and `createsOf` when it is imported rather than run.
+interface Sampled {
+  pool: { intervalMs: number; samples: number; size: number; max: number; p95: number; samplesAboveSize: number };
+  lockWaits: { intervalMs: number; samples: number; max: number; p95: number };
+}
+
+// The runner is a script that does nothing but export `evaluate`, `importRunVus`, `loadOf`, `createsOf`, `summarizeSamples` and `startSampler` when it is imported rather than run.
 const runnerSpecifier = pathToFileURL(resolve(ROOT, "scripts/perf/run.mjs")).href;
-const { evaluate, loadOf, createsOf } = (await import(runnerSpecifier)) as {
+const { evaluate, importRunVus, loadOf, createsOf, startSampler, summarizeSamples } = (await import(runnerSpecifier)) as {
   evaluate: (summary: Summary, ids: string[], vus?: { capacity: number; of: string }) => Evaluated;
+  importRunVus: (createRate: number) => { capacity: number; of: string };
   loadOf: (summary: Summary, scenario: string, vus: { capacity: number; of: string }) => Load;
   createsOf: (summary: Summary) => Record<string, unknown> & { dropped: number };
+  startSampler: (options: { held: { state: string }; metricsPort: number; serverUrl: string; databaseName: string; lockWaitTimeoutMs?: number }) => { stop: () => Promise<Sampled> };
+  summarizeSamples: (values: number[]) => { max: number; p95: number };
 };
 
 // The k6 summary of a run in which every shape of `ids` was requested `requests` times: the p(95) of each budget (half its limit), the count of its requests, and the load of each scenario.
@@ -343,10 +354,22 @@ describe("performance budgets", () => {
     expect(() => createsOf(omitting({ metrics }, dropped))).toThrow(/no dropped arrivals for the creates/);
   });
 
+  it("counts the VUs of the creates only when the run has them, so a control run without them is saturated at the VUs it had", () => {
+    // /go and the list, the importer, and the creates when they are a scenario (scenarios.js leaves them out at a rate of 0).
+    expect(importRunVus(CREATE_RATE)).toEqual({ capacity: 301, of: "run" });
+    const control = importRunVus(0);
+    expect(control).toEqual({ capacity: 201, of: "run" });
+    const summary = summaryOf(IMPORT_SCENARIOS, { peakVus: 201 });
+    for (const scenario of IMPORT_SCENARIOS) {
+      expect(evaluate(summary, IMPORT_SCENARIOS, control).scenarios[scenario], scenario).toMatchObject({ peakVus: 201, maxVus: 201, saturated: true });
+      expect(evaluate(summary, IMPORT_SCENARIOS, importRunVus(CREATE_RATE)).scenarios[scenario], scenario).toMatchObject({ maxVus: 301, saturated: false });
+    }
+  });
+
   it("reports the VUs of the import run as the run's, against the VUs the run may use, so no figure claims more than that and no scenario is saturated by the others", () => {
     // The creates, /go, the list and the importer are active together: 221 VUs are more than a scenario's 100 and fewer than the 301 the run may use.
-    const together = { capacity: MAX_VUS * (IMPORT_SCENARIOS.length + 1) + 1, of: "run" };
-    expect(together.capacity).toBe(301);
+    const together = importRunVus(CREATE_RATE);
+    expect(together).toEqual({ capacity: 301, of: "run" });
     const summary = summaryOf(IMPORT_SCENARIOS, { peakVus: 221 });
     const imported = evaluate(summary, IMPORT_SCENARIOS, together);
     for (const scenario of IMPORT_SCENARIOS) {
@@ -354,7 +377,7 @@ describe("performance budgets", () => {
     }
     expect(imported.budgets.every((budget) => !budget.saturated)).toBe(true);
     // The runner passes it for the import run only; the scenarios of the budgets run are alone, so their peak is theirs, against the 100 of one.
-    expect(read("run.mjs")).toMatch(/evaluate\(summary, IMPORT_SCENARIOS, \{ capacity: MAX_VUS \* \(IMPORT_SCENARIOS\.length \+ 1\) \+ 1, of: "run" \}\)/);
+    expect(read("run.mjs")).toMatch(/evaluate\(summary, IMPORT_SCENARIOS, importRunVus\(createRate\)\)/);
     const alone = evaluate(summaryOf(STEADY_SCENARIOS, { peakVus: MAX_VUS }), STEADY_SCENARIOS);
     expect(Object.values(alone.scenarios).every((load) => load.maxVus === MAX_VUS && load.vusOf === "scenario" && load.saturated)).toBe(true);
     // Four scenarios of the import run in k6: the three that overlap and the importer.
@@ -686,7 +709,7 @@ describe("performance budgets", () => {
   it("tags each search request by its term, and by the shared tag for the slugs members share, with the load reported from the same module", () => {
     const scenarios = read("scenarios.js");
     expect(scenarios).toMatch(/\.\.\.loadThresholds\(IMPORT \? IMPORT_SCENARIOS : STEADY_SCENARIOS\)/);
-    expect(scenarios).toMatch(/\.\.\.\(IMPORT \? createThresholds\(\) : \{\}\)/);
+    expect(scenarios).toMatch(/\.\.\.\(IMPORT && CREATES_PER_SECOND > 0 \? createThresholds\(\) : \{\}\)/);
     expect(scenarios).toMatch(/term: useShared \? SHARED_TERM : term/);
     expect(scenarios).toMatch(/maxVUs: MAX_VUS/);
     expect(scenarios).not.toMatch(/shared: String\(useShared\)/);
@@ -709,5 +732,235 @@ describe("performance budgets", () => {
 
   it("imports nothing, so k6 and node can both load it", () => {
     expect(read("budgets.js")).not.toMatch(/^\s*import\b/m);
+  });
+});
+
+// The k6 scenarios that are a constant arrival rate, each with the `preAllocatedVUs` and the `maxVUs` it is written with.
+function arrivalRateVus(source: string): { preAllocated: string; max: string }[] {
+  return source
+    .split('executor: "constant-arrival-rate"')
+    .slice(1)
+    .map((chunk) => {
+      const scenario = chunk.slice(0, chunk.search(/\n\s*(?:exec|tags)\b/u));
+      return { preAllocated: /preAllocatedVUs: (\w+)/u.exec(scenario)?.[1] ?? "none", max: /maxVUs: (\w+)/u.exec(scenario)?.[1] ?? "none" };
+    });
+}
+
+describe("the VUs of the arrival-rate scenarios", () => {
+  it("are all preallocated, so that a dropped arrival means the scenario's own cap was reached and not a VU that was still being started", () => {
+    const scenarios = read("scenarios.js");
+    const vus = arrivalRateVus(scenarios);
+    // The steady scenarios (one function), go_import and list_import (one function), and the creates.
+    expect(vus).toHaveLength(3);
+    for (const { preAllocated, max } of vus) {
+      expect(max).toBe("MAX_VUS");
+      expect(preAllocated).toBe(max);
+    }
+    expect(scenarios.match(/preAllocatedVUs:/g)).toHaveLength(vus.length);
+    // The check sees a scenario that preallocates fewer VUs than it may use, as the import scenarios did with 10 of 100.
+    const fewer = arrivalRateVus(scenarios.replace("preAllocatedVUs: MAX_VUS,", "preAllocatedVUs: 10,"));
+    expect(fewer.filter(({ preAllocated, max }) => preAllocated !== max)).toHaveLength(1);
+  });
+
+  it("are described by budgets.js and the README as the reason a dropped arrival is a reached cap, with the run that showed it", () => {
+    for (const text of [read("budgets.js"), read("README.md")]) {
+      expect(text).toContain("`preAllocatedVUs`");
+      expect(text).toMatch(/`vus_max` (?:went )?from 31 to 40/);
+      expect(text).toMatch(/9 (?:more VUs for the 9 )?dropped arrivals/);
+    }
+  });
+});
+
+describe("the pool and the lock waits sampled while an import is in flight", () => {
+  const dirs: string[] = [];
+  const servers: Server[] = [];
+
+  afterAll(async () => {
+    for (const server of servers) {
+      server.closeAllConnections();
+      await new Promise<void>((done) => {
+        server.close(() => {
+          done();
+        });
+      });
+    }
+    for (const dir of dirs) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("is the nearest-rank p95 and the maximum, and refuses no samples or one that is not a number", () => {
+    const values = Array.from({ length: 20 }, (_, index) => index + 1);
+    expect(summarizeSamples(values)).toEqual({ max: 20, p95: 19 });
+    expect(summarizeSamples([3])).toEqual({ max: 3, p95: 3 });
+    expect(summarizeSamples([0, 0, 0])).toEqual({ max: 0, p95: 0 });
+    expect(() => summarizeSamples([])).toThrow(/no samples/);
+    expect(() => summarizeSamples([1, Number.NaN])).toThrow(/not a number/);
+    expect(() => summarizeSamples([1, -1])).toThrow(/not a number/);
+  });
+
+  // A metrics listener that answers what the test says and a `psql` that prints what the test says, so the run's own sampler runs end to end.
+  // `lateBy` makes the stub's answer arrive after the stub itself has exited: a process it leaves running prints it a moment later, as a pipe read late by a loaded host does.
+  async function rig(options: { metrics: () => { status: number; body: string }; backends: string; lateBy?: number; hang?: boolean }): Promise<{ metricsPort: number; restore: () => void }> {
+    const server = createServer((request, response) => {
+      const answer = options.metrics();
+      response.writeHead(answer.status, { "content-type": "text/plain" });
+      response.end(request.url === "/metrics" ? answer.body : "");
+    });
+    servers.push(server);
+    await new Promise<void>((done) => {
+      server.listen(0, "127.0.0.1", done);
+    });
+    const dir = mkdtempSync(join(tmpdir(), "perf-sampler-"));
+    dirs.push(dir);
+    const answer = `printf '%s\\n' '${options.backends}'`;
+    // A `psql` that never answers and never exits, as one that waits for a connection does; `exec` makes the process the deadline kills the one that holds the output open.
+    const body = options.hang === true ? "exec sleep 30" : options.lateBy === undefined ? answer : `(sleep ${String(options.lateBy)}; ${answer}) &`;
+    writeFileSync(join(dir, "psql"), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(dir, "psql"), 0o755);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path ?? ""}`;
+    return {
+      metricsPort: (server.address() as AddressInfo).port,
+      restore: () => {
+        process.env.PATH = path;
+      },
+    };
+  }
+
+  const exposition = (inFlight: number, size: number): string =>
+    `# TYPE slugbase_db_pool_size gauge\nslugbase_db_pool_size ${String(size)}\n# TYPE slugbase_db_tenant_transactions_in_flight gauge\nslugbase_db_tenant_transactions_in_flight ${String(inFlight)}\n`;
+  const sampleOptions = (metricsPort: number, state: string) => ({ held: { state }, metricsPort, serverUrl: "postgres://sampler:sampler@127.0.0.1:1/postgres", databaseName: "sampled" });
+  const wait = (ms: number): Promise<void> =>
+    new Promise((done) => {
+      setTimeout(done, ms);
+    });
+  // Polls for what the sampler does on its own clock, with a bound, and fails by naming it.
+  async function until(done: () => boolean, what: string): Promise<void> {
+    const deadline = Date.now() + 20_000;
+    while (!done()) {
+      if (Date.now() > deadline) {
+        throw new Error(`timed out waiting for ${what}`);
+      }
+      await wait(20);
+    }
+  }
+
+  it("records the transactions in flight against the pool size and the backends that wait for a lock, only while an import is in flight, with their maximum and p95", async () => {
+    let scrapes = 0;
+    const { metricsPort, restore } = await rig({
+      metrics: () => {
+        scrapes += 1;
+        return { status: 200, body: exposition(scrapes <= 2 ? 4 : 13, 10) };
+      },
+      backends: "7|0",
+    });
+    try {
+      const held = { state: "before" };
+      const sampler = startSampler({ ...sampleOptions(metricsPort, "before"), held });
+      // Two intervals pass with no import in flight, and nothing is scraped.
+      await wait(550);
+      expect(scrapes).toBe(0);
+      held.state = "importing";
+      await until(() => scrapes >= 4, "the sampler to scrape four times while an import is in flight");
+      held.state = "after";
+      const figures = await sampler.stop();
+      expect(scrapes).toBe(figures.pool.samples);
+      expect(figures.pool.samples).toBeGreaterThanOrEqual(4);
+      expect(figures.pool).toMatchObject({ intervalMs: 250, size: 10, max: 13, p95: 13 });
+      expect(figures.pool.samplesAboveSize).toBe(figures.pool.samples - 2);
+      expect(figures.lockWaits).toMatchObject({ intervalMs: 250, samples: figures.pool.samples, max: 7, p95: 7 });
+    } finally {
+      restore();
+    }
+  });
+
+  it("fails the run on a sample it cannot read, and on a phase it never sampled, and never reads either as 0", async () => {
+    const cases: [string, { metrics: () => { status: number; body: string }; backends: string }, RegExp][] = [
+      ["a metrics listener that answers an error", { metrics: () => ({ status: 500, body: "" }), backends: "0|0" }, /answered 500/],
+      ["a metrics text without the transactions in flight", { metrics: () => ({ status: 200, body: "slugbase_db_pool_size 10\n" }), backends: "0|0" }, /no readable slugbase_db_tenant_transactions_in_flight/],
+      ["a metrics text without the pool size", { metrics: () => ({ status: 200, body: "slugbase_db_tenant_transactions_in_flight 3\n" }), backends: "0|0" }, /no readable slugbase_db_pool_size/],
+      ["a count that is not a number", { metrics: () => ({ status: 200, body: exposition(Number.NaN, 10) }), backends: "0|0" }, /no readable slugbase_db_tenant_transactions_in_flight/],
+      ["backends whose activity the role may not see", { metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "0|3" }, /could not be read/],
+      ["an answer of psql that is no count", { metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "ERROR" }, /could not be read/],
+    ];
+    for (const [name, options, failure] of cases) {
+      const { metricsPort, restore } = await rig(options);
+      try {
+        const sampler = startSampler(sampleOptions(metricsPort, "importing"));
+        await expect(sampler.stop(), name).rejects.toThrow(failure);
+      } finally {
+        restore();
+      }
+    }
+    const { metricsPort, restore } = await rig({ metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "0|0" });
+    try {
+      const sampler = startSampler(sampleOptions(metricsPort, "before"));
+      await expect(sampler.stop()).rejects.toThrow(/no sample of the pool or of the lock waits was taken while an import was in flight/);
+    } finally {
+      restore();
+    }
+  });
+
+  it("reads what psql printed even when psql has exited before it is read, and still fails the run on a failure that the late answer does not hide", async () => {
+    const late = await rig({ metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "5|0", lateBy: 0.3 });
+    try {
+      const held = { state: "importing" };
+      const sampler = startSampler({ ...sampleOptions(late.metricsPort, "importing"), held });
+      await wait(100);
+      held.state = "after";
+      const figures = await sampler.stop();
+      expect(figures.lockWaits).toMatchObject({ max: 5, p95: 5 });
+    } finally {
+      late.restore();
+    }
+    const refused = await rig({ metrics: () => ({ status: 200, body: "slugbase_db_tenant_transactions_in_flight 3\n" }), backends: "0|0", lateBy: 0.3 });
+    try {
+      await expect(startSampler(sampleOptions(refused.metricsPort, "importing")).stop()).rejects.toThrow(/no readable slugbase_db_pool_size/);
+    } finally {
+      refused.restore();
+    }
+  });
+
+  it("ends a psql that never answers at the deadline and fails the run with the sample it could not read", async () => {
+    const stalled = await rig({ metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "0|0", hang: true });
+    try {
+      const began = Date.now();
+      const sampler = startSampler({ ...sampleOptions(stalled.metricsPort, "importing"), lockWaitTimeoutMs: 300 });
+      await expect(sampler.stop()).rejects.toThrow(/backends that wait for a lock could not be read/);
+      // The stub would run for 30 seconds: a stop that returns well before is the deadline's, not the stub's.
+      expect(Date.now() - began).toBeLessThan(10_000);
+    } finally {
+      stalled.restore();
+    }
+  }, 20_000);
+
+  it("is read from a server started with a METRICS_PORT of its own, as the image and as the local build, and written to the result by the names the report reads", () => {
+    const runner = read("run.mjs");
+    // `serverEnv` is what both servers get: the local build's environment, and the image's by name (`-e NAME`), on the host network.
+    expect(runner).toMatch(/PORT: String\(port\),\s*METRICS_PORT: String\(metricsPort\),/);
+    expect(runner).toMatch(/env: \{ PATH: process\.env\.PATH \?\? "", \.\.\.serverEnv \}/);
+    expect(runner).toMatch(/Object\.keys\(serverEnv\)\.flatMap\(\(name\) => \["-e", name\]\)/);
+    expect(runner).toContain("http://127.0.0.1:${String(metricsPort)}/metrics");
+    expect(runner).toContain('"slugbase_db_tenant_transactions_in_flight"');
+    expect(runner).toContain('"slugbase_db_pool_size"');
+    expect(runner).toContain("wait_event_type = 'Lock'");
+    expect(runner).toMatch(/const SAMPLE_INTERVAL_MS = 250;/);
+    expect(runner).toMatch(/imports, creates: \{.*\}, pool: sampled\.figures\.pool, lockWaits: sampled\.figures\.lockWaits \}/);
+    // The sampling's failure is the run's: thrown once k6 and the import have been judged, and the sampler is stopped whichever way k6 ended.
+    expect(runner).toMatch(/if \(sampled\.error !== undefined\) \{\s*throw sampled\.error;/);
+    expect(runner).toMatch(/\} finally \{[^}]*sampled = await sampler\.stop\(\)/s);
+  });
+
+  it("takes a rate of creates for a trial, as it takes a rate of imports, and leaves the creates out of the import run at 0", () => {
+    const runner = read("run.mjs");
+    const scenarios = read("scenarios.js");
+    expect(runner).toMatch(/"create-rate": \{ type: "string" \}/);
+    expect(runner).toContain("const createRate = Number(args[\"create-rate\"] ?? CREATE_RATE);");
+    expect(runner).toMatch(/const importTrial = [^;]*createRate !== CREATE_RATE;/);
+    expect(runner).toMatch(/CREATE_RATE: String\(createRate\),/);
+    expect(scenarios).toContain("const CREATES_PER_SECOND = __ENV.CREATE_RATE === undefined ? CREATE_RATE : Number(__ENV.CREATE_RATE);");
+    expect(scenarios).toMatch(/\.\.\.\(CREATES_PER_SECOND > 0\s*\? \{\s*\[CREATES_SCENARIO\]: \{/);
+    expect(scenarios).toContain("...(IMPORT && CREATES_PER_SECOND > 0 ? createThresholds() : {}),");
   });
 });

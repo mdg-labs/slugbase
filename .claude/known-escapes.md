@@ -64,6 +64,7 @@ existing line by adding its PR number.
 - **step contradicts the rule** — a verification or recovery step expects an outcome the same page's rule or the API rules out (a domain list refusing an address that already has an account, a recovery that needs one more one-time code than it names) — PR 825
 - **shared phrase, one meaning** — a generated description reuses one phrase for every setting of a kind and the phrase states one setting's purpose ("the address a message is for"), which is false for the others — PR 825
 - **documented secret exposed** — an operator command or example passes a secret as a process argument, or writes it unquoted into a file Compose interpolates, so the value leaks to the process list or changes on a `$` — PR 825
+- **verified then re-referenced** — an operator procedure verifies an artefact by its digest and then deploys it by a mutable reference (a version tag), so what runs can differ from what was checked and the step contradicts the guide it summarises — PR 863
 
 ## Processes
 
@@ -72,6 +73,7 @@ existing line by adding its PR number.
 - **output truncated before success** — a command redirects straight onto its final file, so a failed run destroys the previous good output; write elsewhere and rename on success — PR 825
 - **sync throw past a promise** — a function returns `Promise.resolve(f())`, so a synchronous throw in `f` escapes as an exception and skips the caller's rejection handler; an `async` function turns it into a rejection — PR 825
 - **stderr parsed as the answer** — a script captures a CLI with `2>&1` and parses the capture as JSON, so a notice the CLI writes to stderr on a call that succeeds makes the answer unreadable — PR 853
+- **one sibling bounded** — a sampling loop bounds one of its samples (a fetch with a timeout) but runs another as a subprocess with no deadline or connect timeout, so a stalled child holds the loop and the run hangs instead of failing with its named error — PR 863
 
 ## Database sessions and migrations
 
@@ -87,10 +89,12 @@ existing line by adding its PR number.
 - **catalog column wider than its name** — a catalog check reads a column by what it usually means (`pg_constraint.conindid` as the index a constraint owns) without filtering on the kinds that set it for another reason (a foreign key names the index it references), so a valid state is refused — PR 696
 - **new column's default read as a fact** — a column is added with a default that the rule reading it treats as a recorded fact (`instance_created = false` read as "the account made it itself"), so every row that predates the column is classified by the default and a destructive rule reaches rows it should not — PR 775
 - **OR across a subquery** — a lock or lookup predicate ORs a column comparison with `IN (subquery)`, or compares a column no index covers, so the planner can use no index for it and scans the whole table while taking row locks — PR 775
+- **secret kept out of one statement class** — a guard turns off tracking or logging for one class of statement (utility statements) while the secret also flows through another class the same session runs (a `SELECT format(... %L)` that builds the utility statement), so the secret can still be recorded — PR 863
 
 ## Optional capabilities
 
 - **renewal assumes delivery** — a write path replaces a credential on the assumption that an optional capability (mail) delivers the new one, so where the capability is off it ends the only working credential (a copied link) and delivers nothing, while a sibling path refuses the same case — PR 514
+- **capacity counts what is off** — a limit is summed over every optional part (each load scenario's VUs) whether or not the run includes it, so a run without that part is judged against a capacity it cannot reach and its saturation is never flagged — PR 863
 
 ## Client state
 

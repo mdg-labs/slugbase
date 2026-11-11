@@ -8,9 +8,11 @@ import { truthy } from "@stoplight/spectral-functions";
 import { describe, expect, it } from "vitest";
 
 /*
- * minimatch 11 has no callable or default export, and the repository overrides every consumer to it
- * (pnpm.overrides, pnpm.patchedDependencies). These tests drive the two consumers' glob paths so a
- * consumer that cannot call it fails here and not on the first config line that reaches it.
+ * Each glob consumer runs against the minimatch line it resolves: spectral-core an older line that is
+ * still callable, @redocly/openapi-core its own, and the pnpm.overrides entry covers only the range the
+ * advisory names. minimatch 11 has no callable or default export, so a consumer that cannot call the
+ * minimatch it resolves, for example after a future override or bump, fails these tests that drive both
+ * consumers' glob paths, and not on the first config line that reaches it.
  */
 
 const packageDir = fileURLToPath(new URL("..", import.meta.url));

@@ -12,6 +12,8 @@ export interface SearchFieldProps {
   /** Called with the text typed, without the whitespace around it, once the member has stopped typing for `SEARCH_FIELD_DELAY_MS`; the empty text takes the narrowing off. */
   readonly onSearch: (text: string) => void;
   readonly label: string;
+  /** Keeps the label from showing while it still names the field to assistive technology. */
+  readonly hideLabel?: boolean;
   readonly placeholder: string;
   readonly className?: string;
 }
@@ -22,7 +24,7 @@ export interface SearchFieldProps {
  * chip taken off, the filters cleared, the browser's back button) replaces what is typed, and a text this field reported itself
  * does not, so the member's own whitespace at the end of a word is not taken away while they type.
  */
-export function SearchField({ value, onSearch, label, placeholder, className }: SearchFieldProps): ReactElement {
+export function SearchField({ value, onSearch, label, hideLabel, placeholder, className }: SearchFieldProps): ReactElement {
   const [draft, setDraft] = useState(value);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // The text the list was last narrowed to, whether this field reported it or the address changed by itself.
@@ -54,7 +56,7 @@ export function SearchField({ value, onSearch, label, placeholder, className }: 
     }, SEARCH_FIELD_DELAY_MS);
   }
   return (
-    <FormField className={className} label={label}>
+    <FormField className={className} hideLabel={hideLabel} label={label}>
       <Input
         autoComplete="off"
         maxLength={SEARCH_QUERY_MAX_LENGTH}

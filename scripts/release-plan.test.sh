@@ -346,6 +346,7 @@ bash "$here/release-tag.test.sh" || failures=$((failures + 1))
 bash "$here/release-check-tags.test.sh" || failures=$((failures + 1))
 bash "$here/verify-image.test.sh" || failures=$((failures + 1))
 bash "$here/release-publish.test.sh" || failures=$((failures + 1))
+bash "$here/release-notes.test.sh" || failures=$((failures + 1))
 
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2

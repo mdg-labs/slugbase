@@ -236,11 +236,61 @@ function requestOf(request: unknown): { method: string } | undefined {
 // breadcrumbs go; the request and the transaction name are rebuilt below.
 const DROPPED_FIELDS: readonly string[] = ["request", "user", "server_name", "breadcrumbs", "transaction"];
 
-/** A copy of a Sentry event with no personal data; it throws on a value it cannot walk, and the caller then sends nothing. */
-export function scrubEvent<Event extends object>(event: Event): Event {
+/** The release and environment the adapter itself was configured with; they are not personal data. */
+export interface ConfiguredTags {
+  readonly release?: string | undefined;
+  readonly environment?: string | undefined;
+}
+
+const TAG_FIELDS = ["release", "environment"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// The tags of `record` that equal the configured value exactly. A value the event carries from anywhere else
+// is not listed, so the scrubber still sees it.
+function configuredTagsIn(record: Record<string, unknown>, configured: ConfiguredTags): Record<string, string> {
+  const found: Record<string, string> = {};
+  for (const field of TAG_FIELDS) {
+    const value = record[field];
+    if (typeof value === "string" && value === configured[field]) {
+      found[field] = value;
+    }
+  }
+  return found;
+}
+
+function withoutTags(record: Record<string, unknown>, tags: Record<string, string>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !(key in tags)));
+}
+
+/**
+ * A copy of a Sentry event with no personal data; it throws on a value it cannot walk, and the caller then
+ * sends nothing. The release and environment the adapter was configured with (`configured`) bypass the text
+ * scrubbing, in the event and in the dynamic sampling context that becomes the envelope header, when the event
+ * carries exactly that value; any other value in those fields is scrubbed like the rest.
+ */
+export function scrubEvent<Event extends object>(event: Event, configured: ConfiguredTags = {}): Event {
   const source = event as Record<string, unknown>;
   const kept = Object.fromEntries(Object.entries(source).filter(([key]) => !DROPPED_FIELDS.includes(key)));
-  const scrubbed = scrubValue(kept, 0) as Record<string, unknown>;
+  const eventTags = configuredTagsIn(kept, configured);
+  const metadata = kept["sdkProcessingMetadata"];
+  const context = isRecord(metadata) ? metadata["dynamicSamplingContext"] : undefined;
+  const contextTags = isRecord(context) ? configuredTagsIn(context, configured) : {};
+  const toScrub = withoutTags(kept, eventTags);
+  if (isRecord(metadata) && isRecord(context)) {
+    toScrub["sdkProcessingMetadata"] = {
+      ...metadata,
+      dynamicSamplingContext: withoutTags(context, contextTags),
+    };
+  }
+  const scrubbed = scrubValue(toScrub, 0) as Record<string, unknown>;
+  Object.assign(scrubbed, eventTags);
+  const scrubbedMetadata = scrubbed["sdkProcessingMetadata"];
+  if (isRecord(scrubbedMetadata) && isRecord(scrubbedMetadata["dynamicSamplingContext"])) {
+    Object.assign(scrubbedMetadata["dynamicSamplingContext"], contextTags);
+  }
   const request = requestOf(source["request"]);
   if (request !== undefined) {
     scrubbed["request"] = request;
