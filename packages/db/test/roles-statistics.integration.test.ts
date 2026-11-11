@@ -223,6 +223,20 @@ describe.skipIf(!ENABLED)("role passwords on a server that preloads pg_stat_stat
     expectNoPassword("pg_stat_statements", rows.map((row) => row.query).join("\n"));
   });
 
+  // The provisioning's plannable statements that carry a password as a constant
+  // (the check that both are set, and the SELECTs that format CREATE ROLE) are
+  // not kept out by `track_utility = off`: only `pg_stat_statements.track = none`
+  // does. A statement is recorded normalised in the normal case, so the
+  // passwords are absent from it either way; what this guards is that none of
+  // them is recorded at all, because an entry evicted early keeps its text with
+  // the constants in it.
+  it("records none of the provisioning's password-bearing statements", async () => {
+    const rows = await admin.unsafe<{ query: string }[]>(
+      "SELECT query FROM pg_stat_statements WHERE query ILIKE '%FROM pg_roles WHERE rolname%' OR query ILIKE '%AS passwords_set%'",
+    );
+    expect(rows.map((row) => row.query)).toEqual([]);
+  });
+
   // The statistics the init server wrote when it stopped are read back at this
   // server's start, which removes pg_stat/pg_stat_statements.stat and rebuilds
   // the query texts in pg_stat_tmp, so a leak of the first start is found there.

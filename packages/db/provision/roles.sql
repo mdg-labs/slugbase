@@ -31,9 +31,12 @@ SELECT current_setting('is_superuser') = 'on' AS is_superuser \gset
   END $$;
 \endif
 
--- pg_stat_statements.track_utility is a placeholder setting on a server that has
--- not preloaded the library, which a superuser may set.
+-- pg_stat_statements.track and pg_stat_statements.track_utility are placeholder
+-- settings on a server that has not preloaded the library, which a superuser may
+-- set. track_utility keeps the CREATE ROLE statements out; track keeps the
+-- SELECT statements that format them out too.
 SET track_activities = off;
+SET pg_stat_statements.track = none;
 SET pg_stat_statements.track_utility = off;
 SET log_statement = none;
 SET log_min_duration_statement = -1;
