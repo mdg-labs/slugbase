@@ -1,4 +1,4 @@
-postgres.js 3.4.9, two defects after a lost connection.
+postgres.js 3.4.9, three defects after a lost connection.
 
 1. connection.js, execute(): a query run on a connection whose socket is gone.
 
@@ -57,12 +57,47 @@ then the running one, and it is never rejected with CONNECTION_CLOSED:
    after that. No array type stays unregistered, and the first query on the
    connection succeeds.
 
+3. connection.js, closed(): bytes still waiting to be written.
+
+write() collects the bytes of a query in chunk and schedules nextWrite() with
+setImmediate, but only while nextWriteTimer is null; nextWrite() writes chunk
+and sets both back to null. When the socket closes before that immediate runs,
+closed() clears the immediate but leaves chunk holding the bytes and
+nextWriteTimer holding the cleared handle. connected() of the next socket then
+calls write() with the StartupMessage: it is appended to the bytes of the lost
+query, and because nextWriteTimer is not null no write is scheduled for it. The
+new socket never gets a startup, and the first query after the loss fails with
+CONNECT_TIMEOUT, or the server receives protocol bytes of the old connection
+before the startup.
+
+This patch sets chunk and nextWriteTimer to null in closed(), next to the
+socket and errorResponse, so the new socket's first bytes are its own
+StartupMessage.
+
+When the socket is destroyed with an error, 'error' fires before 'close', and
+the socket is not gone until 'close': error() rejects the query that was
+running and those in sent, but execute() still accepts a query that runs on the
+idle connection in between, and an immediate callback in between writes its
+bytes to the destroyed socket, where they are lost, or closed() drops them as
+described above. closed() used to reject query and sent with CONNECTION_CLOSED
+only when the socket closed without an error, on the assumption that the error
+had rejected them already; the query of that window had not been. The
+ReadyForQuery that ends the startup of the next socket then resolved it as a
+success although it was never written (an INSERT reported done and no row
+existed), and a query queued behind a running one in that window was never sent
+and never settled, so every query after the first one on the reconnected
+connection stayed pending when max is 1.
+
+This patch lets closed() reject query and sent with CONNECTION_CLOSED whether or
+not the socket closed with an error. A query that the error rejected already is
+unaffected: rejecting a settled query does nothing.
+
 Upstream: no issue is linked yet; the defect is to be reported to
 https://github.com/porsager/postgres. Drop this patch when a release carries
 the fix.
 
 diff --git a/cjs/src/connection.js b/cjs/src/connection.js
-index 07f6716702ac888215c86ad6e0071aaf55ae519c..9af8512c45680f7a503cd45edf3048c8b31cb79c 100644
+index 07f6716702ac888215c86ad6e0071aaf55ae519c..179607cc38bf02a4b2e50b5a01f6c6d4ea1bf405 100644
 --- a/cjs/src/connection.js
 +++ b/cjs/src/connection.js
 @@ -157,6 +157,11 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
@@ -77,16 +112,24 @@ index 07f6716702ac888215c86ad6e0071aaf55ae519c..9af8512c45680f7a503cd45edf3048c8
      if (stream)
        return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
  
-@@ -446,6 +451,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -446,11 +451,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
  
      socket.removeAllListeners()
      socket = null
 +    errorResponse = null
++    chunk = nextWriteTimer = null
  
      if (initial)
        return reconnect()
+ 
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    if (query || sent.length)
++      error(Errors.connection('CONNECTION_CLOSED', options, socket))
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000
 diff --git a/src/connection.js b/src/connection.js
-index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..f661d4c52a89b1830686c1f6f5b4aed4c320f4f7 100644
+index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..f348b1b2e7626bf74b383ae37171cbc48740e4fc 100644
 --- a/src/connection.js
 +++ b/src/connection.js
 @@ -157,6 +157,11 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
@@ -101,11 +144,19 @@ index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..f661d4c52a89b1830686c1f6f5b4aed4
      if (stream)
        return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
  
-@@ -446,6 +451,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -446,11 +451,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
  
      socket.removeAllListeners()
      socket = null
 +    errorResponse = null
++    chunk = nextWriteTimer = null
  
      if (initial)
        return reconnect()
+ 
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    if (query || sent.length)
++      error(Errors.connection('CONNECTION_CLOSED', options, socket))
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000
