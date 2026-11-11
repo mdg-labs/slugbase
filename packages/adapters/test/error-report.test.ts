@@ -73,6 +73,24 @@ describe("the Sentry-protocol adapter", () => {
     expect(envelope).not.toContain("server_name");
   });
 
+  it("sends the configured release and environment unchanged, in the event and the envelope header, and scrubs the rest", async () => {
+    const sink = await startSink();
+    const release = "@scope/app@1.2.3+abc1234";
+    const errors = createSentryErrorReport({ dsn: sink.dsn, release, environment: "production" });
+
+    await errors.capture(new Error(`login failed for ${SEEDS.email}`));
+
+    expect(sink.bodies).toHaveLength(1);
+    const envelope = sink.bodies[0] ?? "";
+    const [header, , payload] = envelope.split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(payload?.["release"]).toBe(release);
+    expect(payload?.["environment"]).toBe("production");
+    expect(header?.["trace"]).toMatchObject({ release, environment: "production" });
+    expect(envelope).not.toContain("@scope/[email]");
+    expect(envelope).not.toContain(SEEDS.email);
+    expect(envelope).toContain("login failed for [email]");
+  });
+
   it("is available, and reports the route template for the transaction name", async () => {
     const sink = await startSink();
     const errors = createSentryErrorReport({ dsn: sink.dsn });
@@ -343,6 +361,43 @@ describe("scrubEvent", () => {
       expect(text, name).not.toContain(seed);
     }
     expect(text).toContain("/srv/app/a.ts");
+  });
+
+  describe("with the configured release and environment", () => {
+    const configured = { release: "@scope/app@1.2.3+abc1234", environment: "production" };
+    const tagged = {
+      release: configured.release,
+      environment: configured.environment,
+      sdkProcessingMetadata: {
+        dynamicSamplingContext: { release: configured.release, environment: configured.environment, sample_rate: "1" },
+      },
+      message: `login failed for ${SEEDS.email}`,
+    };
+
+    it("keeps them byte for byte in the event and the dynamic sampling context", () => {
+      const scrubbed = scrubEvent(tagged, configured);
+      expect(scrubbed.release).toBe(configured.release);
+      expect(scrubbed.environment).toBe(configured.environment);
+      expect(scrubbed.sdkProcessingMetadata.dynamicSamplingContext).toEqual(tagged.sdkProcessingMetadata.dynamicSamplingContext);
+      expect(scrubbed.message).toBe("login failed for [email]");
+    });
+
+    it("scrubs a release or environment that differs from the configured one", () => {
+      const foreign = {
+        release: SEEDS.email,
+        environment: SEEDS.email,
+        sdkProcessingMetadata: { dynamicSamplingContext: { release: SEEDS.email, environment: SEEDS.email } },
+      };
+      const text = JSON.stringify(scrubEvent(foreign, configured));
+      expect(text).not.toContain(SEEDS.email);
+      expect(text).toContain("[email]");
+    });
+
+    it("scrubs them when called with one argument", () => {
+      const scrubbed = scrubEvent(tagged);
+      expect(scrubbed.release).toBe("@scope/[email]+abc1234");
+      expect(scrubbed.sdkProcessingMetadata.dynamicSamplingContext.release).toBe("@scope/[email]+abc1234");
+    });
   });
 
   it("does not change the event it is given", () => {

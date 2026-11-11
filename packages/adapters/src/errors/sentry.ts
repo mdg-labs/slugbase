@@ -52,7 +52,7 @@ export function createSentryErrorReport(options: CreateSentryErrorReportOptions)
     sendClientReports: false,
     beforeSend: (event) => {
       try {
-        return scrubEvent(event);
+        return scrubEvent(event, { release: options.release, environment: options.environment });
       } catch {
         return null;
       }
