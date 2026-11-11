@@ -32,10 +32,13 @@ existing line by adding its PR number.
 - **missing read as zero** — a fail-closed reader of a tool's summary treats a missing entry as an error for some metrics but defaults a sibling metric to 0 (`?? 0`), so a measurement that was never exported reads as a clean zero — PR 791
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
-- **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422, 641
+- **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other (two schedule names that derive one monitor slug) — PR 422, 641, 867
 
 - **runtime floor** — code relies on a runtime API newer than the declared engine floor (`import.meta.main` under `engines` `>=24.0.0`), so a permitted runtime silently skips the code it guards — PR 409
 - **copied threshold list** — a runner classifies a tool's exit status against its own copy of the thresholds the tool enforces, the copy misses some, so a crossed threshold reads as a failed run instead of a regression — PR 622
+- **two counts of one bound** — two validators of one limit measure a string differently (a schema in code points, a hand-written check in UTF-16 units), so a value the first accepts is refused further on and the request fails — PR 867
+- **data checked, rendering not** — a declaration is validated for the fields the API reads (an id and a version) but not for the one the UI renders (a label), so one that renders nothing a person can read passes — PR 867
+- **first wins in a map** — a map keyed by a value several entries can share (the job several schedules name) keeps the first entry and silently drops the rest, so the later entries lose what the map gives (their monitor) — PR 867
 - **copied limit** — a client keeps its own literal of a limit the contracts package exports (an import cap shown in a message), beside siblings that import theirs, so a change to the server's cap leaves the client stating a stale number — PR 713
 
 - **rule checked one node at a time** — a check of a key-and-value rule (no secret given a value) inspects each parsed node alone, so the same pair split across adjacent nodes (a key cell and a value cell of a table row) passes — PR 724
@@ -113,6 +116,7 @@ existing line by adding its PR number.
 ## Shared helpers
 
 - **copy drops side duties** — a second copy of a shared routine (a rate-limit take) keeps its answers but leaves out the original's side duties (the rejection metric, the error report), so the copy's refusals and failures never reach monitoring — PR 520
+- **one mutable value fanned out** — a value handed in turn to several independent consumers (event subscribers) is one mutable object, while a sibling path freezes it, so one consumer can change what the next sees — PR 867
 - **fan-out into a refusing cap** — a component starts all its requests at once against a shared resource that refuses past a fixed cap instead of queueing (an egress instance's lookup slots), so a list longer than the cap loses its tail on every load — PR 775
 
 ## Tests
