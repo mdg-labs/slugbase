@@ -2600,6 +2600,9 @@
       "signIn": "Go to sign in"
     }
   },
+  "acknowledgement": {
+    "required": "Tick this box to continue."
+  },
   "newPassword": {
     "label": "Password",
     "description": "Use at least 12 characters. A long phrase works well.",

@@ -1,4 +1,5 @@
 import type { ComponentTypes } from "@slugbase/contracts";
+import type { AcknowledgementEntries } from "./acknowledgement-checks.tsx";
 import { ApiProblemError, createApiClient, isSessionEnded, type ApiClient } from "../api/client.ts";
 import { isMfaRequired } from "./mfa.ts";
 import { passwordProblemOf, type PasswordProblem } from "./new-password-field.tsx";
@@ -152,9 +153,16 @@ export async function acceptAsAccount(api: ApiClient, token: string): Promise<Ac
  * password. The answer carries the new session (`201`), or none (`202`) where the address has to be verified before
  * the account can sign in; the outcome says which.
  */
-export async function acceptWithNewAccount(api: ApiClient, token: string, displayName: string, password: string, signal: AbortSignal): Promise<AcceptOutcome> {
+export async function acceptWithNewAccount(
+  api: ApiClient,
+  token: string,
+  displayName: string,
+  password: string,
+  signal: AbortSignal,
+  acknowledgements?: AcknowledgementEntries,
+): Promise<AcceptOutcome> {
   try {
-    const { response, error } = await api.POST("/api/v1/invitations/accept", { body: { token, displayName, password }, signal });
+    const { response, error } = await api.POST("/api/v1/invitations/accept", { body: { token, displayName, password, ...(acknowledgements === undefined ? {} : { acknowledgements }) }, signal });
     if (!response.ok) {
       throw new Error("The sign-up did not answer with a problem document", { cause: error });
     }

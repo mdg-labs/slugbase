@@ -2600,6 +2600,9 @@
       "signIn": "Zur Anmeldung"
     }
   },
+  "acknowledgement": {
+    "required": "Setze dieses Häkchen, um fortzufahren."
+  },
   "newPassword": {
     "label": "Passwort",
     "description": "Verwende mindestens 12 Zeichen. Ein langer Satz eignet sich gut.",

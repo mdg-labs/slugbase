@@ -253,7 +253,7 @@ createServer({
 
 ### 7.2 Web
 
-CE's web package exports `createWebApp({ extensions })`. An extension contributes routes (e.g. `/settings/billing`), navigation items, and components for named **slots** that CE's shell renders (e.g. `sidebar.footer`, `entitlement.upgradeAction`, `settings.workspace.nav`; doc 03 §"Extension slots" is the complete, authoritative list and part of the contract in §7.4). Without extensions the slots render nothing — a CE build never contains billing UI. Cloud's web entry imports `createWebApp` plus its extensions and is built by Vite in the Cloud repository; the result is embedded in the Cloud `app` image exactly as CE embeds its own build.
+CE's web package exports `createWebApp({ extensions })`. An extension contributes routes (e.g. `/settings/billing`), navigation items, registration acknowledgements (`{ id, version, label }` entries that `/register` and the sign-up form of `/invite/$token` render as required checkboxes and send as `acknowledgements`, doc 03 §1.3, doc 04 §10.2; `createWebApp` refuses an id or version the API would refuse, an id declared twice and more than the request limit), and components for named **slots** that CE's shell renders (e.g. `sidebar.footer`, `entitlement.upgradeAction`, `settings.workspace.nav`; doc 03 §"Extension slots" is the complete, authoritative list and part of the contract in §7.4). Without extensions the slots render nothing — a CE build never contains billing UI. Cloud's web entry imports `createWebApp` plus its extensions and is built by Vite in the Cloud repository; the result is embedded in the Cloud `app` image exactly as CE embeds its own build.
 
 ### 7.3 Database
 

@@ -1,3 +1,4 @@
+import { REGISTRATION_ACKNOWLEDGEMENTS_MAX, RegistrationAcknowledgementSchema } from "@slugbase/contracts";
 import { isSlotName } from "./slot-names.ts";
 import type { WebExtension } from "./types.ts";
 
@@ -12,11 +13,14 @@ function assertAbsolutePath(path: string, what: string, extensionId: string): vo
  * a slot name outside the closed set, a path that is not absolute, a route path
  * other than `/` that ends in `/` (the router would match it in place of the
  * same path without the slash), or a route path that another extension or the
- * app (`reservedPaths`) already owns.
+ * app (`reservedPaths`) already owns, an acknowledgement whose id or version the
+ * API would refuse, an acknowledgement id declared twice across the extensions,
+ * or more acknowledgements in total than one request may carry.
  */
 export function assertValidExtensions(extensions: readonly WebExtension[], reservedPaths: readonly string[] = []): void {
   const ids = new Set<string>();
   const routePaths = new Set<string>(reservedPaths);
+  const acknowledgementIds = new Set<string>();
   for (const extension of extensions) {
     const { id } = extension;
     if (id.trim() === "") {
@@ -42,11 +46,25 @@ export function assertValidExtensions(extensions: readonly WebExtension[], reser
       }
       routePaths.add(path);
     }
+    for (const { id: acknowledgementId, version } of extension.acknowledgements ?? []) {
+      const parsed = RegistrationAcknowledgementSchema.safeParse({ id: acknowledgementId, version });
+      if (!parsed.success) {
+        const [issue] = parsed.error.issues;
+        throw new Error(`The acknowledgement "${acknowledgementId}" of the web extension "${id}" has an invalid ${String(issue?.path[0] ?? "entry")}: ${issue?.message ?? "refused"}`);
+      }
+      if (acknowledgementIds.has(acknowledgementId)) {
+        throw new Error(`The acknowledgement id "${acknowledgementId}" of the web extension "${id}" is used twice`);
+      }
+      acknowledgementIds.add(acknowledgementId);
+    }
     for (const { to, label } of extension.navigation ?? []) {
       assertAbsolutePath(to, "navigation target", id);
       if (label.trim() === "") {
         throw new Error(`The navigation item "${to}" of the web extension "${id}" needs a label`);
       }
     }
+  }
+  if (acknowledgementIds.size > REGISTRATION_ACKNOWLEDGEMENTS_MAX) {
+    throw new Error(`The web extensions declare ${String(acknowledgementIds.size)} acknowledgements; at most ${String(REGISTRATION_ACKNOWLEDGEMENTS_MAX)} are allowed`);
   }
 }

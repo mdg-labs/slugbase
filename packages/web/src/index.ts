@@ -9,4 +9,5 @@ export {
   type WebExtensionNavigationItem,
   type WebExtensionRoute,
   type WebExtensionSlots,
+  type WebRegistrationAcknowledgement,
 } from "./extensions/index.ts";

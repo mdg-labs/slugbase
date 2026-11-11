@@ -195,7 +195,7 @@ Slots CE's shell renders; with no extensions they render nothing. Cloud fills th
 | `settings.workspace.members.seats` | Seat summary on the Members page |
 | `dashboard.top` | Above the dashboard counts |
 | `auth.footer` | Footer of the authentication card on every auth page, beside the language switch (legal links on Cloud) |
-| `auth.register.footer` | Under the registration form (terms acceptance on Cloud) |
+| `auth.register.footer` | Under the registration form, above its submit button (text; terms acceptance is declared as acknowledgements, §1.3, not through a slot) |
 
 ---
 
@@ -217,7 +217,7 @@ Email, password, "Remember me", "Forgot password?", OIDC provider buttons (when 
 
 ### 1.3 `/register`, `/verify-email`
 
-Registration (only when open): name, email, password; Cloud adds terms acceptance through slot `auth.register.footer`. Success → "Check your email" with resend (rate-limited, countdown). `/verify-email#token=…` (the token travels in the URL fragment, so it never reaches server logs or `Referer`) verifies and signs in; an expired token offers resend. Registration closed → a card "Registration is closed — ask an admin for an invitation."
+Registration (only when open): name, email, password, then one required checkbox per acknowledgement a web extension declares (`acknowledgements` of `WebExtension`, each `{ id, version, label }`; terms acceptance on Cloud). The form sends no request while a box is unticked, marks each unticked box with an error and focuses the first, and sends the declared entries as `acknowledgements` once all are ticked; with none declared it is unchanged. The slot `auth.register.footer` stays for text under the form. Success → "Check your email" with resend (rate-limited, countdown). `/verify-email#token=…` (the token travels in the URL fragment, so it never reaches server logs or `Referer`) verifies and signs in; an expired token offers resend. Registration closed → a card "Registration is closed — ask an admin for an invitation."
 
 **Components:** authentication card; `form`, `secret-input`; `banner` for expired links; resend Button with `loading`.
 
@@ -229,7 +229,7 @@ Request: email → always "If an account exists for that address, we sent a link
 
 ### 1.5 `/invite/$token` — Accept invitation
 
-Shows workspace name, inviter, role. Branches per doc 02 §3.4: signed in as the invitee → "Join <workspace>"; signed in as someone else → explanation and "Sign out and continue"; no account → short sign-up (email fixed) or OIDC buttons; existing account signed out → sign-in form. Expired or revoked → explanation, no detail about why.
+Shows workspace name, inviter, role. Branches per doc 02 §3.4: signed in as the invitee → "Join <workspace>"; signed in as someone else → explanation and "Sign out and continue"; no account → short sign-up (email fixed, with the same required acknowledgement checkboxes as `/register`) or OIDC buttons (which send no acknowledgements); existing account signed out → sign-in form. Expired or revoked → explanation, no detail about why.
 
 **Components:** authentication card; `form`; `status-badge` for role; `banner` for expired.
 

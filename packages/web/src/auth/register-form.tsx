@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } f
 import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
 import { Slot, useSlotFilled } from "../extensions/index.ts";
+import { useAcknowledgementChecks } from "./acknowledgement-checks.tsx";
 import { NewPasswordField, passwordProblemOf, type PasswordProblem } from "./new-password-field.tsx";
 
 const SECONDS_PER_MINUTE = 60;
@@ -74,11 +75,12 @@ export interface RegisterFormProps {
   onClosed: () => void;
 }
 
-/** The registration form: name, email and password with its strength meter, and the slot `auth.register.footer` under it. */
+/** The registration form: name, email and password with its strength meter, the acknowledgements the extensions declare as required checkboxes, and the slot `auth.register.footer` under them. */
 export function RegisterForm({ onRegistered, onClosed }: RegisterFormProps): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const hasFooter = useSlotFilled("auth.register.footer");
+  const acknowledgements = useAcknowledgementChecks();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -142,16 +144,22 @@ export function RegisterForm({ onRegistered, onClosed }: RegisterFormProps): Rea
     };
     setFailure(undefined);
     setProblems(missing);
+    const focusAcknowledgement = acknowledgements.check();
     if (Object.keys(missing).length > 0) {
       (missing.displayName === undefined ? (missing.email === undefined ? passwordInput : emailInput) : nameInput).current?.focus();
       return;
     }
+    if (focusAcknowledgement !== undefined) {
+      focusAcknowledgement();
+      return;
+    }
+    const acknowledged = acknowledgements.entries();
     const controller = new AbortController();
     request.current = controller;
     setSubmitting(true);
     try {
       const { error } = await router.options.context.api.POST("/api/v1/auth/register", {
-        body: { displayName: name, email: address, password },
+        body: { displayName: name, email: address, password, ...(acknowledged === undefined ? {} : { acknowledgements: acknowledged }) },
         signal: controller.signal,
       });
       if (error !== undefined) {
@@ -208,6 +216,7 @@ export function RegisterForm({ onRegistered, onClosed }: RegisterFormProps): Rea
         />
       </FormField>
       <NewPasswordField inputRef={passwordInput} onChange={setPassword} problem={problems.password} value={password} />
+      {acknowledgements.fields}
       {hasFooter ? <Slot name="auth.register.footer" /> : null}
       <Button loading={submitting} type="submit">
         {t("register.submit")}

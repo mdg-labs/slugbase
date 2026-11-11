@@ -23,6 +23,20 @@ export interface WebExtensionNavigationItem {
 export type WebExtensionSlots = { readonly [Name in SlotName]?: ComponentType };
 
 /**
+ * A statement or document a person acknowledges before creating an account, shown as a required checkbox on the
+ * registration form and on the sign-up form of an invitation. The ticked ones travel with the request as
+ * `acknowledgements` (doc 04 section 10.2).
+ */
+export interface WebRegistrationAcknowledgement {
+  /** 1 to 32 characters of a-z, 0-9, underscore and hyphen; unique among the acknowledgements of one app. */
+  readonly id: string;
+  /** The version label the person acknowledges, 1 to 32 characters without a control character. */
+  readonly version: string;
+  /** What the checkbox says, in the user's language: the extension owns its strings. It may hold a link to the document. */
+  readonly label: ReactNode;
+}
+
+/**
  * What a composition adds to the web app (doc 01 section 7.2). An extension is
  * identified by `id`; everything else it contributes is optional.
  */
@@ -35,4 +49,6 @@ export interface WebExtension {
   readonly navigation?: readonly WebExtensionNavigationItem[];
   /** Components for the named slots. */
   readonly slots?: WebExtensionSlots;
+  /** Acknowledgements required to create an account, listed in registration order across the extensions, as many as one request may carry (`REGISTRATION_ACKNOWLEDGEMENTS_MAX` of `@slugbase/contracts`). */
+  readonly acknowledgements?: readonly WebRegistrationAcknowledgement[];
 }
