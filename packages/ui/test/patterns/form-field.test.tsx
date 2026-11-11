@@ -60,4 +60,26 @@ describe("FormField", () => {
 
     expect(screen.getByRole("textbox", { name: "Email" }).getAttribute("aria-describedby")).toBeNull();
   });
+
+  it("keeps a hidden label as the name of the control, for assistive technology only", async () => {
+    const { container } = render(
+      <FormField hideLabel label="Search">
+        <Input type="search" />
+      </FormField>,
+    );
+
+    expect(screen.getByRole("searchbox", { name: "Search" })).toBeTruthy();
+    expect(screen.getByText("Search").className).toContain("sr-only");
+    await expectNoViolations(container);
+  });
+
+  it("shows the label unless it is hidden", () => {
+    render(
+      <FormField label="Search">
+        <Input type="search" />
+      </FormField>,
+    );
+
+    expect(screen.getByText("Search").className).not.toContain("sr-only");
+  });
 });

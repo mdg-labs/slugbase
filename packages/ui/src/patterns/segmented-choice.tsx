@@ -27,13 +27,22 @@ export interface SegmentedChoiceProps {
    * a set that is too wide for its labels, such as the eight folder colours. Every option needs an icon then.
    */
   iconOnly?: boolean;
+  /** The height of the options: `sm` makes the group as high as a default `Button` or `Select` beside it. */
+  size?: "default" | "sm";
+  /** Keeps the label from showing while it still names the group to assistive technology, for a group in a toolbar. */
+  hideLabel?: boolean;
 }
+
+const OPTION_HEIGHTS = {
+  default: "h-8",
+  sm: "h-7.5 sm:h-6.5",
+} as const satisfies Record<NonNullable<SegmentedChoiceProps["size"]>, string>;
 
 /**
  * Exactly one of a few options, shown as joined segments: a labelled radio group, so the arrow keys move
  * between the options and a screen reader announces the position (doc 03 `segmented-choice`).
  */
-export function SegmentedChoice({ label, name, description, error, options, value, onValueChange, disabled, className, iconOnly = false }: SegmentedChoiceProps): ReactElement {
+export function SegmentedChoice({ label, name, description, error, options, value, onValueChange, disabled, className, iconOnly = false, size = "default", hideLabel = false }: SegmentedChoiceProps): ReactElement {
   const id = useId();
   const labelId = `${id}-label`;
   const descriptionId = `${id}-description`;
@@ -42,7 +51,7 @@ export function SegmentedChoice({ label, name, description, error, options, valu
   const describedBy = [description === undefined ? undefined : descriptionId, invalid ? errorId : undefined].filter((part) => part !== undefined).join(" ");
   return (
     <div className={cn("flex flex-col items-stretch gap-1.5", className)}>
-      <span className="font-medium text-base/4.5 text-foreground sm:text-sm/4" id={labelId}>
+      <span className={cn("font-medium text-base/4.5 text-foreground sm:text-sm/4", hideLabel && "sr-only")} id={labelId}>
         {label}
       </span>
       <RadioGroupPrimitive
@@ -63,7 +72,8 @@ export function SegmentedChoice({ label, name, description, error, options, valu
         {options.map((option) => (
           <RadioPrimitive.Root
             className={cn(
-              "inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md font-medium text-muted-foreground text-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-checked:bg-background data-checked:text-foreground data-checked:shadow-sm data-disabled:cursor-not-allowed",
+              "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md font-medium text-muted-foreground text-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-checked:bg-background data-checked:text-foreground data-checked:shadow-sm data-disabled:cursor-not-allowed",
+              OPTION_HEIGHTS[size],
               iconOnly ? "w-8" : "px-3",
             )}
             data-slot="segmented-choice-option"

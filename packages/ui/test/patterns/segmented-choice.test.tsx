@@ -69,4 +69,29 @@ describe("SegmentedChoice", () => {
     expect(screen.getByRole("radio", { name: "Light" }).getAttribute("title")).toBeNull();
     expect(document.querySelector(".sr-only")).toBeNull();
   });
+
+  it("keeps a hidden label as the name of the group, for assistive technology only", async () => {
+    const { container } = render(<SegmentedChoice hideLabel label="Theme" onValueChange={() => undefined} options={THEMES} value="dark" />);
+
+    const group = screen.getByRole("radiogroup", { name: "Theme" });
+    expect(screen.getByText("Theme").className).toContain("sr-only");
+    expect(group.getAttribute("aria-labelledby")).toBe(screen.getByText("Theme").id);
+    await expectNoViolations(container);
+  });
+
+  it("shows the label unless it is hidden", () => {
+    render(<SegmentedChoice label="Theme" onValueChange={() => undefined} options={THEMES} value="dark" />);
+
+    expect(screen.getByText("Theme").className).not.toContain("sr-only");
+  });
+
+  it("sizes the options by the size asked for", () => {
+    const { rerender } = render(<SegmentedChoice label="Theme" onValueChange={() => undefined} options={THEMES} value="dark" />);
+    expect(screen.getByRole("radio", { name: "Dark" }).className).toContain("h-8");
+
+    rerender(<SegmentedChoice label="Theme" onValueChange={() => undefined} options={THEMES} size="sm" value="dark" />);
+    const compact = screen.getByRole("radio", { name: "Dark" }).className;
+    expect(compact).toContain("h-7.5");
+    expect(compact).not.toContain("h-8");
+  });
 });

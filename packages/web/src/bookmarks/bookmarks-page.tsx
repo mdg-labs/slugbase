@@ -294,29 +294,28 @@ export function BookmarksPage(): ReactElement {
           )}
         </div>
         {/* The size select shows its label in its text ("24 per load"), so the field's own label is kept for assistive technology alone. */}
-        <div className="[&_[data-slot=field-label]]:sr-only">
-          <LoadMore
-            count={
-              lastPage?.totalAtLeast !== undefined && total === null
-                ? t("bookmarks.list.countAtLeast", { shown, total: format.number(lastPage.totalAtLeast) })
-                : t("bookmarks.list.count", { shown, total: format.number(total ?? items.length) })
-            }
-            hasMore={query.hasNextPage}
-            loadMoreLabel={t("bookmarks.list.loadMore")}
-            loading={query.isFetchingNextPage}
-            onLoadMore={() => {
-              void query.fetchNextPage();
-            }}
-            pageSize={{
-              label: t("bookmarks.list.pageSize"),
-              value: String(pageSizeOfSearch(search)),
-              options: BOOKMARK_PAGE_SIZES.map((size) => ({ value: String(size), label: t("bookmarks.list.pageSizeOption", { size: format.number(size) }) })),
-              onValueChange: (value) => {
-                controls.update({ size: BOOKMARK_PAGE_SIZES.find((size) => String(size) === value) });
-              },
-            }}
-          />
-        </div>
+        <LoadMore
+          count={
+            lastPage?.totalAtLeast !== undefined && total === null
+              ? t("bookmarks.list.countAtLeast", { shown, total: format.number(lastPage.totalAtLeast) })
+              : t("bookmarks.list.count", { shown, total: format.number(total ?? items.length) })
+          }
+          hasMore={query.hasNextPage}
+          loadMoreLabel={t("bookmarks.list.loadMore")}
+          loading={query.isFetchingNextPage}
+          onLoadMore={() => {
+            void query.fetchNextPage();
+          }}
+          pageSize={{
+            hideLabel: true,
+            label: t("bookmarks.list.pageSize"),
+            value: String(pageSizeOfSearch(search)),
+            options: BOOKMARK_PAGE_SIZES.map((size) => ({ value: String(size), label: t("bookmarks.list.pageSizeOption", { size: format.number(size) }) })),
+            onValueChange: (value) => {
+              controls.update({ size: BOOKMARK_PAGE_SIZES.find((size) => String(size) === value) });
+            },
+          }}
+        />
       </>
     );
   }

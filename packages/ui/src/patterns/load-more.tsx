@@ -5,6 +5,8 @@ import { SelectField, type SelectOption } from "./select-field.tsx";
 export interface LoadMorePageSize {
   /** Names the select. */
   label: string;
+  /** Keeps the label from showing while it still names the select to assistive technology, for a select whose chosen text already says what it sets. */
+  hideLabel?: boolean;
   /** The chosen size, one of the `options` values. */
   value: string;
   options: readonly SelectOption[];
@@ -37,7 +39,7 @@ export function LoadMore({ count, hasMore, loadMoreLabel, onLoadMore, loading = 
       </p>
       <div className="flex flex-wrap items-end justify-center gap-3">
         {pageSize === undefined ? null : (
-          <SelectField className="w-36" label={pageSize.label} onValueChange={pageSize.onValueChange} options={pageSize.options} value={pageSize.value} />
+          <SelectField className="w-36" hideLabel={pageSize.hideLabel} label={pageSize.label} onValueChange={pageSize.onValueChange} options={pageSize.options} value={pageSize.value} />
         )}
         {hasMore ? (
           <Button loading={loading} onClick={onLoadMore} variant="outline">

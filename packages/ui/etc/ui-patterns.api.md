@@ -704,6 +704,7 @@ export interface FormFieldProps {
     className?: string;
     description?: ReactNode;
     error?: ReactNode;
+    hideLabel?: boolean;
     // (undocumented)
     label: ReactNode;
     name?: string;
@@ -791,6 +792,7 @@ export function LoadMore(input: LoadMoreProps): ReactElement;
 
 // @public (undocumented)
 export interface LoadMorePageSize {
+    hideLabel?: boolean;
     label: string;
     // (undocumented)
     onValueChange: (value: string) => void;
@@ -1029,6 +1031,7 @@ export interface SegmentedChoiceProps {
     // (undocumented)
     disabled?: boolean;
     error?: ReactNode;
+    hideLabel?: boolean;
     iconOnly?: boolean;
     label: ReactNode;
     name?: string;
@@ -1036,6 +1039,7 @@ export interface SegmentedChoiceProps {
     onValueChange: (value: string) => void;
     // (undocumented)
     options: readonly SegmentedChoiceOption[];
+    size?: "default" | "sm";
     // (undocumented)
     value: string;
 }
