@@ -158,11 +158,13 @@ function fitsAcknowledgements(value: unknown): boolean {
     if (Object.keys(rest).length > 0 || typeof id !== "string" || typeof version !== "string") {
       return false;
     }
+    // Counted in code points, as the contract's schema counts it, so every version a request may carry fits here.
+    const versionLength = Array.from(version).length;
     if (
       !REGISTRATION_ACKNOWLEDGEMENT_ID_PATTERN.test(id) ||
       seen.has(id) ||
-      version.length < 1 ||
-      version.length > REGISTRATION_ACKNOWLEDGEMENT_VERSION_MAX_LENGTH ||
+      versionLength < 1 ||
+      versionLength > REGISTRATION_ACKNOWLEDGEMENT_VERSION_MAX_LENGTH ||
       CONTROL_CHARACTER.test(version)
     ) {
       return false;

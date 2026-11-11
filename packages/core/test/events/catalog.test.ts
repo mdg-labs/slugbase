@@ -1,3 +1,4 @@
+import { RegistrationAcknowledgementSchema } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
 import {
   ACCOUNT_CREATION_PATHS,
@@ -142,6 +143,17 @@ describe("the acknowledgements of account.created", () => {
     expect(parse([{ id: "terms", version: "2026-01" }]).acknowledgements).toEqual([{ id: "terms", version: "2026-01" }]);
     expect(parse(eight).acknowledgements).toHaveLength(8);
     expect(parse([{ id: "a_b-9".padEnd(32, "x"), version: "1" }]).acknowledgements).toHaveLength(1);
+  });
+
+  it("counts a version in code points, as the contract's schema does", () => {
+    for (const version of ["\u{1F680}".repeat(32), "\uD800".repeat(32), "a\u{1F680}".repeat(16)]) {
+      expect(RegistrationAcknowledgementSchema.safeParse({ id: "terms", version }).success).toBe(true);
+      expect(parse([{ id: "terms", version }]).acknowledgements).toEqual([{ id: "terms", version }]);
+    }
+    for (const version of ["\u{1F680}".repeat(33), "\uD800".repeat(33)]) {
+      expect(RegistrationAcknowledgementSchema.safeParse({ id: "terms", version }).success).toBe(false);
+      expect(() => parse([{ id: "terms", version }])).toThrow(DomainEventPayloadError);
+    }
   });
 
   it("refuses a list that breaks a bound, naming the field and never a value", () => {
