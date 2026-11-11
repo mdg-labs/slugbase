@@ -29,7 +29,10 @@ cat > "$tmp/bin/gh" <<'STUB'
 # with the one release of release.json when there is no list, and fails when
 # $STUB_LIST_FAIL is set. $STUB_RELEASE_AFTER, when set, is a list that replaces
 # the first one from the second reading on (a release published during the run).
+# $STUB_NOTICE, when set, is written to stderr by every call, as gh does with a
+# notice or its debug output on a call that succeeds.
 printf 'gh %s\n' "$*" >> "$STUB_DIR/calls"
+if [[ -n "${STUB_NOTICE:-}" ]]; then printf '%s\n' "$STUB_NOTICE" >&2; fi
 if [[ "${1:-}" == "api" && "$*" == *"/releases?"* ]]; then
   if [[ -n "${STUB_LIST_FAIL:-}" ]]; then
     echo 'gh: HTTP 502' >&2
@@ -447,6 +450,19 @@ ${image}:latest $d3
 ${image}:1.1 $d2
 " "$(release_json v1.1.0 false false "$(notes "$d2")")" RELEASE_TAG=v1.1.0 "STUB_SIGNED=$d1 $d2 $d3"
 expect_unchanged "a run that finds :latest and :1.1 on the releases they follow is a green no-op" "nothing to move"
+
+# What gh writes to stderr on a call that succeeds is not read as part of its answer.
+run_case "${image}:1.0.0 $d1
+${image}:1.1.0 $d2
+${image}:1.2.0 $d3
+${image}:latest $d3
+${image}:1.1 $d2
+" "$(release_json v1.1.0 false false "$(notes "$d2")")" RELEASE_TAG=v1.1.0 "STUB_SIGNED=$d1 $d2 $d3" "STUB_NOTICE=gh: a notice on stderr"
+if ((code == 0)) && ! moved && grep -q -- "nothing to move" <<<"$out" && [[ "$(grep -c -- "gh: a notice on stderr" <<<"$out")" == "$(calls_of '^gh api')" ]]; then
+  pass "a notice gh writes to stderr on a call that succeeds leaves its answer readable, and is passed on"
+else
+  fail "gh notice on stderr (exit $code)"
+fi
 
 # The release the tag is to move to is checked, not the one the run is for.
 run_case "$dropped" "$(release_json v1.1.0 false false "$(notes "$d2")")" RELEASE_TAG=v1.1.0 "STUB_SIGNED=$d1 $d2"

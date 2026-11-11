@@ -58,6 +58,12 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 image="${RELEASE_IMAGE:-ghcr.io/mdg-labs/slugbase}"
 
+# What `gh api` writes to stderr is kept apart from the JSON it answers, so a notice
+# on a call that succeeds cannot make the answer unreadable. It is passed on to
+# stderr after a call that succeeds, and is the reason given for one that fails.
+gh_stderr="$(mktemp)"
+trap 'rm -f "$gh_stderr"' EXIT
+
 die() {
   printf 'release-publish: refused. %s\n' "$1" >&2
   exit 1
@@ -128,9 +134,10 @@ highest_all=""
 highest_line=""
 highest_published() {
   local tag numbers tags own=false
-  if ! releases="$(gh api --paginate "repos/${repository}/releases?per_page=100" 2>&1)"; then
-    die "the published releases could not be read: ${releases}"
+  if ! releases="$(gh api --paginate "repos/${repository}/releases?per_page=100" 2>"$gh_stderr")"; then
+    die "the published releases could not be read: $(<"$gh_stderr")"
   fi
+  cat "$gh_stderr" >&2
   tags="$(jq -r '.[] | select(.draft == false and .prerelease == false) | .tag_name' <<<"$releases")" \
     || die "the list of the published releases is not readable."
   highest_all="$major $minor $patch"
@@ -169,9 +176,10 @@ tag_digest() {
 # The release as it is now. The endpoint does not return a draft, so a draft and
 # a missing release both end here.
 release_json=""
-if ! release_json="$(gh api "repos/${repository}/releases/tags/${release_tag}" 2>&1)"; then
-  die "the release ${release_tag} could not be read, or is still a draft: ${release_json}"
+if ! release_json="$(gh api "repos/${repository}/releases/tags/${release_tag}" 2>"$gh_stderr")"; then
+  die "the release ${release_tag} could not be read, or is still a draft: $(<"$gh_stderr")"
 fi
+cat "$gh_stderr" >&2
 fields="$(jq -r '[(.tag_name // ""), (.draft | tostring), (.prerelease | tostring)] | join(" ")' <<<"$release_json")" \
   || die "the answer of the API for ${release_tag} is not readable."
 read -r api_tag api_draft api_prerelease <<<"$fields"
