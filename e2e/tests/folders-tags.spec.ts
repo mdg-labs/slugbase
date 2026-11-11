@@ -124,7 +124,8 @@ async function pick(field: Locator, entry: Locator): Promise<void> {
 
 test.describe("folders and tags journey", () => {
   // A click that finds its target covered waits for the test to time out unless the actions are bounded.
-  test.use({ actionTimeout: 15_000 });
+  // The journey lists, filters and removes what the workspace holds, so it holds the account's preferences alone.
+  test.use({ actionTimeout: 15_000, accountAlone: true });
   test.skip(({ browserName }) => browserName !== "chromium", "the journey is Chromium's: it holds the lock of the account's preferences and a second member's session");
 
   test("makes folders and tags inline, filters, merges, bulk-tags and deletes a folder, and a second member sees none of the tags", async ({

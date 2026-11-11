@@ -91,9 +91,10 @@ const LANGUAGES: readonly { readonly locale: Locale; readonly browser: string; r
 
 for (const { locale, browser, title } of LANGUAGES) {
   test.describe(`a signed-in member, ${title}`, () => {
-    test.use({ locale: browser });
+    // The journeys that toggle the theme start from the light one, so all three hold the account's preferences alone with it set.
+    test.use({ locale: browser, preferences: { theme: "light", locale } });
 
-    // The language of a member is the account's, not the browser's, so each journey sets it before the page
+    // The language of a member is the account's, not the browser's, so each journey has it set before the page
     // loads and holds the account's preferences until it ends.
     test("opens the shell on the home page", async ({ page, app, account }) => {
       await account.set({ locale });

@@ -127,9 +127,11 @@ for (const { name, viewport } of [
   { name: "on a 390 px wide phone", viewport: PHONE },
 ] as const) {
   test.describe(`bookmarks journey ${name}`, () => {
+    // The journey selects and removes every pinned bookmark of the workspace, so nothing else runs while it does.
+    test.use({ accountAlone: true });
     if (viewport !== undefined) {
       test.use({ viewport });
-      // Every run holds the lock of the account's preferences until it ends and the others wait for it, so the run at
+      // Every run holds the lock of the account's preferences alone until it ends and the others wait for it, so the run at
       // phone size, which takes the longest, is one engine's.
       test.skip(({ browserName }) => browserName !== "chromium", "the phone-size run is Chromium's");
     }

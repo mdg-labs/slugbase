@@ -67,6 +67,7 @@ for (const scheme of ["light", "dark"] as const) {
   });
 
   test.describe(`the shell of a signed-in member in the ${scheme} theme`, () => {
+    test.use({ preferences: { theme: scheme, locale: "en" } });
     test.beforeEach(async ({ account }) => {
       await account.set({ theme: scheme, locale: "en" });
     });
