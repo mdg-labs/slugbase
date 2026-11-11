@@ -274,7 +274,11 @@ describe("apps/slugbase main server --with-worker", () => {
       let text = "";
       await until(async () => {
         const response = await get(metricsPort, "/metrics");
-        expect(response.split("\r\n")[0]).toBe("HTTP/1.1 200 OK");
+        // A scrape answers 500 while the worker cannot read its queues yet, as it can just after the start: that is
+        // a reason to poll again, not a failure; the deadline still fails a scrape that never succeeds.
+        if (response.split("\r\n")[0] !== "HTTP/1.1 200 OK") {
+          return false;
+        }
         text = bodyOf(response);
         return text.includes('slugbase_job_queue_depth{queue="mail.send",state="ready",process="worker"}');
       }, "the worker's job queue samples");
