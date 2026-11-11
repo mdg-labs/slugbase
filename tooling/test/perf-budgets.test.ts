@@ -134,7 +134,7 @@ const { evaluate, loadOf, createsOf, startSampler, summarizeSamples } = (await i
   evaluate: (summary: Summary, ids: string[], vus?: { capacity: number; of: string }) => Evaluated;
   loadOf: (summary: Summary, scenario: string, vus: { capacity: number; of: string }) => Load;
   createsOf: (summary: Summary) => Record<string, unknown> & { dropped: number };
-  startSampler: (options: { held: { state: string }; metricsPort: number; serverUrl: string; databaseName: string }) => { stop: () => Promise<Sampled> };
+  startSampler: (options: { held: { state: string }; metricsPort: number; serverUrl: string; databaseName: string; lockWaitTimeoutMs?: number }) => { stop: () => Promise<Sampled> };
   summarizeSamples: (values: number[]) => { max: number; p95: number };
 };
 
@@ -788,7 +788,7 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
 
   // A metrics listener that answers what the test says and a `psql` that prints what the test says, so the run's own sampler runs end to end.
   // `lateBy` makes the stub's answer arrive after the stub itself has exited: a process it leaves running prints it a moment later, as a pipe read late by a loaded host does.
-  async function rig(options: { metrics: () => { status: number; body: string }; backends: string; lateBy?: number }): Promise<{ metricsPort: number; restore: () => void }> {
+  async function rig(options: { metrics: () => { status: number; body: string }; backends: string; lateBy?: number; hang?: boolean }): Promise<{ metricsPort: number; restore: () => void }> {
     const server = createServer((request, response) => {
       const answer = options.metrics();
       response.writeHead(answer.status, { "content-type": "text/plain" });
@@ -801,7 +801,9 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
     const dir = mkdtempSync(join(tmpdir(), "perf-sampler-"));
     dirs.push(dir);
     const answer = `printf '%s\\n' '${options.backends}'`;
-    writeFileSync(join(dir, "psql"), `#!/bin/sh\n${options.lateBy === undefined ? answer : `(sleep ${String(options.lateBy)}; ${answer}) &`}\n`);
+    // A `psql` that never answers and never exits, as one that waits for a connection does; `exec` makes the process the deadline kills the one that holds the output open.
+    const body = options.hang === true ? "exec sleep 30" : options.lateBy === undefined ? answer : `(sleep ${String(options.lateBy)}; ${answer}) &`;
+    writeFileSync(join(dir, "psql"), `#!/bin/sh\n${body}\n`);
     chmodSync(join(dir, "psql"), 0o755);
     const path = process.env.PATH;
     process.env.PATH = `${dir}:${path ?? ""}`;
@@ -906,6 +908,19 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
       refused.restore();
     }
   });
+
+  it("ends a psql that never answers at the deadline and fails the run with the sample it could not read", async () => {
+    const stalled = await rig({ metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "0|0", hang: true });
+    try {
+      const began = Date.now();
+      const sampler = startSampler({ ...sampleOptions(stalled.metricsPort, "importing"), lockWaitTimeoutMs: 300 });
+      await expect(sampler.stop()).rejects.toThrow(/backends that wait for a lock could not be read/);
+      // The stub would run for 30 seconds: a stop that returns well before is the deadline's, not the stub's.
+      expect(Date.now() - began).toBeLessThan(10_000);
+    } finally {
+      stalled.restore();
+    }
+  }, 20_000);
 
   it("is read from a server started with a METRICS_PORT of its own, as the image and as the local build, and written to the result by the names the report reads", () => {
     const runner = read("run.mjs");

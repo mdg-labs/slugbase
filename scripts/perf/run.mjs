@@ -582,15 +582,18 @@ async function poolSample(metricsPort) {
 }
 
 // The backends of the run's database that wait for a lock (`wait_event_type = 'Lock'`), as the owner of the database. A role that may not see the other backends' activity gets `<insufficient privilege>` for them and no
-// wait event, which would read as 0 waits: a sample with any such backend is an error.
-async function lockWaitSample(serverUrl, databaseName) {
+// wait event, which would read as 0 waits: a sample with any such backend is an error. Like the pool sample, it is bounded by `timeoutMs`: `psql` waits for a connection without end unless it is told how long, and a `psql` that is
+// killed at the deadline closes with no status, which `capture` reports as a failure.
+async function lockWaitSample(serverUrl, databaseName, timeoutMs) {
+  const options = psqlOptions(serverUrl, databaseName);
   const { status, stdout } = await capture(
     "psql",
     [
       "--no-psqlrc", "--no-align", "--tuples-only", "--set", "ON_ERROR_STOP=1", "--command",
       "SELECT count(*) FILTER (WHERE wait_event_type = 'Lock'), count(*) FILTER (WHERE query = '<insufficient privilege>') FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()",
     ],
-    psqlOptions(serverUrl, databaseName),
+    // `PGCONNECT_TIMEOUT` is whole seconds, and libpq reads anything under 2 as 2.
+    { ...options, env: { ...options.env, PGCONNECT_TIMEOUT: String(Math.max(2, Math.ceil(timeoutMs / 1000))) }, timeout: timeoutMs, killSignal: "SIGKILL" },
   );
   const read = /^(\d+)\|(\d+)$/u.exec(stdout.trim());
   if (status !== 0 || read === null || Number(read[2]) > 0) {
@@ -610,7 +613,7 @@ function summarizeSamples(values) {
 
 // The pool and the lock waits sampled every SAMPLE_INTERVAL_MS while the import is in the state `importing` (`held.state`), in the run's own process and beside the k6 run, which cannot see them. The first sample that cannot be
 // read ends the sampling and fails the run when it is stopped, as does a phase that was never sampled: neither is taken for a quiet one.
-function startSampler({ held, metricsPort, serverUrl, databaseName }) {
+function startSampler({ held, metricsPort, serverUrl, databaseName, lockWaitTimeoutMs = SAMPLE_TIMEOUT_MS }) {
   const inFlight = [];
   const waits = [];
   let size;
@@ -621,7 +624,7 @@ function startSampler({ held, metricsPort, serverUrl, databaseName }) {
       const began = performance.now();
       if (held.state === "importing") {
         try {
-          const [pool, waiting] = await Promise.all([poolSample(metricsPort), lockWaitSample(serverUrl, databaseName)]);
+          const [pool, waiting] = await Promise.all([poolSample(metricsPort), lockWaitSample(serverUrl, databaseName, lockWaitTimeoutMs)]);
           if (size !== undefined && size !== pool.size) {
             throw new Error(`the pool size of the server changed from ${String(size)} to ${String(pool.size)} during the import phase`);
           }
