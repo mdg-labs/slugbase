@@ -162,7 +162,8 @@ function run(command, argv, options = {}) {
   });
 }
 
-// Runs a command to its end and resolves with its status and what it wrote to stdout; a failure to start it rejects.
+// Runs a command to its end and resolves with its status and what it wrote to stdout; a failure to start it rejects. It waits for `close`, not `exit`: `exit` is the process ending, which can be before the parent has read
+// the last of its stdout, so on `exit` a command that succeeded and printed its answer can resolve with an empty one; `close` is after stdout has ended too.
 function capture(command, argv, options = {}) {
   return new Promise((resolveRun, reject) => {
     const child = spawn(command, argv, { stdio: ["ignore", "pipe", "inherit"], ...options });
@@ -172,7 +173,7 @@ function capture(command, argv, options = {}) {
       stdout += chunk;
     });
     child.once("error", reject);
-    child.once("exit", (code) => {
+    child.once("close", (code) => {
       resolveRun({ status: code ?? 1, stdout });
     });
   });

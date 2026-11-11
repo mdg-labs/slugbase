@@ -787,7 +787,8 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
   });
 
   // A metrics listener that answers what the test says and a `psql` that prints what the test says, so the run's own sampler runs end to end.
-  async function rig(options: { metrics: () => { status: number; body: string }; backends: string }): Promise<{ metricsPort: number; restore: () => void }> {
+  // `lateBy` makes the stub's answer arrive after the stub itself has exited: a process it leaves running prints it a moment later, as a pipe read late by a loaded host does.
+  async function rig(options: { metrics: () => { status: number; body: string }; backends: string; lateBy?: number }): Promise<{ metricsPort: number; restore: () => void }> {
     const server = createServer((request, response) => {
       const answer = options.metrics();
       response.writeHead(answer.status, { "content-type": "text/plain" });
@@ -799,7 +800,8 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
     });
     const dir = mkdtempSync(join(tmpdir(), "perf-sampler-"));
     dirs.push(dir);
-    writeFileSync(join(dir, "psql"), `#!/bin/sh\nprintf '%s\\n' '${options.backends}'\n`);
+    const answer = `printf '%s\\n' '${options.backends}'`;
+    writeFileSync(join(dir, "psql"), `#!/bin/sh\n${options.lateBy === undefined ? answer : `(sleep ${String(options.lateBy)}; ${answer}) &`}\n`);
     chmodSync(join(dir, "psql"), 0o755);
     const path = process.env.PATH;
     process.env.PATH = `${dir}:${path ?? ""}`;
@@ -882,6 +884,26 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
       await expect(sampler.stop()).rejects.toThrow(/no sample of the pool or of the lock waits was taken while an import was in flight/);
     } finally {
       restore();
+    }
+  });
+
+  it("reads what psql printed even when psql has exited before it is read, and still fails the run on a failure that the late answer does not hide", async () => {
+    const late = await rig({ metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "5|0", lateBy: 0.3 });
+    try {
+      const held = { state: "importing" };
+      const sampler = startSampler({ ...sampleOptions(late.metricsPort, "importing"), held });
+      await wait(100);
+      held.state = "after";
+      const figures = await sampler.stop();
+      expect(figures.lockWaits).toMatchObject({ max: 5, p95: 5 });
+    } finally {
+      late.restore();
+    }
+    const refused = await rig({ metrics: () => ({ status: 200, body: "slugbase_db_tenant_transactions_in_flight 3\n" }), backends: "0|0", lateBy: 0.3 });
+    try {
+      await expect(startSampler(sampleOptions(refused.metricsPort, "importing")).stop()).rejects.toThrow(/no readable slugbase_db_pool_size/);
+    } finally {
+      refused.restore();
     }
   });
 
