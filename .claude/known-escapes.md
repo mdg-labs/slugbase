@@ -48,7 +48,7 @@ existing line by adding its PR number.
 
 - **cache key** — a cached value depends on a scope the key omits (an account-scoped value in a workspace-keyed cache) — PR 354
 - **dedupe key the job does not carry** — a queued job is deduplicated on a value (a page address) it does not carry and re-reads from a mutable row (the bookmark) when it runs, so a waiting job can stand for a row that has since moved away and a later job for that value is dropped as a duplicate — PR 629
-- **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558, 641
+- **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558, 641, 853
 - **contract description lags behaviour** — a change widens what an operation returns (a search that now reaches shared rows) and updates the design doc, but the operation's published contract description still states the old behaviour, so API callers read the old rule — PR 648
 - **error code by reference** — a contract description names a refusal's code only as "the same error" right after a sentence giving a different code, so a client branching on the code reads the wrong one — PR 762
 - **external behaviour** — a doc or comment states a third-party system's behaviour more broadly than that system documents it (a database "waits for every older transaction" where it waits only for writers and older snapshots) — PR 365
@@ -71,6 +71,7 @@ existing line by adding its PR number.
 - **interrupt checked once** — a runner of several child steps checks its interrupt flag after the first step only, so an interrupt during a later step starts the next one with no handler waiting on it — PR 825
 - **output truncated before success** — a command redirects straight onto its final file, so a failed run destroys the previous good output; write elsewhere and rename on success — PR 825
 - **sync throw past a promise** — a function returns `Promise.resolve(f())`, so a synchronous throw in `f` escapes as an exception and skips the caller's rejection handler; an `async` function turns it into a rejection — PR 825
+- **stderr parsed as the answer** — a script captures a CLI with `2>&1` and parses the capture as JSON, so a notice the CLI writes to stderr on a call that succeeds makes the answer unreadable — PR 853
 
 ## Database sessions and migrations
 
@@ -125,6 +126,7 @@ existing line by adding its PR number.
 - **deadline checked only between polls** — a polling helper checks its own deadline between calls while each call auto-waits on its own (a Playwright locator action waiting for its element), so a missing element holds one call until the test's timeout and the helper's bound and named error never fire — PR 602
 - **unescaped literal in a pattern** — a test builds a `RegExp` from a literal value (an origin, a hostname) without escaping it, so each `.` matches any character and the assertion accepts look-alike values — PR 529
 - **fixed sleep as a bound** — a test sleeps a fixed delay and then asserts that something has happened, so a loaded runner that takes longer fails it; a positive outcome is awaited by polling it — PR 622
+- **assertion inside a poll** — a polling callback asserts the transient state it is waiting through (a scrape's HTTP status while the service starts), so the first not-yet-ready answer fails the test instead of polling again — PR 853
 - **absence shown by a sleep** — a test proves a component is not running only by waiting and seeing nothing happen, with no direct check that it is absent (its connection, its process) — PR 825
 - **order claim untested** — a comment states a start order that matters (migrate before the worker starts), and every test runs with the precondition already met, so reversing the order passes — PR 825
 - **timeout told by timing alone** — an error classifier treats any rejection that arrives near a deadline as that deadline's timeout without reading the error, so an unrelated late failure (`Target closed`) is reported as the timeout — PR 622
@@ -154,6 +156,7 @@ existing line by adding its PR number.
 - **sibling page skips the shared reaction** — one page of a group omits a hook its siblings all call on a failed request (re-reading the account after a 403), so on that page alone a lost permission shows a retry that keeps failing instead of the access page — PR 532
 - **word-for-word state label** — a short toggle label ("Forwarding on") is translated word for word, and in the target language the particle reads as a direction ("Weiterleitung an", forwarding to …) rather than a state; a label naming a state uses that language's state adjective — PR 569
 - **reachability by computed style** — a helper that lists the controls Tab reaches judges them by computed `display` and `visibility` and takes document order, so a control the browser skips without either (inside a closed `<details>`) or orders differently (a positive `tabindex`) becomes the first or last stop and the trap misses the real one — PR 612
+- **destructive action during a read** — a dialog offers a background read (an export) beside the destructive action it precedes (a deletion) and leaves the action enabled while the read runs, so the read can miss what the action removes — PR 853
 - **secure-context API presumed** — code calls a browser API that exists only in a secure context (`navigator.clipboard`) without allowing for its absence, so on an instance served over http it throws before any feedback — PR 612
 - **error routed to a hidden message** — a page routes a failure to a message shown beside one control, under a broader condition than the one that shows that control (any filter, while the day fields show only for a custom range), so the page renders nothing for that failure: no table, banner or retry — PR 724
 - **one code, several causes** — a client maps a refusal code to one cause and message, though the server answers that code for several causes and names which in the body (an `entitlement_required` for invitations or for teams), so the message names the wrong cause — PR 775
