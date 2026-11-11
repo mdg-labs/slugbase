@@ -145,6 +145,33 @@ describe("the event jobs", () => {
     await expect(job.handle({ ...data, acknowledgements: [] }, moduleContext())).rejects.toThrow();
   });
 
+  it("hand every subscriber the same frozen event, so none changes what a later one sees", async () => {
+    const seen: unknown[] = [];
+    const acknowledgements = [{ id: "terms", version: "2026-01" }];
+    const job = jobFor([
+      registered("a", (event) => {
+        if (event.name !== "account.created") {
+          throw new Error("expected account.created");
+        }
+        const list = event.payload.acknowledgements as unknown as [{ version: string }];
+        expect(Object.isFrozen(event)).toBe(true);
+        expect(Object.isFrozen(event.payload)).toBe(true);
+        expect(Object.isFrozen(list)).toBe(true);
+        expect(() => {
+          list[0].version = "changed";
+        }).toThrow(TypeError);
+        expect(() => {
+          (list as { version: string }[]).push({ version: "added" });
+        }).toThrow(TypeError);
+      }),
+      registered("b", (event) => void seen.push(event.payload)),
+    ]);
+
+    await job.handle({ ...data, acknowledgements: JSON.stringify(acknowledgements) }, moduleContext());
+
+    expect(seen).toEqual([{ accountId: ACCOUNT, path: "invitation", acknowledgements }]);
+  });
+
   it("do nothing when no module subscribes", async () => {
     await expect(jobFor([]).handle(data, moduleContext())).resolves.toBeUndefined();
   });

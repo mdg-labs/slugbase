@@ -54,10 +54,21 @@ function decoded(name: DomainEventName, fields: Readonly<Record<string, unknown>
   );
 }
 
+/** The value with it and every object or array it holds frozen. */
+function deepFrozen<Value>(value: Value): Value {
+  if (typeof value === "object" && value !== null) {
+    for (const inner of Object.values(value)) {
+      deepFrozen(inner);
+    }
+    Object.freeze(value);
+  }
+  return value;
+}
+
 /**
  * The event jobs. Delivery is at least once: a subscriber that failed makes the job run again, and every
  * subscriber sees the event again, so each is idempotent on `eventId`. One failing subscriber does not keep the
- * others from running in the attempt. A failure is logged with the event name, the identifier and the module,
+ * others from running in the attempt. The event is deeply frozen, so every subscriber sees the same payload. A failure is logged with the event name, the identifier and the module,
  * never the payload.
  */
 export function eventJobs(subscribersFor: (name: DomainEventName) => readonly RegisteredSubscriber[]): readonly JobDefinition[] {
@@ -70,7 +81,8 @@ export function eventJobs(subscribersFor: (name: DomainEventName) => readonly Re
         if (subscribers.length === 0) {
           return;
         }
-        const event = { eventId: EVENT_ID.parse(eventId), name, payload: parseDomainEventPayload(name, decoded(name, fields)) } as AnyDomainEvent;
+        // Every subscriber receives the same deeply frozen event, so none changes what a later one sees.
+        const event = deepFrozen({ eventId: EVENT_ID.parse(eventId), name, payload: parseDomainEventPayload(name, decoded(name, fields)) }) as AnyDomainEvent;
         const failed: string[] = [];
         for (const subscriber of subscribers) {
           try {
