@@ -417,6 +417,46 @@ describe("the export offered in the delete dialog", () => {
     });
     expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
   }, SLOW_TEST_TIMEOUT_MS);
+
+  it("keeps the deletion off while the export runs, though the name is typed, and offers it once the export is saved", async () => {
+    const { saved } = stubDownloads();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const server = stubWorkspaceSettingsServer({
+      members: [SELF, GRACE],
+      other: async (request) => {
+        if (new URL(request.url).pathname !== EXPORT_PATH) {
+          return new Response(null, { status: 204 });
+        }
+        await gate;
+        return new Response("{}", { headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="${EXPORT_NAME}"` } });
+      },
+    });
+    await openGeneral();
+    const dialog = await openDelete();
+
+    await press(within(dialog).getByRole("button", { name: "Export first" }));
+    await type(dialog, NAME);
+
+    expect(submit(dialog).hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      fireEvent.submit(submit(dialog).closest("form") as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+
+    await act(async () => {
+      release();
+      await gate;
+    });
+    await waitFor(() => {
+      expect(saved).toEqual([EXPORT_NAME]);
+    });
+    await waitFor(() => {
+      expect(submit(dialog).hasAttribute("disabled")).toBe(false);
+    });
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+  }, SLOW_TEST_TIMEOUT_MS);
 });
-
-

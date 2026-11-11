@@ -97,6 +97,8 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: { workspace: Works
     <TypedConfirm
       cancelLabel={t("settings.workspace.delete.cancel")}
       confirmLabel={t("settings.workspace.delete.action")}
+      // An export still reading the workspace would miss what the deletion removes, so the deletion waits for it.
+      confirmDisabled={exporting.busy}
       description={t("settings.workspace.delete.description", { name: workspace.name })}
       destructive
       error={needsConfirmation ? t("settings.workspace.delete.error.reauthCancelled") : undefined}
