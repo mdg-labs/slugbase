@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../../src/config/index.ts";
 import { builtInJobs } from "../../src/worker/built-in.ts";
-import { createWorker, monitorSlug } from "../../src/worker/index.ts";
+import { createWorker, defineJob, defineSchedule, monitorSlug } from "../../src/worker/index.ts";
+import { z } from "zod";
 import { productionEnv } from "../config/support.ts";
 import { adapters, fakeDatabase, recordingLogger } from "../support.ts";
 
@@ -41,5 +42,29 @@ describe("the built-in jobs", () => {
       "retention-purge",
       "secrets-reseal",
     ]);
+  });
+
+  it("warn at start, when monitored runs are reported, about a job several schedules name, which reports none", () => {
+    const report = defineJob({ name: "report.send", payload: z.object({}), handle: () => Promise.resolve() });
+    const module = {
+      name: "reports",
+      register: () => ({
+        jobs: [report],
+        schedules: [
+          defineSchedule({ name: "report.daily", cron: "0 3 * * *", job: report.name }),
+          defineSchedule({ name: "report.weekly", cron: "0 4 * * 1", job: report.name }),
+        ],
+      }),
+    };
+    const create = (withCheckIns: boolean) => {
+      const logger = recordingLogger();
+      const base = adapters();
+      const errors = withCheckIns ? { ...base.errors, startMonitoredRun: () => Promise.resolve({ finish: () => Promise.resolve() }) } : base.errors;
+      createWorker({ config: loadConfig("worker", { ...productionEnv(), NODE_ENV: "test" }).config, adapters: { ...base, errors }, modules: [module], logger, database: fakeDatabase() });
+      return logger.entries.filter((entry) => entry.message === "A job several schedules name reports no monitored runs");
+    };
+
+    expect(create(true)).toEqual([{ level: "warn", message: "A job several schedules name reports no monitored runs", fields: { job: "report.send" } }]);
+    expect(create(false)).toEqual([]);
   });
 });

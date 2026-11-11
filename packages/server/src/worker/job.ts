@@ -71,10 +71,38 @@ export interface ScheduleDefinition {
 /**
  * The slug of the monitor that stands for a schedule in an error tracker: each upper-case letter of the name starts
  * a new word and is written lower-case after a hyphen, and each `.` becomes a hyphen, so `rateLimit.purgeIdle` is
- * `rate-limit-purge-idle`. Names that differ only in `.` against `-` share a slug.
+ * `rate-limit-purge-idle`. Names that differ only in `.` against `-` share a slug, so composition refuses two schedules
+ * with one slug.
  */
 export function monitorSlug(scheduleName: string): string {
   return scheduleName.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`).replaceAll(".", "-");
+}
+
+/** Which jobs report their runs to which monitor, and which scheduled jobs report none. */
+export interface ScheduleMonitors {
+  /** The monitor slug of each job exactly one schedule names. */
+  readonly slugs: ReadonlyMap<string, string>;
+  /** The jobs several schedules name: a run does not say which schedule queued it, so none of them is monitored. */
+  readonly unmonitored: readonly string[];
+}
+
+/** The monitor of each scheduled job: the slug of its schedule when exactly one schedule names it. */
+export function scheduleMonitors(schedules: readonly ScheduleDefinition[]): ScheduleMonitors {
+  const byJob = new Map<string, ScheduleDefinition[]>();
+  for (const schedule of schedules) {
+    byJob.set(schedule.job, [...(byJob.get(schedule.job) ?? []), schedule]);
+  }
+  const slugs = new Map<string, string>();
+  const unmonitored: string[] = [];
+  for (const [job, named] of byJob) {
+    const [only] = named;
+    if (named.length === 1 && only !== undefined) {
+      slugs.set(job, monitorSlug(only.name));
+    } else {
+      unmonitored.push(job);
+    }
+  }
+  return { slugs, unmonitored };
 }
 
 export class JobDefinitionError extends Error {

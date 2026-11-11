@@ -273,6 +273,22 @@ describe("createServer", () => {
         "s is registered twice",
       ],
       [
+        "duplicate_schedule",
+        [
+          {
+            name: "slugs",
+            register: () => ({
+              jobs: [job("some.job"), job("other.job")],
+              schedules: [
+                defineSchedule({ name: "foo.bar", cron: "* * * * *", job: "some.job" }),
+                defineSchedule({ name: "foo-bar", cron: "* * * * *", job: "other.job" }),
+              ],
+            }),
+          },
+        ],
+        "foo-bar has the monitor slug foo-bar of schedule foo.bar",
+      ],
+      [
         "invalid_schedule",
         [
           {

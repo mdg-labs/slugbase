@@ -13,7 +13,7 @@ import {
 import { subscribersOf, type RegisteredSubscriber } from "../events/subscriber.ts";
 import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, exposeWorkerMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot, type WorkerMetrics } from "../metrics/index.ts";
-import { monitorSlug, type JobDefinition, type JobPayload, type ScheduleDefinition } from "./job.ts";
+import { scheduleMonitors, type JobDefinition, type JobPayload, type ScheduleDefinition } from "./job.ts";
 import { createBuiltInModules } from "./built-in.ts";
 import { queueSettings, queueUpdates } from "./queues.ts";
 
@@ -144,9 +144,10 @@ export function createWorker(options: CreateWorkerOptions): Worker {
     }
   };
 
-  // Every attempt of a job that a schedule names is a monitored run, under the slug of the first schedule that names it;
-  // the error port decides whether it reports runs at all. A failing report never changes the job's outcome.
-  const monitors = new Map<string, string>();
+  // Every attempt of a job that exactly one schedule names is a monitored run, under that schedule's slug; a job several
+  // schedules name is not monitored, since a run does not say which schedule queued it. The error port decides whether
+  // it reports runs at all. A failing report never changes the job's outcome.
+  let monitors: ReadonlyMap<string, string> = new Map<string, string>();
   const startRun = async (jobName: string): Promise<MonitoredRun | undefined> => {
     const slug = monitors.get(jobName);
     const { errors } = options.adapters;
@@ -173,9 +174,11 @@ export function createWorker(options: CreateWorkerOptions): Worker {
     // The event jobs read the subscribers when a job runs, which is after `composition` is assigned.
     const subscribersFor = (name: DomainEventName): readonly RegisteredSubscriber[] => subscribersOf(composition.subscribers, name);
     composition = compose([...createBuiltInModules(maintenanceStores, subscribersFor), ...options.modules], context, []);
-    for (const schedule of composition.schedules) {
-      if (!monitors.has(schedule.job)) {
-        monitors.set(schedule.job, monitorSlug(schedule.name));
+    const scheduled = scheduleMonitors(composition.schedules);
+    monitors = scheduled.slugs;
+    if (options.adapters.errors.startMonitoredRun !== undefined) {
+      for (const job of scheduled.unmonitored) {
+        logger.warn("A job several schedules name reports no monitored runs", { job });
       }
     }
   } catch (error) {
