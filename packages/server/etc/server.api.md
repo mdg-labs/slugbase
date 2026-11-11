@@ -391,6 +391,8 @@ export const envSchemas: {
         METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
         ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        ERROR_REPORT_TRACES_SAMPLE_RATE: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+        ERROR_REPORT_CHECK_INS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     } & {
         SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
         SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
@@ -443,6 +445,8 @@ export const envSchemas: {
         METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
         ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        ERROR_REPORT_TRACES_SAMPLE_RATE: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+        ERROR_REPORT_CHECK_INS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     } & {
         SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
         SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
@@ -478,6 +482,8 @@ export const envSchemas: {
 // @public
 export const errorReportFragment: EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+ERROR_REPORT_TRACES_SAMPLE_RATE: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+ERROR_REPORT_CHECK_INS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }, object>;
 
 // @public
@@ -745,6 +751,9 @@ export interface ModuleContribution {
     readonly schedules?: readonly ScheduleDefinition[];
     readonly subscribers?: readonly EventSubscriber[];
 }
+
+// @public
+export function monitorSlug(scheduleName: string): string;
 
 // @public (undocumented)
 export const NODE_ENVS: readonly ["development", "test", "production"];
@@ -1233,6 +1242,8 @@ export const serverEnvSchema: EnvSchema<{
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    ERROR_REPORT_TRACES_SAMPLE_RATE: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    ERROR_REPORT_CHECK_INS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
     SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
@@ -1305,6 +1316,8 @@ AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number,
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }, object>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+ERROR_REPORT_TRACES_SAMPLE_RATE: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+ERROR_REPORT_CHECK_INS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }, object>, EnvFragment<    {
 SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
@@ -1490,6 +1503,8 @@ export const workerEnvSchema: EnvSchema<{
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    ERROR_REPORT_TRACES_SAMPLE_RATE: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    ERROR_REPORT_CHECK_INS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
     SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
@@ -1535,6 +1550,8 @@ AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number,
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }, object>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+ERROR_REPORT_TRACES_SAMPLE_RATE: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+ERROR_REPORT_CHECK_INS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }, object>, EnvFragment<    {
 SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;

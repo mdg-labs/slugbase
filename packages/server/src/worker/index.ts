@@ -1,4 +1,4 @@
-export { DEFAULT_RETRY_POLICY, JobDefinitionError, defineJob, defineSchedule } from "./job.ts";
+export { DEFAULT_RETRY_POLICY, JobDefinitionError, defineJob, defineSchedule, monitorSlug } from "./job.ts";
 export type {
   DefineJobOptions,
   JobDefinition,

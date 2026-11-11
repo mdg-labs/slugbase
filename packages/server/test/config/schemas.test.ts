@@ -129,6 +129,31 @@ describe("process schemas", () => {
     );
   });
 
+  it("leaves traces and check-ins off unless their keys are set, on the server and on the worker", () => {
+    for (const type of ["server", "worker"] as const) {
+      const unset = loadConfig(type, development).config;
+      expect(unset.ERROR_REPORT_TRACES_SAMPLE_RATE).toBeUndefined();
+      expect(unset.ERROR_REPORT_CHECK_INS).toBe(false);
+      expect(loadConfig(type, { ...development, ERROR_REPORT_TRACES_SAMPLE_RATE: "" }).config.ERROR_REPORT_TRACES_SAMPLE_RATE).toBeUndefined();
+      expect(loadConfig(type, { ...development, ERROR_REPORT_TRACES_SAMPLE_RATE: "0.25" }).config.ERROR_REPORT_TRACES_SAMPLE_RATE).toBe(0.25);
+      expect(loadConfig(type, { ...development, ERROR_REPORT_TRACES_SAMPLE_RATE: "0" }).config.ERROR_REPORT_TRACES_SAMPLE_RATE).toBe(0);
+      expect(loadConfig(type, { ...development, ERROR_REPORT_TRACES_SAMPLE_RATE: "1" }).config.ERROR_REPORT_TRACES_SAMPLE_RATE).toBe(1);
+      expect(loadConfig(type, { ...development, ERROR_REPORT_CHECK_INS: "true" }).config.ERROR_REPORT_CHECK_INS).toBe(true);
+    }
+  });
+
+  it.each(["1.5", "-0.1", "2", "half", "0,5", "0.1234567", "1e-1"])("names ERROR_REPORT_TRACES_SAMPLE_RATE for the malformed value %j", (value) => {
+    for (const type of ["server", "worker"] as const) {
+      expect(failure(() => loadConfig(type, { ...development, ERROR_REPORT_TRACES_SAMPLE_RATE: value })).issues.map((issue) => issue.key)).toEqual([
+        "ERROR_REPORT_TRACES_SAMPLE_RATE",
+      ]);
+    }
+  });
+
+  it("names ERROR_REPORT_CHECK_INS for a value that is no boolean", () => {
+    expect(failure(() => loadConfig("worker", { ...development, ERROR_REPORT_CHECK_INS: "yes" })).issues.map((issue) => issue.key)).toEqual(["ERROR_REPORT_CHECK_INS"]);
+  });
+
   it.each([
     "errors.example.com/1",
     "ftp://key@errors.example.com/1",

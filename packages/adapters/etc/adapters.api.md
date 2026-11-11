@@ -113,12 +113,15 @@ export function createSentryErrorReport(options: CreateSentryErrorReportOptions)
 
 // @public (undocumented)
 export interface CreateSentryErrorReportOptions {
+    readonly checkIns?: boolean;
     readonly dsn: string;
     // (undocumented)
     readonly environment?: string;
     readonly flushTimeoutMs?: number;
     // (undocumented)
     readonly release?: string;
+    readonly tags?: Readonly<Record<string, string>>;
+    readonly tracesSampleRate?: number;
 }
 
 // @public

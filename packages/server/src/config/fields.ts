@@ -18,6 +18,15 @@ export function envInteger(bounds: { min: number; max: number }) {
     });
 }
 
+/** A probability written in decimal digits, from 0 to 1 inclusive, such as `0.25`. */
+export function envSampleRate() {
+  return z
+    .string()
+    .refine((value) => /^(?:\d(?:\.\d{1,6})?|\.\d{1,6})$/.test(value), { error: "must be a number from 0 to 1 written in digits, such as 0.25" })
+    .transform(Number)
+    .refine((value) => value >= 0 && value <= 1, { error: "must be a number from 0 to 1 written in digits, such as 0.25" });
+}
+
 /** An unset or empty key is "not configured". */
 export function optional<T extends z.ZodType>(field: T) {
   return z.preprocess((value) => (value === "" ? undefined : value), field.optional());

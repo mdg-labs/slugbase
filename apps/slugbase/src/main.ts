@@ -198,11 +198,14 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
   return createSmtpMail({ host, port, security, ...(auth === undefined ? {} : { auth }), from, templates: mailTemplates(config) });
 }
 
-// What the server and the worker of one process (`server --with-worker`) hold in common: the lookup budget the egress
-// instances draw on and the shared egress instance. Without it, `composeAdapters` makes both for the process it composes.
+// What `composeAdapters` is told about the process it composes besides its configuration. The server and the worker of
+// one process (`server --with-worker`) hold the lookup budget the egress instances draw on and the shared egress instance
+// in common; without them `composeAdapters` makes both for the process it composes. `process` names the side being
+// composed: it tags every error report, and only the server registers the trace provider, since only the server opens spans.
 export interface ProcessSharing {
   readonly lookups?: LookupBudget;
   readonly egress?: EgressPort;
+  readonly process?: Exclude<ProcessType, "migrate">;
 }
 
 // What a test may change about the egress instances the composition builds: the resolver, and the allowances that
@@ -282,7 +285,9 @@ function composeAi(config: ServerConfig | WorkerConfig, logger: Logger, lookups:
 // alike: `ENCRYPTION_KEY` seals, the previous keys only open. A key the box
 // refuses stops the process before it serves or works. Error reporting is the
 // Sentry-protocol adapter when the operator set `ERROR_REPORT_DSN`, and the
-// no-op default (errors are logged only) when not. Egress is always on (doc 01
+// no-op default (errors are logged only) when not. The adapter tags its events with the process that sent them; the server
+// also samples traces at `ERROR_REPORT_TRACES_SAMPLE_RATE`, and `ERROR_REPORT_CHECK_INS` has the worker report its scheduled
+// jobs. Egress is always on (doc 01
 // section 6): the adapter that resolves, validates and pins every outbound request.
 // The composition leaves the tenant resolver to `createServer`: the account-only resolver below
 // stands for "no choice made", and `createServer` replaces it with the membership resolver, which
@@ -312,7 +317,15 @@ export function composeAdapters(
   const errors =
     config.ERROR_REPORT_DSN === undefined
       ? defaults.errors
-      : createSentryErrorReport({ dsn: config.ERROR_REPORT_DSN, environment: config.NODE_ENV });
+      : createSentryErrorReport({
+          dsn: config.ERROR_REPORT_DSN,
+          environment: config.NODE_ENV,
+          ...(sharing.process === undefined ? {} : { tags: { process: sharing.process } }),
+          ...(sharing.process === "server" && config.ERROR_REPORT_TRACES_SAMPLE_RATE !== undefined
+            ? { tracesSampleRate: config.ERROR_REPORT_TRACES_SAMPLE_RATE }
+            : {}),
+          checkIns: config.ERROR_REPORT_CHECK_INS,
+        });
   logger.info(errors.available ? "Error reporting ready" : "Error reporting is off; errors are only logged");
   const limits = createRateLimitRegistry(config);
   const rateLimit = createRateLimiter({
@@ -342,7 +355,11 @@ export function composeAdapters(
 }
 
 // The server of the CE composition: the same one whether it runs in a process of its own or beside the worker.
-function composeServer(config: ServerConfig, logger: Logger, adapters: Adapters = composeAdapters(config, logger)): Server {
+function composeServer(
+  config: ServerConfig,
+  logger: Logger,
+  adapters: Adapters = composeAdapters(config, logger, {}, { process: "server" }),
+): Server {
   const serveWeb = existsSync(WEB_ROOT);
   if (!serveWeb) {
     logger.warn("There is no web build; only the API is served", { webRoot: WEB_ROOT });
@@ -362,7 +379,11 @@ function composeServer(config: ServerConfig, logger: Logger, adapters: Adapters 
 }
 
 // The worker of the CE composition, likewise the same in either mode.
-function composeWorker(config: WorkerConfig, logger: Logger, adapters: Adapters = composeAdapters(config, logger)): Worker {
+function composeWorker(
+  config: WorkerConfig,
+  logger: Logger,
+  adapters: Adapters = composeAdapters(config, logger, {}, { process: "worker" }),
+): Worker {
   return createWorker({
     config,
     adapters,
@@ -385,8 +406,8 @@ export function composeWithWorkerAdapters(
   egressOptions: EgressTestOptions = {},
 ): { readonly server: Adapters; readonly worker: Adapters } {
   const lookups = createLookupBudget();
-  const server = composeAdapters(serverConfig, logger, egressOptions, { lookups });
-  const worker = composeAdapters(workerConfig, logger, egressOptions, { lookups, egress: server.egress });
+  const server = composeAdapters(serverConfig, logger, egressOptions, { lookups, process: "server" });
+  const worker = composeAdapters(workerConfig, logger, egressOptions, { lookups, egress: server.egress, process: "worker" });
   return { server, worker };
 }
 

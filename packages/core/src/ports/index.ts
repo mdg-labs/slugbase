@@ -65,7 +65,7 @@ export type {
   EgressRequestBase,
   EgressResponse,
 } from "./egress.ts";
-export type { ErrorReportContext, ErrorReportPort } from "./error-report.ts";
+export type { ErrorReportContext, ErrorReportPort, MonitoredRun, MonitoredRunOutcome } from "./error-report.ts";
 export { IdentityError } from "./identity.ts";
 export type {
   IdentityBeginRequest,

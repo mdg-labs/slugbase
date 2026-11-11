@@ -3105,6 +3105,7 @@ export interface ErrorReportContext {
 export interface ErrorReportPort extends Port {
     // (undocumented)
     capture(error: unknown, context?: ErrorReportContext): Promise<void>;
+    startMonitoredRun?(slug: string): Promise<MonitoredRun>;
 }
 
 // @public
@@ -5935,6 +5936,14 @@ export const METADATA_SITE_NAME_MAX_LENGTH = 100;
 
 // @public
 export const METADATA_TITLE_MAX_LENGTH = 300;
+
+// @public
+export interface MonitoredRun {
+    finish(outcome: MonitoredRunOutcome): Promise<void>;
+}
+
+// @public
+export type MonitoredRunOutcome = "ok" | "error";
 
 // @public (undocumented)
 export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;

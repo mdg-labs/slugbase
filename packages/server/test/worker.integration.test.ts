@@ -1,4 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
+import { trace } from "@opentelemetry/api";
+import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import type { Adapters } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { getConstructionPlans } from "pg-boss";
@@ -217,6 +219,111 @@ describe("two workers on one database", () => {
     expect(await jobRows("test.reported")).toMatchObject([{ state: "failed", retry_count: 1 }]);
     expect(logger.entries.filter((entry) => entry.message === "Error report failed")).toHaveLength(1);
   }, 90_000);
+
+  it("reports each attempt of a scheduled job as a monitored run under the schedule's slug, and none for a job no schedule names", async () => {
+    const events: string[] = [];
+    const errors: Adapters["errors"] = {
+      available: true,
+      capture: () => Promise.resolve(),
+      startMonitoredRun: (slug) => {
+        events.push(`start ${slug}`);
+        return Promise.resolve({
+          finish: (outcome) => {
+            events.push(`${outcome} ${slug}`);
+            return Promise.resolve();
+          },
+        });
+      },
+    };
+    let attempts = 0;
+    const scheduled = defineJob({
+      name: "test.monitored",
+      payload: noPayload,
+      retry: { limit: 1, delaySeconds: 1, backoff: false },
+      handle: () => {
+        attempts += 1;
+        return attempts === 1 ? Promise.reject(new Error("first attempt fails")) : Promise.resolve();
+      },
+    });
+    const unscheduled = defineJob({ name: "test.unmonitored", payload: noPayload, handle: () => Promise.resolve() });
+    const schedule = defineSchedule({ name: "test.monitoredRun", cron: "0 0 1 1 *", job: scheduled.name });
+    const { running } = await startWorker([moduleOf("a", [scheduled, unscheduled], [schedule])], undefined, errors);
+
+    await running.enqueue(unscheduled, {});
+    await running.enqueue(scheduled, {});
+    await until(async () => (await jobRows("test.monitored")).some((row) => row.state === "completed"), 60_000, "the job to complete");
+    await until(async () => (await jobRows("test.unmonitored")).some((row) => row.state === "completed"), 60_000, "the other job to complete");
+
+    expect(events).toEqual(["start test-monitored-run", "error test-monitored-run", "start test-monitored-run", "ok test-monitored-run"]);
+  }, 90_000);
+
+  it("keeps the outcome of a scheduled job when its monitored run cannot be reported", async () => {
+    const errors: Adapters["errors"] = {
+      available: true,
+      capture: () => Promise.resolve(),
+      startMonitoredRun: () => Promise.reject(new Error("tracker down")),
+    };
+    const failingFinish: Adapters["errors"] = {
+      ...errors,
+      startMonitoredRun: () => Promise.resolve({ finish: () => Promise.reject(new Error("tracker down")) }),
+    };
+    const ran: string[] = [];
+    const first = defineJob({
+      name: "test.monitorDownStart",
+      payload: noPayload,
+      handle: () => {
+        ran.push("start");
+        return Promise.resolve();
+      },
+    });
+    const second = defineJob({
+      name: "test.monitorDownFinish",
+      payload: noPayload,
+      handle: () => {
+        ran.push("finish");
+        return Promise.resolve();
+      },
+    });
+    const firstSchedule = defineSchedule({ name: "test.monitorDownStart", cron: "0 0 1 1 *", job: first.name });
+    const secondSchedule = defineSchedule({ name: "test.monitorDownFinish", cron: "0 0 1 1 *", job: second.name });
+    const withStartFailing = await startWorker([moduleOf("a", [first], [firstSchedule])], undefined, errors);
+    const withFinishFailing = await startWorker([moduleOf("b", [second], [secondSchedule])], undefined, failingFinish);
+
+    await withStartFailing.running.enqueue(first, {});
+    await withFinishFailing.running.enqueue(second, {});
+    await until(async () => (await jobRows(first.name)).some((row) => row.state === "completed"), 60_000, "the first job to complete");
+    await until(async () => (await jobRows(second.name)).some((row) => row.state === "completed"), 60_000, "the second job to complete");
+
+    expect(ran.sort()).toEqual(["finish", "start"]);
+    expect(withStartFailing.logger.entries.filter((entry) => entry.message === "Monitored run report failed")).toHaveLength(1);
+    expect(withFinishFailing.logger.entries.filter((entry) => entry.message === "Monitored run report failed")).toHaveLength(1);
+  }, 90_000);
+
+  it("opens no span for a job, even when a tracer provider is registered in the process", async () => {
+    // `server --with-worker` shares the process, and so the global provider, with the server's tracing.
+    const exporter = new InMemorySpanExporter();
+    trace.setGlobalTracerProvider(new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] }));
+    try {
+      const ran: string[] = [];
+      const traced = defineJob({
+        name: "test.untraced",
+        payload,
+        handle: (data) => {
+          ran.push(data.id);
+          return Promise.resolve();
+        },
+      });
+      const { running } = await startWorker([moduleOf("a", [traced])]);
+
+      await running.enqueue(traced, { id: "one" });
+      await until(async () => (await jobRows("test.untraced")).some((row) => row.state === "completed"), 20_000, "the job");
+
+      expect(ran).toEqual(["one"]);
+      expect(exporter.getFinishedSpans().map((span) => span.name)).toEqual([]);
+    } finally {
+      trace.disable();
+    }
+  }, 60_000);
 
   it("leaves the same state when the same job is delivered twice", async () => {
     const record = defineJob({

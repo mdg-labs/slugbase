@@ -30,6 +30,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "@slugbase/testing": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",

@@ -68,6 +68,15 @@ export interface ScheduleDefinition {
   readonly payload?: JobPayload;
 }
 
+/**
+ * The slug of the monitor that stands for a schedule in an error tracker: each upper-case letter of the name starts
+ * a new word and is written lower-case after a hyphen, and each `.` becomes a hyphen, so `rateLimit.purgeIdle` is
+ * `rate-limit-purge-idle`. Names that differ only in `.` against `-` share a slug.
+ */
+export function monitorSlug(scheduleName: string): string {
+  return scheduleName.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`).replaceAll(".", "-");
+}
+
 export class JobDefinitionError extends Error {
   constructor(message: string) {
     super(message);

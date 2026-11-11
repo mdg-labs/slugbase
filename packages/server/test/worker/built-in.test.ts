@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../../src/config/index.ts";
 import { builtInJobs } from "../../src/worker/built-in.ts";
-import { createWorker } from "../../src/worker/index.ts";
+import { createWorker, monitorSlug } from "../../src/worker/index.ts";
 import { productionEnv } from "../config/support.ts";
 import { adapters, fakeDatabase, recordingLogger } from "../support.ts";
 
@@ -24,5 +24,22 @@ describe("the built-in jobs", () => {
     expect(builtInJobs().map((job) => job.name)).toContain("secrets.reseal");
     expect(worker.jobs.map((job) => job.name)).toContain("secrets.reseal");
     expect(worker.schedules.map((schedule) => schedule.name)).toContain("secrets.reseal");
+  });
+
+  it("have the monitor slugs that docs/self-hosting/operations.md lists", () => {
+    const worker = createWorker({
+      config: loadConfig("worker", { ...productionEnv(), NODE_ENV: "test" }).config,
+      adapters: adapters(),
+      modules: [],
+      logger: recordingLogger(),
+      database: fakeDatabase(),
+    });
+
+    expect(worker.schedules.map((schedule) => monitorSlug(schedule.name)).sort()).toEqual([
+      "accounts-end-access-mode",
+      "rate-limit-purge-idle",
+      "retention-purge",
+      "secrets-reseal",
+    ]);
   });
 });
