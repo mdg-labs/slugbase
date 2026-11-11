@@ -6,9 +6,12 @@
 // become write load (doc 01 section 8.1). After them, in a k6 run of its own so that what it adds changes none of their measurements, one member imports the largest
 // Netscape file and the largest SlugBase JSON file into the large workspace, as many times back to back as budgets.js IMPORT_PHASE says (a file of its own for each), while /go and the list are requested and another member
 // creates bookmarks: the p95 of /go and of the list while an import is in flight are budgets (ratios to the same run's steady /go and list, judged here, budgets.js), and each import's duration and counts and the p95 of the creates with and without an import are reported (doc 02 section 13.1).
+// While an import is in flight the run also samples, every SAMPLE_INTERVAL_MS, the tenant transactions the server has open or waiting (`slugbase_db_tenant_transactions_in_flight`, against `slugbase_db_pool_size`, from the
+// server's METRICS_PORT on the loopback address) and the backends of the run's database that wait for a lock (`pg_stat_activity`), and reports the maximum and the p95 of each (`importPhase.pool`, `importPhase.lockWaits`): they say
+// whether the creates that wait for the import's workspace lock hold the pool's connections. A sample that cannot be read fails the run; it is never taken as 0.
 // Everything this run starts, the server or its container, the k6 containers, the state of the import and the database, is removed however it ends.
 //
-//   node scripts/perf/run.mjs [--image <ref>] [--commit <sha>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>] [--import-window <seconds>] [--import-repeats <most pairs>] [--import-rate <per second>]
+//   node scripts/perf/run.mjs [--image <ref>] [--commit <sha>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>] [--import-window <seconds>] [--import-repeats <most pairs>] [--import-rate <per second>] [--create-rate <per second>]
 //
 // Needs `pnpm turbo run build --filter=slugbase --filter=@slugbase/testing` first (`--filter=@slugbase/testing` alone with --image),
 // `psql` and Docker (k6 runs from a pinned image on the host network, as does the server image), and the server the test harness
@@ -53,6 +56,9 @@ const K6_IMAGE = "grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08
 const REGRESSION = 10;
 const READY_SECONDS = 60;
 const STOP_SECONDS = 10;
+// How often the import phase samples the pool and the lock waits. An import is in flight for 1 to 2.5 s, so each is sampled 4 to 10 times; the interval is the one a sample of a few tens of milliseconds (a scrape and one psql call) can keep.
+const SAMPLE_INTERVAL_MS = 250;
+const SAMPLE_TIMEOUT_MS = 5000;
 const DEFAULT_SERVER_URL = "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev";
 // The limits are raised so that the measurement is of the server and not of its rate limiter answering 429; a token is still taken on
 // every request.
@@ -76,6 +82,7 @@ const { values: args } = isMain
         "import-window": { type: "string", default: DEFAULT_IMPORT_WINDOW_SECONDS },
         "import-repeats": { type: "string" },
         "import-rate": { type: "string" },
+        "create-rate": { type: "string" },
       },
     })
   : { values: {} };
@@ -96,10 +103,15 @@ if (isMain && args["import-rate"] !== undefined && !/^[1-9][0-9]{0,3}$/.test(arg
   process.stderr.write("perf: --import-rate takes a number of requests a second, 1 to 9999\n");
   process.exit(1);
 }
-// A run with another number of repeats or another rate for the import phase is a trial of the scripts: the sample the phase must have (budgets.js IMPORT_PHASE) is the one of the phase as committed, at the rate it was sized for, and is not held to a run that changed either.
+if (isMain && args["create-rate"] !== undefined && !/^(0|[1-9][0-9]{0,3})$/.test(args["create-rate"])) {
+  process.stderr.write("perf: --create-rate takes a number of creates a second, 0 to 9999 (0 leaves the creates out of the import phase)\n");
+  process.exit(1);
+}
+// A run with another number of repeats, another rate for the import phase or another rate of creates is a trial of the scripts: the sample the phase must have (budgets.js IMPORT_PHASE) is the one of the phase as committed, at the rate it was sized for, and is not held to a run that changed any of them.
 const importMaxRepeats = Number(args["import-repeats"] ?? IMPORT_PHASE.maxRepeats);
 const importRate = Number(args["import-rate"] ?? IMPORT_PHASE.rate);
-const importTrial = importMaxRepeats !== IMPORT_PHASE.maxRepeats || importRate !== IMPORT_PHASE.rate;
+const createRate = Number(args["create-rate"] ?? CREATE_RATE);
+const importTrial = importMaxRepeats !== IMPORT_PHASE.maxRepeats || importRate !== IMPORT_PHASE.rate || createRate !== CREATE_RATE;
 // The commit is written into the result and from there into an issue, so it is a full hash and nothing else.
 if (isMain && args.commit !== undefined && !/^[0-9a-f]{40}$/.test(args.commit)) {
   process.stderr.write("perf: --commit takes a full commit hash of 40 hex digits\n");
@@ -323,6 +335,11 @@ async function main() {
   await installQueues({ serverUrl, instance });
 
   const port = await freePort();
+  // The metrics listener has a port of its own, which the sampling of the import phase scrapes at the loopback address; it may not be the server's.
+  let metricsPort = await freePort();
+  while (metricsPort === port) {
+    metricsPort = await freePort();
+  }
   const origin = `http://127.0.0.1:${String(port)}`;
   const serverLog = join(work, "server.log");
   const logFile = openSync(serverLog, "w");
@@ -331,6 +348,7 @@ async function main() {
     NODE_ENV: "development",
     LOG_LEVEL: "warn",
     PORT: String(port),
+    METRICS_PORT: String(metricsPort),
     APP_ORIGIN: origin,
     DATABASE_URL: instance.appUrl,
     MIGRATE_ON_START: "false",
@@ -413,7 +431,7 @@ async function main() {
   }
   const steady = evaluate(JSON.parse(readFileSync(join(outDir, "k6-summary.json"), "utf8")), STEADY_SCENARIOS);
   // Last, so that the bookmarks the imports add change none of the measurements above.
-  const importRun = await measureImports({ k6Run, work, instance, deepPage, buildImportFiles, serverLog });
+  const importRun = await measureImports({ k6Run, work, instance, deepPage, buildImportFiles, serverLog, serverUrl, metricsPort });
   const scenarios = { ...steady.scenarios, ...importRun.scenarios };
   // The import phase's budgets are ratios to the steady scenarios of this same run: judged here, where both runs' p95 are known, and not by k6 (budgets.js budgetThresholds).
   const budgets = judgeRatios([...steady.budgets, ...importRun.budgets], scenarios);
@@ -461,8 +479,14 @@ async function main() {
         (i) =>
           `  ${i.import} ${String(i.repeat)}: ${String(i.bytes)} bytes in ${String(i.durationMs)} ms, created ${String(i.created)}, skipped ${String(i.skipped)}, failed ${String(i.failed)}, slugs dropped ${String(i.slugsDropped)} (${String(i.slugsDroppedConflict)} taken, ${String(i.slugsDroppedInvalid)} invalid), folders created ${String(i.foldersCreated)}, tags created ${String(i.tagsCreated)}`,
       ),
-      ...CREATE_PHASES.map((phase) => `  creates ${phase} an import: p95 ${String(importRun.phase.creates[phase].p95Ms)} ms over ${String(importRun.phase.creates[phase].completed)} requests`),
-      `  creates dropped (every VU busy): ${String(importRun.phase.creates.dropped)}`,
+      ...(importRun.phase.creates.rate === 0
+        ? ["  no creates (--create-rate 0)"]
+        : [
+            ...CREATE_PHASES.map((phase) => `  creates ${phase} an import: p95 ${String(importRun.phase.creates[phase].p95Ms)} ms over ${String(importRun.phase.creates[phase].completed)} requests`),
+            `  creates dropped (every VU busy): ${String(importRun.phase.creates.dropped)}`,
+          ]),
+      `  pool while an import was in flight (${String(importRun.phase.pool.samples)} samples, one every ${String(importRun.phase.pool.intervalMs)} ms): tenant transactions in flight at most ${String(importRun.phase.pool.max)}, p95 ${String(importRun.phase.pool.p95)}, against a pool of ${String(importRun.phase.pool.size)} (${String(importRun.phase.pool.samplesAboveSize)} samples above it)`,
+      `  lock waits while an import was in flight (${String(importRun.phase.lockWaits.samples)} samples, one every ${String(importRun.phase.lockWaits.intervalMs)} ms): backends waiting for a lock at most ${String(importRun.phase.lockWaits.max)}, p95 ${String(importRun.phase.lockWaits.p95)}`,
     ].join("\n"),
   );
   if (failedChecks) {
@@ -508,27 +532,125 @@ const summaryFile = (name) => (name === "budgets" ? "k6-summary.json" : `k6-${na
 
 // The rows of `bookmarks` that were updated since the database was made, as the owner of the database (psql, with the credentials of the harness's server).
 // A reading that is not a number is an error: it is never taken for zero.
-async function updatedBookmarkRows(serverUrl, databaseName) {
+function psqlOptions(serverUrl, databaseName) {
   const url = new URL(serverUrl);
+  return {
+    env: {
+      PATH: process.env.PATH ?? "",
+      PGHOST: url.hostname.replace(/^\[|\]$/gu, ""),
+      PGPORT: url.port === "" ? "5432" : url.port,
+      PGUSER: decodeURIComponent(url.username),
+      PGPASSWORD: decodeURIComponent(url.password),
+      PGDATABASE: databaseName,
+    },
+  };
+}
+
+async function updatedBookmarkRows(serverUrl, databaseName) {
   const { status, stdout } = await capture(
     "psql",
     ["--no-psqlrc", "--no-align", "--tuples-only", "--set", "ON_ERROR_STOP=1", "--command", "SELECT n_tup_upd FROM pg_stat_user_tables WHERE schemaname = 'public' AND relname = 'bookmarks'"],
-    {
-      env: {
-        PATH: process.env.PATH ?? "",
-        PGHOST: url.hostname.replace(/^\[|\]$/gu, ""),
-        PGPORT: url.port === "" ? "5432" : url.port,
-        PGUSER: decodeURIComponent(url.username),
-        PGPASSWORD: decodeURIComponent(url.password),
-        PGDATABASE: databaseName,
-      },
-    },
+    psqlOptions(serverUrl, databaseName),
   );
   const text = stdout.trim();
   if (status !== 0 || !/^\d+$/.test(text)) {
     throw new Error("the updates of the bookmarks table could not be read, so the write load was not measured");
   }
   return Number(text);
+}
+
+// The value of a sample without labels in an exposition text; a family that is not there, or whose sample is not a number, is an error and never a 0.
+function metricValue(text, name) {
+  const found = new RegExp(`^${name} (\\S+)$`, "mu").exec(text);
+  const value = found === null ? Number.NaN : Number(found[1]);
+  if (!isNumber(value) || value < 0) {
+    throw new Error(`the metrics of the server have no readable ${name}`);
+  }
+  return value;
+}
+
+// What the server has open in its tenant pool and how big the pool is, from the metrics listener: `slugbase_db_tenant_transactions_in_flight` counts the transactions that hold a connection and those that wait for one (or
+// for a place of the read reserve), so a value above `slugbase_db_pool_size` is transactions queueing (doc 01 section 12).
+async function poolSample(metricsPort) {
+  const response = await fetch(`http://127.0.0.1:${String(metricsPort)}/metrics`, { signal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) });
+  if (!response.ok) {
+    throw new Error(`the metrics of the server answered ${String(response.status)}, so the pool was not sampled`);
+  }
+  const text = await response.text();
+  return { inFlight: metricValue(text, "slugbase_db_tenant_transactions_in_flight"), size: metricValue(text, "slugbase_db_pool_size") };
+}
+
+// The backends of the run's database that wait for a lock (`wait_event_type = 'Lock'`), as the owner of the database. A role that may not see the other backends' activity gets `<insufficient privilege>` for them and no
+// wait event, which would read as 0 waits: a sample with any such backend is an error.
+async function lockWaitSample(serverUrl, databaseName) {
+  const { status, stdout } = await capture(
+    "psql",
+    [
+      "--no-psqlrc", "--no-align", "--tuples-only", "--set", "ON_ERROR_STOP=1", "--command",
+      "SELECT count(*) FILTER (WHERE wait_event_type = 'Lock'), count(*) FILTER (WHERE query = '<insufficient privilege>') FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()",
+    ],
+    psqlOptions(serverUrl, databaseName),
+  );
+  const read = /^(\d+)\|(\d+)$/u.exec(stdout.trim());
+  if (status !== 0 || read === null || Number(read[2]) > 0) {
+    throw new Error("the backends that wait for a lock could not be read, so they were not sampled");
+  }
+  return Number(read[1]);
+}
+
+// The maximum and the p95 (the nearest rank) of the samples of one figure. No sample, or one that is not a number, is an error.
+function summarizeSamples(values) {
+  if (values.length === 0 || !values.every((value) => isNumber(value) && value >= 0)) {
+    throw new Error("the figure has no samples, or one that is not a number");
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  return { max: sorted[sorted.length - 1], p95: sorted[Math.ceil(sorted.length * 0.95) - 1] };
+}
+
+// The pool and the lock waits sampled every SAMPLE_INTERVAL_MS while the import is in the state `importing` (`held.state`), in the run's own process and beside the k6 run, which cannot see them. The first sample that cannot be
+// read ends the sampling and fails the run when it is stopped, as does a phase that was never sampled: neither is taken for a quiet one.
+function startSampler({ held, metricsPort, serverUrl, databaseName }) {
+  const inFlight = [];
+  const waits = [];
+  let size;
+  let failure;
+  let stopping = false;
+  const loop = (async () => {
+    while (!stopping && failure === undefined) {
+      const began = performance.now();
+      if (held.state === "importing") {
+        try {
+          const [pool, waiting] = await Promise.all([poolSample(metricsPort), lockWaitSample(serverUrl, databaseName)]);
+          if (size !== undefined && size !== pool.size) {
+            throw new Error(`the pool size of the server changed from ${String(size)} to ${String(pool.size)} during the import phase`);
+          }
+          size = pool.size;
+          inFlight.push(pool.inFlight);
+          waits.push(waiting);
+        } catch (error) {
+          failure = error;
+          return;
+        }
+      }
+      await sleep(Math.max(0, SAMPLE_INTERVAL_MS - (performance.now() - began)));
+    }
+  })();
+  return {
+    async stop() {
+      stopping = true;
+      await loop;
+      if (failure !== undefined) {
+        throw failure;
+      }
+      if (size === undefined || inFlight.length === 0) {
+        throw new Error("no sample of the pool or of the lock waits was taken while an import was in flight");
+      }
+      return {
+        pool: { intervalMs: SAMPLE_INTERVAL_MS, samples: inFlight.length, size, ...summarizeSamples(inFlight), samplesAboveSize: inFlight.filter((value) => value > size).length },
+        lockWaits: { intervalMs: SAMPLE_INTERVAL_MS, samples: waits.length, ...summarizeSamples(waits) },
+      };
+    },
+  };
 }
 
 // /go counts an open in the server's memory and writes the counts once per flush interval (doc 01 section 8.1). So 10 000 requests for one slug may update
@@ -697,7 +819,7 @@ function createsOf(summary) {
 // The import phase: perf-member-1 imports the largest Netscape file and the largest JSON file, one after the other, while the admin's /go and list traffic goes on at the run's rate and
 // perf-member-2 creates bookmarks (scripts/perf/scenarios.js). The files are made here and handed to k6 as files. The /go and list requests made while an import is in flight are budgets (ratios to the steady ones of the run); the
 // imports' own numbers and the creates' are reported.
-async function measureImports({ k6Run, work, instance, deepPage, buildImportFiles, serverLog }) {
+async function measureImports({ k6Run, work, instance, deepPage, buildImportFiles, serverLog, serverUrl, metricsPort }) {
   const { collidingSlugs, slugs } = instance.instance.fixtures;
   // One pair of files for each repeat (import-files.ts): the files of a repeat name addresses, slugs, folders and tags of their own, so every repeat creates all of its bookmarks and does the work of the first.
   // They are made one at a time and only written, so that the run holds one pair in memory.
@@ -709,22 +831,37 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
     files.push({ netscape: { bytes: pair.netscape.bytes, bookmarks: pair.netscape.bookmarks }, json: { bytes: pair.json.bytes, bookmarks: pair.json.bookmarks } });
   }
   const { port, held } = await startImportState();
-  const status = await k6Run("import", "import", {
-    RATE: args.rate,
-    DURATION_SECONDS: args.duration,
-    DEEP_PAGE: String(deepPage),
-    IMPORT_WINDOW_SECONDS: args["import-window"],
-    IMPORT_REPEATS: String(importMaxRepeats),
-    IMPORT_TARGET_SECONDS: String(IMPORT_PHASE.targetSeconds),
-    IMPORT_RATE: String(importRate),
-    SIGNAL_URL: `http://127.0.0.1:${String(port)}/`,
-  });
+  const sampler = startSampler({ held, metricsPort, serverUrl, databaseName: instance.databaseName });
+  let status;
+  let sampled;
+  try {
+    status = await k6Run("import", "import", {
+      RATE: args.rate,
+      DURATION_SECONDS: args.duration,
+      DEEP_PAGE: String(deepPage),
+      CREATE_RATE: String(createRate),
+      IMPORT_WINDOW_SECONDS: args["import-window"],
+      IMPORT_REPEATS: String(importMaxRepeats),
+      IMPORT_TARGET_SECONDS: String(IMPORT_PHASE.targetSeconds),
+      IMPORT_RATE: String(importRate),
+      SIGNAL_URL: `http://127.0.0.1:${String(port)}/`,
+    });
+  } finally {
+    // Stopped whether or not k6 ended well, so that no sampling goes on after the run; its failure is the run's only when k6 did not fail first.
+    sampled = await sampler.stop().then(
+      (figures) => ({ figures }),
+      (error) => ({ error }),
+    );
+  }
   if (status !== 0 && status !== 99) {
     process.stderr.write(`perf: server log:\n${readFileSync(serverLog, "utf8").slice(-4000)}\n`);
     throw new Error(`the import run ended with k6 status ${String(status)} (the state of the import is ${held.state}${held.state === "failed" ? `: ${JSON.stringify(held.imports.at(-1))}` : ""})`);
   }
   if (held.state !== "after") {
     throw new Error(`the import run ended with the import in the state ${held.state}, not after`);
+  }
+  if (sampled.error !== undefined) {
+    throw sampled.error;
   }
   // The importer stops after the pair that took the time in flight to the target, or at the last pair there is a file for: so the imports are whole pairs, from the first, and no more than the files.
   if (held.imports.length % 2 !== 0 || held.imports.length < 2 || held.imports.length > files.length * 2) {
@@ -744,11 +881,11 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
     budgets,
     scenarios,
     sample,
-    phase: { windowSeconds: Number(args["import-window"]), maxRepeats: importMaxRepeats, repeats: imports.length / 2, importCount: imports.length, targetSeconds: IMPORT_PHASE.targetSeconds, rate: importRate, inFlightSeconds, requests, sample, k6Status: status, imports, creates: createsOf(summary) },
+    phase: { windowSeconds: Number(args["import-window"]), maxRepeats: importMaxRepeats, repeats: imports.length / 2, importCount: imports.length, targetSeconds: IMPORT_PHASE.targetSeconds, rate: importRate, inFlightSeconds, requests, sample, k6Status: status, imports, creates: { ...(createRate === 0 ? {} : createsOf(summary)), rate: createRate }, pool: sampled.figures.pool, lockWaits: sampled.figures.lockWaits },
   };
 }
 
-export { createsOf, evaluate, loadOf };
+export { createsOf, evaluate, loadOf, startSampler, summarizeSamples };
 
 if (isMain) {
   let status = 1;

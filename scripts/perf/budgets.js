@@ -85,7 +85,10 @@ export function writeLoadLimit(elapsedSeconds) {
 export const SEARCH_TERMS = ["caching", "accessibility", "release notes", "database indexes", "docs", "reading", "do"];
 export const SHARED_TERM = "shared";
 
-// The most VUs a scenario may use (`maxVUs` of scenarios.js). A scenario that reached it could not start every arrival on time.
+// The most VUs a scenario may use (`maxVUs` of scenarios.js), and the number it starts with: every constant-arrival-rate scenario has `preAllocatedVUs` equal to `maxVUs` (held by tooling/test/perf-budgets.test.ts).
+// k6 drops the arrival that finds every initialised VU busy and starts initialising one more in the background, so with fewer VUs preallocated than `maxVUs` a dropped arrival would be one moment in which more VUs
+// were needed than were ready, far below the cap: in the run of 2026-11-11 `vus_max` went from 31 to 40, 9 more VUs for the 9 dropped arrivals, at a peak of 38 active of 301, and each was counted as saturation. With the two equal,
+// a scenario that reached `maxVUs` is the only way to drop an arrival, and a dropped arrival means what `loadMetrics` says: every VU was busy and none could be started.
 export const MAX_VUS = 100;
 
 // The limit of a scenario's budget: `limitMs` for a steady scenario, and for one of RATIO_BUDGETS `of` (the steady scenario it is judged against) and `limitRatio`.
@@ -180,7 +183,7 @@ export function judgeRatios(rows, loads) {
 }
 
 // What a run says about its own load, per scenario: the requests that completed, the arrivals k6 dropped because every VU was busy and could not
-// start another, and the most VUs active at an arrival. k6 puts a sub-metric in its summary only when a threshold names it, so each is named by a
+// start another (`maxVUs` was reached, since each scenario starts with all of them, MAX_VUS above), and the most VUs active at an arrival. k6 puts a sub-metric in its summary only when a threshold names it, so each is named by a
 // threshold that no value can fail (a count or a maximum is never below 0): they report and never end k6 with 99. A scenario that dropped nothing has
 // `"count": 0` for `dropped_iterations` in the summary, which is a real 0; the runner reads an entry that is missing as an error, not as 0.
 export function loadMetrics(scenario) {

@@ -65,6 +65,8 @@ const IMPORT_WINDOW_SECONDS = Number(__ENV.IMPORT_WINDOW_SECONDS || 90);
 const IMPORT_REPEATS = Number(__ENV.IMPORT_REPEATS || 1);
 const IMPORT_TARGET_SECONDS = Number(__ENV.IMPORT_TARGET_SECONDS || 0);
 const IMPORT_RATE = Number(__ENV.IMPORT_RATE || RATE);
+// The creates of the import run, a second: budgets.js CREATE_RATE, or the rate run.mjs was given for a trial. 0 leaves the creates out, which is the control of a run that asks what they cost /go and the list.
+const CREATES_PER_SECOND = __ENV.CREATE_RATE === undefined ? CREATE_RATE : Number(__ENV.CREATE_RATE);
 const SIGNAL_URL = __ENV.SIGNAL_URL;
 
 const fixtures = JSON.parse(open("/data/fixtures.json"));
@@ -76,6 +78,8 @@ const jsonFiles = IMPORT ? new SharedArray("json", () => repeats.map((repeat) =>
 // A slug nobody has, or one whose bookmark is plan-archived, is answered 404 on purpose, so that is not a failed request.
 http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 404));
 
+// Every arrival of a constant-arrival-rate scenario is served by a VU that is already initialised: `preAllocatedVUs` is `maxVUs`. With fewer, k6 drops the arrival that finds every initialised VU busy and
+// starts initialising one more in the background, well below `maxVUs`, so a dropped arrival (budgets.js `loadMetrics`) would be a stall of one VU's length and not the scenario's cap reached. tooling/test/perf-budgets.test.ts holds the two equal.
 function scenario(index, exec, tags) {
   return {
     executor: "constant-arrival-rate",
@@ -83,7 +87,7 @@ function scenario(index, exec, tags) {
     timeUnit: "1s",
     duration: `${DURATION_SECONDS}s`,
     startTime: `${index * (DURATION_SECONDS + GAP_SECONDS)}s`,
-    preAllocatedVUs: 10,
+    preAllocatedVUs: MAX_VUS,
     maxVUs: MAX_VUS,
     exec,
     tags,
@@ -112,7 +116,7 @@ const thresholds = GO_HOT
       // Not budgets: they only put the load of each scenario in the summary (budgets.js), and no value fails them.
       ...loadThresholds(IMPORT ? IMPORT_SCENARIOS : STEADY_SCENARIOS),
       ...sampleThresholds(IMPORT ? IMPORT_SCENARIOS : STEADY_SCENARIOS),
-      ...(IMPORT ? createThresholds() : {}),
+      ...(IMPORT && CREATES_PER_SECOND > 0 ? createThresholds() : {}),
     };
 
 // The import run: the creates start with the run; the load of /go and the list starts when they have had their baseline, and lasts the window and a second; the imports start a second after
@@ -125,22 +129,26 @@ function importScenarios() {
     timeUnit: "1s",
     duration: `${IMPORT_WINDOW_SECONDS + 1}s`,
     startTime: `${baseline}s`,
-    preAllocatedVUs: 10,
+    preAllocatedVUs: MAX_VUS,
     maxVUs: MAX_VUS,
     exec,
     tags,
   });
   return {
-    [CREATES_SCENARIO]: {
-      executor: "constant-arrival-rate",
-      rate: CREATE_RATE,
-      timeUnit: "1s",
-      duration: `${baseline + IMPORT_WINDOW_SECONDS + 1}s`,
-      preAllocatedVUs: 10,
-      maxVUs: MAX_VUS,
-      exec: "createDuringImport",
-      tags: { kind: "create" },
-    },
+    ...(CREATES_PER_SECOND > 0
+      ? {
+          [CREATES_SCENARIO]: {
+            executor: "constant-arrival-rate",
+            rate: CREATES_PER_SECOND,
+            timeUnit: "1s",
+            duration: `${baseline + IMPORT_WINDOW_SECONDS + 1}s`,
+            preAllocatedVUs: MAX_VUS,
+            maxVUs: MAX_VUS,
+            exec: "createDuringImport",
+            tags: { kind: "create" },
+          },
+        }
+      : {}),
     importer: { executor: "per-vu-iterations", vus: 1, iterations: 1, startTime: `${baseline + 1}s`, maxDuration: `${IMPORT_WINDOW_SECONDS + 60}s`, exec: "importer", tags: { kind: "import" } },
     go_import: load("goDuringImport", { kind: "go_import" }),
     list_import: load("listDuringImport", { kind: "list_import" }),
