@@ -63,10 +63,30 @@ expect_ok "the guide's wait for the database is read"
 expect_output "the wait is the guide's own pg_isready over TCP" "pg_isready -h 127.0.0.1 -U slugbase -d slugbase"
 if [[ "$out" == until*"done" ]]; then pass "the wait is the script of the loop"; else fail_test "the wait is not the loop of the guide (got '$out')"; fi
 
+# The text a mutation looks for and writes is handed to awk through ENVIRON, never through -v: -v reads the escape sequences of
+# the text (gawk turns \% into %, mawk keeps it), ENVIRON hands it over as it is under every awk.
+
+# A mutation that changed nothing is not a test of anything: the guide it made is the guide, so a check that must refuse it
+# would pass for the wrong reason. The copies are made in a command substitution, where a failed test cannot be counted, so
+# the name is recorded in a file and the run fails at its end.
+NO_OP_LOG="$tmp/no-op-mutations"
+mutation_changed() {
+  local name="$1"
+  if cmp -s "$GUIDE" "$tmp/$name"; then
+    printf 'the mutation %s changed nothing\n' "$name" >&2
+    printf '%s\n' "$name" >>"$NO_OP_LOG"
+    return 1
+  fi
+}
+
 # A copy of the guide with the lines that hold a pattern replaced by another text.
 mutated_guide() {
   local pattern="$1" replacement="$2" name="$3"
-  awk -v pattern="$pattern" -v replacement="$replacement" 'index($0, pattern) > 0 { if (replacement != "") print replacement; next } { print }' "$GUIDE" >"$tmp/$name"
+  PATTERN="$pattern" REPLACEMENT="$replacement" awk '
+    BEGIN { pattern = ENVIRON["PATTERN"]; replacement = ENVIRON["REPLACEMENT"] }
+    index($0, pattern) > 0 { if (replacement != "") print replacement; next }
+    { print }' "$GUIDE" >"$tmp/$name"
+  mutation_changed "$name" || return 1
   printf '%s' "$tmp/$name"
 }
 
@@ -86,7 +106,8 @@ expect_failed "a missing guide is refused"
 # `to`. The copy must differ from the guide, so a test of a mutation that did not apply cannot pass.
 mutated_command() {
   local name="$1" tool="$2" from="$3" to="$4"
-  awk -v tool="docker compose $tool" -v from="$from" -v to="$to" '
+  TOOL="docker compose $tool" FROM="$from" TO="$to" awk '
+    BEGIN { tool = ENVIRON["TOOL"]; from = ENVIRON["FROM"]; to = ENVIRON["TO"] }
     {
       text = $0
       sub(/^[ \t]+/, "", text)
@@ -98,10 +119,7 @@ mutated_command() {
       }
       print
     }' "$GUIDE" >"$tmp/$name"
-  if cmp -s "$GUIDE" "$tmp/$name"; then
-    printf 'the mutation %s changed nothing\n' "$name" >&2
-    return 1
-  fi
+  mutation_changed "$name" || return 1
   printf '%s' "$tmp/$name"
 }
 
@@ -141,7 +159,8 @@ expect_failed "a second dump line that is not the command is refused although th
 # A copy of the guide in which `from` is replaced by `to` on the first line that matches the extended regular expression.
 mutated_matching() {
   local name="$1" pattern="$2" from="$3" to="$4"
-  awk -v pattern="$pattern" -v from="$from" -v to="$to" '
+  PATTERN="$pattern" FROM="$from" TO="$to" awk '
+    BEGIN { pattern = ENVIRON["PATTERN"]; from = ENVIRON["FROM"]; to = ENVIRON["TO"] }
     {
       at = index($0, from)
       if (!done && $0 ~ pattern && at > 0) {
@@ -150,10 +169,7 @@ mutated_matching() {
       }
       print
     }' "$GUIDE" >"$tmp/$name"
-  if cmp -s "$GUIDE" "$tmp/$name"; then
-    printf 'the mutation %s changed nothing\n' "$name" >&2
-    return 1
-  fi
+  mutation_changed "$name" || return 1
   printf '%s' "$tmp/$name"
 }
 
@@ -598,6 +614,10 @@ compose() {
 run take_dump
 expect_ok "a dump that succeeds replaces the earlier dump"
 if [[ "$(cat "$work/backups/slugbase.dump")" == "PGDMP" && ! -e "$work/$GUIDE_PARTIAL" ]]; then pass "the dated file holds the new dump and the partial file is gone"; else fail_test "the files after a dump that succeeded"; fi
+
+if [[ -s "$NO_OP_LOG" ]]; then
+  fail_test "a mutation changed nothing, so the case that uses it tests nothing: $(paste -sd' ' "$NO_OP_LOG")"
+fi
 
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2

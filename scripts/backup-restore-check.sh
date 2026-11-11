@@ -146,7 +146,8 @@ fail() {
 # guide_has <guide> <command>: succeeds when the guide has a line that is `docker compose <command>` and nothing else,
 # apart from the indent. The script runs its own copy of the command, so a guide whose line adds a flag must not pass.
 guide_has() {
-  awk -v command="docker compose $2" '
+  COMMAND="docker compose $2" awk '
+    BEGIN { command = ENVIRON["COMMAND"] }
     { line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line) }
     line == command { found = 1 }
     END { exit !found }' "$1"
@@ -173,11 +174,16 @@ guide_has() {
 # A file is one word, or one double-quoted text whose only substitution is $(date +%F) (or $(date +\%F) in a crontab,
 # where cron would otherwise read the % as a newline and the line would never take a dump); it has no $ or backtick
 # outside that, no /dev/ or /proc/ in it, and in a crontab no other % anywhere in the line. The file the dump is written to is GUIDE_PARTIAL
-# itself, in both places. The guide must hold the dump and the restore of its steps. The check is made by the awk named in GUIDE_AWK (awk by default).
+# itself, in both places. The guide must hold the dump and the restore of its steps. The check is made by the awk named in GUIDE_AWK (awk by default); it gets its text through ENVIRON, which no awk reads for escapes, as -v does.
 # shellcheck disable=SC2016
 guide_tool_lines() {
-  "${GUIDE_AWK:-awk}" -v dump="docker compose $GUIDE_DUMP" -v restore="docker compose $GUIDE_RESTORE" \
-    -v list="docker compose exec -T postgres pg_restore --list" -v find_prefix="$GUIDE_FIND" -v partial="$GUIDE_PARTIAL" '
+  DUMP="docker compose $GUIDE_DUMP" RESTORE="docker compose $GUIDE_RESTORE" \
+    LIST="docker compose exec -T postgres pg_restore --list" FIND_PREFIX="$GUIDE_FIND" PARTIAL="$GUIDE_PARTIAL" \
+    "${GUIDE_AWK:-awk}" '
+    BEGIN {
+      dump = ENVIRON["DUMP"]; restore = ENVIRON["RESTORE"]; list = ENVIRON["LIST"]
+      find_prefix = ENVIRON["FIND_PREFIX"]; partial = ENVIRON["PARTIAL"]
+    }
     function trim(text) {
       sub(/^[ \t]+/, "", text)
       sub(/[ \t]+$/, "", text)
@@ -397,7 +403,7 @@ jar_update() {
     if [[ -z "$value" ]] || [[ "${attributes,,}" =~ (^|[[:space:]]|;)max-age=(0|-[0-9]+)(;|$|[[:space:]]) ]]; then
       ends=1
     fi
-    awk -F= -v name="$name" '$1 != name' "$jar" >"$jar.next"
+    COOKIE_NAME="$name" awk -F= '$1 != ENVIRON["COOKIE_NAME"]' "$jar" >"$jar.next"
     if [[ -z "$ends" ]]; then
       printf '%s=%s\n' "$name" "$value" >>"$jar.next"
     fi
