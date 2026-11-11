@@ -260,6 +260,12 @@ function loadOf(summary, scenario, vus) {
 // The count of the requests behind a budget's p(95): the `http_reqs` sub-metric of the same tags as its `http_req_waiting` one. k6 writes a p(95) of 0 for a shape with no request.
 const requestsMetric = (metric) => metric.replace(/^http_req_waiting/u, "http_reqs");
 
+// The VUs the import run may use, which `active_vus` of every scenario is counted against (the creates, /go, the list and the importer are active together): the VUs of each arrival-rate scenario it runs, and the importer's one.
+// The creates are a scenario only at a rate above 0 (scenarios.js importScenarios), so a control run without them has their VUs left out and a peak at its capacity is a saturated one.
+function importRunVus(createRate) {
+  return { capacity: MAX_VUS * (IMPORT_SCENARIOS.length + (createRate > 0 ? 1 : 0)) + 1, of: "run" };
+}
+
 // The scenarios of one k6 run and the budgets on them, from its summary. A budget whose shape had no request has no p(95) to report and fails the run, naming each such shape.
 function evaluate(summary, ids, vus = { capacity: MAX_VUS, of: "scenario" }) {
   const scenarios = Object.fromEntries(ids.map((scenario) => [scenario, loadOf(summary, scenario, vus)]));
@@ -874,7 +880,7 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
   const imports = judgeImports(held.imports, files.slice(0, held.imports.length / 2));
   const summary = JSON.parse(readFileSync(join(outDir, summaryFile("import")), "utf8"));
   // The creates, /go, the list and the importer run at the same time, and `active_vus` counts them all: the peak is of the run and not of one scenario, against the VUs the run may use.
-  const { budgets, scenarios } = evaluate(summary, IMPORT_SCENARIOS, { capacity: MAX_VUS * (IMPORT_SCENARIOS.length + 1) + 1, of: "run" });
+  const { budgets, scenarios } = evaluate(summary, IMPORT_SCENARIOS, importRunVus(createRate));
   // The sample the ratios are judged on: the time an import was in flight (summed over the imports, which do not overlap) and the requests made in it, held to the phase's minimum unless this run is a trial.
   const inFlightSeconds = Math.round(imports.reduce((sum, i) => sum + i.inFlightMs, 0) / 100) / 10;
   const requests = Object.fromEntries(IMPORT_SCENARIOS.map((scenario) => [scenario, scenarios[scenario].completed]));
@@ -889,7 +895,7 @@ async function measureImports({ k6Run, work, instance, deepPage, buildImportFile
   };
 }
 
-export { createsOf, evaluate, loadOf, startSampler, summarizeSamples };
+export { createsOf, evaluate, importRunVus, loadOf, startSampler, summarizeSamples };
 
 if (isMain) {
   let status = 1;

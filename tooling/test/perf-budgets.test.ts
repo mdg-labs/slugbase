@@ -128,10 +128,11 @@ interface Sampled {
   lockWaits: { intervalMs: number; samples: number; max: number; p95: number };
 }
 
-// The runner is a script that does nothing but export `evaluate`, `loadOf`, `createsOf`, `summarizeSamples` and `startSampler` when it is imported rather than run.
+// The runner is a script that does nothing but export `evaluate`, `importRunVus`, `loadOf`, `createsOf`, `summarizeSamples` and `startSampler` when it is imported rather than run.
 const runnerSpecifier = pathToFileURL(resolve(ROOT, "scripts/perf/run.mjs")).href;
-const { evaluate, loadOf, createsOf, startSampler, summarizeSamples } = (await import(runnerSpecifier)) as {
+const { evaluate, importRunVus, loadOf, createsOf, startSampler, summarizeSamples } = (await import(runnerSpecifier)) as {
   evaluate: (summary: Summary, ids: string[], vus?: { capacity: number; of: string }) => Evaluated;
+  importRunVus: (createRate: number) => { capacity: number; of: string };
   loadOf: (summary: Summary, scenario: string, vus: { capacity: number; of: string }) => Load;
   createsOf: (summary: Summary) => Record<string, unknown> & { dropped: number };
   startSampler: (options: { held: { state: string }; metricsPort: number; serverUrl: string; databaseName: string; lockWaitTimeoutMs?: number }) => { stop: () => Promise<Sampled> };
@@ -353,10 +354,22 @@ describe("performance budgets", () => {
     expect(() => createsOf(omitting({ metrics }, dropped))).toThrow(/no dropped arrivals for the creates/);
   });
 
+  it("counts the VUs of the creates only when the run has them, so a control run without them is saturated at the VUs it had", () => {
+    // /go and the list, the importer, and the creates when they are a scenario (scenarios.js leaves them out at a rate of 0).
+    expect(importRunVus(CREATE_RATE)).toEqual({ capacity: 301, of: "run" });
+    const control = importRunVus(0);
+    expect(control).toEqual({ capacity: 201, of: "run" });
+    const summary = summaryOf(IMPORT_SCENARIOS, { peakVus: 201 });
+    for (const scenario of IMPORT_SCENARIOS) {
+      expect(evaluate(summary, IMPORT_SCENARIOS, control).scenarios[scenario], scenario).toMatchObject({ peakVus: 201, maxVus: 201, saturated: true });
+      expect(evaluate(summary, IMPORT_SCENARIOS, importRunVus(CREATE_RATE)).scenarios[scenario], scenario).toMatchObject({ maxVus: 301, saturated: false });
+    }
+  });
+
   it("reports the VUs of the import run as the run's, against the VUs the run may use, so no figure claims more than that and no scenario is saturated by the others", () => {
     // The creates, /go, the list and the importer are active together: 221 VUs are more than a scenario's 100 and fewer than the 301 the run may use.
-    const together = { capacity: MAX_VUS * (IMPORT_SCENARIOS.length + 1) + 1, of: "run" };
-    expect(together.capacity).toBe(301);
+    const together = importRunVus(CREATE_RATE);
+    expect(together).toEqual({ capacity: 301, of: "run" });
     const summary = summaryOf(IMPORT_SCENARIOS, { peakVus: 221 });
     const imported = evaluate(summary, IMPORT_SCENARIOS, together);
     for (const scenario of IMPORT_SCENARIOS) {
@@ -364,7 +377,7 @@ describe("performance budgets", () => {
     }
     expect(imported.budgets.every((budget) => !budget.saturated)).toBe(true);
     // The runner passes it for the import run only; the scenarios of the budgets run are alone, so their peak is theirs, against the 100 of one.
-    expect(read("run.mjs")).toMatch(/evaluate\(summary, IMPORT_SCENARIOS, \{ capacity: MAX_VUS \* \(IMPORT_SCENARIOS\.length \+ 1\) \+ 1, of: "run" \}\)/);
+    expect(read("run.mjs")).toMatch(/evaluate\(summary, IMPORT_SCENARIOS, importRunVus\(createRate\)\)/);
     const alone = evaluate(summaryOf(STEADY_SCENARIOS, { peakVus: MAX_VUS }), STEADY_SCENARIOS);
     expect(Object.values(alone.scenarios).every((load) => load.maxVus === MAX_VUS && load.vusOf === "scenario" && load.saturated)).toBe(true);
     // Four scenarios of the import run in k6: the three that overlap and the importer.
