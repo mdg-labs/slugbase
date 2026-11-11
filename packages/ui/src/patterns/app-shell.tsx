@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
+import { useEffect, useRef, type ReactElement, type ReactNode } from "react";
 import { Separator } from "../components/ui/separator.tsx";
 import {
   Sidebar,
@@ -9,6 +9,7 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "../components/ui/sidebar.tsx";
 import { SlugBaseMark } from "./slugbase-mark.tsx";
 import { WorkspaceSwitcher, type WorkspaceSwitcherProps } from "./workspace-switcher.tsx";
@@ -47,6 +48,34 @@ export interface AppShellProps {
   defaultOpen?: boolean;
 }
 
+/**
+ * Below the `md` breakpoint the sidebar is a drawer that holds the switcher only while it is open. A page that opens
+ * the switcher (`open`) therefore needs the drawer open first: this opens it, and closes the switcher again when the
+ * drawer is closed under it, so it does not reopen with the next drawer.
+ */
+function OpenDrawerForSwitcher({ open, onOpenChange }: Pick<WorkspaceSwitcherProps, "open" | "onOpenChange">): null {
+  const { isMobile, openMobile, setOpenMobile } = useSidebar();
+  const drawerSeen = useRef(false);
+  useEffect(() => {
+    if (open !== true) {
+      drawerSeen.current = false;
+      return;
+    }
+    if (!isMobile) {
+      return;
+    }
+    if (openMobile) {
+      drawerSeen.current = true;
+    } else if (drawerSeen.current) {
+      drawerSeen.current = false;
+      onOpenChange?.(false);
+    } else {
+      setOpenMobile(true);
+    }
+  }, [open, isMobile, openMobile, setOpenMobile, onOpenChange]);
+  return null;
+}
+
 export const MAIN_CONTENT_ID = "main-content";
 
 // The sidebar collapses to its icons, not off the screen.
@@ -78,6 +107,9 @@ export function AppShell({
       >
         {labels.skipToContent}
       </a>
+      {workspaceSwitcher === undefined ? null : (
+        <OpenDrawerForSwitcher {...(workspaceSwitcher.open === undefined ? {} : { open: workspaceSwitcher.open })} {...(workspaceSwitcher.onOpenChange === undefined ? {} : { onOpenChange: workspaceSwitcher.onOpenChange })} />
+      )}
       <Sidebar
         collapsible={SIDEBAR_COLLAPSE}
         mobileLabels={{ close: labels.drawerClose, description: labels.drawerDescription, title: labels.drawerTitle }}

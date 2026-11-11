@@ -22,7 +22,7 @@
     "subject": "Two-factor authentication was turned off for your {appName} account",
     "greeting": "Hi {name},",
     "greetingAnonymous": "Hi,",
-    "body": "Two-factor authentication was turned off for your {appName} account. Signing in now asks for your password only, and your backup codes no longer work.",
+    "body": "Two-factor authentication was turned off for your {appName} account. Signing in no longer asks for a code: you sign in with your password or through your sign-in provider. Your backup codes no longer work.",
     "notYou": "If you did not make this change, contact the administrator of this {appName} instance right away.",
     "action": "Review your account security"
   },
@@ -127,7 +127,7 @@
     "subject": "Two-factor authentication was reset for your {appName} account",
     "greeting": "Hi {name},",
     "greetingAnonymous": "Hi,",
-    "body": "An administrator of this {appName} instance reset two-factor authentication on your account. Your authenticator app and backup codes no longer work, your devices were signed out, and signing in now asks only for your password.",
+    "body": "An administrator of this {appName} instance reset two-factor authentication on your account. Your authenticator app and backup codes no longer work, your devices were signed out, and signing in no longer asks for a code: you sign in with your password or through your sign-in provider.",
     "notYou": "If you did not ask an administrator for this, contact the administrator of this {appName} instance right away. Once you are signed in, turn two-factor authentication back on.",
     "action": "Set up two-factor authentication"
   },

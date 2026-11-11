@@ -1,0 +1,119 @@
+---
+title: "Command Palette"
+description: "Search your bookmarks, run commands and open slugs with the keyboard."
+edition: both
+order: 100
+---
+
+The command palette is the fastest way around SlugBase. You open it from anywhere, then search for a bookmark, run a command or open a slug.
+
+<Screenshot alt="The command palette with a search and grouped results" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open.
+
+## Open the palette
+
+- Press `⌘K` on macOS or `Ctrl K` elsewhere. It works on every page, even in a text field. Press it again to close the palette.
+- Press `/` on **Bookmarks**, **Folders** or **Tags**, when no text field has focus.
+- Choose **Search or run a command…** in the top bar, or the large search field on **Home**.
+
+Choose **Close the command palette**, or press Esc, to close it.
+
+## Start with the default view
+
+With an empty input, the palette shows groups:
+
+| Group | What it holds |
+| ----- | ------------- |
+| **Recent** | Bookmarks you opened lately. |
+| **Pinned** | Your pinned bookmarks. |
+| **Navigation** | **Home**, **Bookmarks**, **Folders**, **Tags**, **Forwarding** and **Settings**. |
+| **Actions** | **New bookmark**, **New folder**, **Import bookmarks**, **Export bookmarks**, **Switch workspace**, **Toggle theme** and **Sign out**. |
+
+If you have not opened or pinned anything yet, the palette says "No bookmarks to show yet" and "Bookmarks you open and bookmarks you pin appear here."
+
+## Search
+
+1. Type what you look for. The palette searches as you type.
+2. Use the arrow keys to move through the results. They are grouped: **Bookmarks**, **Folders**, **Tags** and **Commands**.
+3. Press Enter to choose.
+
+Bookmarks are matched on their title, host, slug and description. Each result shows the slug and the host. The search tolerates small typos. Archived bookmarks never appear.
+
+The footer shows the keys: **navigate**, **open**, **new tab**, **edit** and **close**. These keys also work:
+
+| Keys | What they do |
+| ---- | ------------ |
+| Enter | Opens the bookmark, goes to the page or runs the command. |
+| `⌘ Enter` or `Ctrl Enter` | Opens the bookmark in a new tab. |
+| `⌥ Enter` or `Alt Enter` | Opens the bookmark dialog to edit one of your own bookmarks. |
+
+### When nothing matches
+
+The palette says **No results** and offers to create a bookmark: **Create a bookmark for** an address you typed, **Create a bookmark with the slug** and your text, or **Create a bookmark**. Choose it to open the bookmark dialog with that filled in. See [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx).
+
+## Use go mode
+
+Go mode opens a slug, the way `go mail` does in your browser.
+
+1. Type `go`, a space and the slug, such as `go mail`. You can also paste a link to `go/` and a slug on your own SlugBase.
+2. A **Go** chip appears next to the input. The palette lists **Slugs** that start with your text, yours first, then those shared with you.
+3. Press Enter on **Go to /go/mail**, or on a slug in the list.
+
+**Result:** The bookmark opens, as it would from the address bar.
+
+A link to another site is searched as text, not opened in go mode. If you type a path or a query after the slug, SlugBase does not pass it on. It looks for exactly what you typed, finds nothing, and does not offer to create a bookmark.
+
+### Choose between several bookmarks
+
+If several bookmarks shared with you have the slug, the palette lists them under "go/mail matches 2 bookmarks", with its host and how it is shared.
+
+1. Optional: select **Always use this for** and the slug.
+2. Choose the bookmark you mean.
+
+With **Always use this**, SlugBase remembers the choice. Review it under **Remembered choices** on [Forwarding](forwarding.mdx).
+
+In go mode, `⌘ Enter` or `Ctrl Enter` acts like Enter, and `⌥ Enter` or `Alt Enter` does nothing, because a slug is not a bookmark to edit.
+
+### When the slug does not exist
+
+The palette says "No bookmark has the slug mail in" and the workspace's name. It offers **Create a bookmark with this slug**, and, where the slug exists in another of your workspaces, **Found in:** and that workspace's name. Choose the workspace to switch and carry on.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Search or run a command | The input. A text searches. `go` and a slug opens a slug. | No |
+| Go chip | Shows that the palette is in go mode. | n/a |
+| Always use this for | Remembers your choice when a slug matches several bookmarks. | No |
+
+## Troubleshooting
+
+### The palette shows "The bookmarks could not be loaded."
+
+Choose **Try again**.
+
+### The palette shows "The search failed."
+
+Choose **Try again**, or check your connection.
+
+### Pressing `/` does nothing
+
+`/` works only on **Bookmarks**, **Folders** and **Tags**, outside a text field, and only while single-key shortcuts are on. Use `⌘K` or `Ctrl K` anywhere. See [Keyboard Shortcuts](keyboard-shortcuts.mdx).
+
+### My bookmark does not appear
+
+It may be archived, or it is in another workspace. Choose **Switch workspace** in the palette.
+
+### Go mode says the slug could not be loaded
+
+SlugBase says "The slugs could not be loaded." Choose **Try again**.
+
+## Related pages
+
+- [Forwarding](forwarding.mdx)
+- [Go Pages](go.mdx)
+- [Keyboard Shortcuts](keyboard-shortcuts.mdx)
+- [Bookmarks](bookmarks.mdx)

@@ -29,6 +29,18 @@ run() {
   out="$("$@" 2>&1)" || code=$?
 }
 
+# Like run, but with errexit in force inside the command, as in the script: run's `||` switches errexit off in everything it calls,
+# so a command that would end the script silently on a failed step passes through it.
+run_strict() {
+  set +e
+  out="$(
+    set -e
+    "$@" 2>&1
+  )"
+  code=$?
+  set -e
+}
+
 pass() {
   printf 'ok: %s\n' "$1"
 }
@@ -355,8 +367,185 @@ run check_owner_role_refused
 expect_failed "check_owner_role_refused fails on a refusal that is not the owner-role message"
 unset -f compose docker
 
-# What a server run as the owner, with the override, must have done: be running and have logged the warning, without the password.
+# check_with_worker reads the log for the worker's start line until it is there: the server listens before the worker starts, so the
+# line can come after /ready answers. docker, compose, timeout and sleep are stand-ins; the log lacks the line for the first
+# $worker_logged_after reads, which the first read after /ready is among, and the container reports $fake_state.
+logs_reads="$tmp/logs-reads"
+with_worker_stop="$tmp/with-worker-stopped"
+# shellcheck disable=SC2317
+timeout() { shift; "$@"; }
+# shellcheck disable=SC2317
+sleep() { command sleep 0.2; }
+# shellcheck disable=SC2317
+compose() {
+  case "$*" in
+    *psql*) printf 'completed\n' ;;
+  esac
+}
+# shellcheck disable=SC2317
+docker() {
+  case "$1" in
+    inspect)
+      case "$*" in
+        *ExitCode*) printf '0\n' ;;
+        *) printf '%s\n' "$fake_state" ;;
+      esac
+      ;;
+    exec)
+      case "$*" in
+        *auth/register*) printf '202\n' ;;
+      esac
+      ;;
+    logs)
+      local reads
+      reads="$(($(cat "$logs_reads") + 1))"
+      printf '%s' "$reads" >"$logs_reads"
+      if ((reads <= logs_failing_reads)); then return 1; fi
+      if [[ -e "$with_worker_stop" ]] && ((logs_failing_after_stop)); then return 1; fi
+      printf '%s' "$logs_extra"
+      printf 'Server started\n'
+      if ((reads > worker_logged_after)); then printf 'Worker started\n'; fi
+      if [[ -e "$with_worker_stop" ]]; then printf 'Server stopped\nWorker stopped\nShutdown complete\n'; fi
+      ;;
+    stop) : >"$with_worker_stop" ;;
+  esac
+}
+run_id="test"
+work="$tmp"
+compose_limit=""
+named_containers=()
+secrets=()
+fake_state="running"
+logs_failing_reads=0
+logs_failing_after_stop=0
+logs_extra=""
+reset_with_worker() {
+  printf '0' >"$logs_reads"
+  rm -f "$with_worker_stop"
+}
+SMOKE_READY_SECONDS=10
+worker_logged_after=0
+reset_with_worker
+run check_with_worker
+expect_ok "check_with_worker accepts a log that holds the worker's start line at the first read"
+worker_logged_after=3
+reset_with_worker
+run check_with_worker
+expect_ok "check_with_worker waits for the worker's start line that is logged after /ready answered"
+SMOKE_READY_SECONDS=2
+worker_logged_after=1000000
+reset_with_worker
+run check_with_worker
+expect_failed "check_with_worker fails when the worker's start line is never logged, within the limit"
+if [[ "$out" == *"the log of server --with-worker does not contain 'Worker started'"* ]]; then pass "check_with_worker names the missing start line"; else fail_test "check_with_worker did not name the missing start line"; fi
+reads="$(cat "$logs_reads")"
+if ((reads > 1)); then pass "check_with_worker read the log more than once before it gave up"; else fail_test "check_with_worker read the log $reads time(s)"; fi
+logs_failing_reads=1
+worker_logged_after=0
+SMOKE_READY_SECONDS=10
+reset_with_worker
+run_strict check_with_worker
+expect_ok "check_with_worker keeps waiting when one read of the log fails, and passes once the start line is there"
+logs_failing_reads=1000000
+SMOKE_READY_SECONDS=2
+reset_with_worker
+run_strict check_with_worker
+expect_failed "check_with_worker fails, within the limit, when the log can never be read"
+if [[ "$out" == *"the log of server --with-worker does not contain 'Worker started'"* ]]; then pass "check_with_worker names the missing start line when the log cannot be read"; else fail_test "check_with_worker ended without naming the missing start line when the log cannot be read"; fi
+logs_failing_reads=0
+# The read of the log after the container stopped fails: the script must say so and not end with no message.
+logs_failing_after_stop=1
+worker_logged_after=0
+SMOKE_READY_SECONDS=10
+reset_with_worker
+run_strict check_with_worker
+expect_failed "check_with_worker fails when the log cannot be read after the container stopped"
+if [[ "$out" == *"the log of server --with-worker could not be read after it stopped"* ]]; then pass "check_with_worker names the read of the log after the stop that failed"; else fail_test "check_with_worker ended without naming the read of the log after the stop that failed"; fi
+logs_failing_after_stop=0
+worker_logged_after=1000000
+SMOKE_READY_SECONDS=100
+fake_state="exited"
+reset_with_worker
+start=$SECONDS
+run check_with_worker
+expect_failed "check_with_worker fails when the container has exited without logging the worker's start line"
+if [[ "$out" == *"the log of server --with-worker does not contain 'Worker started'"* ]] && ((SECONDS - start < 20)); then pass "check_with_worker stops waiting at once for a container that exited"; else fail_test "check_with_worker kept waiting for a container that exited"; fi
+
+# check_owner_role_allowed reads the log of the server it started once /ready answers; a read that fails is named.
 owner_warning="SLUGBASE_ALLOW_OWNER_CONNECTION is set: the application role is not held by row-level security"
+SMOKE_READY_SECONDS=10
+fake_state="running"
+logs_failing_reads=0
+worker_logged_after=0
+logs_extra="$owner_warning"$'\n'
+reset_with_worker
+run_strict check_owner_role_allowed
+expect_ok "check_owner_role_allowed accepts a running server that logged the warning"
+logs_failing_reads=1000000
+reset_with_worker
+run_strict check_owner_role_allowed
+expect_failed "check_owner_role_allowed fails when the log cannot be read"
+if [[ "$out" == *"the log of the server on the owner role could not be read"* ]]; then pass "check_owner_role_allowed names the read of the log that failed"; else fail_test "check_owner_role_allowed ended without naming the read of the log that failed"; fi
+logs_failing_reads=0
+logs_extra=""
+unset -f timeout sleep compose docker
+unset SMOKE_READY_SECONDS
+
+# The reads of compose in check_container_hardening and check_restart, and the work directory of start_stack, are named when they
+# fail: under errexit a failed command substitution in an assignment would end the script with no message. compose, docker and
+# wait_ready are stand-ins; compose ps and compose exec fail, or compose logs fails at the call number in $compose_logs_fail_at.
+compose_logs_calls="$tmp/compose-logs-calls"
+compose_logs_fail_at=0
+# shellcheck disable=SC2317
+compose() {
+  case "$1" in
+    ps) if [[ "$fake_ps" == "fail" ]]; then return 1; fi; printf 'container-id\n' ;;
+    exec) return 1 ;;
+    logs)
+      local calls
+      calls="$(($(cat "$compose_logs_calls") + 1))"
+      printf '%s' "$calls" >"$compose_logs_calls"
+      if ((calls == compose_logs_fail_at)); then return 1; fi
+      printf 'The database is migrated\n'
+      ;;
+  esac
+}
+# shellcheck disable=SC2317
+docker() { printf 'true\n'; }
+# shellcheck disable=SC2317
+wait_ready() { :; }
+fake_ps="fail"
+run_strict check_container_hardening
+expect_failed "check_container_hardening fails when the server container cannot be looked up"
+if [[ "$out" == *"the server container was not found"* ]]; then pass "check_container_hardening names the lookup of the container that failed"; else fail_test "check_container_hardening ended without naming the lookup of the container that failed"; fi
+fake_ps="ok"
+run_strict check_container_hardening
+expect_failed "check_container_hardening fails when the user of the server process cannot be read"
+if [[ "$out" == *"the user of the server process could not be read"* ]]; then pass "check_container_hardening names the read of the user that failed"; else fail_test "check_container_hardening ended without naming the read of the user that failed"; fi
+compose_logs_message=("the log of the first start could not be read" "the log of the first start could not be read" "the log of the restart could not be read")
+for fail_at in 1 2 3; do
+  printf '0' >"$compose_logs_calls"
+  compose_logs_fail_at=$fail_at
+  run_strict check_restart
+  expect_failed "check_restart fails when read $fail_at of the log fails"
+  if [[ "$out" == *"${compose_logs_message[fail_at - 1]}"* ]]; then pass "check_restart names the read $fail_at of the log that failed"; else fail_test "check_restart ended without naming the read $fail_at of the log that failed"; fi
+done
+unset -f compose docker wait_ready
+
+saved_stubbed="$(declare -f preflight select_postgres)"
+# shellcheck disable=SC2317
+preflight() { :; }
+# shellcheck disable=SC2317
+select_postgres() { :; }
+# shellcheck disable=SC2317
+mktemp() { return 1; }
+run_strict start_stack
+expect_failed "start_stack fails when the work directory cannot be created"
+if [[ "$out" == *"the work directory could not be created"* ]]; then pass "start_stack names the work directory it could not create"; else fail_test "start_stack ended without naming the work directory it could not create"; fi
+unset -f mktemp
+eval "$saved_stubbed"
+
+# What a server run as the owner, with the override, must have done: be running and have logged the warning, without the password.
 run expect_owner_allowed running "$owner_warning"
 expect_ok "expect_owner_allowed accepts a running server that logged the warning"
 run expect_owner_allowed exited "$owner_warning"

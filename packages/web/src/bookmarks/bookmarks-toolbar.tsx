@@ -1,16 +1,16 @@
 import { BOOKMARK_SCOPES } from "@slugbase/contracts";
-import { Button, ToggleGroup, ToggleGroupItem, ToggleGroupSeparator } from "@slugbase/ui";
-import { FilterXIcon, LayoutGridIcon, MultiPick, Picker, SegmentedChoice, SelectField, TableIcon } from "@slugbase/ui/patterns";
-import { Fragment, type ReactElement } from "react";
+import { Badge, Button } from "@slugbase/ui";
+import { FilterXIcon, LayoutGridIcon, SegmentedChoice, SelectField, TableIcon } from "@slugbase/ui/patterns";
+import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useCachedAccount } from "../account/use-cached-account.ts";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
-import { folderIconOf, folderTextClass } from "../folders/folder-glyph.tsx";
 import type { AllFolders } from "../folders/use-all-folders.ts";
 import { useSharingGranted } from "../sharing/index.ts";
 import type { AllTags } from "../tags/use-all-tags.ts";
 import { FilterChips, type FilterChip } from "./filter-chips.tsx";
-import { BOOKMARK_SORTS, BOOKMARK_TAG_FILTER_MAX, DEFAULT_SORT, hasActiveFilters, type BookmarkListControls, type BookmarkListSearch, type BookmarkScope, type BookmarkSort, type BookmarkView } from "./list-search.ts";
+import { FiltersPanel, type ShowOnlyFilter } from "./filters-panel.tsx";
+import { BOOKMARK_SORTS, DEFAULT_SORT, type BookmarkListControls, type BookmarkListSearch, type BookmarkScope, type BookmarkSort, type BookmarkView } from "./list-search.ts";
 import { SearchField } from "./search-field.tsx";
 
 export interface BookmarksToolbarProps {
@@ -27,8 +27,8 @@ export interface BookmarksToolbarProps {
 
 const ALL_SCOPE = "all";
 
-// A pressed "Show only" toggle is filled with the primary colour, so it reads as on in both themes beside the outlined toggles that are off.
-const PRESSED_FILTER = "data-pressed:bg-primary data-pressed:text-primary-foreground dark:data-pressed:bg-primary dark:data-pressed:hover:bg-primary/90 data-pressed:hover:bg-primary/90";
+// A segmented choice made as high as the buttons and selects beside it, with its label kept for assistive technology alone.
+const COMPACT_SEGMENTS = "[&>span:first-child]:sr-only [&_[data-slot=segmented-choice-option]]:h-7.5 sm:[&_[data-slot=segmented-choice-option]]:h-6.5";
 
 function isView(value: string): value is BookmarkView {
   return value === "grid" || value === "table";
@@ -43,13 +43,14 @@ function isSort(value: string): value is BookmarkSort {
 }
 
 /**
- * The filters and the sort of the bookmark list (doc 03 section 3.1). Each control writes to the address and reads
- * back from it, so what is shown is what a link would open. The grid and table choice also becomes the account's
- * default view, which applies to a list whose address names none (doc 02 section 2.1). The folder filter is a single
- * choice and the tags filter several, which a bookmark must all carry; a list of either that could not be read says so
- * and can be read again, and is never shown as having none. The search field writes its text to the address once the member
- * has stopped typing, with the history entry replaced, so the back button leaves the list rather than undoing each word.
- * Whatever narrows the list, the text of the search among it, is also a chip that takes it off.
+ * The filters and the sort of the bookmark list (doc 03 section 3.1): one row of controls of one height, with no visible
+ * labels (each keeps its name for assistive technology) in the order search, scope, Filters, sort, view. The Filters button
+ * opens the panel with the folder, the tags and the "show only" switches and shows how many of them are set. Each control
+ * writes to the address and reads back from it, so what is shown is what a link would open. The grid and table choice also
+ * becomes the account's default view, which applies to a list whose address names none (doc 02 section 2.1). The search
+ * field writes its text to the address once the member has stopped typing, with the history entry replaced, so the back
+ * button leaves the list rather than undoing each word. Whatever narrows the list, the text of the search among it, is
+ * also a chip under the row that takes it off, beside the button that takes them all off.
  */
 export function BookmarksToolbar({ search, controls, folders, shared, tags }: BookmarksToolbarProps): ReactElement {
   const { t } = useTranslation();
@@ -92,40 +93,18 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
       controls.update({ scope: value === ALL_SCOPE ? undefined : value });
     }
   }
-  const filters = [
+  const showOnly = [
     { key: "pinned", label: t("bookmarks.list.filter.pinned") },
     { key: "hasSlug", label: t("bookmarks.list.filter.hasSlug") },
     { key: "forwarding", label: t("bookmarks.list.filter.forwarding") },
-  ] as const;
-  const activeFilters = filters.filter(({ key }) => search[key] === true).map(({ key }) => key);
-  function changeFilters(active: readonly string[]): void {
-    controls.update({
-      pinned: active.includes("pinned") ? true : undefined,
-      hasSlug: active.includes("hasSlug") ? true : undefined,
-      forwarding: active.includes("forwarding") ? true : undefined,
-    });
-  }
+  ] as const satisfies readonly { key: ShowOnlyFilter; label: string }[];
+  const [panelOpen, setPanelOpen] = useState(false);
   const filterFolders = [...folders.folders, ...shared.folders];
-  const folderOptions = filterFolders.map((folder) => {
-    const Icon = folderIconOf(folder.icon);
-    return { value: folder.id, label: folder.name, icon: <Icon className={`size-4 ${folderTextClass(folder.color)}`} /> };
-  });
   const chosenFolder = filterFolders.find((folder) => folder.id === search.folderId);
   const tagIds = search.tag ?? [];
-  // A tag of the address that the member's list lacks (deleted, or never theirs) still has its chip, so it can be taken off.
-  const unlisted = tagIds.filter((id) => !tags.tags.some((tag) => tag.id === id));
-  const tagOptions = [
-    ...tags.tags.map((tag) => ({ value: tag.id, label: tag.name })),
-    ...unlisted.map((id) => ({ value: id, label: tags.status === "ready" ? t("bookmarks.list.filters.tags.unknown") : t("bookmarks.list.filters.tags.pending") })),
-  ];
-  const retry = (message: string, state: AllFolders | AllTags): ReactElement => (
-    <span className="flex flex-wrap items-center gap-x-2">
-      {message}
-      <Button loading={state.retrying} onClick={state.retry} size="xs" type="button" variant="outline">
-        {t("bookmarks.list.retry")}
-      </Button>
-    </span>
-  );
+  const tagNames = new Map(tags.tags.map((tag) => [tag.id, tag.name]));
+  // The filters the panel holds that are set now: the folder, each tag and each "show only" switch.
+  const panelFilterCount = (search.folderId === undefined ? 0 : 1) + tagIds.length + showOnly.filter(({ key }) => search[key] === true).length;
   const chips: FilterChip[] = [
     ...(search.q === undefined
       ? []
@@ -149,7 +128,18 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
             },
           },
         ]),
-    ...filters
+    ...tagIds.map((id) => {
+      const name = tagNames.get(id);
+      return {
+        id: `tag-${id}`,
+        label: name === undefined ? (tags.status === "ready" ? t("bookmarks.list.filters.tagChipUnknown") : t("bookmarks.list.filters.tags.pending")) : t("bookmarks.list.filters.tagChip", { name }),
+        onRemove: () => {
+          const rest = tagIds.filter((tagId) => tagId !== id);
+          controls.update({ tag: rest.length === 0 ? undefined : rest });
+        },
+      };
+    }),
+    ...showOnly
       .filter(({ key }) => search[key] === true)
       .map(({ key, label }) => ({
         id: key,
@@ -171,10 +161,10 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
         ]),
   ];
   return (
-    <section aria-label={t("bookmarks.list.toolbar")} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
+    <section aria-label={t("bookmarks.list.toolbar")} className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <SearchField
-          className="sm:w-64"
+          className="w-full sm:w-auto sm:min-w-48 sm:flex-1 [&_label]:sr-only"
           label={t("bookmarks.list.search.label")}
           onSearch={(text) => {
             controls.update({ q: text === "" ? undefined : text }, { replace: true });
@@ -182,59 +172,31 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
           placeholder={t("bookmarks.list.search.placeholder")}
           value={search.q ?? ""}
         />
-        <SegmentedChoice label={t("bookmarks.list.view.label")} onValueChange={changeView} options={viewOptions} value={search.view} />
         <SegmentedChoice
+          className={COMPACT_SEGMENTS}
           label={t("bookmarks.list.scope.label")}
           onValueChange={changeScope}
           options={scopeOptions}
           value={search.scope ?? ALL_SCOPE}
         />
-        <div className="flex flex-col gap-1.5">
-          <span className="font-medium text-base/4.5 text-foreground sm:text-sm/4" id="bookmark-filters-label">
-            {t("bookmarks.list.filter.label")}
-          </span>
-          <ToggleGroup aria-labelledby="bookmark-filters-label" multiple onValueChange={changeFilters} size="sm" value={activeFilters} variant="outline">
-            {filters.map(({ key, label }, index) => (
-              <Fragment key={key}>
-                {index === 0 ? null : <ToggleGroupSeparator />}
-                <ToggleGroupItem className={PRESSED_FILTER} value={key}>
-                  {label}
-                </ToggleGroupItem>
-              </Fragment>
-            ))}
-          </ToggleGroup>
-        </div>
-        <Picker
-          className="sm:w-52"
-          description={folders.status === "failed" ? retry(t("bookmarks.list.filters.folder.loadFailed"), folders) : undefined}
-          emptyLabel={t("bookmarks.list.filters.folder.empty")}
-          label={t("bookmarks.list.filters.folder.label")}
-          {...(folders.status === "loading" ? { loadingLabel: t("bookmarks.list.filters.folder.loading") } : {})}
-          {...(folders.status === "failed" ? { unavailableLabel: t("bookmarks.list.filters.folder.loadFailed") } : {})}
-          onValueChange={(id) => {
-            controls.update({ folderId: id });
+        <Button
+          {...(panelFilterCount === 0 ? {} : { "aria-label": t("bookmarks.list.filters.buttonCount", { count: panelFilterCount }) })}
+          onClick={() => {
+            setPanelOpen(true);
           }}
-          options={folderOptions}
-          placeholder={t("bookmarks.list.filters.folder.placeholder")}
-          value={search.folderId}
-        />
-        <MultiPick
-          className="sm:w-72"
-          description={tags.status === "failed" ? retry(t("bookmarks.list.filters.tags.loadFailed"), tags) : t("bookmarks.list.filters.tags.limit", { max: BOOKMARK_TAG_FILTER_MAX })}
-          emptyLabel={t("bookmarks.list.filters.tags.empty")}
-          label={t("bookmarks.list.filters.tags.label")}
-          {...(tags.status === "loading" ? { loadingLabel: t("bookmarks.list.filters.tags.loading") } : {})}
-          {...(tags.status === "failed" ? { unavailableLabel: t("bookmarks.list.filters.tags.loadFailed") } : {})}
-          onValueChange={(ids) => {
-            controls.update({ tag: ids.length === 0 ? undefined : ids.slice(0, BOOKMARK_TAG_FILTER_MAX) });
-          }}
-          options={tagOptions}
-          placeholder={t("bookmarks.list.filters.tags.placeholder")}
-          removeLabel={(name) => t("bookmarks.list.filters.tags.remove", { name })}
-          value={tagIds}
-        />
+          type="button"
+          variant="outline"
+        >
+          {t("bookmarks.list.filters.button")}
+          {panelFilterCount === 0 ? null : (
+            <Badge aria-hidden="true" size="lg" variant="secondary">
+              {panelFilterCount}
+            </Badge>
+          )}
+        </Button>
         <SelectField
-          className="sm:w-48"
+          className="w-44 sm:w-48"
+          hideLabel
           label={t("bookmarks.list.sort.label")}
           onValueChange={(value) => {
             if (isSort(value)) {
@@ -244,14 +206,18 @@ export function BookmarksToolbar({ search, controls, folders, shared, tags }: Bo
           options={sortOptions}
           value={search.sort ?? DEFAULT_SORT}
         />
-        {hasActiveFilters(search) ? (
-          <Button className="sm:mt-6" onClick={controls.clearFilters} size="sm" variant="ghost">
+        <SegmentedChoice className={`${COMPACT_SEGMENTS} ms-auto`} iconOnly label={t("bookmarks.list.view.label")} onValueChange={changeView} options={viewOptions} value={search.view} />
+      </div>
+      {chips.length === 0 ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <FilterChips chips={chips} />
+          <Button onClick={controls.clearFilters} size="sm" variant="ghost">
             <FilterXIcon aria-hidden="true" />
             {t("bookmarks.list.clearFilters")}
           </Button>
-        ) : null}
-      </div>
-      <FilterChips chips={chips} />
+        </div>
+      )}
+      <FiltersPanel controls={controls} folders={folders} onOpenChange={setPanelOpen} open={panelOpen} search={search} shared={shared} tags={tags} />
     </section>
   );
 }

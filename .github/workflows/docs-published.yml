@@ -1,9 +1,13 @@
 name: Docs published
 
 # Asks the site repository to rebuild when documentation changes on main (doc 09
-# section 3.5, Q111). The target is configuration, not code: the repository
-# variables DOCS_SITE_REPOSITORY and DOCS_SITE_WORKFLOW and the secret
-# DOCS_SITE_DISPATCH_TOKEN, which the maintainer sets (D24). The workflow never
+# section 3.5, Q111). The target is configuration, not code: the secrets
+# DOCS_SITE_REPOSITORY and DOCS_SITE_DISPATCH_TOKEN and the repository variable
+# DOCS_SITE_WORKFLOW, which the maintainer sets (D24). The site repository's
+# name is a secret, not a variable, because a step's env: is printed in the run
+# log of a public repository and Actions masks a secret's value but not a
+# variable's; the workflow file name is not sensitive and stays a variable. The
+# script never prints the repository name either. The workflow never
 # runs for a pull request or a fork's event, and scripts/docs-published-dispatch.sh
 # does nothing where the configuration is absent or the repository is not the
 # upstream one. The token is in the environment of the one step that sends the
@@ -43,7 +47,7 @@ jobs:
           sparse-checkout-cone-mode: false
       - name: Send the dispatch
         env:
-          DOCS_SITE_REPOSITORY: ${{ vars.DOCS_SITE_REPOSITORY }}
+          DOCS_SITE_REPOSITORY: ${{ secrets.DOCS_SITE_REPOSITORY }}
           DOCS_SITE_WORKFLOW: ${{ vars.DOCS_SITE_WORKFLOW }}
           DOCS_SITE_DISPATCH_TOKEN: ${{ secrets.DOCS_SITE_DISPATCH_TOKEN }}
         run: bash scripts/docs-published-dispatch.sh

@@ -1,5 +1,5 @@
 import type { Adapters, DomainEventName } from "@slugbase/core";
-import { createAccessModeStore, createDatabase, createRateLimitStore, createRetentionStore, createWorkspaceDeletionStore, type Database } from "@slugbase/db";
+import { createAccessModeStore, createDatabase, createMfaResealStore, createRateLimitStore, createRetentionStore, createWorkspaceDeletionStore, type Database } from "@slugbase/db";
 import { PgBoss } from "pg-boss";
 import type { WorkerConfig } from "../config/index.ts";
 import {
@@ -12,7 +12,7 @@ import {
 } from "../create-server.ts";
 import { subscribersOf, type RegisteredSubscriber } from "../events/subscriber.ts";
 import { assertApplicationRole } from "../migrate/role-guard.ts";
-import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
+import { createMetrics, exposeWorkerMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot, type WorkerMetrics } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
 import { createBuiltInModules } from "./built-in.ts";
 import { queueSettings, queueUpdates } from "./queues.ts";
@@ -59,6 +59,11 @@ export interface RunningWorker {
 }
 
 export interface Worker {
+  /**
+   * The worker's metrics. A process that runs the worker beside the server hands them to the server's metrics
+   * listener (`StartOptions.workerMetrics`) instead of giving the worker a listener of its own.
+   */
+  readonly metrics: WorkerMetrics;
   readonly jobs: readonly JobDefinition[];
   readonly schedules: readonly ScheduleDefinition[];
   /**
@@ -99,6 +104,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   // as the role of DATABASE_URL; it connects on first use.
   const maintenanceStores = {
     accessMode: createAccessModeStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
+    mfaReseal: createMfaResealStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
     rateLimit: createRateLimitStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
     retention: createRetentionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE, auditRetentionDays: config.AUDIT_RETENTION_DAYS }),
     workspaceDeletion: createWorkspaceDeletionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
@@ -113,7 +119,11 @@ export function createWorker(options: CreateWorkerOptions): Worker {
         try {
           await maintenanceStores.workspaceDeletion.close();
         } finally {
-          await maintenanceStores.accessMode.close();
+          try {
+            await maintenanceStores.mfaReseal.close();
+          } finally {
+            await maintenanceStores.accessMode.close();
+          }
         }
       }
     }
@@ -146,6 +156,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   }
 
   return {
+    metrics: exposeWorkerMetrics(metrics.registry),
     jobs: composition.jobs,
     schedules: composition.schedules,
 

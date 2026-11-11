@@ -1,0 +1,117 @@
+---
+title: "Audit Log"
+description: "See who changed what in a workspace, filter the events, and learn what is and is not recorded."
+edition: both
+order: 40
+---
+
+**Audit log** shows who changed what in the workspace, newest first. Admins and owners use it to follow changes to members, teams, sharing and settings.
+
+<Screenshot alt="The Audit log page with the filters and the list of events" />
+
+## Prerequisites
+
+- You are an admin or an owner of the workspace. Members do not see this page.
+
+<Callout>
+On a self-hosted SlugBase, the audit log is always on. On SlugBase Cloud, your plan decides whether the workspace has it. Where it does not, the page is missing from the settings navigation. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## Open the audit log
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Workspace**, choose **Audit log**.
+
+The page says: "Who changed what in this workspace, newest first." A workspace with nothing recorded shows **No events yet**: "Changes to members, teams, sharing and settings are recorded here."
+
+## Read an event
+
+Each row is one event, with:
+
+| Column | What it shows |
+| ------ | ------------- |
+| **Time** | How long ago it happened. Hover or focus it to see the exact date and time. |
+| **Actor** | Who did it, with the name they had at the time. Other values are **deleted account** for someone whose account is gone, **System** for SlugBase itself, and **API token** for a request made with a token. |
+| **Action** | What happened, for example **Member role changed**, with its category. |
+| **Target** | What it happened to, for example the name of a team or a member. For a share it says "with" and the name. |
+
+Choose a row to open **Everything this event recorded.** in a side panel. It shows the **Time**, **Actor**, **Action**, **Category** and **Target**, an **Identifier of the target** that you can copy, and **Details**: small facts such as the **Name**, **From** and **To** of a rename, the **Role**, or counts. An event without more says "This event recorded no further details."
+
+The line under the filters, for example "Showing 25 events", says how many are loaded. Choose **Load more** for older ones. The log has no page numbers.
+
+## Filter the events
+
+Filters sit above the list under **Filter the audit log**. They are kept in the address of the page, so you can copy the address to share a filtered view with another admin.
+
+1. Under **Actor**, search for a member. It shows **Any actor** until you choose. **Former member** names an actor whose account is gone.
+2. Under **Action category**, choose one or more of **Workspace**, **Member**, **Invitation**, **Team**, **Bookmark**, **Sharing**, **Export**, **Import** and **Other**.
+3. Under **Date range**, choose **Any time**, **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days** or **Custom range**. For a custom range, enter the **First day** and the **Last day**.
+4. Choose **Clear filters** to start over.
+
+If nothing matches, the page says **No events match these filters**: "Try other filters, or clear them to see the whole log."
+
+## What is recorded
+
+SlugBase records each of these once:
+
+| Category | Events |
+| -------- | ------ |
+| **Workspace** | **Workspace created**, **Workspace renamed**, **Workspace setting changed** (for example the AI switch, with its old and new value), **Workspace deletion requested**, **Ownership transferred** |
+| **Member** | **Member joined**, **Member role changed**, **Member removed**, **Member left**, **Instance administrator joined** |
+| **Invitation** | **Invitation sent**, **Invitation resent**, **Invitation link created**, **Invitation revoked** |
+| **Team** | **Team created**, **Team renamed**, **Team members changed**, **Team deleted** |
+| **Sharing** | **Share granted**, **Share revoked**, **Several bookmarks shared** |
+| **Bookmark** | **Bookmarks deleted** when many are deleted at once, and, on SlugBase Cloud, **Bookmarks archived** and **Bookmarks restored** |
+| **Import** | **Import completed**, with counts only |
+| **Export** | **Export created**, with counts only |
+
+A person who accepts an invitation shows as **Member joined**. There is no separate event for the acceptance.
+
+**Instance administrator joined** appears when an instance admin of a self-hosted SlugBase adds themself to your workspace. Owners can see it there. An instance admin does not otherwise get access to the content of workspaces they are not a member of. See [Instance Overview](../admin/overview.mdx).
+
+## What is not recorded
+
+- **Sign-ins and token events.** They are account security events, not workspace events. A person sees their own sessions under [Security](../account/security.mdx).
+- **The content of your bookmarks.** Creating, editing or deleting a single bookmark is not an event. The log records bulk deletes, imports and exports as counts only.
+- **Secrets, email text, addresses and titles.** An event holds names and small facts. It never holds a password, a token, the text of an email, or a bookmark's address or title.
+- **Dry runs.** A preview of an import records nothing.
+
+SlugBase keeps events for a limited time, a year by default. On a self-hosted SlugBase, the operator can change that. When an account is deleted, its events keep the name the person had, and lose the link to the account.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Actor | A member whose events you want to see. | No |
+| Action category | One or more categories. | No |
+| Date range | A preset period, or your own first and last day. | No |
+
+## Troubleshooting
+
+### The page says "The audit log could not be loaded"
+
+Choose **Try again**. If it continues, tell the person who runs your SlugBase.
+
+### The page says "More events could not be loaded"
+
+The next batch failed. Choose **Load more** again.
+
+### A filter says "The last day is before the first day."
+
+Swap the two days.
+
+### The actor filter is not available
+
+The page says "The members could not be loaded, so the actor filter is not available." Reload the page.
+
+### I do not see an expected event
+
+Check that the filters are cleared, that the date range is wide enough, and that the action is one of those listed under **What is recorded**. Events older than the retention period are removed.
+
+## Related pages
+
+- [Members](members.mdx)
+- [Teams](teams.mdx)
+- [General](general.mdx)
+- [Workspaces and Roles](../concepts/workspaces-and-roles.mdx)
+- [Instance Overview](../admin/overview.mdx)

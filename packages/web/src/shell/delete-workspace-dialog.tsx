@@ -1,14 +1,19 @@
 import { Button } from "@slugbase/ui";
-import { FormOverlay, TypedConfirm, feedbackToast } from "@slugbase/ui/patterns";
+import { DownloadIcon, FormOverlay, TypedConfirm, feedbackToast } from "@slugbase/ui/patterns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { ApiProblemCode } from "../api/client.ts";
 import { ME_QUERY_KEY } from "../account/me.ts";
+import type { ExportRequest } from "../data/export-api.ts";
+import { useExportDownload } from "../data/use-export-download.ts";
 import { leaveWorkspaceView } from "./workspace-departure.ts";
 import { WORKSPACE_QUERY_KEY, deleteWorkspace, type Workspace } from "./workspace.ts";
 import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
+
+/** What the offered export holds: the caller's own bookmarks in the lossless format, with none shared with them. */
+const OWN_BOOKMARKS_AS_JSON: ExportRequest = { format: "json", includeShared: false };
 
 /**
  * Deletes the workspace (doc 03 section 11.6, doc 04 section 4.4): a `typed-confirm` on the workspace's name that says the
@@ -17,12 +22,17 @@ import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
  * deployment's deletion guard refuses, the dialog gives way to the explanation for the code it answered with and offers nothing but
  * closing it. Once the request is accepted the app leaves the workspace like a removed member: it moves to the workspace the server
  * now has the account in, or to the page of an account with none.
+ *
+ * Above the field the dialog offers the export of the caller's own bookmarks as SlugBase JSON (doc 02 section 3.7). It runs the export
+ * of the Import and Export page and tells the outcome in the same toasts; it does not close the dialog, and whatever its outcome it
+ * neither types the name, answers the re-authentication nor sends the deletion.
  */
 export function DeleteWorkspaceDialog({ workspace, onClose }: { workspace: Workspace; onClose: () => void }): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const api = router.options.context.api;
+  const exporting = useExportDownload();
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [blockedBy, setBlockedBy] = useState<ApiProblemCode | undefined>(undefined);
 
@@ -87,6 +97,8 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: { workspace: Works
     <TypedConfirm
       cancelLabel={t("settings.workspace.delete.cancel")}
       confirmLabel={t("settings.workspace.delete.action")}
+      // An export still reading the workspace would miss what the deletion removes, so the deletion waits for it.
+      confirmDisabled={exporting.busy}
       description={t("settings.workspace.delete.description", { name: workspace.name })}
       destructive
       error={needsConfirmation ? t("settings.workspace.delete.error.reauthCancelled") : undefined}
@@ -104,6 +116,22 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: { workspace: Works
       }}
       open
       title={t("settings.workspace.delete.title", { name: workspace.name })}
-    />
+    >
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-muted-foreground text-sm">{t("settings.workspace.delete.export.description")}</p>
+        <Button
+          disabled={remove.isPending}
+          loading={exporting.busy}
+          onClick={() => {
+            void exporting.download(OWN_BOOKMARKS_AS_JSON);
+          }}
+          type="button"
+          variant="outline"
+        >
+          <DownloadIcon aria-hidden="true" />
+          {t("settings.workspace.delete.export.action")}
+        </Button>
+      </div>
+    </TypedConfirm>
   );
 }

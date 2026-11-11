@@ -82,9 +82,11 @@ The server port is published on `127.0.0.1` only, so the reverse proxy on the sa
 
 ### Choose the image
 
-`SLUGBASE_IMAGE` names the image that `slugbase` and `slugbase-worker` run. Set it to a version tag, such as `ghcr.io/mdg-labs/slugbase:<version>`, or to an image digest. Pin a version: the same file then starts the same SlugBase every time, and you decide when to change it. Each release has a tag with its full version. A release without a pre-release suffix also has a tag with its major and minor version only.
+`SLUGBASE_IMAGE` names the image that `slugbase` and `slugbase-worker` run. Set it to a version tag, such as `ghcr.io/mdg-labs/slugbase:<version>`, or to an image digest. Pin a version: the same file then starts the same SlugBase every time, and you decide when to change it. Each release has a tag with its full version. When a release without a pre-release suffix is published, it also gets a tag with its major and minor version only, and the tag `latest` points at it.
 
-Do not rely on the default of the file, `ghcr.io/mdg-labs/slugbase:latest`. The release workflow pushes version tags only, so that tag does not exist yet.
+Do not rely on the default of the file, `ghcr.io/mdg-labs/slugbase:latest`. It moves to a new release whenever one is published, and it does not exist until the first release without a pre-release suffix is published. Pin a version.
+
+The release workflow signs every release it publishes, except `1.0.0-rc.1`, which was pushed before signing was added and has no signature. A version whose signing step failed stays unsigned and is abandoned; do not run it, and use the next version. To check an image before you run it, see [Verify the image](upgrade.md#verify-the-image).
 
 To run an image you built yourself, set `SLUGBASE_IMAGE` to its tag, or run `docker compose up -d --build`, which builds the image from the checkout.
 
@@ -238,7 +240,7 @@ What differs from two containers:
 
 - **Migration.** The entrypoint runs `migrate` first, as `slugbase_migrator`, and then starts the process without `DATABASE_MIGRATE_URL`, exactly as for `server`. The one process holds no migrator login.
 - **Connections.** The process holds the pools of both sides: up to 10 connections for the server and 5 for the worker, 15 in these two pools, plus the few small connections each side opens for its own tasks. See [Run SlugBase day to day](operations.md) when you plan the connections of PostgreSQL.
-- **Metrics.** With `METRICS_PORT` set, the process opens one metrics listener, the server's. `/metrics` shows the samples of the server only, and the two job queue series have no samples. [Run SlugBase day to day](operations.md) says what is there.
+- **Metrics.** With `METRICS_PORT` set, the process opens one metrics listener, the server's. `/metrics` shows the samples of the server and, in the same response, those of the worker, which carry the label `process="worker"`. [Run SlugBase day to day](operations.md) says what is there.
 - **Lookups.** The server and the worker share one small budget of simultaneous host-name lookups, so a slow name server can slow both.
 - **Load.** Jobs and requests share one process. Go back to two containers if jobs slow the pages down.
 

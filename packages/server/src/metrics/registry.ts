@@ -11,6 +11,14 @@ export const PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8
 
 export type LabelValues = Readonly<Record<string, string>>;
 
+type MetricType = "counter" | "gauge" | "histogram";
+
+/** What a family's samples are rendered with: the constant labels of a merged-in registry, and whether the family's header comes first. */
+interface RenderOptions {
+  readonly constant?: LabelValues;
+  readonly header?: boolean;
+}
+
 function escapeHelp(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
 }
@@ -30,6 +38,7 @@ function formatNumber(value: number): string {
 }
 
 abstract class Metric {
+  abstract readonly type: MetricType;
   readonly name: string;
   readonly help: string;
   readonly labelNames: readonly string[];
@@ -56,20 +65,21 @@ abstract class Metric {
     return JSON.stringify(this.labelNames.map((label) => values[label]));
   }
 
-  protected pairs(key: string, extra: readonly (readonly [string, string])[] = []): string {
+  protected pairs(key: string, constant: LabelValues = {}, extra: readonly (readonly [string, string])[] = []): string {
     const values = JSON.parse(key) as string[];
-    const all = [...this.labelNames.map((label, index) => [label, values[index] ?? ""] as const), ...extra];
+    const all = [...this.labelNames.map((label, index) => [label, values[index] ?? ""] as const), ...Object.entries(constant), ...extra];
     return all.length === 0 ? "" : `{${all.map(([label, value]) => `${label}="${escapeLabelValue(value)}"`).join(",")}}`;
   }
 
-  protected header(type: "counter" | "gauge" | "histogram"): string[] {
-    return [`# HELP ${this.name} ${escapeHelp(this.help)}`, `# TYPE ${this.name} ${type}`];
+  protected header(options: RenderOptions): string[] {
+    return options.header === false ? [] : [`# HELP ${this.name} ${escapeHelp(this.help)}`, `# TYPE ${this.name} ${this.type}`];
   }
 
-  abstract render(): string[];
+  abstract render(options?: RenderOptions): string[];
 }
 
 export class Counter extends Metric {
+  readonly type = "counter";
   readonly #samples = new Map<string, number>();
 
   increment(values: LabelValues = {}, by = 1): void {
@@ -77,12 +87,13 @@ export class Counter extends Metric {
     this.#samples.set(key, (this.#samples.get(key) ?? 0) + by);
   }
 
-  render(): string[] {
-    return [...this.header("counter"), ...[...this.#samples].map(([key, value]) => `${this.name}${this.pairs(key)} ${formatNumber(value)}`)];
+  render(options: RenderOptions = {}): string[] {
+    return [...this.header(options), ...[...this.#samples].map(([key, value]) => `${this.name}${this.pairs(key, options.constant)} ${formatNumber(value)}`)];
   }
 }
 
 export class Gauge extends Metric {
+  readonly type = "gauge";
   #samples = new Map<string, number>();
 
   set(values: LabelValues, value: number): void {
@@ -94,8 +105,8 @@ export class Gauge extends Metric {
     this.#samples = new Map();
   }
 
-  render(): string[] {
-    return [...this.header("gauge"), ...[...this.#samples].map(([key, value]) => `${this.name}${this.pairs(key)} ${formatNumber(value)}`)];
+  render(options: RenderOptions = {}): string[] {
+    return [...this.header(options), ...[...this.#samples].map(([key, value]) => `${this.name}${this.pairs(key, options.constant)} ${formatNumber(value)}`)];
   }
 }
 
@@ -106,6 +117,7 @@ interface HistogramSample {
 }
 
 export class Histogram extends Metric {
+  readonly type = "histogram";
   readonly #bounds: readonly number[];
   readonly #samples = new Map<string, HistogramSample>();
 
@@ -130,21 +142,27 @@ export class Histogram extends Metric {
     sample.count += 1;
   }
 
-  render(): string[] {
-    const lines = this.header("histogram");
+  render(options: RenderOptions = {}): string[] {
+    const lines = this.header(options);
     for (const [key, sample] of this.#samples) {
       for (const [index, bound] of this.#bounds.entries()) {
-        lines.push(`${this.name}_bucket${this.pairs(key, [["le", formatNumber(bound)]])} ${formatNumber(sample.counts[index] ?? 0)}`);
+        lines.push(`${this.name}_bucket${this.pairs(key, options.constant, [["le", formatNumber(bound)]])} ${formatNumber(sample.counts[index] ?? 0)}`);
       }
-      lines.push(`${this.name}_bucket${this.pairs(key, [["le", "+Inf"]])} ${formatNumber(sample.count)}`);
-      lines.push(`${this.name}_sum${this.pairs(key)} ${formatNumber(sample.sum)}`);
-      lines.push(`${this.name}_count${this.pairs(key)} ${formatNumber(sample.count)}`);
+      lines.push(`${this.name}_bucket${this.pairs(key, options.constant, [["le", "+Inf"]])} ${formatNumber(sample.count)}`);
+      lines.push(`${this.name}_sum${this.pairs(key, options.constant)} ${formatNumber(sample.sum)}`);
+      lines.push(`${this.name}_count${this.pairs(key, options.constant)} ${formatNumber(sample.count)}`);
     }
     return lines;
   }
 }
 
 export type Collector = () => void | Promise<void>;
+
+/** A registry rendered inside another one's exposition, its samples carrying constant labels the other's do not. */
+export interface AttachedRegistry {
+  readonly registry: MetricsRegistry;
+  readonly labels: LabelValues;
+}
 
 export class MetricsRegistry {
   readonly #metrics = new Map<string, Metric>();
@@ -175,11 +193,55 @@ export class MetricsRegistry {
     this.#collectors.push(collector);
   }
 
-  /** The exposition text. A collector that fails fails the render: a scrape never reads a half-filled gauge as a value. */
-  async render(): Promise<string> {
+  async #collect(): Promise<void> {
     for (const collector of this.#collectors) {
       await collector();
     }
-    return `${[...this.#metrics.values()].flatMap((metric) => metric.render()).join("\n")}\n`;
+  }
+
+  /**
+   * The exposition text. A collector that fails fails the render: a scrape never reads a half-filled gauge as a value.
+   *
+   * With `attached` registries it is one exposition of all of them: a family they share is declared once, followed by
+   * this registry's samples and then each attached registry's, which carry the attached registry's constant labels.
+   * Two registries that declare one family differently, or constant labels that a family already uses, cannot be
+   * merged and fail the render.
+   */
+  async render(attached: readonly AttachedRegistry[] = []): Promise<string> {
+    await this.#collect();
+    const families = new Map<string, { readonly metric: Metric; readonly lines: string[] }>();
+    for (const metric of this.#metrics.values()) {
+      families.set(metric.name, { metric, lines: metric.render() });
+    }
+    const seen = new Set<string>();
+    for (const { registry, labels } of attached) {
+      const identity = JSON.stringify(Object.entries(labels).sort(([a], [b]) => a.localeCompare(b)));
+      if (Object.keys(labels).length === 0 || seen.has(identity)) {
+        throw new Error("an attached registry needs constant labels that no other one has");
+      }
+      seen.add(identity);
+      for (const label of Object.keys(labels)) {
+        if (!LABEL_NAME.test(label) || label === "le" || label.startsWith("__")) {
+          throw new Error(`invalid label name ${label} on an attached registry`);
+        }
+      }
+      await registry.#collect();
+      for (const metric of registry.#metrics.values()) {
+        if (Object.keys(labels).some((label) => metric.labelNames.includes(label))) {
+          throw new Error(`metric ${metric.name} already has a label that the attached registry adds`);
+        }
+        const family = families.get(metric.name);
+        if (family === undefined) {
+          families.set(metric.name, { metric, lines: metric.render({ constant: labels }) });
+          continue;
+        }
+        const declared = family.metric;
+        if (declared.type !== metric.type || declared.help !== metric.help || declared.labelNames.join(",") !== metric.labelNames.join(",")) {
+          throw new Error(`metric ${metric.name} is declared differently in the registries being merged`);
+        }
+        family.lines.push(...metric.render({ constant: labels, header: false }));
+      }
+    }
+    return `${[...families.values()].flatMap((family) => family.lines).join("\n")}\n`;
   }
 }

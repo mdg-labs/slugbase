@@ -1,0 +1,150 @@
+---
+title: "Bookmarks"
+description: "Find, filter, sort, open and change your bookmarks, one at a time or many at once."
+edition: both
+order: 30
+---
+
+**Bookmarks** lists every bookmark you can read in the open workspace. You filter and sort it, open bookmarks, and change many of them with one action.
+
+<Screenshot alt="The Bookmarks page in grid view with the toolbar and a selection" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open.
+
+## Find bookmarks
+
+The toolbar above the list is one row. From left to right it holds the search field, the scope, the **Filters** button, the sort and the view. The controls have no labels on screen; a screen reader announces each one by name.
+
+1. Type in **Search** to match the title, host, slug or description of a bookmark. The path of an address is not searched.
+2. Choose **All**, **Mine**, **Shared with me** or **Shared by me** to say whose bookmarks to show. The last two appear only where your workspace can share bookmarks.
+3. Choose **Filters** to open the panel of filters. The button shows how many of them are on.
+4. In the panel, choose a **Folder** to see only the bookmarks in that folder. A folder in the sidebar does the same.
+5. Choose **Tags** to see only the bookmarks that carry every tag you pick. You can pick up to 10.
+6. Under **Show only**, tick **Pinned**, **Has slug** or **Forwarding on**.
+7. Press `Esc` or choose **Close filters** to close the panel. The list has already changed while you chose.
+
+**Result:** The list shows the matches, and **Active filters** chips under the toolbar show what is on. Choose a chip to remove one filter, or **Clear filters** to remove them all. Without a filter, the chips are not shown.
+
+## Sort and view the list
+
+1. Choose a **Sort by** order: **Recently added**, **Oldest first**, **Alphabetical A–Z**, **Alphabetical Z–A**, **Most used** or **Recently opened**.
+2. Choose **Grid** or **Table** with the two view buttons at the right end of the toolbar. Press `V` to switch.
+3. Beside **Load more**, under the list, choose **24 per load**, **48 per load** or **96 per load**. The control is named **Bookmarks per load**.
+
+Your default view comes from **Preferences**, under **Default bookmark view**.
+
+In **Grid**, each card shows the title, the host and the slug, or **No slug**. It also shows up to three of your tags, a pin marker, and how often you opened the bookmark, for example "142 opens · 2 h ago", or **Not opened yet**. A bookmark shared with you carries a **Shared** marker. **Table** adds columns: **Select**, **Title**, **Slug**, **Host**, **Folders**, **Tags**, **Opens**, **Last opened**, **Added** and **Actions**.
+
+### Load more
+
+SlugBase loads the list in parts. Under the last row, the line **Showing 48 of 1,234** tells you how far you are. Choose **Load more** for the next part. Above 10,000 matches the line reads, for example, **Showing 48 of 10,000+**.
+
+## Share a link to a filtered list
+
+The address of the page keeps your search, folder, tags, **Show only** choices, scope, sort, view and size. Copy it from the address bar to link to the same view, or save it as a browser bookmark. The browser's back and forward buttons step through the changes you made.
+
+Folders and tags are your own, so a link that holds one is meant for you. If a folder was deleted, the page says **That folder no longer exists**, removes that filter and shows the list without it.
+
+## Open and change one bookmark
+
+Choose a bookmark to open its address. Open the actions menu of a card or a row, titled **Actions for** and the bookmark's title, for more:
+
+| Action | What it does |
+| ------ | ------------ |
+| **Open** | Opens the address in a new tab. |
+| **Copy address** | Copies the saved address. |
+| **Edit** | Opens the bookmark dialog. See [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx). |
+| **Share** | Opens the share dialog. It appears only where your workspace can share. |
+| **Pin** or **Unpin** | Keeps the bookmark on Home, or removes it. |
+| **Delete** | Asks "Delete this bookmark?" and, when you confirm with **Delete bookmark**, removes it for good. Its slug stops forwarding at once. |
+
+To create a bookmark quickly, paste a web address anywhere on this page outside a text field. The **New bookmark** dialog opens with the address filled in.
+
+## Change many bookmarks at once
+
+1. Select bookmarks with the checkbox on a card or row. It shows when you hover or focus the bookmark.
+2. The bar shows how many are selected, for example "3 selected". To select every match of your filters, choose **Select all** followed by the number, **matching**. A very large set is limited to the first 5,000 matches, and the bar says so.
+3. Choose an action.
+4. Choose **Clear selection** when you are done.
+
+| Action | What it does |
+| ------ | ------------ |
+| **Open all** | Opens each selected bookmark in its own tab. |
+| **Pin** and **Unpin** | Pins or unpins them. |
+| **Add to folder** | Adds them to a folder you choose. |
+| **Move to folder** | Moves them to a folder you choose. They leave every other folder they were in, so the chosen folder is the only one that holds them. |
+| **Remove from folder** | Takes them out of a folder you choose. **Undo** on the message puts them back. |
+| **Add tags** | Adds tags you choose. A preview, **Tags after adding**, shows the result. |
+| **Remove tags** | Removes tags you choose. |
+| **Share** | Shares them with a member or a team, with read access only. It appears only where your workspace can share. |
+| **Export selection** | Downloads the selected bookmarks as a file. |
+| **Delete** | Deletes them for good after you confirm. The slugs stop forwarding at once. |
+
+A message tells you how many bookmarks changed. If some did not change, it adds: "1 bookmark was skipped because it no longer exists or can’t be changed."
+
+Bookmarks shared with you can be opened but not changed. When you select one, only **Open all** and **Export selection** stay available, and the bar tells you why. Deselect the shared bookmarks to use the other actions.
+
+For the keys that move through the list, select, pin and open bookmarks, see [Keyboard Shortcuts](keyboard-shortcuts.mdx).
+
+## Archived bookmarks
+
+<Callout>
+Available on SlugBase Cloud. When a change of plan leaves a workspace with more bookmarks than the new plan includes, SlugBase archives the extra ones. They leave the list, the search and the palette, and their slugs stop forwarding. A separate **Archived** view lists them, and you can delete or export them there. A self-hosted SlugBase has no archived bookmarks.
+</Callout>
+
+## Empty and error states
+
+| What you see | What it means |
+| ------------ | ------------- |
+| **No bookmarks yet** | You have no bookmarks. Choose **New bookmark**, or **Import from browser**. |
+| **Nothing has been shared with you yet** | You chose **Shared with me** and nobody shared a bookmark with you yet. |
+| **No bookmarks match these filters** | Nothing fits. Choose **Clear filters**. |
+| The bookmarks could not be loaded | SlugBase says "The bookmarks could not be loaded. Try again in a moment." Choose **Try again**. |
+| The list may be out of date | SlugBase says "The list could not be refreshed, so it may be out of date. Try again in a moment." |
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Search | Matches title, host, slug and description. | No |
+| Scope | **All**, **Mine**, **Shared with me**, **Shared by me**. | No |
+| Filters | Opens the panel with **Folder**, **Tags** and **Show only**. The button shows how many are on. | No |
+| Folder | One folder. In the **Filters** panel. | No |
+| Tags | Up to 10 tags. A bookmark must carry every one. In the **Filters** panel. | No |
+| Show only | **Pinned**, **Has slug**, **Forwarding on**. In the **Filters** panel. | No |
+| Sort by | The order of the list. | No |
+| View | **Grid** or **Table**. | No |
+| Bookmarks per load | 24, 48 or 96 bookmarks for each load, beside **Load more**. | No |
+
+## Troubleshooting
+
+### A bookmark I just saved is missing
+
+A filter may hide it. Look for chips under **Active filters** and choose **Clear filters**.
+
+### The count says "Showing 48 of 10,000+"
+
+Large result sets show a rounded total. Narrow the filters to see an exact number.
+
+### Select all stops at 5,000
+
+SlugBase selects at most 5,000 bookmarks at once. Narrow the filters and select again.
+
+### An action is greyed out
+
+You selected a bookmark that someone shared with you. Deselect it.
+
+### The export refuses a large selection
+
+An export takes a limited number of selected bookmarks, and the message names it: "Deselect some, or use Select all matching to export every bookmark that matches." If more bookmarks match than one export can hold, narrow the filters.
+
+## Related pages
+
+- [Home](home.mdx)
+- [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx)
+- [Folders](folders.mdx)
+- [Tags](tags.mdx)
+- [Forwarding](forwarding.mdx)
+- [Keyboard Shortcuts](keyboard-shortcuts.mdx)

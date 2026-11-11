@@ -155,6 +155,7 @@
       "countAtLeast": "Showing {shown} of {total}+",
       "loadMore": "Load more",
       "pageSize": "Bookmarks per load",
+      "pageSizeOption": "{size} per load",
       "filter": {
         "label": "Show only",
         "pinned": "Pinned",
@@ -164,7 +165,13 @@
       "filters": {
         "active": "Active filters",
         "remove": "Remove filter: {label}",
+        "button": "Filters",
+        "buttonCount": "Filters, {count} set",
+        "title": "Filters",
+        "close": "Close filters",
         "folderChip": "Folder: {name}",
+        "tagChip": "Tag: {name}",
+        "tagChipUnknown": "Tag: unknown",
         "folderChipUnknown": "Folder",
         "queryChip": "Search: {text}",
         "folder": {
@@ -284,6 +291,7 @@
       "pin": "Pin",
       "unpin": "Unpin",
       "addToFolder": "Add to folder",
+      "moveToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
       "addTags": "Add tags",
       "removeTags": "Remove tags",
@@ -307,6 +315,7 @@
         "pin": "{count, plural, one {# bookmark pinned.} other {# bookmarks pinned.}}",
         "unpin": "{count, plural, one {# bookmark unpinned.} other {# bookmarks unpinned.}}",
         "addToFolder": "{count, plural, one {# bookmark added to “{folder}”.} other {# bookmarks added to “{folder}”.}}",
+        "moveToFolder": "{count, plural, one {# bookmark moved to “{folder}”.} other {# bookmarks moved to “{folder}”.}}",
         "removeFromFolder": "{count, plural, one {# bookmark removed from “{folder}”.} other {# bookmarks removed from “{folder}”.}}",
         "addTags": "{count, plural, one {Tags added to # bookmark.} other {Tags added to # bookmarks.}}",
         "removeTags": "{count, plural, one {Tags removed from # bookmark.} other {Tags removed from # bookmarks.}}",
@@ -320,6 +329,7 @@
         "unpin": "The bookmarks could not be unpinned. Nothing was changed. Try again in a moment.",
         "partial": "Only {done, number} of {total, number} bookmarks were changed before an error. The rest are still selected; try again in a moment.",
         "addToFolder": "The bookmarks could not be added to the folder. Nothing was changed. Try again in a moment.",
+        "moveToFolder": "The bookmarks could not be moved to the folder. Nothing was changed. Try again in a moment.",
         "removeFromFolder": "The bookmarks could not be removed from the folder. Nothing was changed. Try again in a moment.",
         "addTags": "The tags could not be added. Nothing was changed. Try again in a moment.",
         "removeTags": "The tags could not be removed. Nothing was changed. Try again in a moment.",
@@ -335,6 +345,7 @@
         "retry": "Try again",
         "title": {
           "addToFolder": "Add {count, plural, one {# bookmark} other {# bookmarks}} to a folder",
+          "moveToFolder": "Move {count, plural, one {# bookmark} other {# bookmarks}} to a folder",
           "removeFromFolder": "Remove {count, plural, one {# bookmark} other {# bookmarks}} from a folder",
           "addTags": "Add tags to {count, plural, one {# bookmark} other {# bookmarks}}",
           "removeTags": "Remove tags from {count, plural, one {# bookmark} other {# bookmarks}}"
@@ -1319,7 +1330,7 @@
         "resetMfa": {
           "label": "Reset two-factor authentication",
           "title": "Reset the two-factor authentication of {name}?",
-          "description": "Two-factor authentication is turned off for {name}, who is signed out everywhere and signs in with the password alone. They are emailed about it where mail is configured.",
+          "description": "Two-factor authentication is turned off for {name}, who is signed out everywhere and signs in again with their password or through their sign-in provider. They are emailed about it where mail is configured.",
           "done": "Two-factor authentication was reset for {name}."
         },
         "disable": {
@@ -1827,10 +1838,13 @@
         "disable": {
           "open": "Turn off",
           "title": "Turn off two-factor authentication",
-          "description": "Enter a code and your password. Signing in then needs your password alone.",
+          "description": "Enter a code and your password. Signing in then no longer asks for a code.",
+          "descriptionNoPassword": "Enter a code. Your account has no password, so none is asked for.",
           "submit": "Turn off",
           "confirmTitle": "Turn off two-factor authentication?",
-          "confirmDescription": "Your account will be protected by its password alone, and your backup codes will stop working.",
+          "confirmDescription": "Your backup codes and the codes from your authenticator app will stop working. You will sign in with your password or through your sign-in provider, whichever your account uses.",
+          "confirmDescriptionNoPassword": "Your backup codes and the codes from your authenticator app will stop working. You will sign in through your sign-in provider.",
+          "gained": "This account now has a password. Reload the page, then turn off two-factor authentication with it.",
           "confirm": "Turn off",
           "done": "Two-factor authentication is off"
         },
@@ -2054,6 +2068,10 @@
         "confirmLabel": "Type {name} to confirm",
         "cancel": "Cancel",
         "done": "{name} is being deleted",
+        "export": {
+          "description": "Download your own bookmarks in this workspace as a SlugBase JSON file before you delete it. Each member can export only their own bookmarks.",
+          "action": "Export first"
+        },
         "error": {
           "title": "The workspace was not deleted",
           "reauthCancelled": "Confirm it is you to delete the workspace.",
@@ -2433,11 +2451,13 @@
     "goHome": "Go home",
     "notFound": {
       "title": "This page doesn't exist",
-      "description": "The address may be mistyped, or the page may have moved."
+      "description": "The address may be mistyped, or the page may have moved.",
+      "search": "Search"
     },
     "forbidden": {
       "title": "You don't have access",
-      "description": "You are not a member of this workspace, or this page is only for administrators."
+      "description": "You are not a member of this workspace, or this page is only for administrators.",
+      "switchWorkspace": "Switch workspace"
     },
     "serverError": {
       "title": "Something went wrong",
@@ -2736,12 +2756,23 @@
         "unknown": "Too many attempts. Try again later.",
         "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
         "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
-      }
+      },
+      "invalidCode": "That code is not valid. Check it and try again.",
+      "codeUnavailable": "The code could not be checked right now. Try again in a moment."
     },
     "provider": {
       "description": "This change needs you to confirm it is you with your sign-in provider.",
       "confirm": "Confirm with {name}",
       "none": "No sign-in provider is available to confirm it is you. Ask your administrator."
+    },
+    "useCode": "Use a code instead",
+    "usePassword": "Use your password instead",
+    "useProvider": "Use your sign-in provider instead",
+    "code": {
+      "description": "This change needs a code from your authenticator app.",
+      "label": "Authentication code",
+      "slot": "Digit {position} of {length}",
+      "required": "Enter the six-digit code."
     }
   },
   "setup": {

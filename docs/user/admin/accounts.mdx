@@ -1,0 +1,164 @@
+---
+title: "Instance Accounts"
+description: "Manage the accounts on your self-hosted SlugBase: recover access, disable, promote, set export-only and delete."
+edition: ce
+order: 30
+---
+
+**Accounts** lists every account on your SlugBase. An instance admin uses it to get people back into their accounts, and to disable, promote, restrict or delete an account.
+
+<Callout>
+Self-hosted only. This page is part of the **Admin** area of a self-hosted SlugBase.
+</Callout>
+
+<Screenshot alt="The instance Accounts page with the accounts table and the actions menu of one row" />
+
+## Prerequisites
+
+- Your account is an instance admin, and two-factor authentication is on for it. Without it, the page says **Accounts are not available yet**: "Turn on two-factor authentication to manage the accounts of this instance." Choose **Set up two-factor authentication**. See [Security](../account/security.mdx).
+- You are signed in. Most actions ask you to confirm it is you. See the section **Confirm it is you** below.
+
+## Open Accounts
+
+1. Choose **Admin** in the sidebar.
+2. Choose **Accounts**.
+
+The table shows each account's **Name**, **Email**, **Verified**, **Two-factor**, **Instance admin**, **Last sign-in**, **Workspaces** and **Status**. **You** marks your own row. **Last sign-in** says **Never** until the person signs in. The **Status** is **Active**, **Disabled**, or "Export only until" and a date.
+
+Type in **Search accounts** to filter by name or email. Choose **Clear search** to see everyone again.
+
+## Actions on an account
+
+Open the actions menu of a row, **Actions for** and the account's name. SlugBase offers only the actions that make sense for that account.
+
+| Action | When it is offered | What it does |
+| ------ | ------------------ | ------------ |
+| **Resend verification email** | The address is not verified. | Sends the verification email again. It needs mail, and replaces the earlier link. |
+| **Mark as verified** | The address is not verified. | Marks the address verified, after you confirm. For an instance without mail. See below. |
+| **Send reset link** | Always. | Issues a password-reset link. See below. |
+| **Reset two-factor authentication** | The account has two-factor authentication on. Not for your own account. | Turns it off after you confirm. See below. |
+| **Disable account** | The account is enabled. | Signs the person out everywhere and stops them signing in. Their API tokens stop working. |
+| **Enable account** | The account is disabled. | The person can sign in again. |
+| **Make instance admin** | The account is not an instance admin, and not export-only. | Makes it an instance admin, after you confirm. The person is signed out and signs in again. |
+| **Remove instance admin** | The account is an instance admin. | Removes the role, after you confirm. The person is signed out everywhere. |
+| **Set export-only** | The account is enabled and not an instance admin. | Leaves the account a period to export its data. See below. |
+| **End export-only** | The account is in an export-only period. | Gives the account full access again. |
+| **Delete account** | Not your own account. | Deletes the account after you type its address. See below. |
+
+A disabled account sees the same sign-in message as a wrong password, so it learns nothing. Enabling an account sends no email. Disabling one emails the person where your SlugBase can send email.
+
+### Confirm it is you
+
+Most of these actions ask for your password again. SlugBase shows **Confirm it is you**. Enter your **Password** and choose **Confirm**. If you close the prompt, SlugBase says "Confirm it is you to do this. Nothing was changed." The confirmation holds for ten minutes. If your account has no password because you sign in through a provider, you confirm through the provider. If two-factor authentication is on for your account, the prompt also offers **Use a code instead**, which takes the six-digit **Authentication code** from your authenticator app. See [Security](../account/security.mdx). **Resend verification email** does not ask.
+
+### One instance admin must remain
+
+SlugBase always keeps at least one enabled instance admin. If you try to remove the role from the last one, disable them or delete them, SlugBase says: "This is the only enabled instance admin. Make another account an instance admin first." A disabled admin does not count as another one. For your own safety, make a second account an instance admin before anything goes wrong, and have that person turn on two-factor authentication.
+
+You can remove the role from your own account, or disable it, if another enabled instance admin remains. SlugBase warns you that you are signed out right away.
+
+### Reset a password
+
+Choose **Send reset link**. The link works once and for one hour.
+
+- Where your SlugBase can send email and the account has a password, the person gets the ordinary password-reset email and you receive no link: "A password-reset link was mailed to" their address.
+- Without email, or when the account has no password for an email to go to, SlugBase shows the link once in **Reset link for** and the person's name. Copy it with **Copy the reset link**, send it yourself, select **I have sent or saved this link**, and choose **Done**.
+
+Opening the link is the ordinary reset. The person sets a new password and is signed out everywhere. An account with two-factor authentication still needs its code to sign in.
+
+SlugBase refuses a link for a disabled account ("This account is disabled. Enable it first."), for an account whose address is not verified ("The address of this account is not verified. Mark it as verified or resend the verification email first."), and for an account that signs in only through a provider ("This account signs in through a provider only, so it has no password to reset.").
+
+### Verify an address
+
+**Resend verification email** needs mail, and SlugBase says so when it has none: "This server has no mail configured, so no email can be sent." It is refused for a disabled account and for an address that is verified already.
+
+**Mark as verified** is for an instance that cannot send the verification email. Whoever registered an address may not own it. So marking one verified removes what that person set up: the account's password, sessions, two-factor authentication, API tokens and linked sign-ins. In every workspace the account owns alone, it also removes the other members, the teams, the pending invitations and the shares. The workspace, the account's own membership and everything it saved stay. The owner then gets in through a password-reset link or a sign-in provider. Mark an address verified only when you know it belongs to the person.
+
+For your own account, **Mark as verified** only marks the address. Your password, sessions and two-factor authentication stay as they are. Nothing marks an address as not verified again.
+
+### Reset two-factor authentication
+
+Use this when a person lost their authenticator app and their backup codes.
+
+1. Choose **Reset two-factor authentication**.
+2. Read **Reset the two-factor authentication of** and the person's name: "Two-factor authentication is turned off for" them, "who is signed out everywhere and signs in again with their password or through their sign-in provider. They are emailed about it where mail is configured."
+3. Confirm.
+
+**Result:** SlugBase says "Two-factor authentication was reset for" the person. They sign in with their password or through their sign-in provider, and can turn two-factor authentication on again. SlugBase never reads or copies the secret.
+
+The action is refused for a disabled account, so enable it first. It does not appear for your own account. You turn off your own two-factor authentication in your account settings, with the second factor. See [Security](../account/security.mdx). If you lose both your authenticator and your backup codes, another instance admin resets yours.
+
+### Set an export-only period
+
+An export-only period lets a person take their data out before you close the account. During it, the person can sign in, view and export their bookmarks, and nothing else: no changes, no API tokens, no slug links, no invitations.
+
+1. Choose **Set export-only**. The dialog is titled with the person's name and "an export-only period".
+2. Under **Last day**, pick the day the period ends. It ends at the end of that day and must be at least a day from now.
+3. Under **Then**, choose **Disable the account** or **Delete the account**.
+4. Choose **Set export-only**. If SlugBase asks you to confirm it is you, do that.
+
+**Result:** SlugBase says the person "can only export until the end date". The person sees **Your account can only export its data** with the end date, and a link to export. Where email is set up, they are told. At the end, SlugBase disables or deletes the account as you chose. A deletion follows the rules for deleting an account. If it cannot be made, because the account is the only owner of a workspace with other members, the account is disabled instead.
+
+SlugBase refuses an instance admin, a disabled account and a date less than a day away. Choose **End export-only** to give the account full access again. See [Import and Export](../account/import-and-export.mdx).
+
+### Delete an account
+
+1. Choose **Delete account**.
+2. Read the warning: "This is irreversible." The account, its sessions and API tokens are deleted. Workspaces it is the only member of are deleted with it. In every other workspace its membership ends and what it created stays.
+3. Type the account's address where the dialog says "Type" and the address "to confirm".
+4. Choose **Delete account**, and confirm it is you if asked.
+
+**Result:** SlugBase says the person "is deleted".
+
+SlugBase refuses the deletion in some cases and changes nothing:
+
+- The account is the only owner of workspaces that have other members. The dialog says "Transfer the ownership of each, or delete the workspace, first." and lists the **Workspaces without another owner**. Choose **Open workspaces** to go to [Workspaces](workspaces.mdx).
+- The account is the only enabled instance admin.
+- The deployment refuses it. The dialog then says "This server does not allow this right now. Nothing was changed."
+
+Your own account is not deleted here. Delete it from your account settings. A disabled account can be deleted.
+
+## Help someone back into their account
+
+| What happened | What the person does | What you do |
+| ------------- | -------------------- | ----------- |
+| Forgot the password | Uses **Forgot your password?** on the sign-in page. | **Send reset link**. |
+| The verification link did not arrive | Asks for a new link on the sign-in page. | **Resend verification email**, or **Mark as verified** without mail. |
+| Lost the authenticator app | Signs in with a backup code. | **Reset two-factor authentication**. |
+| Account is disabled | Nothing. | **Enable account**. |
+
+The operator guide [Account Recovery and Security Checklist](/docs/self-hosting/security) covers what to do when the last instance admin is locked out, and what an operator can see.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Search accounts | Filters the table by name or email. | No |
+| Last day | The last day of an export-only period, at least a day ahead. | Yes, to set export-only |
+| Then | **Disable the account** or **Delete the account** at the end. | Yes, to set export-only |
+| Type the address to confirm | The account's email address, to delete it. | Yes, to delete |
+
+## Troubleshooting
+
+### A message says "Nothing was changed"
+
+SlugBase gives the reason. Common ones are that the account no longer exists, you are no longer an instance admin, or the account is disabled. The page reloads.
+
+### The page says "There are no accounts" or "No account matches"
+
+With a search, no name or email contains your words. Choose **Clear search**.
+
+### A dialog says "Turn on two-factor authentication first"
+
+Choose **Set up two-factor authentication**, or open **Security**, then come back.
+
+### The page says "The accounts could not be loaded"
+
+Choose **Try again**. If it continues, check the logs of the server.
+
+## Related pages
+
+- [Instance Overview](overview.mdx)
+- [Instance Workspaces](workspaces.mdx)
+- [Settings and Status](settings-and-status.mdx)
+- [Account Recovery and Security Checklist](/docs/self-hosting/security)

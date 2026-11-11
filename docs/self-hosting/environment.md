@@ -98,6 +98,7 @@ The server reads the keys of an OIDC provider. The worker does not. `<SLUG>` in 
 | `OIDC_<SLUG>_ENABLED` | server | No | `true` | boolean | Whether the provider is on. |
 | `OIDC_<SLUG>_AUTO_CREATE` | server | No | `false` | boolean | Whether a sign-in through the provider creates an account for an address that has none. |
 | `OIDC_<SLUG>_ALLOWED_DOMAINS` | server | No | Any domain | comma-separated email domains | The email domains an automatically created account may have. |
+| `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` | server | No | None: the provider must be on a public address | one bare host | The host of `OIDC_<SLUG>_ISSUER_URL`, when the provider is on a private address. SlugBase then reaches that one origin, and no other, on a loopback, private, CGNAT or unique-local address. It has no scheme, port, path, wildcard or range, and the issuer still uses `https` in production. |
 
 An enabled provider that lacks a required key stops SlugBase from starting and names the key. A provider that cannot be reached is left off the sign-in page and logged. Nothing else is affected. The slug that the sign-in page uses is the `<SLUG>` in lower case, with its underscores written as hyphens.
 

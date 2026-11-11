@@ -142,6 +142,12 @@ async function chooseAction(title: string, action: string): Promise<void> {
   await press(await screen.findByRole("menuitem", { name: action }));
 }
 
+/** Opens the Filters panel, which holds the folder, the tags and the "show only" switches, and returns it. */
+async function openFilters(): Promise<HTMLElement> {
+  await press(await screen.findByRole("button", { name: /^Filters/ }));
+  return screen.findByRole("dialog", { name: "Filters" });
+}
+
 async function chooseOption(select: string, option: string): Promise<void> {
   await press(screen.getByRole("combobox", { name: select }));
   await act(async () => {
@@ -295,12 +301,15 @@ describe("the address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(params?.get("scope")).toBe("mine");
     expect(params?.get("sort")).toBe("title_asc");
     expect(params?.get("limit")).toBe("48");
-    for (const name of ["Pinned", "Has slug", "Forwarding on"]) {
-      expect(screen.getByRole("button", { name }).getAttribute("aria-pressed")).toBe("true");
-    }
     expect(screen.getByRole("radio", { name: "Mine" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByRole("combobox", { name: "Sort by" }).textContent).toContain("Alphabetical A–Z");
-    expect(screen.getByRole("combobox", { name: "Bookmarks per load" }).textContent).toContain("48");
+    expect(screen.getByRole("combobox", { name: "Bookmarks per load" }).textContent).toContain("48 per load");
+    // The three switches are set, which the count on the Filters button and the panel both say.
+    expect(screen.getByRole("button", { name: "Filters, 3 set" })).toBeDefined();
+    const panel = await openFilters();
+    for (const name of ["Pinned", "Has slug", "Forwarding on"]) {
+      expect(within(panel).getByRole("checkbox", { name }).getAttribute("aria-checked")).toBe("true");
+    }
   });
 
   it("drops a value that is none of the allowed ones instead of sending it", async () => {
@@ -314,15 +323,17 @@ describe("the address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(params?.get("limit")).toBe("24");
     expect(params?.get("scope")).toBeNull();
     expect(params?.get("pinned")).toBeNull();
-    expect(screen.getByRole("button", { name: "Pinned" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Filters" })).toBeDefined();
+    const panel = await openFilters();
+    expect(within(panel).getByRole("checkbox", { name: "Pinned" }).getAttribute("aria-checked")).toBe("false");
   });
 
-  it("takes a filter from the Pinned toggle and keeps it linkable", async () => {
+  it("takes a filter from the Pinned checkbox of the Filters panel and keeps it linkable", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
     await openApp("/bookmarks");
     await card("Bookmark 1");
 
-    await press(screen.getByRole("button", { name: "Pinned" }));
+    await press(within(await openFilters()).getByRole("checkbox", { name: "Pinned" }));
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true");
     });
@@ -347,7 +358,7 @@ describe("the address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks?pinned=true&sort=most_used");
     await card("Bookmark 1");
 
-    await chooseOption("Bookmarks per load", "96");
+    await chooseOption("Bookmarks per load", "96 per load");
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true&sort=most_used&size=96");
     });
@@ -363,7 +374,7 @@ describe("the address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks?pinned=true&sort=most_used");
     await card("Bookmark 1");
 
-    await chooseOption("Bookmarks per load", "96");
+    await chooseOption("Bookmarks per load", "96 per load");
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true&sort=most_used&size=96");
     });
@@ -376,15 +387,16 @@ describe("the address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
       expect(window.location.search).toBe("?pinned=true&sort=most_used");
     });
     await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: "Bookmarks per load" }).textContent).toContain("24");
+      expect(screen.getByRole("combobox", { name: "Bookmarks per load" }).textContent).toContain("24 per load");
     });
-    expect(screen.getByRole("button", { name: "Pinned" }).getAttribute("aria-pressed")).toBe("true");
+    const panel = await openFilters();
+    expect(within(panel).getByRole("checkbox", { name: "Pinned" }).getAttribute("aria-checked")).toBe("true");
 
-    await press(screen.getByRole("button", { name: "Pinned" }));
+    await press(within(panel).getByRole("checkbox", { name: "Pinned" }));
     await waitFor(() => {
       expect(window.location.search).toBe("?sort=most_used");
     });
-    expect(screen.getByRole("button", { name: "Pinned" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(panel).getByRole("checkbox", { name: "Pinned" }).getAttribute("aria-checked")).toBe("false");
   });
 
   it("keeps the bookmark modal's parameters when a filter changes", async () => {
@@ -394,11 +406,11 @@ describe("the address", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
 
     await act(async () => {
       // The modal makes the page behind it inert for assistive technology, not for a click.
-      fireEvent.click(await screen.findByRole("button", { name: "Pinned", hidden: true }));
+      fireEvent.click(await screen.findByRole("radio", { name: "Mine", hidden: true }));
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(window.location.search).toContain("pinned=true");
+      expect(window.location.search).toContain("scope=mine");
     });
     expect(window.location.search).toContain(`bookmark=${bookmark(1).id}`);
   });
@@ -575,7 +587,7 @@ describe("states", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(await screen.findByRole("heading", { level: 2, name: "No bookmarks yet" })).toBeDefined();
     expect(screen.getByText(/Give a bookmark a short, private slug/)).toBeDefined();
     expect(screen.queryByText("No bookmarks match these filters")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Pinned" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Filters/ })).toBeNull();
     const main = screen.getByRole("main");
     await press(within(main).getByRole("button", { name: "New bookmark" }));
 
@@ -683,8 +695,13 @@ describe("in German", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(within(item).getByText(/^142 Aufrufe · vor 2 Std\.$/)).toBeDefined();
     expect(screen.getByText("1 von 1.234 angezeigt")).toBeDefined();
     expect(screen.getByRole("button", { name: "Mehr laden" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Angeheftet" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Weiterleitung aktiv" })).toBeDefined();
+    expect(screen.getByRole("radio", { name: "Meine" })).toBeDefined();
+    expect(screen.getByRole("combobox", { name: "Sortieren nach" })).toBeDefined();
+    await press(screen.getByRole("button", { name: "Filter" }));
+    const panel = await screen.findByRole("dialog", { name: "Filter" });
+    for (const name of ["Angeheftet", "Mit Slug", "Weiterleitung aktiv"]) {
+      expect(within(panel).getByRole("checkbox", { name })).toBeDefined();
+    }
   });
 });
 

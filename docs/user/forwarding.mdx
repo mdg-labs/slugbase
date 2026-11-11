@@ -1,0 +1,126 @@
+---
+title: "Forwarding"
+description: "Add SlugBase to your browser as a search engine, manage your slugs and review your remembered choices."
+edition: both
+order: 80
+---
+
+**Forwarding** is the home of slugs. Here you add SlugBase to your browser as a search engine, turn forwarding on or off for each slug, and review the choices go remembered for you.
+
+<Screenshot alt="The Forwarding page with Set up your browser, Your slugs and Remembered choices" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open.
+- You use Chrome, Firefox, Edge or Safari on a desktop.
+
+## Set up your browser
+
+Once your browser knows SlugBase as a search engine, typing `go mail` in the address bar opens the bookmark with the slug `mail`.
+
+1. Under **Set up your browser**, choose **Copy the search engine address**. The address has the form `https://<your SlugBase host>/go/%s`. The host is the one your SlugBase is set up with. The `%s` stands for what you type after the keyword.
+2. Note the **Keyword**, which is `go`. Choose **Copy the keyword** to copy it.
+
+Then add the address as a search engine in your browser. Under **Browser**, choose your browser and follow its steps. They are shown here too. Paste the address you copied where the steps ask for the URL.
+
+<Tabs>
+<Tab label="Chrome">
+
+1. Open Settings, then Search engine, then Manage search engines and site search.
+2. Under Site search, choose Add.
+3. Enter SlugBase as the name and `go` as the shortcut, and paste the address as the URL.
+4. Choose Add to save it.
+
+</Tab>
+<Tab label="Firefox">
+
+1. Open Settings and choose Search.
+2. Under Search Shortcuts, choose Add.
+3. Enter SlugBase as the name, paste the address as the URL and enter `go` as the alias.
+4. Save the search engine.
+
+</Tab>
+<Tab label="Edge">
+
+1. Open Settings, then Privacy, search, and services, then Address bar and search.
+2. Choose Manage search engines, then Add.
+3. Enter SlugBase as the search engine and `go` as the shortcut, and paste the address as the URL.
+4. Choose Add to save it.
+
+</Tab>
+<Tab label="Safari">
+
+1. Safari has no setting for a custom search engine.
+2. Install a Safari extension that adds custom search engines.
+3. In the extension, add SlugBase with the address you copied and the keyword `go`.
+
+</Tab>
+</Tabs>
+
+## Test it and mark it done
+
+1. Choose **Test it: open go/** followed by a slug of yours. It opens that address in a new tab. Once the search engine is set up, type `go` and the slug in the address bar.
+2. Choose **Mark as done**. The page shows **Marked as done**, and the **Getting started** checklist on Home ticks **Set up the browser search engine**.
+
+If none of your bookmarks has a slug that forwards yet, the test link opens a sample address. SlugBase then answers that no bookmark has that slug, and offers to create one.
+
+## Manage your slugs
+
+**Your slugs** lists the bookmarks of yours that have a slug. **Forwarding** decides whether the slug takes you to the bookmark when you go to it.
+
+1. Type in **Search your slugs** to filter by slug, title or host.
+2. Use the switch in the **Forwarding** column to turn forwarding on or off for one slug. The switch is named **Forwarding for** and the slug.
+3. Open the actions menu, **Actions for** and the slug, for **Edit**, **Copy address** or **Turn off forwarding**.
+
+The list shows the **Slug**, the **Destination** host, **Forwarding**, **Opens** and **Last opened**. A slug that was never used shows **Never**.
+
+When a bookmark has forwarding off, it keeps its slug but go does not open it. The slug still helps in search and the palette.
+
+## Review your remembered choices
+
+When several bookmarks shared with you have the same slug, go asks which one you mean. If you chose **Always use this**, SlugBase remembers it. **Remembered choices** lists them: "When several bookmarks share a slug, go sends you to the one you chose to always use."
+
+1. Find the slug under **Slug**. The list shows the **Bookmark**, its **Destination** and its **Owner**, where **You** marks your own.
+2. Choose **Remove**.
+
+**Result:** SlugBase says "Forgot your choice for" and the slug. Choose **Undo** to bring it back.
+
+SlugBase also forgets a choice by itself when its bookmark is deleted, when the bookmark's slug changes or its forwarding goes off, and when you lose access to the bookmark.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Search engine address | The address to paste into your browser. It ends in `/go/%s`. | n/a |
+| Keyword | `go`. What you type before the slug. | n/a |
+| Forwarding | A switch per slug. Off keeps the slug, and go does not open the bookmark. | No |
+| Remove | Forgets a remembered choice. | No |
+
+## Troubleshooting
+
+### The page shows "No slugs yet"
+
+None of your bookmarks has a slug. Choose **New bookmark** and give one a slug. See [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx).
+
+### Typing `go mail` searches the web instead
+
+The browser did not take the search engine. Check the shortcut or keyword, and that the address contains `%s`. In Safari, use an extension.
+
+### A slug opens "No bookmark has the slug"
+
+The slug does not exist in the open workspace, or its forwarding is off. Check the switch under **Forwarding**. See [Go Pages](go.mdx).
+
+### The switch jumps back
+
+SlugBase says "Forwarding could not be turned on. It is off again." or "Forwarding could not be turned off. It is on again." Try again in a moment. "This bookmark was changed elsewhere, so forwarding was not changed. The list is up to date again." means someone changed the bookmark first.
+
+### The setup could not be marked as done
+
+SlugBase says: "The setup could not be marked as done. Try again in a moment." Choose **Mark as done** again.
+
+## Related pages
+
+- [Go Pages](go.mdx)
+- [Command Palette](command-palette.mdx)
+- [Add and Edit Bookmarks](add-and-edit-bookmarks.mdx)
+- [Getting started](getting-started.mdx)

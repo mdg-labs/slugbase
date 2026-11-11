@@ -569,6 +569,9 @@ export function createAuthStore(options: AuthStoreOptions): AuthStore;
 export function createDatabase(options: DatabaseOptions): Database;
 
 // @public
+export function createMfaResealStore(options: MfaResealStoreOptions): MfaResealStore;
+
+// @public
 export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitStore;
 
 // @public
@@ -1100,6 +1103,28 @@ export type MfaDisablingOutcome =
 | "no_session";
 
 // @public
+export interface MfaKeyUse {
+    // (undocumented)
+    readonly keyId: string;
+    // (undocumented)
+    readonly secrets: number;
+}
+
+// @public (undocumented)
+export interface MfaResealStore {
+    close(): Promise<void>;
+    keyIds(): Promise<readonly MfaKeyUse[]>;
+    reseal(accountId: string, expected: Uint8Array, secret: SealedMfaSecret): Promise<boolean>;
+    secretsUnderKey(keyId: string, afterAccountId: string | null, limit: number): Promise<readonly MfaSweptSecret[]>;
+}
+
+// @public (undocumented)
+export interface MfaResealStoreOptions {
+    poolSize?: number;
+    url: string;
+}
+
+// @public
 export interface MfaState {
     readonly enabledAt: Date | null;
     readonly lastStep: number | null;
@@ -1119,6 +1144,14 @@ export interface MfaStore {
     resealMfaSecret(accountId: string, expected: Uint8Array, secret: SealedMfaSecret): Promise<boolean>;
     startMfaEnrollment(accountId: string, secret: SealedMfaSecret): Promise<boolean>;
     unusedBackupCodes(accountId: string): Promise<readonly UnusedBackupCode[]>;
+}
+
+// @public
+export interface MfaSweptSecret {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly secret: Uint8Array;
 }
 
 // @public

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Dialog, Locator, Page, Request, Response } from "@playwright/test";
 import { bookmarkBody, bookmarkShape } from "../support/bookmark-fixtures.ts";
+import { closeFilters, filterChips, filtersButton, openFilters } from "../support/bookmarks-filters.ts";
 import { message } from "../support/catalog.ts";
 import { appOrigin } from "../support/environment.ts";
 import { tabTo, waitForInitialFocus } from "../support/keyboard.ts";
@@ -126,9 +127,11 @@ for (const { name, viewport } of [
   { name: "on a 390 px wide phone", viewport: PHONE },
 ] as const) {
   test.describe(`bookmarks journey ${name}`, () => {
+    // The journey selects and removes every pinned bookmark of the workspace, so nothing else runs while it does.
+    test.use({ accountAlone: true });
     if (viewport !== undefined) {
       test.use({ viewport });
-      // Every run holds the lock of the account's preferences until it ends and the others wait for it, so the run at
+      // Every run holds the lock of the account's preferences alone until it ends and the others wait for it, so the run at
       // phone size, which takes the longest, is one engine's.
       test.skip(({ browserName }) => browserName !== "chromium", "the phone-size run is Chromium's");
     }
@@ -352,8 +355,13 @@ for (const { name, viewport } of [
         });
 
         await test.step("selects every matching bookmark and deletes them in bulk", async () => {
-          await page.getByRole("button", { name: en("bookmarks.list.filter.pinned"), exact: true }).click();
+          // The Pinned checkbox is in the Filters panel, a sheet over the page: it is closed again so that the list behind it is reachable.
+          const panel = await openFilters(page);
+          await panel.getByRole("checkbox", { name: en("bookmarks.list.filter.pinned"), exact: true }).check();
           await expect(page).toHaveURL(/\?pinned=true$/);
+          await closeFilters(page);
+          await expect(filterChips(page).getByText(en("bookmarks.list.filter.pinned"), { exact: true })).toBeVisible();
+          await expect(filtersButton(page, 1)).toBeVisible();
           await expect(page.locator("[data-item-id]")).toHaveCount(ids.size);
           await scan();
 

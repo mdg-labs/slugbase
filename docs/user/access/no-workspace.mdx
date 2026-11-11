@@ -1,0 +1,70 @@
+---
+title: "No Workspace"
+description: "What to do when you are signed in but not in a workspace yet."
+edition: both
+order: 60
+---
+
+**You are not in a workspace yet** appears when your account is signed in but has no workspace open.
+
+<Screenshot alt="The You are not in a workspace yet page with Create a workspace" />
+
+## Prerequisites
+
+- You are signed in.
+
+## Create a workspace
+
+Where your account can create one, the page says: "Create a workspace to start saving bookmarks."
+
+1. Choose **Create a workspace**.
+2. In the **New workspace** dialog, enter a **Name**. Use 1 to 64 characters.
+3. Choose **Create workspace**.
+
+**Result:** You own the new workspace, and Home opens in it.
+
+## Wait for an invitation
+
+When your account cannot create a workspace, the page shows **Waiting for an invitation** and says: "Ask the owner of a workspace to invite you. It appears here once you accept."
+
+1. Ask the owner or an admin of a workspace to invite your email address.
+2. Open the link in the invitation. See [Accept an Invitation](accept-an-invitation.mdx).
+
+The page shows the address you are signed in with under **Signed in as**. Choose **Sign out** to use another account.
+
+## Choose a workspace
+
+If you belong to workspaces but none is open, the page shows **Choose a workspace**: "You are a member of these workspaces, but none is open." Choose **Open** followed by a workspace name.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Create a workspace | Opens the dialog to make a workspace you own. It appears only where your account may create one. | No |
+| Name | The name of the new workspace, 1 to 64 characters. | Yes |
+| Open the admin area | Opens the admin area. It appears for an instance admin only, on a self-hosted SlugBase. | No |
+| Sign out | Ends your session. | No |
+
+## Troubleshooting
+
+### The page says "Waiting for an invitation" and I expected to create a workspace
+
+On a self-hosted SlugBase, the instance admin decides whether members can create workspaces, and the setting is off by default. Ask to be invited, or ask the instance admin to allow it.
+
+### The dialog says "Verify your email address to create a workspace."
+
+Open the link in your verification email first. See [Create an Account](create-an-account.mdx).
+
+### The dialog says "You have reached the limit of workspaces for your account."
+
+Your account owns as many workspaces as it may. On SlugBase Cloud, the limit depends on your plan. See https://slugbase.app/pricing.
+
+### The page says "Your account could not be loaded"
+
+Choose **Try again**. If it continues, tell your administrator.
+
+## Related pages
+
+- [Accept an Invitation](accept-an-invitation.mdx)
+- [Sign In](sign-in.mdx)
+- [Getting started](../getting-started.mdx)

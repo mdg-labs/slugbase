@@ -364,13 +364,14 @@ check_probes_and_pages() {
 
 check_container_hardening() {
   local container uid output
-  container="$(compose ps -q slugbase)"
+  # A failed lookup leaves the container empty, and the next line names it.
+  container="$(compose ps -q slugbase)" || container=""
   [[ -n "$container" ]] || fail "the server container was not found"
   expect_equal "ReadonlyRootfs of the server container" \
     "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$container")" "true"
   # PID 1 is the node process the entrypoint exec'd into; the loop runs in the container, so $ is not expanded here.
   # shellcheck disable=SC2016
-  uid="$(compose exec -T slugbase sh -c 'while read -r key real rest; do if [ "$key" = "Uid:" ]; then echo "$real"; fi; done < /proc/1/status' | tr -d '\r')"
+  uid="$(compose exec -T slugbase sh -c 'while read -r key real rest; do if [ "$key" = "Uid:" ]; then echo "$real"; fi; done < /proc/1/status' | tr -d '\r')" || uid=""
   [[ "$uid" =~ ^[0-9]+$ ]] || fail "the user of the server process could not be read"
   [[ "$uid" != "0" ]] || fail "the server process runs as root"
   log "ok: the server process runs as user $uid, not root"
@@ -397,12 +398,16 @@ check_no_npm() {
 # A restart runs the entrypoint again, which runs migrate again; with nothing to
 # apply, migrate says so and the server is ready as before.
 check_restart() {
-  local before after
-  before="$(compose logs --no-color --no-log-prefix slugbase 2>&1 | wc -l)"
-  expect_contains "the log of the first start" "$(compose logs --no-color --no-log-prefix slugbase 2>&1)" "The database is migrated"
+  local before first after
+  # Under errexit a failed read of the log would end the script with no message, so each read names its step.
+  before="$(compose logs --no-color --no-log-prefix slugbase 2>&1 | wc -l)" ||
+    fail "the log of the first start could not be read"
+  first="$(compose logs --no-color --no-log-prefix slugbase 2>&1)" || fail "the log of the first start could not be read"
+  expect_contains "the log of the first start" "$first" "The database is migrated"
   compose restart slugbase >/dev/null 2>&1 || fail "docker compose restart failed"
   wait_ready
-  after="$(compose logs --no-color --no-log-prefix slugbase 2>&1 | tail -n +"$((before + 1))")"
+  after="$(compose logs --no-color --no-log-prefix slugbase 2>&1 | tail -n +"$((before + 1))")" ||
+    fail "the log of the restart could not be read"
   expect_contains "the log of the restart" "$after" "The database is up to date"
   expect_lacks "the log of the restart" "$after" "The database is migrated"
   expect_status /ready 200
@@ -582,7 +587,8 @@ check_owner_role_allowed() {
     sleep 2
   done
   state="$(docker inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
-  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')" ||
+    fail "the log of the server on the owner role could not be read"
   expect_owner_allowed "$state" "$logs"
   docker rm --force "$name" >/dev/null 2>&1 || true
 }
@@ -630,7 +636,20 @@ check_with_worker() {
     sleep 2
   done
   log "ok: server --with-worker answered /ready"
-  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+  # The server listens before the worker starts (runServerWithWorker), so /ready can answer before the worker has logged that it
+  # started: the log is read again until the line is there, the container has stopped, or the limit is spent, and the assertion
+  # below then judges the last read.
+  deadline=$((SECONDS + limit))
+  while true; do
+    state="$(docker inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
+    logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')" || logs=""
+    [[ "$logs" == *"Worker started"* ]] && break
+    case "$state" in
+      exited | dead) break ;;
+    esac
+    ((SECONDS < deadline)) || break
+    sleep 1
+  done
   expect_contains "the log of server --with-worker" "$logs" "Worker started"
 
   password="$(random_hex 16)"
@@ -655,7 +674,8 @@ check_with_worker() {
 
   timeout 60 docker stop --time 30 "$name" >/dev/null 2>&1 || fail "server --with-worker could not be stopped"
   exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$name" 2>/dev/null || true)"
-  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+  logs="$(docker logs "$name" 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')" ||
+    fail "the log of server --with-worker could not be read after it stopped"
   expect_with_worker_stopped "$exit_code" "$logs"
   expect_lacks "the log of server --with-worker" "$logs" "$password"
   docker rm --force "$name" >/dev/null 2>&1 || true
@@ -682,7 +702,7 @@ start_stack() {
 
   run_id="$(random_hex 4)"
   project="slugbase-smoke-${run_id}"
-  work="$(mktemp -d "${TMPDIR:-/tmp}/slugbase-smoke.XXXXXX")"
+  work="$(mktemp -d "${TMPDIR:-/tmp}/slugbase-smoke.XXXXXX")" || fail "the work directory could not be created"
   chmod 700 "$work"
   env_file="$work/stack.env"
   # The variables that tell the docker CLI which daemon to use survive the clean environment of compose().

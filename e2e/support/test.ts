@@ -1,5 +1,5 @@
 import { expect, test as base, type Locator } from "@playwright/test";
-import { PREFERENCES_FIXTURE_TIMEOUT_MS, withAccountPreferences, type PreferencesOfAccount } from "./account-preferences.ts";
+import { PREFERENCES_FIXTURE_TIMEOUT_MS, withAccountPreferences, type Preferences, type PreferencesOfAccount } from "./account-preferences.ts";
 import { findViolations, loadAllowlist } from "./axe.ts";
 
 export interface App {
@@ -13,10 +13,22 @@ export interface Fixtures {
   app: App;
   /**
    * The theme and the locale of the signed-in account, for a journey that reads either (see account-preferences.ts):
-   * the journey holds the account's preferences until it ends, and the ones it set go back to what the account had
-   * then. A journey of a visitor without a session has no account and does not use it.
+   * the journey holds the account's preferences until it ends, with the values it declared in place, and the ones that
+   * were changed go back to what the account had once the last journey that holds them ends. A journey of a visitor without a session has no account and does not use it.
    */
   account: PreferencesOfAccount;
+  /**
+   * The theme and the locale the signed-in account is given before a journey that uses `account` starts, and holds until it ends. A journey
+   * that reads the language and does not set the theme leaves it at English; one that needs another language or a theme says so with
+   * `test.use({ preferences })`, and then holds the account's preferences alone (support/preferences-lock.ts).
+   */
+  preferences: Preferences;
+  /**
+   * Whether the journey holds the account's preferences alone, which keeps every other journey that uses `account` away from the
+   * workspace while it runs: for a journey that counts, selects or removes what the workspace holds. False for a journey that makes
+   * its own things and looks at those only.
+   */
+  accountAlone: boolean;
 }
 
 /**
@@ -26,9 +38,11 @@ export interface Fixtures {
  * ends on a page it never scanned (reached by a click, say) fails too.
  */
 export const test = base.extend<Fixtures>({
+  preferences: [{ locale: "en" }, { option: true }],
+  accountAlone: [false, { option: true }],
   account: [
-    async ({ request }, use) => {
-      await withAccountPreferences(request, use);
+    async ({ request, preferences, accountAlone }, use) => {
+      await withAccountPreferences(request, preferences, accountAlone, use);
     },
     { timeout: PREFERENCES_FIXTURE_TIMEOUT_MS },
   ],

@@ -716,3 +716,185 @@ describe("an allowlisted AI origin", () => {
     });
   });
 });
+
+// Q120: an operator may name the issuer origin of each OIDC provider on a private address. The instance the OIDC adapter holds takes the
+// list of them and connects to exactly those origins on a loopback, private, CGNAT or unique-local address, as for the AI origin (Q90).
+// Everything else a provider's documents name is an ordinary target. Loopback stands in for the private address here.
+describe("an allowlisted identity origin", () => {
+  /** The OIDC adapter's instance: every origin of `origins` is allowed; 127.0.0.1 also stands in for a public address when asked. */
+  const identity = (origins: readonly string[], publicIsLoopbackToo = false) =>
+    new HttpEgress({
+      nodeEnv: "test",
+      privateOrigin: origins,
+      testOnly: { dnsServers: [dns.server], ...(publicIsLoopbackToo ? { allowAddresses: ["127.0.0.1"] } : {}) },
+    });
+
+  it("reaches each named origin, resolved once, pinned, with its host name in Host; the same requests through an instance without the option are refused", async () => {
+    const first = await serve(ok);
+    const second = await serve(ok, "127.0.0.2");
+    dns.set("idp-one.test", ["127.0.0.1"]);
+    dns.set("idp-two.test", ["127.0.0.2"]);
+    const oneUrl = `http://idp-one.test:${String(first.port)}`;
+    const twoUrl = `http://idp-two.test:${String(second.port)}`;
+    const egress = identity([oneUrl, twoUrl]);
+    expect((await egress.request(get(`${oneUrl}/.well-known/openid-configuration`))).status).toBe(200);
+    expect((await egress.request(get(`${twoUrl}/keys`))).status).toBe(200);
+    expect(questionsFor("idp-one.test").sort()).toEqual(["A", "AAAA"]);
+    expect(attempts()).toEqual([`127.0.0.1:${String(first.port)}`, `127.0.0.2:${String(second.port)}`]);
+    expect(first.requests[0]?.headers["host"]).toBe(`idp-one.test:${String(first.port)}`);
+    expect(second.requests[0]?.headers["host"]).toBe(`idp-two.test:${String(second.port)}`);
+
+    for (const refusedOn of [strict(), identity([]), new HttpEgress({ nodeEnv: "test", privateOrigin: [], testOnly: { dnsServers: [dns.server] } })]) {
+      expect(await rejection(refusedOn, get(`${oneUrl}/`))).toBeInstanceOf(EgressBlocked);
+      expect(await rejection(refusedOn, get(`${twoUrl}/`))).toBeInstanceOf(EgressBlocked);
+    }
+    expect(first.connections()).toBe(1);
+    expect(second.connections()).toBe(1);
+    expect(attempts()).toHaveLength(2);
+  });
+
+  it("reaches an IP-literal origin without asking the DNS", async () => {
+    const server = await serve(ok);
+    const origin = `http://127.0.0.1:${String(server.port)}`;
+    expect((await identity(["http://unused.test:9", origin]).request(get(`${origin}/`))).status).toBe(200);
+    expect(dns.questions).toEqual([]);
+  });
+
+  it("is accepted when NODE_ENV is production, and a list holding text that is no origin is refused", () => {
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: ["https://idp.lan", "https://sso.lan:8443"] })).not.toThrow();
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: ["https://idp.lan", "sso.lan"] })).toThrow();
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: ["https://idp.lan/realms/main"] })).toThrow();
+    expect(() => new HttpEgress({ nodeEnv: "production", privateOrigin: ["https://idp.lan"], testOnly: {} })).toThrow();
+  });
+
+  it("refuses the same host on another port, another scheme and another private host, without a connection", async () => {
+    const named = await serve(ok);
+    const other = await serve(ok);
+    dns.set("idp-one.test", ["127.0.0.1"]);
+    dns.set("idp-two.test", ["127.0.0.1"]);
+    dns.set("unnamed.test", ["127.0.0.1"]);
+    const egress = identity([`https://idp-one.test:${String(named.port)}`, `http://idp-two.test:${String(named.port)}`]);
+    for (const url of [
+      `https://idp-one.test:${String(other.port)}/`,
+      `http://idp-one.test:${String(named.port)}/`,
+      `https://idp-two.test:${String(named.port)}/`,
+      `http://idp-two.test:${String(other.port)}/`,
+      `http://unnamed.test:${String(named.port)}/`,
+      `http://127.0.0.1:${String(named.port)}/`,
+    ]) {
+      expect(await rejection(egress, get(url)), url).toBeInstanceOf(EgressBlocked);
+    }
+    expect(other.connections()).toBe(0);
+    expect(named.connections()).toBe(0);
+    expect(attempts()).toEqual([]);
+  });
+
+  const refused: [string, string[]][] = [
+    ["link-local", ["169.254.1.1"]],
+    ["the metadata address", ["169.254.169.254"]],
+    ["the unspecified address", ["0.0.0.0"]],
+    ["multicast", ["224.0.0.1"]],
+    ["a reserved address", ["240.0.0.1"]],
+    ["IPv6 link-local", ["fe80::1"]],
+    ["the IPv6 unspecified address", ["::"]],
+    ["IPv6 multicast", ["ff02::1"]],
+    ["the IPv4-mapped metadata address", ["::ffff:169.254.169.254"]],
+    ["a private address and the metadata address", ["127.0.0.1", "169.254.169.254"]],
+    ["the metadata address and a private address", ["169.254.169.254", "127.0.0.1"]],
+    ["a private address and an IPv6 link-local address", ["127.0.0.1", "fe80::1"]],
+  ];
+
+  it.each(refused)("refuses a named name when it answers %s, without a connection", async (_label, answers) => {
+    const trap = await serve(ok);
+    dns.set("idp-one.test", answers);
+    dns.set("idp-two.test", answers);
+    const egress = identity([`http://idp-one.test:${String(trap.port)}`, `http://idp-two.test:${String(trap.port)}`]);
+    expect(await rejection(egress, get(`http://idp-one.test:${String(trap.port)}/`))).toBeInstanceOf(EgressBlocked);
+    expect(await rejection(egress, get(`http://idp-two.test:${String(trap.port)}/`))).toBeInstanceOf(EgressBlocked);
+    expect(trap.connections()).toBe(0);
+    expect(attempts()).toEqual([]);
+  });
+
+  it.each([["169.254.169.254"], ["169.254.1.1"], ["0.0.0.0"], ["[fe80::1]"], ["[::ffff:169.254.169.254]"]])("refuses a named literal origin %s", async (host) => {
+    const origin = `http://${host}:9`;
+    expect(await rejection(identity(["http://other.test:9", origin]), get(`${origin}/`))).toBeInstanceOf(EgressBlocked);
+    expect(attempts()).toEqual([]);
+  });
+
+  it("validates the answer of every request afresh: a name that moves to the metadata address is refused", async () => {
+    const [first, second] = await servePair(ok, ok);
+    dns.set("idp-moving.test", (type, ordinal) => (type === "A" ? [["127.0.0.1", "127.0.0.2", "169.254.169.254"][ordinal - 1] ?? "169.254.169.254"] : []));
+    const origin = `http://idp-moving.test:${String(first.port)}`;
+    const egress = identity(["http://other.test:9", origin]);
+    expect((await egress.request(get(`${origin}/`))).status).toBe(200);
+    expect((await egress.request(get(`${origin}/`))).status).toBe(200);
+    expect(await rejection(egress, get(`${origin}/`))).toBeInstanceOf(EgressBlocked);
+    expect(first.connections()).toBe(1);
+    expect(second.connections()).toBe(1);
+  });
+
+  describe("a document of the origin that names another address", () => {
+    async function named(handler: Handler): Promise<{ server: LocalServer; origin: string }> {
+      const server = await serve(handler);
+      dns.set("idp-one.test", ["127.0.0.1"]);
+      return { server, origin: `http://idp-one.test:${String(server.port)}` };
+    }
+
+    it("is refused on a redirect to another private port, another private host and the metadata address, without a connection", async () => {
+      const trap = await serve(ok);
+      dns.set("unnamed.test", ["127.0.0.1"]);
+      for (const location of [
+        `http://idp-one.test:${String(trap.port)}/`,
+        `http://unnamed.test:${String(trap.port)}/`,
+        `http://127.0.0.1:${String(trap.port)}/`,
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::ffff:169.254.169.254]/",
+      ]) {
+        const { server, origin } = await named(redirect(location));
+        expect(await rejection(identity([origin, "http://other.test:9"]), get(`${origin}/`)), location).toBeInstanceOf(EgressBlocked);
+        expect(server.requests).toHaveLength(1);
+      }
+      expect(trap.connections()).toBe(0);
+      expect(attempts().filter((target) => target.startsWith("169.254."))).toEqual([]);
+    });
+
+    it("is refused as a request to another private host the document names, as a discovery-named endpoint is", async () => {
+      const trap = await serve(ok);
+      const { origin } = await named(ok);
+      dns.set("unnamed.test", ["127.0.0.1"]);
+      const egress = identity([origin]);
+      expect(await rejection(egress, get(`http://unnamed.test:${String(trap.port)}/keys`))).toBeInstanceOf(EgressBlocked);
+      expect(await rejection(egress, get("http://169.254.169.254/latest/meta-data/"))).toBeInstanceOf(EgressBlocked);
+      expect(trap.connections()).toBe(0);
+    });
+
+    it("follows a redirect to the same origin on another path", async () => {
+      const server = await serve((request, socket) => {
+        if (request.target === "/start") {
+          respond(socket, 302, { location: "/keys" });
+        } else {
+          respond(socket, 200, { "content-type": "text/plain" }, request.target);
+        }
+      });
+      dns.set("idp-one.test", ["127.0.0.1"]);
+      const origin = `http://idp-one.test:${String(server.port)}`;
+      const response = await identity(["http://other.test:9", origin]).request(get(`${origin}/start`));
+      expect(new TextDecoder().decode(response.body)).toBe("/keys");
+      expect(server.requests.map((request) => request.target)).toEqual(["/start", "/keys"]);
+    });
+
+    it("is refused on a 307 that would carry the body to another origin", async () => {
+      const publicServer = await serve(ok);
+      dns.set("pub.test", ["127.0.0.1"]);
+      const server = await serve(redirect(`http://pub.test:${String(publicServer.port)}/`, 307), "127.0.0.2");
+      dns.set("idp-one.test", ["127.0.0.2"]);
+      const origin = `http://idp-one.test:${String(server.port)}`;
+      const error = await rejection(
+        identity([origin], true),
+        get(`${origin}/token`, { method: "POST", body: new TextEncoder().encode("code=1"), headers: { authorization: "Basic cXg4NDpxeDg1" } }),
+      );
+      expect(error).toBeInstanceOf(EgressError);
+      expect(publicServer.connections()).toBe(0);
+    });
+  });
+});

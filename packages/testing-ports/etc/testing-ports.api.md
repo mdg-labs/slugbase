@@ -76,7 +76,7 @@ export class FakeEgressError extends Error {
 }
 
 // @public (undocumented)
-export type FakeEgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large";
+export type FakeEgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large" | "egress_busy";
 
 // @public (undocumented)
 export interface FakeEgressRequest {

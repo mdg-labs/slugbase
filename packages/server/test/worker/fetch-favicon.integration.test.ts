@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ImageRefused, PortUnavailable, unconfigured, type EgressPort, type ImageCodecPort, type ReencodedIcon } from "@slugbase/core";
+import { EgressBusy, ImageRefused, PortUnavailable, unconfigured, type EgressPort, type ImageCodecPort, type ReencodedIcon } from "@slugbase/core";
 import { FakeEgress, type FakeEgressRoute } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -218,6 +218,32 @@ describe("what a hostile host serves ends as a none row and nothing to serve", (
     await run(a, egress);
 
     expect(await rows()).toMatchObject([{ host: HOST, status: "none", content: null }]);
+  });
+});
+
+describe("a lookup the port refuses for lack of a slot", () => {
+  it("rejects, so the queue retries it, stores no favicons or workspace_favicons row, and asks for no further candidate", async () => {
+    const world = harness.serve();
+    const a = await workspace(world);
+    await bookmarkOn(a, HOST);
+    const inner = new FakeEgress({ [`http://${HOST}/favicon.ico`]: image(), [`https://${HOST}/`]: html('<link rel="icon" href="/real.png">') });
+    const asked: string[] = [];
+    const busy: EgressPort = {
+      available: true,
+      request: (request) => {
+        asked.push(request.url);
+        return request.url === `https://${HOST}/favicon.ico` ? Promise.reject(new EgressBusy()) : inner.request(request);
+      },
+    };
+
+    await expect(run(a, busy)).rejects.toBeInstanceOf(EgressBusy);
+
+    expect(asked).toEqual([`https://${HOST}/favicon.ico`]);
+    expect(await rows()).toEqual([]);
+    expect(await fetchesOf(a)).toEqual([]);
+    await run(a, new FakeEgress({ [`https://${HOST}/favicon.ico`]: image() }));
+    expect(await rows()).toMatchObject([{ host: HOST, status: "ok" }]);
+    expect(await fetchesOf(a)).toEqual([HOST]);
   });
 });
 

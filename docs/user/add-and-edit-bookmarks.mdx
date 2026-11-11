@@ -1,0 +1,169 @@
+---
+title: "Add and Edit Bookmarks"
+description: "Save a bookmark, give it a slug, and change or delete it later in the bookmark dialog."
+edition: both
+order: 40
+---
+
+The bookmark dialog is where you create and edit every bookmark. It has the same fields for both, and it opens over the page you are on.
+
+<Screenshot alt="The New bookmark dialog with the URL, Title and Slug filled in" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open.
+- To edit or delete a bookmark, it is one of yours. A bookmark shared with you opens read-only: the dialog says **This bookmark is shared with you** and "Its owner changes it. You can open it and copy its address from the list."
+
+## Open the dialog
+
+You can open it in these ways:
+
+- Choose **New bookmark** in the top bar.
+- Press `C` when no text field has focus. See [Keyboard Shortcuts](keyboard-shortcuts.mdx).
+- Choose **New bookmark** in the [command palette](command-palette.mdx).
+- Paste a web address anywhere on the **Bookmarks** page outside a text field. The dialog opens with the address filled in.
+- Choose **Edit** in the actions menu of a bookmark on **Bookmarks**. The dialog is called **Edit bookmark**.
+
+The dialog has its own link, so a link can open it. When a slug does not exist, the [page that says so](go.mdx) offers to create a bookmark with that slug, and opens the dialog with the slug filled in.
+
+## Add a bookmark
+
+1. In **URL**, paste the address. The dialog says "Reading the title and description of the page" and, when it finds them, fills **Title** and **Description**. It also says "Checking whether you saved this address already".
+2. Check **Title**. Every bookmark needs one.
+3. Optional: in **Slug**, type a short word such as `mail`. See below.
+4. Optional: choose **Folders**, add **Tags**, open **More** to write a **Description**, and turn on **Pinned**.
+5. Choose **Save**.
+
+**Result:** SlugBase says **Bookmark saved.** and the bookmark appears in the list.
+
+Choose **Cancel**, or press Esc, to close without saving. If you changed something, SlugBase asks **Discard your changes?** Choose **Keep editing** or **Discard changes**.
+
+### What the page fetch fills in
+
+SlugBase reads the public page at the address to fill **Title** and **Description**. It never overwrites a field you typed in yourself. If the page cannot be read, SlugBase shows no error and the fields stay as you entered them.
+
+### A duplicate warning
+
+If you already saved the same address in this workspace, a warning says **You already saved this address**: the title of the existing bookmark has the same address, and you can still save this one. Choose **Edit existing** to open the other bookmark instead. If SlugBase could not check, it says: "We could not check whether you saved this address already."
+
+## Give a bookmark a slug
+
+A slug is a short, private name that opens the bookmark through `go/` and its slug. It works only for members of your workspace.
+
+1. In **Slug**, type the slug. Use 1 to 64 lowercase letters, digits and hyphens, and do not start with a hyphen.
+2. Watch the line under the field. It gives feedback as you type.
+3. Check that **Forwarding** is on. It turns on by itself when a bookmark gets its first slug.
+4. Copy **Go address** with **Copy go address** to use it in a link. It shows once the slug is valid.
+
+| Feedback | What it means |
+| -------- | ------------- |
+| Checking the slug | SlugBase is checking whether you can use it. |
+| This slug is free. | Nobody in this workspace uses it. |
+| You already use this slug on another bookmark. Choose a different one. | A slug is unique among your own bookmarks. |
+| Use 1 to 64 lowercase letters, digits and hyphens, and do not start with a hyphen. | The slug breaks the rules. |
+| We could not check whether this slug is free. You can still save. | The check did not answer. Saving still works. |
+
+If other members have a bookmark with the same slug, the line says so: "1 other bookmark in this workspace has this slug too. In go, yours comes first unless you have remembered another choice for this slug." You can still save it. See [Forwarding](forwarding.mdx) for remembered choices.
+
+Switch **Forwarding** off to keep the slug but stop `go/` opening the bookmark. Without a slug it says: "Give the bookmark a slug to turn forwarding on."
+
+## Add folders and tags
+
+1. In **Folders**, search for a folder, or type a name and choose **Create folder** with that name. Choose a folder again to remove it.
+2. In **Tags**, search for a tag, or type a name and choose **Create tag** with that name.
+
+A tag name has at most 40 characters and a folder name at most 64.
+
+## Suggest a title, slug and tags
+
+<Callout>
+The **Suggest** button appears only when all of these are true: the person who runs your SlugBase set up an AI provider, your workspace has suggestions switched on, your plan includes them where plans apply, and you have not opted out in **Preferences**. Otherwise the dialog shows no button. On SlugBase Cloud a plan without suggestions may show an upgrade hint in its place.
+</Callout>
+
+1. Enter the **URL**.
+2. Choose **Suggest** in the header of the dialog. Hover over it to see the tooltip. It names the provider.
+3. Empty fields are filled. For a field that already has a value, a chip appears: **Suggested title**, **Suggested slug** or **Suggested tags**. Choose a chip to take it.
+4. Check the fields and choose **Save**.
+
+SlugBase sends the provider only the address, the title and description it fetched from the public page, and the names of your tags. It sends no other bookmark and no workspace name. The tooltip says: "It receives the address, the page’s title and description, and the names of your tags." SlugBase checks a suggested slug against your existing slugs before it shows it.
+
+If the request fails, the fields stay as they are and a note says **Suggestions unavailable**.
+
+To stop the suggestions for yourself, turn on **Don't use AI suggestions for me** in **Preferences**. A workspace admin switches them off for the whole workspace in the workspace settings.
+
+## Change a bookmark
+
+1. Open the dialog with **Edit** on the bookmark.
+2. Change the fields.
+3. Choose **Save**.
+
+**Result:** SlugBase says **Bookmark updated.**
+
+At the bottom of the dialog, a bookmark of yours that already exists shows a **Sharing** line. It says **Private**, or who the bookmark is shared with, for example "Shared with Platform team and 2 members". Choose **Manage** to open the share dialog. The line is not there when you add a new bookmark, and not where your workspace has no sharing. See [Share Dialog](sharing.mdx), and [Sharing](concepts/sharing.mdx) for how access reaches people.
+
+If someone saved a newer version while you edited, the dialog says **This bookmark changed elsewhere**. Choose **Load the latest**. Your edits in the dialog are replaced.
+
+## Delete a bookmark
+
+1. Open the bookmark with **Edit**.
+2. Choose **Delete**.
+3. Read "Delete this bookmark?" and choose **Delete bookmark**.
+
+**Result:** The bookmark is gone for good, and its slug stops forwarding at once. You cannot undo it.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| URL | The address to save. It must start with `http` or `https`, and has at most 2,048 characters. | Yes |
+| Title | At most 300 characters. Filled from the page when you leave it empty. | Yes |
+| Slug | The short name for `go/`. At most 64 characters. | No |
+| Forwarding | Lets `go/` open the bookmark. It needs a slug. | No |
+| Folders | The folders that hold the bookmark. You can create one here. | No |
+| Tags | Labels for the bookmark. You can create one here. | No |
+| Description | Under **More**. At most 1,000 characters, with a counter. | No |
+| Pinned | Keeps the bookmark among the first you see on Home. | No |
+| Sharing | Shows **Private** or "Shared with …", with a **Manage** button for the share dialog. Only for an existing bookmark you own, and only where your workspace has sharing. | No |
+
+## Troubleshooting
+
+### The dialog says "Enter the address to save."
+
+**URL** is empty. Paste the address.
+
+### The dialog asks for an address that starts with http or https
+
+SlugBase saves web addresses only. Add `https://` in front, or check for a typo.
+
+### Title and Description stay empty
+
+The page could not be read, or it has no title. Type them yourself.
+
+### The slug is refused
+
+Use only lowercase letters, digits and hyphens, and start with a letter or digit. You cannot use one slug on two of your own bookmarks.
+
+### The dialog says "Bookmark limit reached"
+
+<EditionBadge edition="cloud" /> This workspace holds as many bookmarks as its plan allows. SlugBase says: "Delete a bookmark to save a new one." See https://slugbase.app/pricing for plans.
+
+### The dialog says "Bookmark not found"
+
+"It may have been deleted, or it is not one of yours." Close the dialog and refresh the list.
+
+### The dialog says "A folder or tag was not found"
+
+A folder or tag you chose may have been deleted. SlugBase keeps your choices. Check them and save again.
+
+### The bookmark could not be saved
+
+SlugBase says: "The bookmark could not be saved right now. Try again in a moment." Choose **Save** again.
+
+## Related pages
+
+- [Bookmarks](bookmarks.mdx)
+- [Home](home.mdx)
+- [Share Dialog](sharing.mdx)
+- [Sharing](concepts/sharing.mdx)
+- [Forwarding](forwarding.mdx)
+- [Go Pages](go.mdx)

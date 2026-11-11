@@ -557,7 +557,7 @@ export const resetInstanceAccountMfa = defineOperation({
   request: { params: InstanceAccountParamsSchema },
   responses: {
     204: emptyResponse(
-      "The account's second factor is off: its secret, activation and backup codes are cleared and never returned, every session of the account is deleted, the instance audit stream records instance.account_mfa_reset and, where a mail adapter is configured, the account is emailed that an administrator reset it, all in one transaction. The account then signs in with its password alone. An account with no confirmed second factor is left as it is: nothing is written, deleted or sent",
+      "The account's second factor is off: its secret, activation and backup codes are cleared and never returned, every session of the account is deleted, the instance audit stream records instance.account_mfa_reset and, where a mail adapter is configured, the account is emailed that an administrator reset it, all in one transaction. The account's password and linked identities are untouched, so it signs in again with its password when it has one and through a linked provider when it has one; an account without a password signs in through its provider. An account with no confirmed second factor is left as it is: nothing is written, deleted or sent",
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),

@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Database } from "@slugbase/db";
-import { MetricsRegistry } from "./registry.ts";
+import { MetricsRegistry, type AttachedRegistry } from "./registry.ts";
 
 // The metrics of doc 01 section 12. Every label value is chosen here from a
 // closed set or from a template the code declared: the method is one of the
@@ -11,6 +11,35 @@ import { MetricsRegistry } from "./registry.ts";
 export const UNMATCHED_ROUTE = "unmatched";
 
 const LATENCY_BOUNDS_SECONDS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+
+/**
+ * The worker's registry as the server's listener serves it when both run in one process: its samples carry
+ * `process="worker"`, which the server's own do not, so a family both declare keeps distinct series.
+ */
+export function workerSamples(registry: MetricsRegistry): AttachedRegistry {
+  return { registry, labels: { process: "worker" } };
+}
+
+/** The metrics of a worker, to be served on the metrics listener of a server in the same process (`StartOptions.workerMetrics`). */
+export interface WorkerMetrics {
+  readonly kind: "worker-metrics";
+}
+
+const workerRegistries = new WeakMap<WorkerMetrics, MetricsRegistry>();
+
+export function exposeWorkerMetrics(registry: MetricsRegistry): WorkerMetrics {
+  const handle: WorkerMetrics = Object.freeze({ kind: "worker-metrics" });
+  workerRegistries.set(handle, registry);
+  return handle;
+}
+
+export function attachWorkerMetrics(handle: WorkerMetrics): AttachedRegistry {
+  const registry = workerRegistries.get(handle);
+  if (registry === undefined) {
+    throw new Error("workerMetrics must be the metrics of a worker");
+  }
+  return workerSamples(registry);
+}
 
 export interface RequestSample {
   /** One of the known verbs, or `_OTHER`. */

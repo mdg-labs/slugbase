@@ -12,6 +12,8 @@ export type PageFetchOutcome =
   | { readonly kind: "ok"; readonly page: PageMetadata }
   /** The port refused the target: the URL, an address it resolves to, or a redirect hop is not one the server may connect to. */
   | { readonly kind: "blocked" }
+  /** The port refused a hop of the request for lack of a lookup slot: the refused hop asked nothing of its host, so this says nothing about the page and a caller does not store it. */
+  | { readonly kind: "busy" }
   /** Anything else: no connection, a timeout, a status outside 2xx, a page of another type or one that cannot be read. */
   | { readonly kind: "failed" };
 
@@ -20,7 +22,10 @@ const REQUEST_HEADERS = { accept: "text/html,application/xhtml+xml", "user-agent
 /** The code the egress port gives a target it refuses; matched by value because the fake of the port does not share the class. */
 const BLOCKED_CODE = "egress_blocked";
 
-/** Fetches `urlCanonical` through `egress` within `timeoutMs`, redirects included, and never throws: every failure is an outcome. */
+/** The code the egress port gives a request it refused for lack of a lookup slot; matched by value like `BLOCKED_CODE`. */
+const BUSY_CODE = "egress_busy";
+
+/** Fetches `urlCanonical` through `egress` within `timeoutMs`, redirects included, and never throws: every failure is an outcome, a refusal for lack of a lookup slot (`busy`) included. */
 export async function fetchPageMetadata(egress: EgressPort, urlCanonical: string, timeoutMs: number): Promise<PageFetchOutcome> {
   try {
     const response = await egress.request({
@@ -37,6 +42,7 @@ export async function fetchPageMetadata(egress: EgressPort, urlCanonical: string
     const page = parsePageMetadata({ body: response.body, contentType: response.contentType, url: response.url });
     return page === undefined ? { kind: "failed" } : { kind: "ok", page };
   } catch (error) {
-    return { kind: (error as { code?: unknown } | null)?.code === BLOCKED_CODE ? "blocked" : "failed" };
+    const code = (error as { code?: unknown } | null)?.code;
+    return { kind: code === BLOCKED_CODE ? "blocked" : code === BUSY_CODE ? "busy" : "failed" };
   }
 }

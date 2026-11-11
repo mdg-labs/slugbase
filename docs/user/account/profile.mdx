@@ -1,0 +1,124 @@
+---
+title: "Profile"
+description: "Change your name, email address and language, and delete your account."
+edition: both
+order: 10
+---
+
+**Profile** is where you change how you appear to other members, the address you sign in with and the language of SlugBase. It is also where you delete your account.
+
+<Screenshot alt="The Profile page with name, email, language and the danger zone" />
+
+## Prerequisites
+
+- You are signed in.
+
+## Open your profile
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Account** in the settings navigation, choose **Profile**.
+
+You can also open the [command palette](../command-palette.mdx) and run **Settings**.
+
+## Change your name or language
+
+1. Change your **Name**. Use 1 to 100 characters. Other members see this name. Your avatar shows your initials, and you cannot upload a picture.
+2. Under **Language**, choose **English** or **Deutsch**. SlugBase uses it for the app and for the emails it sends you.
+3. Choose **Save**.
+
+**Result:** SlugBase says **Profile saved**. **Save** stays off until you change something.
+
+## Change your email address
+
+Your email address is the one you sign in with. SlugBase changes it only after you confirm the new address.
+
+1. Choose **Change email**.
+2. Enter the **New email address**.
+3. Choose **Send confirmation link**.
+4. If SlugBase asks you to confirm it is you, do that first. See the section **Confirm it is you** below.
+
+**Result:** SlugBase tells you to check your new address for the confirmation link. Your address stays as it is until you open that link. The link works once and for one hour. See [Email Change Links](../access/email-change-links.mdx).
+
+While the change waits, the page shows **Pending verification** and the address you asked for. Choose **Resend link** to send the link again, or **Cancel change** to drop the change. A new request replaces the earlier one, and the earlier link stops working.
+
+SlugBase also writes to your old address. That email carries a "this wasn't me" link. If you did not ask for the change, open it. It cancels the change and signs out every device of your account. Then sign in again and change your password.
+
+Asking for an address that already belongs to another account looks the same as any other request. SlugBase tells you nothing about the other account.
+
+## Confirm it is you
+
+Some changes need your password again, even though you are signed in. SlugBase shows **Confirm it is you**, with the line "This change needs your password again."
+
+1. Enter your **Password**. **Show password** and **Hide password** reveal or hide it.
+2. Choose **Confirm**.
+
+**Result:** the change goes ahead. Your confirmation holds for the next ten minutes, so a second sensitive change in that time does not ask again. If you choose **Cancel** or close the dialog, nothing changes, and the page says "Confirm it is you to continue."
+
+If your account has no password and you sign in through an identity provider, the dialog says "This change needs you to confirm it is you with your sign-in provider." Choose **Confirm with** and the provider's name. You come back to the page you were on. Repeat the action there.
+
+If two-factor authentication is on for your account, the dialog also offers **Use a code instead**. Choose it and enter the six-digit **Authentication code** from your authenticator app. To go back, choose **Use your password instead**, or **Use your sign-in provider instead** if you have no password. See [Security](security.mdx).
+
+A wrong password shows "The password is not right." After too many tries, SlugBase asks you to wait and names how long. [Security](security.mdx) lists the other changes that ask for this.
+
+## Delete your account
+
+Deleting your account cannot be undone. It deletes your account, your sessions, your API tokens and your linked sign-in methods right away, and signs you out everywhere.
+
+1. Under **Danger zone**, choose **Delete account**.
+2. Read **Delete your account?**. It lists what happens to your workspaces:
+   - A workspace where you are the only member is deleted with your account. The dialog lists each one.
+   - In every other workspace, your membership ends. The bookmarks and folders you created stay with the workspace, and a workspace admin can reassign or delete them.
+3. Type your email address where the dialog says "Type" and your address "to confirm".
+4. Choose **Delete account**.
+5. If SlugBase asks you to confirm it is you, do that. If you close that prompt, SlugBase says "Confirm it is you to delete your account." and nothing is deleted.
+
+**Result:** SlugBase says **Your account was deleted** and shows the sign-in page.
+
+### When SlugBase refuses
+
+The dialog **Your account cannot be deleted yet** tells you why, and changes nothing.
+
+| Reason | What to do |
+| ------ | ---------- |
+| You are the only owner of workspaces that have other members. | Make another member an owner, or delete the workspace. The dialog lists the workspaces. Choose **Open the members of** and the workspace's name, then see [Workspaces and Roles](../concepts/workspaces-and-roles.mdx). |
+| You are the only instance admin. A self-hosted SlugBase needs one. | Make another account an instance admin first. |
+| Your account or one of your workspaces has an active paid subscription. | Cancel the subscription first. This applies to SlugBase Cloud. |
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Name | How other members see you. 1 to 100 characters. | Yes |
+| Email | The address you sign in with. You cannot edit it here. Use **Change email**. | n/a |
+| New email address | The address you want to use. It must be a valid address, and not your current one. | Yes |
+| Language | **English** or **Deutsch**. Used in the app and in emails. | Yes |
+| Type your email to confirm | Your own address, to confirm a deletion. | Yes |
+
+## Troubleshooting
+
+### The page says "That is already your email address."
+
+You entered the address you already use. Enter the new one.
+
+### I cannot change my email address
+
+A change needs a confirmation link by email. If your SlugBase cannot send email, **Change email** is missing and the page says: "Changing your email needs a confirmation link, and this server cannot send email." On a self-hosted SlugBase, ask an instance admin to set up email. See [Set Up Mail](/docs/self-hosting/mail) for the operator.
+
+### The page says "Too many attempts"
+
+You tried too often. Wait for the time the message names and try again.
+
+### The confirmation link does not work
+
+The page says **This link is not valid or has expired**. A link works once and for a limited time. Sign in and ask for a new one in **Profile**.
+
+### The page says "Your profile could not be loaded"
+
+Choose **Try again**. If it continues, tell the person who runs your SlugBase.
+
+## Related pages
+
+- [Security](security.mdx)
+- [Preferences](preferences.mdx)
+- [Sign In](../access/sign-in.mdx)
+- [Workspaces and Roles](../concepts/workspaces-and-roles.mdx)

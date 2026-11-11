@@ -106,6 +106,7 @@ CREATE OR REPLACE FUNCTION public.sys_instance_create_workspace(
 DECLARE
   v_label text;
   v_expires timestamptz;
+  v_now timestamptz;
 BEGIN
   IF p_event_id IS NULL OR p_workspace_id IS NULL OR p_name IS NULL THEN
     RAISE EXCEPTION 'sys_instance_create_workspace needs an event id, a workspace id and a name' USING ERRCODE = 'invalid_parameter_value';
@@ -138,11 +139,12 @@ BEGIN
   IF p_owner_account_id IS NOT NULL THEN
     INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (p_workspace_id, p_owner_account_id, 'owner');
   ELSE
-    INSERT INTO public.workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, mail_ticket, link_issued, invited_by, expires_at)
+    v_now := clock_timestamp();
+    INSERT INTO public.workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, mail_ticket, link_issued, invited_by, expires_at, created_at)
     VALUES (
       p_invitation_id, p_workspace_id, p_owner_email, 'owner', true, p_token_hash,
       CASE WHEN p_link_issued THEN NULL ELSE p_invitation_id END, p_link_issued,
-      public.app_account_id(), clock_timestamp() + p_ttl_seconds * interval '1 second')
+      public.app_account_id(), v_now + p_ttl_seconds * interval '1 second', v_now)
     RETURNING expires_at INTO v_expires;
   END IF;
 
@@ -212,6 +214,7 @@ DECLARE
   v_label text;
   v_email citext;
   v_expires timestamptz;
+  v_now timestamptz;
 BEGIN
   IF p_event_id IS NULL OR p_workspace_id IS NULL OR p_invitation_id IS NULL OR p_token_hash IS NULL
      OR octet_length(p_token_hash) <> 32 OR p_ttl_seconds IS NULL OR p_ttl_seconds < 1 OR p_link_issued IS NULL THEN
@@ -253,11 +256,12 @@ BEGIN
   SET status = 'revoked', closed_at = clock_timestamp()
   WHERE workspace_id = p_workspace_id AND role = 'owner' AND status = 'pending';
 
-  INSERT INTO public.workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, mail_ticket, link_issued, invited_by, expires_at)
+  v_now := clock_timestamp();
+  INSERT INTO public.workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, mail_ticket, link_issued, invited_by, expires_at, created_at)
   VALUES (
     p_invitation_id, p_workspace_id, v_email, 'owner', true, p_token_hash,
     CASE WHEN p_link_issued THEN NULL ELSE p_invitation_id END, p_link_issued,
-    public.app_account_id(), clock_timestamp() + p_ttl_seconds * interval '1 second')
+    public.app_account_id(), v_now + p_ttl_seconds * interval '1 second', v_now)
   RETURNING expires_at INTO v_expires;
 
   INSERT INTO public.audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, entity_type, entity_id, metadata, ip_prefix)

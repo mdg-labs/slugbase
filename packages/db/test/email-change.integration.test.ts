@@ -17,6 +17,7 @@ const MAIL_QUEUE = "mail.send";
 const WAIT_DEADLINE_MS = 10_000;
 const WAIT_POLL_MS = 25;
 const RACE_TEST_TIMEOUT_MS = 30_000;
+const CANCEL_ISSUES = 200;
 
 let db: TestDatabase;
 let store: AuthStore;
@@ -295,6 +296,35 @@ describe("the token issue", () => {
       { purpose: "email_change_cancel", used: false, target_email: "held@example.test" },
     ]);
   });
+
+  it(
+    "writes a cancel token whose lifetime is exactly the ttl on every issue, with created_at a clock read of that call",
+    async () => {
+      const owner = await account({ email: "dates.held@example.test" });
+      await request(owner, "dates.new@example.test");
+
+      const lifetimes: boolean[] = [];
+      const created: number[] = [];
+      for (let issue = 0; issue < CANCEL_ISSUES; issue += 1) {
+        expect((await issueAs(owner, "email_change_cancel")).pending).toBe("dates.new@example.test");
+        const dates = await asSystem(
+          db,
+          (tx) =>
+            tx<{ exact: boolean; created: string }[]>`
+              SELECT expires_at - created_at = ${HOUR_SECONDS}::integer * interval '1 second' AS exact, extract(epoch FROM created_at)::text AS created
+              FROM credential_tokens WHERE account_id = ${owner} AND purpose = 'email_change_cancel'`,
+        );
+        expect(dates).toHaveLength(1);
+        lifetimes.push(dates[0]?.exact === true);
+        created.push(Number(dates[0]?.created));
+      }
+
+      expect(lifetimes.filter((exact) => !exact)).toHaveLength(0);
+      expect([...created].sort((a, b) => a - b)).toEqual(created);
+      expect(new Set(created).size).toBe(CANCEL_ISSUES);
+    },
+    RACE_TEST_TIMEOUT_MS,
+  );
 
   it("issues no confirmation when the address is another account's, whatever its spelling, or the account's own, and still issues the notice's token", async () => {
     const owner = await account();

@@ -5,7 +5,7 @@ edition: ce
 order: 60
 ---
 
-A SlugBase upgrade is a new image and a restart. The server migrates the database as it starts, and does not serve requests until the database is at the level the new image expects. This page explains the image tags, the steps to upgrade a `compose.yml` installation, what the migration does, how to run it yourself, and what a rollback can and cannot do.
+A SlugBase upgrade is a new image and a restart. The server migrates the database as it starts, and does not serve requests until the database is at the level the new image expects. This page explains the image tags, how to check that an image is the one the project released, the steps to upgrade a `compose.yml` installation, what the migration does, how to run it yourself, and what a rollback can and cannot do.
 
 ## Prerequisites
 
@@ -19,10 +19,10 @@ SlugBase is published as one image, `ghcr.io/mdg-labs/slugbase`, which runs as t
 | Tag | What it points at |
 | --- | ----------------- |
 | `:<semver>`, such as `:1.2.3` | Exactly that release. It never moves. A pre-release such as `1.0.0-rc.1` has this tag only. |
-| `:<major>.<minor>`, such as `:1.2` | The newest patch release of that minor version, so it moves from one patch release to the next. A pre-release never has it. |
-| `:latest` | Not pushed yet, so it does not exist today. The design is that it points at the newest published release and moves only when a release is published, never because of a build, and never for a pre-release. |
+| `:<major>.<minor>`, such as `:1.2` | The newest published patch release of that minor version, so it moves from one patch release to the next, when that release is published. Publishing an older patch release later does not move it back. It can lag behind the newest patch release of its minor version until the next release of that minor version is published, or until the publish run that was cancelled is run again; it never moves backwards. A pre-release never has it. |
+| `:latest` | The newest published release. It moves only when a release is published, never because of a build, never for a pre-release, and never to a release older than the newest one already published. Until the first release without a pre-release suffix is published, it does not exist. |
 
-`compose.yml` runs `ghcr.io/mdg-labs/slugbase:latest` unless you set `SLUGBASE_IMAGE`. The release workflow pushes version tags only, so that default does not pull today. Set `SLUGBASE_IMAGE` to a version tag or to an image digest, as in [Choose the image](install.md#choose-the-image). A pinned installation changes only when you decide to, and you know which release a backup belongs to.
+`compose.yml` runs `ghcr.io/mdg-labs/slugbase:latest` unless you set `SLUGBASE_IMAGE`. Until the first release without a pre-release suffix is published, that tag does not exist and the default does not pull. Even afterwards, `:latest` moves whenever a release is published. Set `SLUGBASE_IMAGE` to a version tag or to an image digest, as in [Choose the image](install.md#choose-the-image). A pinned installation changes only when you decide to, and you know which release a backup belongs to.
 
 ```sh
 SLUGBASE_IMAGE=ghcr.io/mdg-labs/slugbase:1.2.3
@@ -39,9 +39,52 @@ The server and the worker run the same image, and `compose.yml` hands `SLUGBASE_
 
 Within `/api/v1`, SlugBase only adds things. A change that would break the API is published as `/api/v2` next to `v1`, and `v1` stays for at least six months, so integrations that use API tokens keep working through the overlap.
 
+## Verify the image
+
+Every release that the release workflow has built since signing was added is signed; `1.0.0-rc.1` was pushed before and is not. The signature says that the image was built by the release workflow of the SlugBase repository, on its `main` branch, and not pushed by someone else who gained access to the registry. The workflow signs the image by its digest, so the signature holds for every tag that points at that digest. It also signs two attestations that describe the image: the list of what is inside it (an SPDX SBOM) and how it was built (a provenance statement, which names the commit and the build arguments). The signatures use no key that anyone keeps. They are tied to the identity of the workflow run and recorded in the public Sigstore transparency log.
+
+You can check all of this before you run an image. You need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.x and Docker with the `buildx` plugin on the machine where you check.
+
+1. Download the script from the release you are about to run. Replace `<version>` with its version, such as `1.2.4`.
+
+   ```sh
+   curl -fsSLo verify-image.sh https://github.com/mdg-labs/slugbase/raw/v<version>/scripts/verify-image.sh
+   ```
+
+   Read it before you run it. It is short, and it only runs `cosign` and `docker buildx imagetools inspect`.
+
+2. Run it with the tag of the release.
+
+   ```sh
+   bash verify-image.sh <version>
+   ```
+
+   A tag alone means that tag of `ghcr.io/mdg-labs/slugbase`. You can also give a whole image, such as `ghcr.io/mdg-labs/slugbase:<version>` or `ghcr.io/mdg-labs/slugbase@sha256:<the digest>`. The script does not accept an image with no tag and no digest, and it never assumes `:latest`.
+
+3. Read the last line. The script has found the digest of the tag, checked the signature and both attestations against it, and prints the image by digest. Use that line for `SLUGBASE_IMAGE`, so that what you run is what you checked.
+
+   ```text
+   verify-image: signature ok, made by https://github.com/mdg-labs/slugbase/.github/workflows/release.yml@refs/heads/main
+   verify-image: spdxjson attestation ok
+   verify-image: slsaprovenance1 attestation ok
+   verify-image: verified. Run it by digest: ghcr.io/mdg-labs/slugbase@sha256:<the digest>
+   ```
+
+The script exits with `0` only when all three checks pass. When it exits with another status, do not run the image.
+
+| Exit status | Meaning |
+| --- | --- |
+| `0` | The signature and both attestations are valid, and they were made by the release workflow of this repository on `main`. |
+| `1` | Something is not verified: there is no signature, the signature was made by another identity, an attestation is missing, or the digest of the tag could not be read. The message says which. |
+| `2` | The script was not run correctly, `cosign` is missing or older than version 3, or `docker` is missing. Nothing was checked. |
+
+The identity is fixed in the script, and you cannot change it with an option. An image that you built yourself, or one that another workflow or another repository signed, fails. That is the point of the check. A copy of the image in your own registry passes when its signature and attestations were copied with it, for example with `cosign copy`. Checking costs two things from outside your network: `cosign` asks the public Sigstore services, and the script reads the registry that holds the image. SlugBase itself contacts no one.
+
+A signature does not say that the image is free of vulnerabilities. It says where the image came from. The SBOM lists its packages, and the release workflow scans it before it pushes the image.
+
 ## Upgrade
 
-1. Read the notes of the release on the [releases page](https://github.com/mdg-labs/slugbase/releases). They say what changed, and name anything you have to do yourself, such as a new key in `.env`. When a release changes `compose.yml` or `.env.example`, compare them with your own copies.
+1. Read the notes of the release on the [releases page](https://github.com/mdg-labs/slugbase/releases). They say what changed, and name anything you have to do yourself, such as a new key in `.env`. When a release changes `compose.yml` or `.env.example`, compare them with your own copies. [Verify the image](#verify-the-image) of the release.
 2. Take a backup, and check that it lists its contents. See [Back Up and Restore SlugBase](backup-restore.md).
 3. Set the new version in `.env`.
 
@@ -124,6 +167,10 @@ You can upgrade from any release straight to a later one. `migrate` applies ever
 - **Node.** The image carries its own Node.js, version 24. You do not install Node on the host. A newer Node version arrives with a new image, and you do nothing for it.
 
 ## Troubleshooting
+
+**`verify-image.sh` says `NOT VERIFIED`.** The image has no valid signature from the release workflow of this repository. Do not run it. The message names the check that failed. A release candidate that was built before signing was added, such as `1.0.0-rc.1`, has SBOM and provenance but no signature, and fails for that reason. If a release that should be signed fails, report it in an issue at https://github.com/mdg-labs/slugbase/issues, and say the tag and the message.
+
+**`verify-image.sh` says `cosign is not installed`, or that your cosign cannot read the signatures.** Install cosign 3.x and run the script again. The release workflow signs with cosign 3, whose signatures cosign 2.x does not find, so the script refuses an older version instead of reporting a signed image as unsigned. It checks nothing without a suitable cosign and exits with `2`.
 
 **`docker compose up -d` reports that `slugbase` is unhealthy while the migration still runs.** The health check gives the server about a minute and a half to answer, and a large migration can take longer. Wait until `docker compose ps` shows `slugbase` as healthy, and run `docker compose up -d` again to start the worker.
 

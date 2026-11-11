@@ -8374,7 +8374,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The account's second factor is off: its secret, activation and backup codes are cleared and never returned, every session of the account is deleted, the instance audit stream records instance.account_mfa_reset and, where a mail adapter is configured, the account is emailed that an administrator reset it, all in one transaction. The account then signs in with its password alone. An account with no confirmed second factor is left as it is: nothing is written, deleted or sent */
+            /** @description The account's second factor is off: its secret, activation and backup codes are cleared and never returned, every session of the account is deleted, the instance audit stream records instance.account_mfa_reset and, where a mail adapter is configured, the account is emailed that an administrator reset it, all in one transaction. The account's password and linked identities are untouched, so it signs in again with its password when it has one and through a linked provider when it has one; an account without a password signs in through its provider. An account with no confirmed second factor is left as it is: nothing is written, deleted or sent */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -11080,7 +11080,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The secret, the activation time and every backup code are deleted and the account signs in with its password alone; the response carries the Set-Cookie header of the session's new token */
+            /** @description The secret, the activation time and every backup code are deleted and the account signs in with its password or through its provider, whichever it uses; the response carries the Set-Cookie header of the session's new token */
             204: {
                 headers: {
                     [name: string]: unknown;

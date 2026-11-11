@@ -131,7 +131,7 @@ export function useDeleteBookmark(onDeleted: () => void): ReturnType<typeof useM
 }
 
 /** The bulk actions the bar offers. */
-export type BulkRunAction = Exclude<BulkAction, "move_to_folder">;
+export type BulkRunAction = BulkAction;
 
 interface BulkRequest {
   readonly action: BulkRunAction;
@@ -187,6 +187,10 @@ function relinked(bookmark: Bookmark, action: BulkRunAction, target: BulkTarget)
     const { folder } = target;
     if (action === "add_to_folder") {
       return bookmark.folders.some(({ id }) => id === folder.id) ? bookmark : { ...bookmark, folders: byName([...bookmark.folders, folder]) };
+    }
+    if (action === "move_to_folder") {
+      // The folder replaces the folders the bookmark was in.
+      return { ...bookmark, folders: [folder] };
     }
     return action === "remove_from_folder" ? { ...bookmark, folders: bookmark.folders.filter(({ id }) => id !== folder.id) } : bookmark;
   }
@@ -249,6 +253,8 @@ function doneTitle(t: TFunction, action: BulkRunAction, count: number, target: B
       return t("bookmarks.bulk.done.unpin", { count });
     case "add_to_folder":
       return t("bookmarks.bulk.done.addToFolder", { count, folder });
+    case "move_to_folder":
+      return t("bookmarks.bulk.done.moveToFolder", { count, folder });
     case "remove_from_folder":
       return t("bookmarks.bulk.done.removeFromFolder", { count, folder });
     case "add_tags":
@@ -270,6 +276,8 @@ function failureTitle(t: TFunction, action: BulkRunAction): string {
       return t("bookmarks.bulk.error.unpin");
     case "add_to_folder":
       return t("bookmarks.bulk.error.addToFolder");
+    case "move_to_folder":
+      return t("bookmarks.bulk.error.moveToFolder");
     case "remove_from_folder":
       return t("bookmarks.bulk.error.removeFromFolder");
     case "add_tags":

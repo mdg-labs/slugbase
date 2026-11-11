@@ -78,5 +78,6 @@ export type {
   ValidatedInput,
 } from "./create-server.ts";
 export * from "./worker/index.ts";
+export type { WorkerMetrics } from "./metrics/metrics.ts";
 export { createAccountOnlyTenantResolver, createMembershipTenantResolver } from "./auth/tenant-resolver.ts";
 export type { MembershipTenantResolverOptions } from "./auth/tenant-resolver.ts";

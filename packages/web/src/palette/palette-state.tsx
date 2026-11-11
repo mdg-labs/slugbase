@@ -39,6 +39,20 @@ export function usePaletteState(): PaletteState {
   return state;
 }
 
+/** A function that opens the palette, for a page that may stand outside the shell (the signed-out 404): absent where no palette is mounted. */
+export function useOpenPalette(): (() => void) | undefined {
+  const setOpen = useContext(PaletteStateContext)?.setOpen;
+  return useMemo(
+    () =>
+      setOpen === undefined
+        ? undefined
+        : () => {
+            setOpen(true);
+          },
+    [setOpen],
+  );
+}
+
 function Shortcuts({ open, setOpen }: { readonly open: boolean; readonly setOpen: (open: boolean) => void }): null {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   // Ctrl or Command with K works from anywhere, a text field included, and closes the palette while it is open.

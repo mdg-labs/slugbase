@@ -1,0 +1,78 @@
+---
+title: "AI Suggestions"
+description: "Turn AI suggestions on or off for a workspace, and see what is sent to the AI service."
+edition: both
+order: 50
+---
+
+**AI suggestions** is the workspace switch for the **Suggest** button in the bookmark dialog. When it is on, members can ask for a title, a slug and tags for a page they save.
+
+<Screenshot alt="The AI suggestions page with the workspace switch and the note on what is sent" />
+
+## Prerequisites
+
+- You are an admin or an owner of the workspace. Members do not see this page, and the person who runs your SlugBase sets up the AI service.
+
+<Callout>
+On a self-hosted SlugBase, the operator decides whether an AI service is set up at all. On SlugBase Cloud, your plan decides whether the workspace can use suggestions. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## Open AI suggestions
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Workspace**, choose **AI suggestions**.
+
+## Turn suggestions on or off
+
+1. Under **AI suggestions**, turn **Enable AI suggestions for this workspace** on or off.
+
+**Result:** the switch changes at once. If the change cannot be saved, the switch goes back and SlugBase shows an error. The change is recorded in the [audit log](audit-log.mdx) as a **Workspace setting changed** event with the old and the new value.
+
+Members can still opt out for themselves. See [Preferences](../account/preferences.mdx). A member who opted out never sees suggestions, whatever the workspace switch says.
+
+## What is sent to the AI service
+
+The note under the switch says what happens when a member asks for suggestions. The AI service, named in the note, receives:
+
+- the address of the page
+- the public information fetched from that page
+- the member's own tag names
+
+Nothing else is sent. No other bookmarks and no workspace names leave SlugBase. Suggestions come only from the **Suggest** button in the bookmark dialog, and only when a member asks. SlugBase does not send anything in the background.
+
+If your SlugBase does not name the service, the note says "the AI service your administrator configured". Which service it is, and its credentials, are the operator's choice. Admins and owners do not enter them here.
+
+## When the page offers no switch
+
+If your SlugBase has no AI service, the page says **Not available on this server** and has no controls. There is nothing to turn on. On SlugBase Cloud, a workspace whose plan has no suggestions may show an upgrade hint instead.
+
+## Who sees the Suggest button
+
+The **Suggest** button appears in the bookmark dialog only when all of these are true: the operator set up an AI service, your plan includes suggestions where plans apply, this workspace switch is on, and the member has not opted out. See [Add and Edit Bookmarks](../add-and-edit-bookmarks.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Enable AI suggestions for this workspace | Turns the **Suggest** button on for the workspace. | No |
+
+## Troubleshooting
+
+### The page says "Not available on this server"
+
+Your SlugBase has no AI service set up. Ask the person who runs it.
+
+### The switch jumped back
+
+SlugBase could not save the change. Try again. If your role changed while the page was open, the page says "You don't have access".
+
+### The page says "The AI setting could not be loaded"
+
+Choose **Try again**.
+
+## Related pages
+
+- [Preferences](../account/preferences.mdx)
+- [Add and Edit Bookmarks](../add-and-edit-bookmarks.mdx)
+- [Audit Log](audit-log.mdx)
+- [General](general.mdx)

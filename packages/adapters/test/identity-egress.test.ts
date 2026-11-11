@@ -208,3 +208,103 @@ describe("an https issuer over the egress adapter", () => {
     expect(plain.connections()).toBe(0);
   });
 });
+
+// Q120: the operator names the issuer origin of a provider on a private address. The instance carries that origin and no allowance
+// of the test's own, so what the provider reaches on loopback it reaches only through the origin it was named for.
+describe("a provider on a named private origin over the egress adapter", () => {
+  function named(...origins: LocalServer[]) {
+    const resolved: string[] = [];
+    const egress = new HttpEgress({
+      nodeEnv: "test",
+      resolve: (hostname) => {
+        resolved.push(hostname);
+        return Promise.resolve(hostname === "idp.example.test" ? ["127.0.0.1"] : ["10.0.0.5"]);
+      },
+      privateOrigin: origins.map((server) => `http://idp.example.test:${String(server.port)}`),
+    });
+    const lines: unknown[] = [];
+    const build = (...providers: IdentityProviderConfig[]) =>
+      createOidcIdentity({ providers, egress, logger: { warn: (message, fields) => lines.push({ message, fields }) } });
+    return { build, lines, resolved };
+  }
+
+  const REDIRECT = "https://app.example.test/callback";
+
+  it("lists the provider and reaches its token endpoint, which are on its own origin", async () => {
+    const server = await serve((request, socket) => {
+      const origin = `http://idp.example.test:${String(socket.localPort)}`;
+      if (request.target === "/token") {
+        respond(socket, 400, { "content-type": "application/json" }, JSON.stringify({ error: "invalid_grant" }));
+      } else if (request.target === "/keys") {
+        respond(socket, 200, { "content-type": "application/json" }, JSON.stringify({ keys: [{ kty: "RSA", kid: "k1" }] }));
+      } else {
+        respond(socket, 200, { "content-type": "application/json" }, JSON.stringify(document(origin)));
+      }
+    });
+    const { build, lines } = named(server);
+    const identity = build(provider(server, "lan"));
+    expect(await identity.listProviders()).toEqual([{ id: "lan", displayName: "lan" }]);
+    await expect(identity.complete({ providerId: "lan", redirectUri: REDIRECT, code: "code-1", nonce: "nonce-1", codeVerifier: "verifier-1" })).rejects.toMatchObject({
+      reason: "exchange_failed",
+    });
+    expect(server.requests.map((request) => request.target)).toEqual(["/.well-known/openid-configuration", "/keys", "/token"]);
+    expect(lines).toEqual([{ message: "An OIDC code exchange failed", fields: { provider: "lan", status: 400 } }]);
+  });
+
+  it("is refused for the same provider when its origin is not named", async () => {
+    const server = await serve(asJson((origin) => document(origin)));
+    const { build, lines } = named();
+    expect(await build(provider(server, "lan")).listProviders()).toEqual([]);
+    expect(lines).toEqual([{ message: "An OIDC provider is unavailable", fields: { provider: "lan", reason: "discovery_failed", code: "egress_blocked" } }]);
+    expect(server.connections()).toBe(0);
+  });
+
+  it.each([
+    ["another private host", (port: number) => `http://internal.example.test:${String(port)}/keys`],
+    ["the metadata address", () => "http://169.254.169.254/latest/meta-data/"],
+    ["a private address literal", (port: number) => `http://127.0.0.1:${String(port)}/keys`],
+    ["the named host on another port", (port: number) => `http://idp.example.test:${String(port + 1)}/keys`],
+  ])("leaves the provider out when its document puts the key set on %s, with no connection", async (_label, jwksUri) => {
+    const trap = await serve(asJson((origin) => document(origin)));
+    const server = await serve(asJson((origin) => document(origin, { jwks_uri: jwksUri(trap.port) })));
+    const { build, lines } = named(server);
+    expect(await build(provider(server, "lan")).listProviders()).toEqual([]);
+    expect(lines).toEqual([{ message: "An OIDC provider is unavailable", fields: { provider: "lan", reason: "keys_failed", code: "egress_blocked" } }]);
+    expect(server.requests.map((request) => request.target)).toEqual(["/.well-known/openid-configuration"]);
+    expect(trap.connections()).toBe(0);
+  });
+
+  it.each([
+    ["another private host", (port: number) => `http://internal.example.test:${String(port)}/token`],
+    ["the metadata address", () => "http://169.254.169.254/latest/meta-data/"],
+    ["a private address literal", (port: number) => `http://127.0.0.1:${String(port)}/token`],
+  ])("refuses the code exchange when the token endpoint is on %s, with no connection and without the secret in the log", async (_label, tokenEndpoint) => {
+    const trap = await serve(asJson((origin) => document(origin)));
+    const server = await serve(asJson((origin) => document(origin, { token_endpoint: tokenEndpoint(trap.port) })));
+    const { build, lines } = named(server);
+    const identity = build(provider(server, "lan"));
+    expect(await identity.listProviders()).toEqual([{ id: "lan", displayName: "lan" }]);
+    await expect(identity.complete({ providerId: "lan", redirectUri: REDIRECT, code: "code-1", nonce: "nonce-1", codeVerifier: "verifier-1" })).rejects.toMatchObject({
+      reason: "exchange_failed",
+    });
+    expect(lines).toEqual([{ message: "An OIDC code exchange failed", fields: { provider: "lan", code: "egress_blocked" } }]);
+    expect(JSON.stringify(lines)).not.toContain(SECRET);
+    expect(trap.connections()).toBe(0);
+  });
+
+  it("refuses the key set a document redirects to another private host, with no connection", async () => {
+    const trap = await serve(asJson((origin) => document(origin)));
+    const server = await serve((request, socket) => {
+      const origin = `http://idp.example.test:${String(socket.localPort)}`;
+      if (request.target === "/keys") {
+        respond(socket, 302, { location: `http://internal.example.test:${String(trap.port)}/keys` });
+      } else {
+        respond(socket, 200, { "content-type": "application/json" }, JSON.stringify(document(origin)));
+      }
+    });
+    const { build, lines } = named(server);
+    expect(await build(provider(server, "lan")).listProviders()).toEqual([]);
+    expect(lines).toEqual([{ message: "An OIDC provider is unavailable", fields: { provider: "lan", reason: "keys_failed", code: "egress_blocked" } }]);
+    expect(trap.connections()).toBe(0);
+  });
+});

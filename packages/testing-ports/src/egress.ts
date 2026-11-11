@@ -12,7 +12,7 @@ declare const URL: {
   canParse(input: string): boolean;
 };
 
-export type FakeEgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large";
+export type FakeEgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large" | "egress_busy";
 
 /**
  * The error a `FakeEgress` throws. It carries the same `name`, `code` and fixed
@@ -28,6 +28,7 @@ export class FakeEgressError extends Error {
       egress_blocked: ["EgressBlocked", "The request was refused"],
       egress_timeout: ["EgressTimeout", "The request timed out"],
       egress_too_large: ["EgressTooLarge", "The request or response was too large"],
+      egress_busy: ["EgressBusy", "The request could not be started now"],
     } as const;
     super(named[code][1]);
     this.name = named[code][0];

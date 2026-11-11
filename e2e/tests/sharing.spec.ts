@@ -149,7 +149,7 @@ async function addShare(page: Page, dialog: Locator, name: string): Promise<void
 
 test.describe("sharing journey", () => {
   // A click that finds its target covered waits for the test to time out unless the actions are bounded.
-  test.use({ actionTimeout: 15_000 });
+  test.use({ actionTimeout: 15_000, preferences: { theme: THEME, locale: "en" }, accountAlone: true });
   test.skip(({ browserName }) => browserName !== "chromium", "the journey is Chromium's: it holds the lock of the account's preferences and two members' sessions");
 
   test("shares a folder with a team and a bookmark with a member, goes by own-first and by disambiguation, remembers a choice, and access ends when the shares do, scanning the share dialogs and shared scopes in both themes", async ({

@@ -1,10 +1,11 @@
 import { endAccessMode, type AccessModeEndRequest } from "@slugbase/core";
-import { accessModeEndStore, type AccessModeStore, type QueuedJob, type RateLimitStore, type RetentionStore, type WorkspaceDeletionStore } from "@slugbase/db";
+import { accessModeEndStore, type AccessModeStore, type MfaResealStore, type QueuedJob, type RateLimitStore, type RetentionStore, type WorkspaceDeletionStore } from "@slugbase/db";
 import { z } from "zod";
 import { uuidv7 } from "../auth/uuidv7.ts";
 import type { ModuleContext, ModuleContribution } from "../create-server.ts";
 import { queueDomainEvent } from "../events/publish.ts";
 import { defineJob, defineSchedule } from "./job.ts";
+import { secretResealJob } from "./jobs/secret-reseal.ts";
 import { WORKSPACE_DELETE_JOB } from "./jobs/workspace-delete.ts";
 
 // The retention the worker applies on its own, whatever modules it composes
@@ -23,11 +24,15 @@ const END_ACCESS_MODE_CRON = "20 3 * * *";
 const END_ACCESS_MODE_BATCH = 100;
 const END_ACCESS_MODE_MAX_BATCHES = 20;
 
+/** `secrets.reseal` runs at 40 minutes past every hour (doc 01 section 8.1). */
+const SECRET_RESEAL_CRON = "40 * * * *";
+
 /** The request id of the tenant transaction that ends one account's period; there is no request. */
 const END_ACCESS_MODE_REQUEST_ID = "accounts.endAccessMode";
 
 export interface MaintenanceStores {
   readonly accessMode: Pick<AccessModeStore, "due">;
+  readonly mfaReseal: Pick<MfaResealStore, "keyIds" | "secretsUnderKey" | "reseal">;
   readonly rateLimit: Pick<RateLimitStore, "purgeIdle">;
   readonly retention: Pick<RetentionStore, "purge">;
   readonly workspaceDeletion: WorkspaceDeletionStore;
@@ -135,7 +140,16 @@ export function maintenanceContribution(stores: MaintenanceStores, context: Pick
     cron: END_ACCESS_MODE_CRON,
     job: endAccessModes.name,
   });
-  return { jobs: [purgeIdleBuckets, retentionPurge, endAccessModes], schedules: [schedule, retentionSchedule, endAccessModeSchedule] };
+  const secretReseal = secretResealJob(stores.mfaReseal);
+  const secretResealSchedule = defineSchedule({
+    name: secretReseal.name,
+    cron: SECRET_RESEAL_CRON,
+    job: secretReseal.name,
+  });
+  return {
+    jobs: [purgeIdleBuckets, retentionPurge, endAccessModes, secretReseal],
+    schedules: [schedule, retentionSchedule, endAccessModeSchedule, secretResealSchedule],
+  };
 }
 
 /** The jobs and events a deletion queues in the transaction that deletes the account: the deletion of each workspace it was the only member of, and `account.deleted`. */

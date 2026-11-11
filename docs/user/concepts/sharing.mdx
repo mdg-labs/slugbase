@@ -1,0 +1,89 @@
+---
+title: "Sharing"
+description: "Learn how to share a bookmark or a folder with a member or a team, what the people you share with can do, and when their access ends."
+edition: both
+order: 40
+---
+
+Sharing lets other members of your workspace read a bookmark or a folder of yours. They can open it and use its slug, but they cannot change it.
+
+## What you can share
+
+You share a bookmark or a folder, with a member or with a team. Sharing never crosses a workspace: you can share only with people in the same workspace.
+
+There are three ways someone gets to read a bookmark:
+
+- **Directly.** You share the bookmark with that member.
+- **Through a team.** You share the bookmark with a team, and every member of the team can read it, including people who join the team later.
+- **Through a shared folder.** You share a folder, and everyone you shared it with can read the folder and every bookmark in it, including bookmarks you add later.
+
+The same person can have more than one of these at once. They keep access as long as one of them remains.
+
+<Callout>
+On a self-hosted SlugBase, sharing is always on. On SlugBase Cloud, your plan decides whether you can share with individual members and whether you can share with teams. Where a workspace's plan does not include sharing, the share controls are hidden. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## How to share
+
+You can share only your own bookmarks and folders.
+
+1. For a bookmark, open it for editing and choose **Manage** on the **Sharing** line, which says **Private** until you share it. For a folder, choose **Share settings** on the **Folders** page.
+2. In **Share with**, search for a member or a team and choose it. The change applies at once.
+3. Check **Current shares** for everyone who has access. The footer says how many members can read it, for example **Visible to 7 members**.
+4. To end a share, choose the remove button next to the name, labelled **Stop sharing with** that name.
+
+You can also share several of your own bookmarks at once from the bar that appears when you select them. [Share Dialog](../sharing.mdx) walks through the dialog step by step.
+
+## What the people you share with can do
+
+Sharing is read-only. This table shows what each person can do with a bookmark.
+
+| Action | You, the owner | Someone you shared it with | Everyone else |
+| --- | :-: | :-: | :-: |
+| See it in lists, search, the command palette and **Home** | Yes | Yes | No |
+| Open it and use its slug | Yes | Yes | No |
+| Edit its fields, slug or forwarding | Yes | No | No |
+| Pin it, tag it or file it into folders | Yes | No | No |
+| Delete it | Yes | No | No |
+| Share it further or change who it is shared with | Yes | No | No |
+| See who else it is shared with | Yes | No, they see only that it was shared with them by you | No |
+| Export it | Yes, the full record | Yes, only the readable fields, marked as shared | No |
+
+Workspace admins and owners are in the last column. Their role lets them manage people, teams and settings, not read your private bookmarks.
+
+A bookmark shared with you shows its owner's avatar and a shared marker. A folder shared with you shows **Shared with you** or **Shared with you by** and the owner's name. On the **Bookmarks** page, the scope filter lets you pick **Shared with me** or **Shared by me**.
+
+If a shared bookmark has the same slug as yours, go opens yours first, unless you remembered another choice. If several bookmarks shared with you have the same slug and you have none of your own, go asks you to choose. [Slugs and /go](slugs.md) explains the choice.
+
+## Tags and folders stay private
+
+Your tags never travel with a bookmark. People you share with see the bookmark without your tags, and they never see a list of your tags. They also do not see which of your folders it is in or whether you pinned it. They cannot tag, pin or file a bookmark shared with them. [Organising bookmarks](organising-bookmarks.md) explains tags, folders and pinning.
+
+## When access ends
+
+Access ends at once, with the next request, when:
+
+- you remove the share,
+- the person is removed from a team and had access only through that team,
+- you take the bookmark out of a shared folder, or
+- the person leaves the workspace or an admin removes them.
+
+If a person can still read the bookmark another way, they keep it. Deleting a bookmark deletes its shares. Deleting a team ends every share through that team, and its members stay in the workspace.
+
+When you leave a workspace, the person who ends the membership chooses what happens to your bookmarks and folders. If they are transferred, the shares on them stay in force. If they are deleted, the shares go with them. Shares you received end when you leave.
+
+Remembered go choices that pointed at a bookmark you can no longer read are removed too.
+
+## What it means for you
+
+- Share a folder to give people everything on a topic, now and later. Share a bookmark to give one link.
+- Share with a team when the same people need it. Changing the team changes who has access.
+- To stop sharing, remove the share. Nothing else is needed.
+
+## Related pages
+
+- [Share Dialog](../sharing.mdx)
+- [Workspaces and roles](workspaces-and-roles.mdx)
+- [Teams and invitations](teams-and-invitations.mdx)
+- [Organising bookmarks](organising-bookmarks.md)
+- [Slugs and /go](slugs.md)

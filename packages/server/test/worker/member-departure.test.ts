@@ -21,6 +21,7 @@ describe("the member.left subscriber", () => {
     const modules = createBuiltInModules(
       {
         accessMode: { due: () => Promise.resolve([]) },
+        mfaReseal: { keyIds: () => Promise.resolve([]), secretsUnderKey: () => Promise.resolve([]), reseal: () => Promise.resolve(false) },
         rateLimit: { purgeIdle: () => Promise.resolve(0) },
         retention: { purge: () => Promise.resolve([]) },
         workspaceDeletion: { purgeRows: () => Promise.resolve({}), finish: () => Promise.resolve(false) },

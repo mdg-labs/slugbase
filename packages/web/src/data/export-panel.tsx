@@ -1,11 +1,10 @@
 import { Button } from "@slugbase/ui";
-import { CheckboxField, ChoiceCards, DownloadIcon, SettingsSection, feedbackToast, type ChoiceCardOption } from "@slugbase/ui/patterns";
-import { useRouter } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { CheckboxField, ChoiceCards, DownloadIcon, SettingsSection, type ChoiceCardOption } from "@slugbase/ui/patterns";
+import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useIsGranted } from "../entitlements/index.ts";
-import { exportFailureOf, fetchExport, saveFile, type ExportFormat } from "./export-api.ts";
-import { useExportFailureMessage } from "./export-messages.ts";
+import type { ExportFormat } from "./export-api.ts";
+import { useExportDownload } from "./use-export-download.ts";
 
 const FORMATS: readonly ExportFormat[] = ["json", "netscape"];
 
@@ -27,50 +26,10 @@ export function ExportPanel(): ReactElement {
 /** The export panel with the choice of including shared bookmarks decided by the caller, which reads no entitlement. */
 export function ExportPanelView({ offerShared: mayShare }: { offerShared: boolean }): ReactElement {
   const { t } = useTranslation();
-  const api = useRouter().options.context.api;
-  const failureMessage = useExportFailureMessage();
+  const { busy, download } = useExportDownload();
 
   const [format, setFormat] = useState<ExportFormat>("json");
   const [includeShared, setIncludeShared] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const downloading = useRef(false);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  async function download(): Promise<void> {
-    if (downloading.current) {
-      return;
-    }
-    downloading.current = true;
-    setBusy(true);
-    const followed = feedbackToast.promise(
-      fetchExport(api, { format, includeShared: mayShare && includeShared }).then((file) => {
-        saveFile(file);
-        return file.fileName;
-      }),
-      {
-        loading: t("data.export.loading"),
-        success: (fileName) => ({ title: t("data.export.success"), description: fileName }),
-        error: (reason) => ({ title: t("data.export.failure"), description: failureMessage(exportFailureOf(reason)) }),
-      },
-    );
-    try {
-      await followed;
-    } catch {
-      // The toast has told the member why.
-    } finally {
-      downloading.current = false;
-      if (mounted.current) {
-        setBusy(false);
-      }
-    }
-  }
 
   const formatOptions: readonly ChoiceCardOption[] = [
     { value: "json", label: t("data.export.format.json.label"), description: t("data.export.format.json.description") },
@@ -84,7 +43,7 @@ export function ExportPanelView({ offerShared: mayShare }: { offerShared: boolea
         <Button
           loading={busy}
           onClick={() => {
-            void download();
+            void download({ format, includeShared: mayShare && includeShared });
           }}
         >
           <DownloadIcon aria-hidden="true" />

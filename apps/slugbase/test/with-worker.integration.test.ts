@@ -62,6 +62,27 @@ function get(port: number, path: string): Promise<string> {
   return request(port, `GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
 }
 
+// The body of a plain HTTP/1.1 response, whether it is sent with a length or chunked.
+function bodyOf(response: string): string {
+  const separator = response.indexOf("\r\n\r\n");
+  const head = response.slice(0, separator).toLowerCase();
+  const raw = response.slice(separator + 4);
+  if (!head.includes("transfer-encoding: chunked")) {
+    return raw;
+  }
+  let rest = raw;
+  let body = "";
+  for (;;) {
+    const lineEnd = rest.indexOf("\r\n");
+    const size = Number.parseInt(rest.slice(0, lineEnd), 16);
+    if (lineEnd < 0 || Number.isNaN(size) || size === 0) {
+      return body;
+    }
+    body += rest.slice(lineEnd + 2, lineEnd + 2 + size);
+    rest = rest.slice(lineEnd + 2 + size + 2);
+  }
+}
+
 function register(port: number, email: string): Promise<string> {
   const body = JSON.stringify({ displayName: "Ada", email, password: "a long enough password for ada" });
   return request(
@@ -86,6 +107,8 @@ function canConnect(port: number): Promise<boolean> {
 interface Running {
   readonly child: ChildProcess;
   readonly port: number;
+  /** The port of the metrics listener, when `METRICS_PORT` was set. */
+  readonly metricsPort?: number;
   output(): string;
   /** Resolves with the exit status once the process has ended. */
   exited: Promise<number | null>;
@@ -100,14 +123,27 @@ async function until(check: () => boolean | Promise<boolean>, what: string, time
   }
 }
 
+// How long a start that migrates an unmigrated database waits for /ready, which answers 503 until the whole chain is
+// applied (D25). Applying it takes about 10 s on an idle host and was seen taking over 30 s on a runner that was also
+// running other database tests, so it gets 90 s; an already-migrated database is ready in a second or two and keeps
+// the 30 s default. With the 30 s to listen and the 30 s for the worker that follow, a start that is slow at every
+// step still fits the test's 180 s timeout together with the job and the shutdown.
+const MIGRATING_READY_TIMEOUT_MS = 90_000;
+
 // Starts `server` with `args` and waits until it listens and answers /ready 200, which is after the migration level is
 // checked; with the worker, also until it logged `Worker started`.
-async function startServer(database: TestDatabase, args: readonly string[], migrateOnStart = false): Promise<Running> {
+async function startServer(
+  database: TestDatabase,
+  args: readonly string[],
+  migrateOnStart = false,
+  extraEnv: Readonly<Record<string, string>> = {},
+): Promise<Running> {
   const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server", ...args], {
     cwd: APP,
     env: {
       PATH: process.env["PATH"] ?? "",
       ...base,
+      ...extraEnv,
       DATABASE_URL: databaseUrl(database),
       ...(migrateOnStart ? { MIGRATE_ON_START: "true", DATABASE_MIGRATE_URL: databaseUrl(database, "owner") } : { MIGRATE_ON_START: "false" }),
     },
@@ -127,11 +163,16 @@ async function startServer(database: TestDatabase, args: readonly string[], migr
   try {
     await until(() => boundPort(output, "Listening") !== undefined, "the server to listen");
     const port = boundPort(output, "Listening") ?? 0;
-    await until(async () => (await get(port, "/ready")).startsWith("HTTP/1.1 200 "), "/ready to answer 200");
+    await until(
+      async () => (await get(port, "/ready")).startsWith("HTTP/1.1 200 "),
+      "/ready to answer 200",
+      migrateOnStart ? MIGRATING_READY_TIMEOUT_MS : undefined,
+    );
     if (args.includes("--with-worker")) {
       await until(() => output.includes('"Worker started"'), "the worker to start");
     }
-    return { ...running, port };
+    const metricsPort = boundPort(output, "Metrics listening");
+    return { ...running, port, ...(metricsPort === undefined ? {} : { metricsPort }) };
   } catch (error) {
     child.kill("SIGKILL");
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${output}`);
@@ -225,6 +266,37 @@ describe("apps/slugbase main server --with-worker", () => {
     }
   }, 90_000);
 
+  it("serves the worker's samples on the server's one metrics listener, each family declared once", async () => {
+    const running = await startServer(database, ["--with-worker"], false, { METRICS_PORT: PLACEHOLDER_PORTS.METRICS_PORT });
+    try {
+      const metricsPort = running.metricsPort ?? 0;
+      expect(metricsPort).toBeGreaterThan(0);
+      let text = "";
+      await until(async () => {
+        const response = await get(metricsPort, "/metrics");
+        // A scrape answers 500 while the worker cannot read its queues yet, as it can just after the start: that is
+        // a reason to poll again, not a failure; the deadline still fails a scrape that never succeeds.
+        if (response.split("\r\n")[0] !== "HTTP/1.1 200 OK") {
+          return false;
+        }
+        text = bodyOf(response);
+        return text.includes('slugbase_job_queue_depth{queue="mail.send",state="ready",process="worker"}');
+      }, "the worker's job queue samples");
+
+      expect(text).toMatch(/^slugbase_db_pool_size 10$/m);
+      expect(text).toMatch(/^slugbase_db_pool_size\{process="worker"\} 5$/m);
+      expect(text).toMatch(/^slugbase_db_tenant_transactions_in_flight\{process="worker"\} \d+$/m);
+      const declarations = text.split("\n").filter((line) => line.startsWith("# "));
+      expect(new Set(declarations).size).toBe(declarations.length);
+      const samples = text.split("\n").filter((line) => line !== "" && !line.startsWith("#"));
+      expect(new Set(samples.map((line) => line.slice(0, line.lastIndexOf(" ")))).size).toBe(samples.length);
+      // The worker opens no listener of its own: the process logs the one it has.
+      expect(logLines(running.output()).filter((line) => line["msg"] === "Metrics listening")).toHaveLength(1);
+    } finally {
+      expect(await stop(running), running.output()).toBe(0);
+    }
+  }, 90_000);
+
   it("stops on SIGTERM: stops listening, drains the worker, closes both and exits 0", async () => {
     const running = await startServer(database, ["--with-worker"]);
     expect(await canConnect(running.port)).toBe(true);
@@ -270,7 +342,7 @@ describe("apps/slugbase main server --with-worker", () => {
     } finally {
       await fresh.drop();
     }
-  }, 120_000);
+  }, 180_000);
 
   it("shuts down what started when the signal arrives while it starts", async () => {
     const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server", "--with-worker"], {

@@ -164,6 +164,20 @@ async function card(title: string): Promise<HTMLElement> {
   return item as HTMLElement;
 }
 
+/** Opens the Filters panel, which holds the folder, the tags and the "show only" switches, and returns it. */
+async function openFilters(): Promise<HTMLElement> {
+  await press(await screen.findByRole("button", { name: /^Filters/ }));
+  return screen.findByRole("dialog", { name: "Filters" });
+}
+
+/** Closes the Filters panel with its button, so the page behind it is reachable again. */
+async function closeFilters(): Promise<void> {
+  await press(within(screen.getByRole("dialog", { name: "Filters" })).getByRole("button", { name: "Close filters" }));
+  await waitFor(() => {
+    expect(screen.queryByRole("dialog", { name: "Filters" })).toBeNull();
+  });
+}
+
 /** Opens the list of a combobox field the way a press on its input does. */
 async function openField(name: string): Promise<HTMLElement> {
   const input = await screen.findByRole("combobox", { name });
@@ -279,6 +293,7 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks");
     await card("Bookmark 1");
 
+    await openFilters();
     await choose("Folder", "Reading");
 
     await waitFor(() => {
@@ -289,6 +304,7 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     });
     expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Folder" }).value).toBe("Reading");
     expect(screen.getByText("Folder: Reading")).toBeDefined();
+    await closeFilters();
 
     await press(screen.getByRole("button", { name: "Remove filter: Folder: Reading" }));
 
@@ -299,6 +315,7 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
       expect(lists().at(-1)?.params.get("folderId")).toBeNull();
     });
     expect(screen.queryByText("Folder: Reading")).toBeNull();
+    await openFilters();
     expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Folder" }).value).toBe("");
   });
 
@@ -307,6 +324,7 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp(`/bookmarks?folderId=${WORK}`);
 
     await card("Bookmark 1");
+    await openFilters();
 
     expect(lists()[0]?.params.get("folderId") ?? lists().at(-1)?.params.get("folderId")).toBe(WORK);
     await waitFor(() => {
@@ -341,7 +359,9 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     });
     expect(lists().at(-1)?.params.get("pinned")).toBe("true");
     expect(screen.queryByText(/^Folder: /)).toBeNull();
+    await openFilters();
     expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Folder" }).value).toBe("");
+    await closeFilters();
 
     await press(screen.getByRole("button", { name: "Dismiss" }));
 
@@ -387,7 +407,9 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp(`/bookmarks?folderId=${GONE}`);
 
     await card("Bookmark 1");
+    await openFilters();
     await screen.findByText("The folders could not be loaded.");
+    await closeFilters();
     expect(screen.queryByText("That folder no longer exists")).toBeNull();
     expect(window.location.search).toBe(`?folderId=${GONE}`);
     expect(lists().at(-1)?.params.get("folderId")).toBe(GONE);
@@ -404,6 +426,7 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks");
     await card("Bookmark 1");
 
+    await openFilters();
     await openField("Folder");
 
     expect(await screen.findByText("You have no folders yet", { selector: "[data-slot='picker-popup'] *" })).toBeDefined();
@@ -414,6 +437,7 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks");
     await card("Bookmark 1");
 
+    await openFilters();
     await openField("Folder");
 
     const popup = document.querySelector("[data-slot='picker-popup']");
@@ -429,6 +453,7 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks");
     await card("Bookmark 1");
 
+    await openFilters();
     await choose("Tags", "go");
     await choose("Tags", "rust");
 
@@ -437,6 +462,8 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     });
     expect(new URLSearchParams(window.location.search).has("tag")).toBe(true);
     expect(chipsOf("Tags")).toEqual(["go", "rust"]);
+    expect(screen.getByText("Tag: go")).toBeDefined();
+    expect(screen.getByText("Tag: rust")).toBeDefined();
 
     await press(screen.getByRole("button", { name: "Remove tag go" }));
 
@@ -444,6 +471,8 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
       expect(lists().at(-1)?.params.getAll("tag")).toEqual([TAG_RUST]);
     });
     expect(chipsOf("Tags")).toEqual(["rust"]);
+    await closeFilters();
+    expect(screen.queryByText("Tag: go")).toBeNull();
 
     await press(screen.getByRole("button", { name: "Clear filters" }));
 
@@ -453,6 +482,7 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(lists().at(-1)?.params.getAll("tag")).toEqual([]);
     });
+    await openFilters();
     expect(chipsOf("Tags")).toEqual([]);
   });
 
@@ -461,10 +491,13 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp(`/bookmarks?tag=${TAG_GO}&tag=${TAG_ZIG}`);
 
     await card("Bookmark 1");
+    await openFilters();
 
     await waitFor(() => {
       expect(chipsOf("Tags")).toEqual(["go", "zig"]);
     });
+    expect(screen.getByText("Tag: go")).toBeDefined();
+    expect(screen.getByText("Tag: zig")).toBeDefined();
     expect(lists().at(-1)?.params.getAll("tag")).toEqual([TAG_GO, TAG_ZIG]);
   });
 
@@ -474,6 +507,7 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp(`/bookmarks?tag=${stray}`);
 
     await card("Bookmark 1");
+    await openFilters();
 
     await waitFor(() => {
       expect(chipsOf("Tags")).toEqual(["Unknown tag"]);
@@ -490,6 +524,7 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks");
     await card("Bookmark 1");
 
+    await openFilters();
     await openField("Tags");
 
     const popup = document.querySelector("[data-slot='multi-pick-popup']");
@@ -502,6 +537,7 @@ describe("the tag filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks");
     await card("Bookmark 1");
 
+    await openFilters();
     await openField("Tags");
 
     expect(await screen.findByText("You have no tags yet", { selector: "[data-slot='multi-pick-popup'] *" })).toBeDefined();
@@ -516,7 +552,7 @@ describe("the active filters", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
 
     const chips = within(await screen.findByRole("list", { name: "Active filters" }));
     await waitFor(() => {
-      expect(chips.getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Folder: Work", "Pinned", "Mine"]);
+      expect(chips.getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Folder: Work", "Tag: go", "Pinned", "Mine"]);
     });
 
     await press(chips.getByRole("button", { name: "Remove filter: Pinned" }));
@@ -643,18 +679,29 @@ describe("the folders and tags of a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS 
   });
 });
 
-describe("the Show only toggles", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
-  it("are separated from each other and show a filled pressed state while their filter is on", async () => {
+describe("the Show only switches", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  it("are checkboxes in the Filters panel that read the address and write each filter to it", async () => {
     serve();
     await openApp("/bookmarks?pinned=true");
     await card("Bookmark 1");
 
-    const group = screen.getByRole("group", { name: "Show only" });
-    expect(group.querySelectorAll("[data-slot='separator']")).toHaveLength(2);
-    const pinned = within(group).getByRole("button", { name: "Pinned" });
-    const hasSlug = within(group).getByRole("button", { name: "Has slug" });
-    expect(pinned.getAttribute("aria-pressed")).toBe("true");
-    expect(pinned.className).toContain("data-pressed:bg-primary");
-    expect(hasSlug.getAttribute("aria-pressed")).toBe("false");
+    const group = within(await openFilters()).getByRole("group", { name: "Show only" });
+    expect(within(group).getByRole("checkbox", { name: "Pinned" }).getAttribute("aria-checked")).toBe("true");
+    expect(within(group).getByRole("checkbox", { name: "Has slug" }).getAttribute("aria-checked")).toBe("false");
+    expect(within(group).getByRole("checkbox", { name: "Forwarding on" }).getAttribute("aria-checked")).toBe("false");
+
+    await press(within(group).getByRole("checkbox", { name: "Has slug" }));
+    await press(within(group).getByRole("checkbox", { name: "Forwarding on" }));
+    await press(within(group).getByRole("checkbox", { name: "Pinned" }));
+
+    await waitFor(() => {
+      expect(window.location.search).toBe("?hasSlug=true&forwarding=true");
+    });
+    await waitFor(() => {
+      expect(lists().at(-1)?.params.get("hasSlug")).toBe("true");
+    });
+    expect(lists().at(-1)?.params.get("forwarding")).toBe("true");
+    expect(lists().at(-1)?.params.get("pinned")).toBeNull();
+    expect(within(group).getByRole("checkbox", { name: "Pinned" }).getAttribute("aria-checked")).toBe("false");
   });
 });

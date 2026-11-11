@@ -155,6 +155,7 @@
       "countAtLeast": "{shown} von {total}+ angezeigt",
       "loadMore": "Mehr laden",
       "pageSize": "Lesezeichen pro Ladevorgang",
+      "pageSizeOption": "{size} pro Ladevorgang",
       "filter": {
         "label": "Nur anzeigen",
         "pinned": "Angeheftet",
@@ -164,7 +165,13 @@
       "filters": {
         "active": "Aktive Filter",
         "remove": "Filter entfernen: {label}",
+        "button": "Filter",
+        "buttonCount": "Filter, {count} gesetzt",
+        "title": "Filter",
+        "close": "Filter schließen",
         "folderChip": "Ordner: {name}",
+        "tagChip": "Tag: {name}",
+        "tagChipUnknown": "Tag: unbekannt",
         "folderChipUnknown": "Ordner",
         "queryChip": "Suche: {text}",
         "folder": {
@@ -284,6 +291,7 @@
       "pin": "Anheften",
       "unpin": "Anheftung lösen",
       "addToFolder": "Zu Ordner hinzufügen",
+      "moveToFolder": "In Ordner verschieben",
       "removeFromFolder": "Aus Ordner entfernen",
       "addTags": "Tags hinzufügen",
       "removeTags": "Tags entfernen",
@@ -307,6 +315,7 @@
         "pin": "{count, plural, one {# Lesezeichen angeheftet.} other {# Lesezeichen angeheftet.}}",
         "unpin": "{count, plural, one {Anheftung von # Lesezeichen gelöst.} other {Anheftung von # Lesezeichen gelöst.}}",
         "addToFolder": "{count, plural, one {# Lesezeichen zu „{folder}“ hinzugefügt.} other {# Lesezeichen zu „{folder}“ hinzugefügt.}}",
+        "moveToFolder": "{count, plural, one {# Lesezeichen nach „{folder}“ verschoben.} other {# Lesezeichen nach „{folder}“ verschoben.}}",
         "removeFromFolder": "{count, plural, one {# Lesezeichen aus „{folder}“ entfernt.} other {# Lesezeichen aus „{folder}“ entfernt.}}",
         "addTags": "{count, plural, one {Tags zu # Lesezeichen hinzugefügt.} other {Tags zu # Lesezeichen hinzugefügt.}}",
         "removeTags": "{count, plural, one {Tags von # Lesezeichen entfernt.} other {Tags von # Lesezeichen entfernt.}}",
@@ -320,6 +329,7 @@
         "unpin": "Die Anheftung der Lesezeichen konnte nicht gelöst werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "partial": "Nur {done, number} von {total, number} Lesezeichen wurden vor einem Fehler geändert. Die übrigen bleiben ausgewählt; versuche es gleich noch einmal.",
         "addToFolder": "Die Lesezeichen konnten nicht zum Ordner hinzugefügt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "moveToFolder": "Die Lesezeichen konnten nicht in den Ordner verschoben werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "removeFromFolder": "Die Lesezeichen konnten nicht aus dem Ordner entfernt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "addTags": "Die Tags konnten nicht hinzugefügt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "removeTags": "Die Tags konnten nicht entfernt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
@@ -335,6 +345,7 @@
         "retry": "Erneut versuchen",
         "title": {
           "addToFolder": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} zu einem Ordner hinzufügen",
+          "moveToFolder": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} in einen Ordner verschieben",
           "removeFromFolder": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} aus einem Ordner entfernen",
           "addTags": "Tags zu {count, plural, one {# Lesezeichen} other {# Lesezeichen}} hinzufügen",
           "removeTags": "Tags von {count, plural, one {# Lesezeichen} other {# Lesezeichen}} entfernen"
@@ -1319,7 +1330,7 @@
         "resetMfa": {
           "label": "Zwei-Faktor-Authentifizierung zurücksetzen",
           "title": "Die Zwei-Faktor-Authentifizierung von {name} zurücksetzen?",
-          "description": "Die Zwei-Faktor-Authentifizierung wird für {name} ausgeschaltet. {name} wird überall abgemeldet und meldet sich nur noch mit dem Passwort an. Wo der E-Mail-Versand eingerichtet ist, wird {name} per E-Mail informiert.",
+          "description": "Die Zwei-Faktor-Authentifizierung wird für {name} ausgeschaltet. {name} wird überall abgemeldet und meldet sich danach mit dem Passwort oder über den Anmeldeanbieter an. Wo der E-Mail-Versand eingerichtet ist, wird {name} per E-Mail informiert.",
           "done": "Die Zwei-Faktor-Authentifizierung von {name} wurde zurückgesetzt."
         },
         "disable": {
@@ -1827,10 +1838,13 @@
         "disable": {
           "open": "Ausschalten",
           "title": "Zwei-Faktor-Authentifizierung ausschalten",
-          "description": "Gib einen Code und dein Passwort ein. Die Anmeldung braucht danach nur noch dein Passwort.",
+          "description": "Gib einen Code und dein Passwort ein. Die Anmeldung fragt danach nicht mehr nach einem Code.",
+          "descriptionNoPassword": "Gib einen Code ein. Dein Konto hat kein Passwort, deshalb wird keins verlangt.",
           "submit": "Ausschalten",
           "confirmTitle": "Zwei-Faktor-Authentifizierung ausschalten?",
-          "confirmDescription": "Dein Konto ist dann nur noch durch das Passwort geschützt, und deine Backup-Codes funktionieren nicht mehr.",
+          "confirmDescription": "Deine Backup-Codes und die Codes aus deiner Authenticator-App funktionieren dann nicht mehr. Du meldest dich mit deinem Passwort oder über deinen Anmeldeanbieter an, je nachdem, was dein Konto nutzt.",
+          "confirmDescriptionNoPassword": "Deine Backup-Codes und die Codes aus deiner Authenticator-App funktionieren dann nicht mehr. Du meldest dich über deinen Anmeldeanbieter an.",
+          "gained": "Dieses Konto hat jetzt ein Passwort. Lade die Seite neu und schalte die Zwei-Faktor-Authentifizierung dann mit dem Passwort aus.",
           "confirm": "Ausschalten",
           "done": "Die Zwei-Faktor-Authentifizierung ist aus"
         },
@@ -2054,6 +2068,10 @@
         "confirmLabel": "Tippe {name} zur Bestätigung",
         "cancel": "Abbrechen",
         "done": "{name} wird gelöscht",
+        "export": {
+          "description": "Lade vorher deine eigenen Lesezeichen in diesem Workspace als SlugBase-JSON-Datei herunter. Jedes Mitglied kann nur seine eigenen Lesezeichen exportieren.",
+          "action": "Zuerst exportieren"
+        },
         "error": {
           "title": "Der Workspace wurde nicht gelöscht",
           "reauthCancelled": "Bestätige, dass du es bist, um den Workspace zu löschen.",
@@ -2433,11 +2451,13 @@
     "goHome": "Zur Startseite",
     "notFound": {
       "title": "Diese Seite gibt es nicht",
-      "description": "Die Adresse ist möglicherweise falsch geschrieben, oder die Seite wurde verschoben."
+      "description": "Die Adresse ist möglicherweise falsch geschrieben, oder die Seite wurde verschoben.",
+      "search": "Suchen"
     },
     "forbidden": {
       "title": "Du hast keinen Zugriff",
-      "description": "Du bist kein Mitglied dieses Workspace, oder diese Seite ist nur für Administratoren."
+      "description": "Du bist kein Mitglied dieses Workspace, oder diese Seite ist nur für Administratoren.",
+      "switchWorkspace": "Workspace wechseln"
     },
     "serverError": {
       "title": "Etwas ist schiefgelaufen",
@@ -2736,12 +2756,23 @@
         "unknown": "Zu viele Versuche. Versuche es später noch einmal.",
         "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
         "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
-      }
+      },
+      "invalidCode": "Dieser Code ist nicht gültig. Prüfe ihn und versuche es noch einmal.",
+      "codeUnavailable": "Der Code konnte gerade nicht geprüft werden. Versuche es gleich noch einmal."
     },
     "provider": {
       "description": "Für diese Änderung musst du über deinen Anmeldeanbieter bestätigen, dass du es bist.",
       "confirm": "Mit {name} bestätigen",
       "none": "Es ist kein Anmeldeanbieter verfügbar, um deine Identität zu bestätigen. Wende dich an deine Administration."
+    },
+    "useCode": "Stattdessen einen Code verwenden",
+    "usePassword": "Stattdessen dein Passwort verwenden",
+    "useProvider": "Stattdessen deinen Anmeldeanbieter verwenden",
+    "code": {
+      "description": "Für diese Änderung brauchen wir einen Code aus deiner Authenticator-App.",
+      "label": "Authentifizierungscode",
+      "slot": "Ziffer {position} von {length}",
+      "required": "Gib den sechsstelligen Code ein."
     }
   },
   "setup": {

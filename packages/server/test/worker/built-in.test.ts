@@ -21,5 +21,8 @@ describe("the built-in jobs", () => {
     expect(worker.jobs.map((job) => job.name)).toContain("bookmark.fetchMetadata");
     expect(builtInJobs().map((job) => job.name)).toContain("favicon.fetch");
     expect(worker.jobs.map((job) => job.name)).toContain("favicon.fetch");
+    expect(builtInJobs().map((job) => job.name)).toContain("secrets.reseal");
+    expect(worker.jobs.map((job) => job.name)).toContain("secrets.reseal");
+    expect(worker.schedules.map((schedule) => schedule.name)).toContain("secrets.reseal");
   });
 });

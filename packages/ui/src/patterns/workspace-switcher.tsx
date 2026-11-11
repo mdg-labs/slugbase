@@ -48,6 +48,10 @@ export interface WorkspaceSwitcherProps {
   emptyMessage: string;
   onSelect: (workspaceId: string) => void;
   actions: readonly WorkspaceSwitcherAction[];
+  /** Whether the menu is open, for a page that opens it for the member. Absent, the menu opens and closes on its own. */
+  open?: boolean;
+  /** Called when the menu asks to open or close, with the new state; pair it with `open`. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -72,6 +76,8 @@ export function WorkspaceSwitcher({
   emptyMessage,
   onSelect,
   actions,
+  open,
+  onOpenChange,
 }: WorkspaceSwitcherProps): ReactElement {
   if (loading) {
     return (
@@ -86,7 +92,16 @@ export function WorkspaceSwitcher({
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <Menu>
+        <Menu
+          {...(open === undefined ? {} : { open })}
+          {...(onOpenChange === undefined
+            ? {}
+            : {
+                onOpenChange: (next: boolean) => {
+                  onOpenChange(next);
+                },
+              })}
+        >
           <MenuTrigger disabled={disabled} render={<SidebarMenuButton aria-label={`${label}: ${name}`} size="lg" />}>
             <AccountAvatar className="rounded-lg" name={name} seed={active?.id ?? name} size="sm" />
             <span className="min-w-0 flex-1 truncate font-medium group-data-[collapsible=icon]:hidden">{name}</span>

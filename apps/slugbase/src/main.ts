@@ -229,7 +229,9 @@ const LOOKUP_RESERVE = 1;
 // requests at once and queues the rest in order: a long provider list or a burst of sign-ins is served in turns
 // and its own requests do not refuse one another. The instance keeps a lookup's slot until the lookup finishes,
 // even after the request that started it timed out, so while a resolver hangs a later request can still be
-// refused. The instance carries no allowance, as the shared one does not.
+// refused. The instance carries the operator's allowance for a provider on a private address (Q120) and nothing else: the
+// issuer origin of each provider whose `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` the configuration accepted, so a provider that
+// names no host, the shared instance and the AI instance get no exemption from it.
 export function composeIdentity(
   config: ServerConfig | WorkerConfig,
   logger: Logger,
@@ -240,8 +242,14 @@ export function composeIdentity(
   if (providers.length === 0) {
     return unconfigured().identity;
   }
-  logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug) });
-  const egress = new HttpEgress({ ...egressOptions, nodeEnv: config.NODE_ENV, lookups: lookups.share(LOOKUP_RESERVE) });
+  const privateOrigins = "OIDC_PRIVATE_ORIGINS" in config ? config.OIDC_PRIVATE_ORIGINS : [];
+  const egress = new HttpEgress({
+    ...egressOptions,
+    nodeEnv: config.NODE_ENV,
+    lookups: lookups.share(LOOKUP_RESERVE),
+    ...(privateOrigins.length === 0 ? {} : { privateOrigin: privateOrigins }),
+  });
+  logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug), privateProviders: privateOrigins.length });
   return createOidcIdentity({ providers, egress, logger, maxConcurrentRequests: LOOKUP_RESERVE });
 }
 
@@ -394,20 +402,22 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
 // thing the sides share is the process's budget of host-name lookups (see `composeWithWorkerAdapters`).
 // The server starts first: with MIGRATE_ON_START it migrates and installs the pg-boss schema before `start` resolves,
 // and the worker never migrates, so it has to start after that. The worker opens no metrics listener here, because
-// the one `METRICS_PORT` belongs to the server's; /metrics then reports the server's samples only. A worker that
-// fails to start stops the server again, so a failed start leaves nothing listening.
+// the one `METRICS_PORT` belongs to the server's; that listener serves the worker's samples too, labelled
+// `process="worker"`, from the worker object built before the server starts. A worker that fails to start stops the
+// server again, so a failed start leaves nothing listening.
 async function runServerWithWorker(serverConfig: ServerConfig, workerConfig: WorkerConfig, trap: SignalTrap): Promise<void> {
   const logger = createLogger({ level: serverConfig.LOG_LEVEL });
   const adapters = composeWithWorkerAdapters(serverConfig, workerConfig, logger);
   const server = composeServer(serverConfig, logger, adapters.server);
   const workerWithoutMetrics: WorkerConfig = { ...workerConfig, METRICS_PORT: undefined };
+  const worker = composeWorker(workerWithoutMetrics, logger, adapters.worker);
   await runUntilSignal(
     trap,
     async () => {
-      const runningServer = await server.start();
+      const runningServer = await server.start({ workerMetrics: worker.metrics });
       let runningWorker: RunningWorker;
       try {
-        runningWorker = await composeWorker(workerWithoutMetrics, logger, adapters.worker).start();
+        runningWorker = await worker.start();
       } catch (error) {
         await runningServer.shutdown().catch((cleanup: unknown) => {
           logger.error("Cleanup after a failed start failed", { error: cleanup instanceof Error ? cleanup.name : typeof cleanup });

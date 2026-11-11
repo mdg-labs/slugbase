@@ -63,10 +63,30 @@ expect_ok "the guide's wait for the database is read"
 expect_output "the wait is the guide's own pg_isready over TCP" "pg_isready -h 127.0.0.1 -U slugbase -d slugbase"
 if [[ "$out" == until*"done" ]]; then pass "the wait is the script of the loop"; else fail_test "the wait is not the loop of the guide (got '$out')"; fi
 
+# The text a mutation looks for and writes is handed to awk through ENVIRON, never through -v: -v reads the escape sequences of
+# the text (gawk turns \% into %, mawk keeps it), ENVIRON hands it over as it is under every awk.
+
+# A mutation that changed nothing is not a test of anything: the guide it made is the guide, so a check that must refuse it
+# would pass for the wrong reason. The copies are made in a command substitution, where a failed test cannot be counted, so
+# the name is recorded in a file and the run fails at its end.
+NO_OP_LOG="$tmp/no-op-mutations"
+mutation_changed() {
+  local name="$1"
+  if cmp -s "$GUIDE" "$tmp/$name"; then
+    printf 'the mutation %s changed nothing\n' "$name" >&2
+    printf '%s\n' "$name" >>"$NO_OP_LOG"
+    return 1
+  fi
+}
+
 # A copy of the guide with the lines that hold a pattern replaced by another text.
 mutated_guide() {
   local pattern="$1" replacement="$2" name="$3"
-  awk -v pattern="$pattern" -v replacement="$replacement" 'index($0, pattern) > 0 { if (replacement != "") print replacement; next } { print }' "$GUIDE" >"$tmp/$name"
+  PATTERN="$pattern" REPLACEMENT="$replacement" awk '
+    BEGIN { pattern = ENVIRON["PATTERN"]; replacement = ENVIRON["REPLACEMENT"] }
+    index($0, pattern) > 0 { if (replacement != "") print replacement; next }
+    { print }' "$GUIDE" >"$tmp/$name"
+  mutation_changed "$name" || return 1
   printf '%s' "$tmp/$name"
 }
 
@@ -86,7 +106,8 @@ expect_failed "a missing guide is refused"
 # `to`. The copy must differ from the guide, so a test of a mutation that did not apply cannot pass.
 mutated_command() {
   local name="$1" tool="$2" from="$3" to="$4"
-  awk -v tool="docker compose $tool" -v from="$from" -v to="$to" '
+  TOOL="docker compose $tool" FROM="$from" TO="$to" awk '
+    BEGIN { tool = ENVIRON["TOOL"]; from = ENVIRON["FROM"]; to = ENVIRON["TO"] }
     {
       text = $0
       sub(/^[ \t]+/, "", text)
@@ -98,10 +119,7 @@ mutated_command() {
       }
       print
     }' "$GUIDE" >"$tmp/$name"
-  if cmp -s "$GUIDE" "$tmp/$name"; then
-    printf 'the mutation %s changed nothing\n' "$name" >&2
-    return 1
-  fi
+  mutation_changed "$name" || return 1
   printf '%s' "$tmp/$name"
 }
 
@@ -141,7 +159,8 @@ expect_failed "a second dump line that is not the command is refused although th
 # A copy of the guide in which `from` is replaced by `to` on the first line that matches the extended regular expression.
 mutated_matching() {
   local name="$1" pattern="$2" from="$3" to="$4"
-  awk -v pattern="$pattern" -v from="$from" -v to="$to" '
+  PATTERN="$pattern" FROM="$from" TO="$to" awk '
+    BEGIN { pattern = ENVIRON["PATTERN"]; from = ENVIRON["FROM"]; to = ENVIRON["TO"] }
     {
       at = index($0, from)
       if (!done && $0 ~ pattern && at > 0) {
@@ -150,10 +169,7 @@ mutated_matching() {
       }
       print
     }' "$GUIDE" >"$tmp/$name"
-  if cmp -s "$GUIDE" "$tmp/$name"; then
-    printf 'the mutation %s changed nothing\n' "$name" >&2
-    return 1
-  fi
+  mutation_changed "$name" || return 1
   printf '%s' "$tmp/$name"
 }
 
@@ -246,6 +262,64 @@ run require_guide_commands "$(mutated_command dump-substitution.md "$DUMP_TOOL" 
 expect_failed "a dump file with another substitution is refused"
 run require_guide_commands "$(mutated_command dump-backtick.md "$DUMP_TOOL" "\$(date +%F)" "\`id\`")"
 expect_failed "a dump file with a backtick is refused"
+
+# Cron turns every % that is not escaped into a newline, so a crontab line with one would never take a dump: the only
+# % of the crontab line is the \% of the date, and the other forms keep the plain $(date +%F).
+run require_guide_commands "$(mutated_matching cron-date-unescaped.md "$CRON_LINE" "+\\%F" "+%F")"
+expect_failed "a crontab dump whose date is not escaped is refused"
+run require_guide_commands "$(mutated_matching cron-date-other.md "$CRON_LINE" "+\\%F" "+\\%Y")"
+expect_failed "a crontab dump with another escaped date format is refused"
+run require_guide_commands "$(mutated_matching cron-percent-cd.md "$CRON_LINE" "cd /opt/slugbase" "cd /opt/slug%base")"
+expect_failed "a crontab directory with a % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-cd-escaped.md "$CRON_LINE" "cd /opt/slugbase" "cd /opt/slug\\%base")"
+expect_failed "a crontab directory with an escaped % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-word.md "$CRON_LINE" "\"backups/slugbase-\$(date +\\%F).dump\"" "backups/slugbase-%F.dump")"
+expect_failed "a crontab dump to a one-word file with a % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-word-escaped.md "$CRON_LINE" "\"backups/slugbase-\$(date +\\%F).dump\"" "backups/slugbase-\\%F.dump")"
+expect_failed "a crontab dump to a one-word file with an escaped % is refused"
+run require_guide_commands "$(mutated_matching cron-percent-text.md "$CRON_LINE" ").dump\"" ")-\\%x.dump\"")"
+expect_failed "a crontab dump to a quoted text with a second % beside the date is refused"
+run require_guide_commands "$(mutated_matching cron-percent-twice.md "$CRON_LINE" ").dump\"" ")\$(date +%F).dump\"")"
+expect_failed "a crontab dump with an unescaped date beside the escaped one is refused"
+run require_guide_commands "$(mutated_matching cron-escaped-backslash.md "$CRON_LINE" "+\\%F" "+\\\\%F")"
+expect_failed "a crontab dump whose date has a doubled backslash is refused"
+run require_guide_commands "$(mutated_command dump-date-escaped.md "$DUMP_TOOL" "+%F" "+\\%F")"
+expect_failed "a dump outside a crontab whose date is escaped is refused"
+run require_guide_commands "$(mutated_command restore-date-escaped.md "$RESTORE_TOOL" "backups/slugbase-2026-11-04.dump" "\"backups/slugbase-\$(date +\\%F).dump\"")"
+expect_failed "a restore outside a crontab whose date is escaped is refused"
+run require_guide_commands "$(mutated_command restore-date.md "$RESTORE_TOOL" "backups/slugbase-2026-11-04.dump" "\"backups/slugbase-\$(date +%F).dump\"")"
+expect_ok "a restore that reads the dump of a date is the same restore"
+{
+  cat "$GUIDE"
+  printf '\n```sh\n%s\n```\n' 'docker compose exec -T postgres pg_restore --list < "backups/slugbase-$(date +\%F).dump"'
+} >"$tmp/list-date-escaped.md"
+run require_guide_commands "$tmp/list-date-escaped.md"
+expect_failed "a listing outside a crontab whose date is escaped is refused"
+
+# The schedule is five valid cron fields.
+bad_cron=0
+good_cron=0
+cron_schedule() {
+  local name="$1" schedule="$2"
+  mutated_matching "$name" "$CRON_LINE" "17 3 * * *" "$schedule"
+}
+for schedule in "99 99 99 99 99" "*/0 * * * *" "5-1 * * * *" "60 * * * *" "* 24 * * *" "* * 0 * *" "* * 32 * *" "* * * 0 *" \
+  "* * * 13 *" "* * * * 8" "1,,2 * * * *" "1, * * * *" ",1 * * * *" "*/ * * * *" "*/5/2 * * * *" "5/2 * * * *" "1-5/0 * * * *" \
+  "1-2-3 * * * *" "-1 * * * *" "1- * * * *" "*-5 * * * *" "7-0 * * * *" "1-60 * * * *" "0-5,*/0 * * * *" "* * * * * *" "* * * *"; do
+  bad_cron=$((bad_cron + 1))
+  run require_guide_commands "$(cron_schedule "cron-bad-${bad_cron}.md" "$schedule")"
+  expect_failed "a crontab schedule of '$schedule' is refused"
+  expect_output "the refusal of '$schedule' is the one of a line in another form" "in another form"
+done
+for schedule in "*/5 1 * * 1-5" "0,30 0-23/2 1-31 1-12 0-7" "1-5/2 * * * *" "59 23 31 12 7" "00 03 01 01 00" "*/1 * * * *" "1,2,3 * * * *"; do
+  good_cron=$((good_cron + 1))
+  run require_guide_commands "$(cron_schedule "cron-good-${good_cron}.md" "$schedule")"
+  expect_ok "a crontab schedule of '$schedule' is valid"
+done
+run require_guide_commands "$(cron_schedule cron-name.md "17 3 * * mon")"
+expect_failed "a crontab schedule with a day name is refused"
+run require_guide_commands "$(cron_schedule cron-at.md "@daily")"
+expect_failed "a crontab with an @ form instead of five fields is refused"
 
 # The dump is written to a partial file and renamed only when pg_dump succeeded: the old form, which truncates the dated
 # file before pg_dump starts, and every variant of the new one are refused.
@@ -540,6 +614,10 @@ compose() {
 run take_dump
 expect_ok "a dump that succeeds replaces the earlier dump"
 if [[ "$(cat "$work/backups/slugbase.dump")" == "PGDMP" && ! -e "$work/$GUIDE_PARTIAL" ]]; then pass "the dated file holds the new dump and the partial file is gone"; else fail_test "the files after a dump that succeeded"; fi
+
+if [[ -s "$NO_OP_LOG" ]]; then
+  fail_test "a mutation changed nothing, so the case that uses it tests nothing: $(paste -sd' ' "$NO_OP_LOG")"
+fi
 
 if ((failures > 0)); then
   printf '%s test(s) failed\n' "$failures" >&2

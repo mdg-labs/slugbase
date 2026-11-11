@@ -22,9 +22,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- ttl_seconds): stores the SHA-256 of a token the application generated, under
 -- the identifier it generated, and deletes the account's older unused tokens of
 -- the same purpose in the same call, so at most one token of a purpose works at
--- a time. The expiry is set from the database clock. The account's row is locked
--- first, so two issues for one account queue and the later one leaves exactly
--- its own token. Answers false, changing nothing, for an unknown or disabled
+-- a time. The account's row is locked first, so two issues for one account queue and
+-- the later one leaves exactly its own token. created_at and expires_at come from
+-- one read of the database clock taken after that lock, so the lifetime is exactly
+-- the ttl and a wait for the lock does not date the token before it was issued. Answers false, changing nothing, for an unknown or disabled
 -- account; an argument that breaks the table's checks, or a lifetime outside 1
 -- second to 7 days, is refused with invalid_parameter_value.
 CREATE OR REPLACE FUNCTION public.sys_credential_token_issue(
@@ -38,6 +39,8 @@ CREATE OR REPLACE FUNCTION public.sys_credential_token_issue(
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
   AS $$
+DECLARE
+  v_now timestamptz;
 BEGIN
   IF NOT coalesce(
     p_id IS NOT NULL AND p_account_id IS NOT NULL
@@ -55,13 +58,14 @@ BEGIN
     RETURN false;
   END IF;
 
+  v_now := clock_timestamp();
   DELETE FROM public.credential_tokens
   WHERE account_id = p_account_id AND purpose = p_purpose AND used_at IS NULL;
 
-  INSERT INTO public.credential_tokens (id, purpose, account_id, token_hash, target_email, expires_at)
+  INSERT INTO public.credential_tokens (id, purpose, account_id, token_hash, target_email, expires_at, created_at)
   VALUES (
     p_id, p_purpose, p_account_id, p_token_hash, p_target_email::public.citext,
-    clock_timestamp() + p_ttl_seconds * interval '1 second'
+    v_now + p_ttl_seconds * interval '1 second', v_now
   );
   RETURN true;
 END

@@ -22,7 +22,7 @@
     "subject": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet",
     "greeting": "Hallo {name},",
     "greetingAnonymous": "Hallo,",
-    "body": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet. Die Anmeldung fragt jetzt nur noch nach deinem Passwort, und deine Backup-Codes funktionieren nicht mehr.",
+    "body": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet. Die Anmeldung fragt nicht mehr nach einem Code: Du meldest dich mit deinem Passwort oder über deinen Anmeldeanbieter an. Deine Backup-Codes funktionieren nicht mehr.",
     "notYou": "Falls du diese Änderung nicht vorgenommen hast, wende dich sofort an die Administration dieser {appName}-Instanz.",
     "action": "Kontosicherheit prüfen"
   },
@@ -127,7 +127,7 @@
     "subject": "Die Zwei-Faktor-Authentifizierung für dein {appName}-Konto wurde zurückgesetzt",
     "greeting": "Hallo {name},",
     "greetingAnonymous": "Hallo,",
-    "body": "Eine Administratorin oder ein Administrator dieser {appName}-Instanz hat die Zwei-Faktor-Authentifizierung für dein Konto zurückgesetzt. Deine Authenticator-App und deine Backup-Codes funktionieren nicht mehr, deine Geräte wurden abgemeldet, und die Anmeldung fragt jetzt nur noch nach deinem Passwort.",
+    "body": "Eine Administratorin oder ein Administrator dieser {appName}-Instanz hat die Zwei-Faktor-Authentifizierung für dein Konto zurückgesetzt. Deine Authenticator-App und deine Backup-Codes funktionieren nicht mehr, deine Geräte wurden abgemeldet, und die Anmeldung fragt nicht mehr nach einem Code: Du meldest dich mit deinem Passwort oder über deinen Anmeldeanbieter an.",
     "notYou": "Falls du die Administration nicht darum gebeten hast, wende dich sofort an die Administration dieser {appName}-Instanz. Schalte die Zwei-Faktor-Authentifizierung nach der Anmeldung wieder ein.",
     "action": "Zwei-Faktor-Authentifizierung einrichten"
   },

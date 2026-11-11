@@ -79,8 +79,8 @@ async function until(check: () => Promise<boolean>, timeoutMs: number, what: str
 describe("the idle rate-limit bucket purge of a worker without modules", () => {
   it("registers the purge job and its schedule", async () => {
     const created = ceWorker();
-    expect(created.jobs.map((job) => job.name)).toEqual([JOB, "retention.purge", "accounts.endAccessMode", "mail.send", "invitation.send", "bookmark.fetchMetadata", "favicon.fetch", "workspace.delete", "event.account.created", "event.account.deleted", "event.workspace.created", "event.workspace.deleted", "event.member.left", "event.member.joined", "event.bookmark.created"]);
-    expect(created.schedules.map((schedule) => schedule.name)).toEqual([SCHEDULE, "retention.purge", "accounts.endAccessMode"]);
+    expect(created.jobs.map((job) => job.name)).toEqual([JOB, "retention.purge", "accounts.endAccessMode", "secrets.reseal", "mail.send", "invitation.send", "bookmark.fetchMetadata", "favicon.fetch", "workspace.delete", "event.account.created", "event.account.deleted", "event.workspace.created", "event.workspace.deleted", "event.member.left", "event.member.joined", "event.bookmark.created"]);
+    expect(created.schedules.map((schedule) => schedule.name)).toEqual([SCHEDULE, "retention.purge", "accounts.endAccessMode", "secrets.reseal"]);
 
     started.push(await created.start());
 

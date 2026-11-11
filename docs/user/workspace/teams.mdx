@@ -1,0 +1,110 @@
+---
+title: "Teams"
+description: "Group members into teams, then share bookmarks and folders with a team instead of with each person."
+edition: both
+order: 30
+---
+
+**Teams** lists the teams of the workspace and who is in them. Admins and owners create, edit and delete teams. A team is a group of members that you can share with in one step.
+
+<Screenshot alt="The Teams page with the list of teams and their members" />
+
+## Prerequisites
+
+- You are signed in and a workspace is open.
+- To create, edit or delete a team, you are an admin or an owner.
+
+<Callout>
+On a self-hosted SlugBase, teams are always on. On SlugBase Cloud, your plan decides whether the workspace can use teams. See [pricing](https://slugbase.app/pricing) for the plans.
+</Callout>
+
+## What each role can do here
+
+| What | Owner | Admin | Member |
+| ---- | :---: | :---: | :----: |
+| See the teams and who is in them | Yes | Yes | Yes, read-only |
+| Create, edit and delete a team | Yes | Yes | No |
+| Put a person in a team | Yes | Yes | No |
+| Share a bookmark or folder with a team | Yes | Yes | Yes |
+
+A member sees the page with the line "The teams of this workspace and who is in them. Admins and owners change them." and no buttons. [Teams and Invitations](../concepts/teams-and-invitations.mdx) explains what a team is and does.
+
+## Open Teams
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Workspace**, choose **Teams**.
+
+The list shows each team's **Name**, **Description** and **Members**, with their avatars and a count. Choose **Load more** to see further teams.
+
+## Create a team
+
+1. Choose **Create team**.
+2. Enter a **Name**. Use 1 to 64 characters. Names are unique in the workspace.
+3. Optional: enter a **Description**. Use up to 280 characters. A counter shows how many you used.
+4. Under **Members**, search for members and choose them. Choose a name's remove button to take a person out again.
+5. Choose **Create team**.
+
+**Result:** SlugBase says **Team created.** and the team appears in the list. The form says: "A team is shared by the whole workspace."
+
+## Edit a team
+
+1. Open the actions menu of the team, **Actions for the team** and its name, and choose **Edit**.
+2. Change the **Name**, the **Description** or the **Members**.
+3. Choose **Save changes**.
+
+**Result:** SlugBase says **Team saved.** Removing someone from a team ends their access to anything shared only through that team, at once. Adding someone gives them access to everything shared with the team.
+
+You can also assign one person to several teams from [Members](members.mdx), with **Manage teams**.
+
+## Delete a team
+
+1. Open the actions menu of the team and choose **Delete**.
+2. Read the warning: "Everything shared through the team" and its name "stops being shared with its members. The members stay in the workspace."
+3. Choose **Delete team**.
+
+**Result:** SlugBase says the team was deleted. The shares through it are gone.
+
+## Share with a team
+
+Anyone in the workspace can share their own bookmarks and folders with a team. See [Share Dialog](../sharing.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Name | 1 to 64 characters, unique in the workspace. | Yes |
+| Description | Up to 280 characters. | No |
+| Members | The people in the team. Search by name. | No |
+
+## Troubleshooting
+
+### The page says "No teams yet"
+
+The workspace has no teams. An admin or owner can choose **Create team**. Members see: "An admin or owner can create one to group members and share access."
+
+### The form says "The workspace already has a team with this name."
+
+Choose another name.
+
+### The form says "This team was changed somewhere else."
+
+Close the form and open it again to see the latest version.
+
+### The form says "Someone you chose is no longer a member of this workspace."
+
+Remove that person from the list and save again.
+
+### The form says "Some of your changes were saved, but not all of them."
+
+The name, description and members are saved in separate steps, and one failed. Choose the save button again to send the rest.
+
+### The page says "The teams could not be loaded"
+
+Choose **Try again**.
+
+## Related pages
+
+- [Members](members.mdx)
+- [Share Dialog](../sharing.mdx)
+- [Teams and Invitations](../concepts/teams-and-invitations.mdx)
+- [Sharing](../concepts/sharing.mdx)

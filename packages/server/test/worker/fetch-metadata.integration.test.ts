@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { EgressTooLarge, type EgressPort } from "@slugbase/core";
+import { EgressBusy, EgressTooLarge, type EgressPort } from "@slugbase/core";
 import { FakeEgress, type FakeEgressRoute } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -225,6 +225,24 @@ describe("a fetch that does not end in a page", () => {
     await run(a, id, refusing);
 
     expect(await resultsOf(a.workspaceId)).toMatchObject([{ status: "failed" }]);
+  });
+});
+
+describe("a fetch the port refuses for lack of a lookup slot", () => {
+  const busy: EgressPort = { available: true, request: () => Promise.reject(new EgressBusy()) };
+
+  it("rejects, so the queue retries it, stores no result, and a later run with a working port stores ok", async () => {
+    const world = harness.serve();
+    const a = await workspace(world);
+    const id = await bookmarkIn(a, { url: PAGE, canonical: PAGE });
+    const before = await bookmarkRows(a.workspaceId);
+
+    await expect(run(a, id, busy)).rejects.toBeInstanceOf(EgressBusy);
+
+    expect(await resultsOf(a.workspaceId)).toEqual([]);
+    expect(await bookmarkRows(a.workspaceId)).toEqual(before);
+    await run(a, id, new FakeEgress({ [PAGE]: route("<title>Later</title>") }));
+    expect(await resultsOf(a.workspaceId)).toMatchObject([{ url_canonical: PAGE, status: "ok", title: "Later" }]);
   });
 });
 

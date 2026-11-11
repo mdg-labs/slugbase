@@ -12,6 +12,12 @@ export function shouldRetry(failureCount: number, error: Error): boolean {
   return failureCount < MAX_RETRIES;
 }
 
+// Doc 03 §13: a mutation made while the browser is offline queues nothing. TanStack Query's default network mode
+// (`online`) pauses it and sends it when the connection returns, so a change is silently held and lost with the tab.
+// `always` runs it at once; the request fails and the shared error toast names the offline cause. Queries keep the
+// default: a paused read is replayed on reconnect and writes nothing.
 export function createQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: shouldRetry } } });
+  return new QueryClient({
+    defaultOptions: { queries: { retry: shouldRetry }, mutations: { networkMode: "always" } },
+  });
 }

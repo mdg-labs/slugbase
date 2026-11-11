@@ -10,10 +10,10 @@ import { startEnrollment, useMfaFailureMessage, useMfaRequest, type MfaEnrollmen
 
 /**
  * The Two-factor authentication card of `/settings/account/security` (doc 03 section 11.2): whether the second factor is on,
- * and how to turn it on, replace its backup codes or turn it off. `enabled` is what `GET /me` says. The secret
+ * and how to turn it on, replace its backup codes or turn it off. `enabled` and `hasPassword` are what `GET /me` says. The secret
  * of a running enrolment is held here and dropped when the wizard closes.
  */
-export function TwoFactorCard({ enabled }: { enabled: boolean }): ReactElement {
+export function TwoFactorCard({ enabled, hasPassword }: { enabled: boolean; hasPassword: boolean }): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const run = useMfaRequest();
@@ -106,6 +106,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }): ReactElement {
       ) : null}
       {disabling ? (
         <DisableTwoFactor
+          hasPassword={hasPassword}
           onClose={() => {
             setDisabling(false);
           }}

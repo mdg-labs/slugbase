@@ -6,6 +6,7 @@ import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import {
   EGRESS_MAX_REQUEST_BODY_BYTES,
   EgressBlocked,
+  EgressBusy,
   EgressError,
   EgressTimeout,
   EgressTooLarge,
@@ -25,13 +26,14 @@ export interface CreateEgressOptions {
   /** Replaces the system resolver. Its answers are validated like any other. */
   readonly resolve?: EgressResolver;
   /**
-   * The one origin (scheme, host and port) whose loopback, private, CGNAT and unique-local addresses may be
-   * connected to, which the operator names for the AI endpoint (Q90). Every other origin is checked as without it,
-   * link-local, unspecified, multicast and reserved addresses stay refused for this one too, and a redirect to any
-   * other origin is an ordinary target. Unlike `testOnly` it is accepted in production; only the composition root
-   * sets it, on an instance that is handed to the AI adapter alone.
+   * The origins (scheme, host and port each) whose loopback, private, CGNAT and unique-local addresses may be
+   * connected to, which the operator names: the AI endpoint (Q90) or the issuers of OIDC providers (Q120). One origin
+   * or a list. Every other origin is checked as without it, link-local, unspecified, multicast and reserved addresses
+   * stay refused for these too, and a redirect to any other origin is an ordinary target, an exempt one included. Unlike
+   * `testOnly` it is accepted in production; only the composition root sets it, on an instance that is handed to the
+   * adapter the operator named it for alone.
    */
-  readonly privateOrigin?: string;
+  readonly privateOrigin?: string | readonly string[];
   /**
    * The share of the process's host-name lookup budget this instance draws on. The instances built for one process are
    * given shares of one budget, so that together they stay within the threadpool; without it the instance has a budget
@@ -156,7 +158,7 @@ function parseTarget(text: string): Target {
   return { url, hostname, literal };
 }
 
-// The origin of `privateOrigin` as `URL.origin` writes it, so the scheme, the case, the notation of the host and a default port compare
+// Each origin of `privateOrigin` as `URL.origin` writes it, so the scheme, the case, the notation of the host and a default port compare
 // as they do for a target; text that is more than an http or https origin is a programming error.
 function parsePrivateOrigin(text: string): string {
   const url = URL.canParse(text) ? new URL(text) : undefined;
@@ -279,16 +281,16 @@ function decodersFor(header: string | undefined): Readable[] | undefined {
  * hop's resolving, connecting and reading, and the decoded body is cut off at
  * `maxBytes`. An instance runs host-name lookups only within its share of the process's lookup budget (three in all, with
  * a reserve for each instance of the process), counted until each lookup itself settles and not until the request's
- * deadline, and refuses a further one at once. A response outside the caller's content-type allowlist is refused
+ * deadline, and refuses a further one at once with `EgressBusy`, which no other failure uses. A response outside the caller's content-type allowlist is refused
  * once its headers arrive. An instance built with `privateOrigin` also connects to
- * the loopback, private, CGNAT and unique-local addresses of that one origin.
+ * the loopback, private, CGNAT and unique-local addresses of exactly the origins it names.
  */
 export class HttpEgress implements EgressPort {
   readonly available = true;
   readonly #resolve: EgressResolver;
   readonly #allowNonPublic: boolean;
   readonly #allowedAddresses: ReadonlySet<string>;
-  readonly #privateOrigin: string | undefined;
+  readonly #privateOrigins: ReadonlySet<string>;
   readonly #ca: string | Buffer | undefined;
   readonly #lookups: LookupShare;
 
@@ -311,7 +313,8 @@ export class HttpEgress implements EgressPort {
         return formatAddress(parsed);
       }),
     );
-    this.#privateOrigin = options.privateOrigin === undefined ? undefined : parsePrivateOrigin(options.privateOrigin);
+    const origins = options.privateOrigin === undefined ? [] : typeof options.privateOrigin === "string" ? [options.privateOrigin] : options.privateOrigin;
+    this.#privateOrigins = new Set(origins.map(parsePrivateOrigin));
     this.#ca = options.testOnly?.ca;
     this.#lookups = options.lookups ?? createLookupBudget().share(0);
   }
@@ -404,7 +407,7 @@ export class HttpEgress implements EgressPort {
     if (target.literal === undefined) {
       const release = this.#lookups.acquire();
       if (release === undefined) {
-        throw new EgressError();
+        throw new EgressBusy();
       }
       let texts: readonly string[];
       try {
@@ -424,7 +427,7 @@ export class HttpEgress implements EgressPort {
     } else {
       answers = [target.literal];
     }
-    const exempt = this.#privateOrigin !== undefined && target.url.origin === this.#privateOrigin;
+    const exempt = this.#privateOrigins.has(target.url.origin);
     const permitted = (address: ParsedAddress): boolean =>
       isPublicAddress(address) ||
       this.#allowedAddresses.has(formatAddress(address)) ||

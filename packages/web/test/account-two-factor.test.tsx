@@ -39,6 +39,8 @@ interface Handlers {
   codes?: (call: number) => Response | Promise<Response>;
   disable?: (call: number) => Response | Promise<Response>;
   me?: () => Response | Promise<Response>;
+  /** Whether the account has a password; true unless a test says otherwise. */
+  hasPassword?: boolean;
 }
 
 interface Server {
@@ -70,7 +72,7 @@ function stubServer(initial: boolean, handlers: Handlers = {}): Server {
     const text = request.method === "GET" || request.method === "HEAD" ? "" : await request.clone().text();
     calls.push({ method: request.method, path: pathname, body: text === "" ? undefined : (JSON.parse(text) as unknown) });
     if (pathname === ME_PATH) {
-      return handlers.me?.() ?? json({ ...(meBody() as { account: object }), account: { ...ACCOUNT_BODY, mfaEnabled: enabled } });
+      return handlers.me?.() ?? json({ ...(meBody() as { account: object }), account: { ...ACCOUNT_BODY, hasPassword: handlers.hasPassword ?? true, mfaEnabled: enabled } });
     }
     if (pathname === SESSION_PATH) {
       return json(SESSION_BODY);
@@ -523,6 +525,72 @@ describe("turning off", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
       expect(server.to("DELETE", MFA_PATH)).toHaveLength(1);
     });
     expect(server.to("DELETE", MFA_PATH)[0]?.body).toEqual({ backupCode: "abcdefgh23", password: "old password 1" });
+  });
+
+  it("asks an account without a password for the code only and sends no password", async () => {
+    const server = stubServer(true, { hasPassword: false });
+    await openSecurity();
+    await click("Turn off");
+    const dialog = await screen.findByRole("dialog", { name: "Turn off two-factor authentication" });
+    expect(within(dialog).queryByLabelText("Password")).toBeNull();
+    expect(within(dialog).getByText("Enter a code. Your account has no password, so none is asked for.")).toBeTruthy();
+
+    await click("Turn off", dialog);
+    expect(within(dialog).getByText("Enter the six-digit code.")).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    await typeCode("654321", dialog);
+    await click("Turn off", dialog);
+    await click("Turn off", await screen.findByRole("alertdialog", { name: "Turn off two-factor authentication?" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Turn off two-factor authentication" })).toBeNull();
+    });
+    expect(server.to("DELETE", MFA_PATH).map((call) => call.body)).toEqual([{ code: "654321" }]);
+    expect(await screen.findByText("Off")).toBeTruthy();
+  });
+
+  it("sends a backup code alone for an account without a password", async () => {
+    const server = stubServer(true, { hasPassword: false });
+    await openSecurity();
+    await click("Turn off");
+    const dialog = await screen.findByRole("dialog", { name: "Turn off two-factor authentication" });
+
+    await click("Use a backup code instead", dialog);
+    fireEvent.change(within(dialog).getByLabelText("Backup code"), { target: { value: " abcdefgh23 " } });
+    await click("Turn off", dialog);
+    await click("Turn off", await screen.findByRole("alertdialog"));
+
+    await waitFor(() => {
+      expect(server.to("DELETE", MFA_PATH)).toHaveLength(1);
+    });
+    expect(server.to("DELETE", MFA_PATH)[0]?.body).toEqual({ backupCode: "abcdefgh23" });
+  });
+
+  it("shows a wrong code of an account without a password at the code", async () => {
+    stubServer(true, { hasPassword: false, disable: () => withErrors(422, "invalid_code", [{ path: "code", code: "invalid_code" }]) });
+    await openSecurity();
+    await click("Turn off");
+    const dialog = await screen.findByRole("dialog", { name: "Turn off two-factor authentication" });
+    await typeCode("654321", dialog);
+    await click("Turn off", dialog);
+    await click("Turn off", await screen.findByRole("alertdialog"));
+
+    expect(await within(dialog).findByText("That code is not valid. Check it and try again.")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Turn off two-factor authentication" })).toBeTruthy();
+  });
+
+  it("tells an account that gained a password since the page loaded to reload", async () => {
+    stubServer(true, { hasPassword: false, disable: () => withErrors(422, "validation_failed", [{ path: "password", code: "invalid_password" }]) });
+    await openSecurity();
+    await click("Turn off");
+    const dialog = await screen.findByRole("dialog", { name: "Turn off two-factor authentication" });
+    await typeCode("654321", dialog);
+    await click("Turn off", dialog);
+    await click("Turn off", await screen.findByRole("alertdialog"));
+
+    expect(await within(dialog).findByText("This account now has a password. Reload the page, then turn off two-factor authentication with it.")).toBeTruthy();
+    expect(within(dialog).queryByText("The password is not right.")).toBeNull();
   });
 
   it("asks for both before it asks for confirmation", async () => {

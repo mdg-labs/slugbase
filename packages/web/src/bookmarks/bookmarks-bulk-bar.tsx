@@ -65,7 +65,7 @@ export interface BookmarksBulkBarProps {
 
 /**
  * The bar of the bookmark list's selection (doc 03 section 3.4): the count, "Select all matching", and add to a folder,
- * remove from a folder, add tags, remove tags, share, pin, unpin and delete for the selected bookmarks. The folder and tag actions
+ * move to a folder, remove from a folder, add tags, remove tags, share, pin, unpin and delete for the selected bookmarks. The folder and tag actions
  * first ask which folder or tags, and a share which member or team with the preview of it, over the bookmarks selected when the
  * picker was opened. Share is offered where the workspace may share. Select all asks the API for the identifiers the filters match, at most the
  * select-all cap, and says so when more match. Delete first states how many bookmarks it removes and what happens to
@@ -258,6 +258,7 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
   });
   const ownOnlyActions: readonly BulkBarAction[] = [
     linkAction("add_to_folder", t("bookmarks.bulk.addToFolder"), <FolderIcon aria-hidden="true" />),
+    linkAction("move_to_folder", t("bookmarks.bulk.moveToFolder"), <FolderIcon aria-hidden="true" />),
     linkAction("remove_from_folder", t("bookmarks.bulk.removeFromFolder"), <FolderIcon aria-hidden="true" />),
     linkAction("add_tags", t("bookmarks.bulk.addTags"), <TagIcon aria-hidden="true" />),
     linkAction("remove_tags", t("bookmarks.bulk.removeTags"), <TagIcon aria-hidden="true" />),

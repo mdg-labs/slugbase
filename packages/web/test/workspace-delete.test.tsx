@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 import { createWebApp } from "../src/index.ts";
-import { problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 import { GRACE, SELF, WORKSPACE_PATH, stubWorkspaceSettingsServer, type Role } from "./workspace-settings-server.ts";
 
 // Deleting the workspace (doc 03 section 11.6, doc 04 section 4.4, doc 01 section 13.2). The failure scenarios are a deletion that
@@ -13,6 +13,8 @@ import { GRACE, SELF, WORKSPACE_PATH, stubWorkspaceSettingsServer, type Role } f
 const SLOW_TEST_TIMEOUT_MS = 30_000;
 const REAUTH_PATH = "/api/v1/me/reauth";
 const NAME = "Ada's Workspace";
+const EXPORT_PATH = "/api/v1/export/json";
+const EXPORT_NAME = "slugbase-export-2026-05-05.json";
 
 beforeEach(() => {
   stubBrowserApis();
@@ -23,8 +25,21 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  Reflect.deleteProperty(URL, "createObjectURL");
+  Reflect.deleteProperty(URL, "revokeObjectURL");
   document.documentElement.removeAttribute("lang");
 });
+
+/** jsdom has no object URLs and cannot save a file: the test sees what the page hands to them. */
+function stubDownloads(): { readonly saved: string[] } {
+  const saved: string[] = [];
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: () => "blob:export-1" });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: () => undefined });
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(this: HTMLAnchorElement) {
+    saved.push(this.download);
+  });
+  return { saved };
+}
 
 async function openGeneral(): Promise<HTMLElement> {
   window.history.replaceState(null, "", "/settings/workspace");
@@ -300,4 +315,148 @@ describe("the delete dialog", () => {
     expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
   }, SLOW_TEST_TIMEOUT_MS);
 });
+describe("the export offered in the delete dialog", () => {
+  it("starts the SlugBase JSON export of the caller, keeps the dialog open and still needs the typed name", async () => {
+    const { saved } = stubDownloads();
+    const asked: string[] = [];
+    const server = stubWorkspaceSettingsServer({
+      members: [SELF, GRACE],
+      other: (request) => {
+        if (new URL(request.url).pathname !== EXPORT_PATH) {
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
+        asked.push(new URL(request.url).search);
+        return Promise.resolve(
+          new Response('{"format":"slugbase-export","version":1,"bookmarks":[]}', {
+            headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="${EXPORT_NAME}"` },
+          }),
+        );
+      },
+    });
+    await openGeneral();
+    const dialog = await openDelete();
 
+    await press(within(dialog).getByRole("button", { name: "Export first" }));
+
+    await waitFor(() => {
+      expect(saved).toEqual([EXPORT_NAME]);
+    });
+    expect(server.received("GET", EXPORT_PATH)).toHaveLength(1);
+    expect(asked).toEqual(["?includeShared=false"]);
+    expect((await screen.findAllByText("Download started")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("alertdialog", { name: `Delete ${NAME}?` })).toBe(dialog);
+    expect(submit(dialog).hasAttribute("disabled")).toBe(true);
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+
+    await type(dialog, NAME);
+    expect(submit(dialog).hasAttribute("disabled")).toBe(false);
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("tells a refused export in a toast, saves nothing and neither enables nor sends the deletion", async () => {
+    const { saved } = stubDownloads();
+    const server = stubWorkspaceSettingsServer({
+      members: [SELF, GRACE],
+      other: (request) =>
+        Promise.resolve(
+          new URL(request.url).pathname !== EXPORT_PATH
+            ? new Response(null, { status: 204 })
+            : json(
+                { type: "https://slugbase.app/problems/rate_limited", title: "rate_limited", status: 429, code: "rate_limited", detail: "x", requestId: "req-429" },
+                { status: 429, contentType: "application/problem+json", headers: { "Retry-After": "30" } },
+              ),
+        ),
+    });
+    await openGeneral();
+    const dialog = await openDelete();
+
+    await press(within(dialog).getByRole("button", { name: "Export first" }));
+
+    expect((await screen.findAllByText("The export was not downloaded")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Too many exports. Try again in 30 seconds.")).length).toBeGreaterThan(0);
+    expect(saved).toEqual([]);
+    expect(screen.getByRole("alertdialog", { name: `Delete ${NAME}?` })).toBe(dialog);
+    expect(submit(dialog).hasAttribute("disabled")).toBe(true);
+    await waitFor(() => {
+      expect(within(dialog).getByRole("button", { name: "Export first" }).hasAttribute("data-loading")).toBe(false);
+    });
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+    expect(window.location.pathname).toBe("/settings/workspace");
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("does not send a second export while one runs", async () => {
+    stubDownloads();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const server = stubWorkspaceSettingsServer({
+      members: [SELF, GRACE],
+      other: async (request) => {
+        if (new URL(request.url).pathname !== EXPORT_PATH) {
+          return new Response(null, { status: 204 });
+        }
+        await gate;
+        return new Response("{}", { headers: { "Content-Type": "application/json" } });
+      },
+    });
+    await openGeneral();
+    const dialog = await openDelete();
+    const button = within(dialog).getByRole("button", { name: "Export first" });
+
+    await press(button);
+    await press(button);
+
+    expect(server.received("GET", EXPORT_PATH)).toHaveLength(1);
+    await act(async () => {
+      release();
+      await gate;
+    });
+    await waitFor(() => {
+      expect(button.hasAttribute("data-loading")).toBe(false);
+    });
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("keeps the deletion off while the export runs, though the name is typed, and offers it once the export is saved", async () => {
+    const { saved } = stubDownloads();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const server = stubWorkspaceSettingsServer({
+      members: [SELF, GRACE],
+      other: async (request) => {
+        if (new URL(request.url).pathname !== EXPORT_PATH) {
+          return new Response(null, { status: 204 });
+        }
+        await gate;
+        return new Response("{}", { headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="${EXPORT_NAME}"` } });
+      },
+    });
+    await openGeneral();
+    const dialog = await openDelete();
+
+    await press(within(dialog).getByRole("button", { name: "Export first" }));
+    await type(dialog, NAME);
+
+    expect(submit(dialog).hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      fireEvent.submit(submit(dialog).closest("form") as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+
+    await act(async () => {
+      release();
+      await gate;
+    });
+    await waitFor(() => {
+      expect(saved).toEqual([EXPORT_NAME]);
+    });
+    await waitFor(() => {
+      expect(submit(dialog).hasAttribute("disabled")).toBe(false);
+    });
+    expect(server.received("DELETE", WORKSPACE_PATH)).toHaveLength(0);
+  }, SLOW_TEST_TIMEOUT_MS);
+});

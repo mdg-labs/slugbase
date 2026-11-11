@@ -1,0 +1,109 @@
+---
+title: "API Tokens"
+description: "Create and revoke tokens that let scripts and integrations act as you in one workspace."
+edition: both
+order: 40
+---
+
+**API tokens** let a script or an integration act as you in one workspace, without your password. You create a token here, copy it once, and revoke it when you no longer need it.
+
+<Screenshot alt="The API tokens page with the list of tokens and the New token button" />
+
+## Prerequisites
+
+- You are signed in and belong to at least one workspace. **New token** is off otherwise.
+
+## What a token can do
+
+- **It acts as you.** A token works in the one workspace you pick, with the role you hold there. If you lose your place in that workspace, the token stops working.
+- **It has a scope.** **Read** can only look at things. **Read and write** can change them too. Choose the smallest scope the script needs.
+- **It can expire.** You choose when. The default is 90 days.
+- **It is a bearer credential.** Anyone who has the token can act as you with it, and it needs no password and no second step. Treat it like a password. Keep it in a password manager or a secret store, never in a shared document, a chat or a public repository.
+- **It cannot change your security settings.** A token can never change your password or email address, manage two-factor authentication, your sessions or your tokens, delete your account, or use instance administration. These need you, signed in, in a browser.
+
+Resetting your password ends your API tokens, because a token made before the reset is not one you know of. You make new ones afterwards.
+
+## Create a token
+
+1. Open the account menu in the top bar and choose **Account settings**.
+2. Under **Account**, choose **API tokens**.
+3. Choose **New token**.
+4. Enter a **Name** to recognise it by, such as the script that uses it. Use up to 64 characters.
+5. Choose the **Workspace**. It lists your workspaces, and the one you have open is chosen for you.
+6. Under **Scope**, choose **Read** or **Read and write**.
+7. Choose when it **Expires**: **30 days**, **90 days**, **365 days** or **Never**.
+8. Choose **Create token**.
+9. If SlugBase asks you to confirm it is you, enter your password and choose **Confirm**. A token is a credential, so creating one needs a confirmation made in the last ten minutes. See [Security](security.mdx).
+
+**Result:** **Copy your token** shows the token, with the line "This is the only time the token is shown."
+
+10. Choose **Copy the API token** and put the token where your script reads it.
+11. Select **I have saved this token**, then choose **Done**.
+
+You cannot close the dialog before you select the box, because SlugBase never shows the token again. If you lose it, revoke it and create a new one.
+
+Under **Try it**, SlugBase also shows an **Example request** you can copy. It carries the placeholder `<your API token>`. Replace the placeholder with your token. The token goes in the `Authorization` header as a bearer token.
+
+## Use the interactive API reference
+
+Your SlugBase serves an interactive reference for its API at `/api/docs`, on the same address you open SlugBase at. It lists every operation, what it takes and what it returns, and lets you try requests. On a self-hosted SlugBase, the operator can turn it off.
+
+## Read the token list
+
+| Column | What it shows |
+| ------ | ------------- |
+| **Name** | The name you gave it. |
+| **Workspace** | The workspace the token acts in. |
+| **Scope** | **Read** or **Read and write**. |
+| **Token** | The start of the token, to recognise it. The rest is never shown again. |
+| **Created** | When you made it. |
+| **Last used** | When it last made a request, or **Never**. |
+| **Expires** | The end date, or **No expiry**. |
+
+A revoked token leaves the list. An expired one stays, with its end date. Choose **Show more** to see more tokens. With none, the page says "No tokens yet" and "Create one to authenticate scripts or integrations."
+
+## Revoke a token
+
+1. Choose **Revoke** in the token's row.
+2. Confirm **Revoke** and the token's name.
+
+**Result:** SlugBase says **Token revoked**. Anything that uses the token stops working at once. "This cannot be undone." The name can be used again.
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Name | 1 to 64 characters. Unique among your tokens that are not revoked. | Yes |
+| Workspace | One of your workspaces. The token works only there. | Yes |
+| Scope | **Read** or **Read and write**. | Yes |
+| Expires | **30 days**, **90 days**, **365 days** or **Never**. The default is 90 days. | Yes |
+
+## Troubleshooting
+
+### The form says "You have reached the limit of 10 tokens."
+
+You can have at most 10 tokens that are neither revoked nor expired. Revoke one you no longer use.
+
+### The form says "You already have a token with this name."
+
+Choose another name. You can reuse the name of a token you revoked.
+
+### The form says "Confirm it is you to continue."
+
+You closed the confirmation. Choose **Create token** again and enter your password.
+
+### A script is refused
+
+The token may have expired, been revoked or lost its workspace, or your password was reset. Check the **Expires** column and the list. Create a new token if needed.
+
+A token cannot change security settings, so a request for one of those is always refused.
+
+### The app says my account can only export its data
+
+If an administrator ended your access, every request of a token is refused. See [Import and Export](import-and-export.mdx).
+
+## Related pages
+
+- [Security](security.mdx)
+- [Import and Export](import-and-export.mdx)
+- [Workspaces and Roles](../concepts/workspaces-and-roles.mdx)

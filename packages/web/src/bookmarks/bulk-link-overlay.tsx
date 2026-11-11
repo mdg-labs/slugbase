@@ -12,7 +12,7 @@ import { useAllTags } from "../tags/use-all-tags.ts";
 import { BOOKMARKS_QUERY_KEY, previewAddTags, type BulkAction, type BulkTarget } from "./bookmarks.ts";
 
 /** The actions of the bar that name a folder or tags. */
-export type LinkAction = Extract<BulkAction, "add_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags">;
+export type LinkAction = Extract<BulkAction, "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags">;
 
 export interface BulkLinkOverlayProps {
   readonly action: LinkAction;
@@ -36,7 +36,9 @@ export function BulkLinkOverlay({ action, ids, onSubmit, onClose }: BulkLinkOver
   const title =
     action === "add_to_folder"
       ? t("bookmarks.bulk.link.title.addToFolder", { count })
-      : action === "remove_from_folder"
+      : action === "move_to_folder"
+        ? t("bookmarks.bulk.link.title.moveToFolder", { count })
+        : action === "remove_from_folder"
         ? t("bookmarks.bulk.link.title.removeFromFolder", { count })
         : action === "add_tags"
           ? t("bookmarks.bulk.link.title.addTags", { count })
@@ -52,7 +54,7 @@ export function BulkLinkOverlay({ action, ids, onSubmit, onClose }: BulkLinkOver
       open
       title={title}
     >
-      {action === "add_to_folder" || action === "remove_from_folder" ? (
+      {action === "add_to_folder" || action === "move_to_folder" || action === "remove_from_folder" ? (
         <FolderChoice action={action} onClose={onClose} onSubmit={onSubmit} />
       ) : (
         <TagsChoice action={action} ids={ids} onClose={onClose} onSubmit={onSubmit} />
@@ -65,6 +67,8 @@ function submitLabel(t: TFunction, action: LinkAction): string {
   switch (action) {
     case "add_to_folder":
       return t("bookmarks.bulk.addToFolder");
+    case "move_to_folder":
+      return t("bookmarks.bulk.moveToFolder");
     case "remove_from_folder":
       return t("bookmarks.bulk.removeFromFolder");
     case "add_tags":

@@ -9,7 +9,8 @@ import { PortUnavailable } from "../ports/port.ts";
 // and a longer one is refused, never cut (an image cut short is not the image); only image content types are accepted, so SVG is never fetched as an
 // icon; and the bytes are handed to the image codec, which identifies the format from the bytes, refuses a vector format and a declared size above its
 // pixel cap, and encodes the PNGs afresh. A candidate that fails in any of these ways is skipped and the next one is tried; a host none of whose
-// candidates works has no icon (`none`). A port that is not configured is not a host without an icon: that error is the caller's.
+// candidates works has no icon (`none`). A port that is not configured is not a host without an icon: that error is the caller's, and so is a request
+// the port refused a hop of for lack of a lookup slot (`egress_busy`): that refusal says nothing about the host, so the fetch stops there and asks for no further candidate.
 
 /** The most bytes of an icon the fetch reads (doc 02 section 16); a longer body is refused. */
 export const FAVICON_MAX_BYTES = 64 * 1024;
@@ -42,6 +43,11 @@ export interface FaviconFetchDependencies {
 /** What the fetch of a host ended as: the PNGs of its icon, or that no candidate gave a usable one. */
 export type FaviconFetchOutcome = ({ readonly kind: "ok" } & ReencodedIcon) | { readonly kind: "none" };
 
+/** A request the port refused for lack of a lookup slot; matched by code because the fake of the port does not share the class. */
+function isBusy(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "egress_busy";
+}
+
 function isSuccess(status: number): boolean {
   return status >= 200 && status < 300;
 }
@@ -49,8 +55,8 @@ function isSuccess(status: number): boolean {
 /**
  * Fetches the icon of `host`, a lower-case host name: `/favicon.ico` over https and then http, then the `<link rel=icon>` targets of the home page
  * (https first, then http) in document order, at most `FAVICON_LINK_CANDIDATES_MAX` of them, each judged the same way. Never throws for a host, a
- * response or an image it cannot use: those end in `none`. It rejects when the egress port or the image codec is not configured, and for a defect of
- * the codec itself, so the caller retries instead of recording a host without an icon.
+ * response or an image it cannot use: those end in `none`. It rejects when the egress port or the image codec is not configured, when the port refuses
+ * a request for lack of a lookup slot, and for a defect of the codec itself, so the caller retries instead of recording a host without an icon.
  */
 export async function fetchFavicon({ egress, imageCodec }: FaviconFetchDependencies, host: string): Promise<FaviconFetchOutcome> {
   const deadline = performance.now() + FAVICON_TOTAL_TIMEOUT_MS;
@@ -69,7 +75,7 @@ export async function fetchFavicon({ egress, imageCodec }: FaviconFetchDependenc
       }
       body = response.body;
     } catch (error) {
-      if (error instanceof PortUnavailable) {
+      if (error instanceof PortUnavailable || isBusy(error)) {
         throw error;
       }
       return undefined;
@@ -103,7 +109,7 @@ export async function fetchFavicon({ egress, imageCodec }: FaviconFetchDependenc
           return parsePageIcons({ body: response.body, contentType: response.contentType, url: response.url });
         }
       } catch (error) {
-        if (error instanceof PortUnavailable) {
+        if (error instanceof PortUnavailable || isBusy(error)) {
           throw error;
         }
       }

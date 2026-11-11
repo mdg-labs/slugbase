@@ -66,7 +66,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q86 | Private vulnerability reporting or `support@slugbase.app`; 3 days / 30 days / +7 days | Decided (maintainer) |
 | Q2 | User documentation lives in this repository (`docs/user/`, `docs/self-hosting/`, `docs/releases/`), written with `/customer-docs` and published at `slugbase.app/docs` by the one SlugBase site; no separate docs repository, no `docs.slugbase.app` | Decided (changed 2026-10-09) |
 | Q89 | Deleted on 2026-10-08 (maintainer decision), without a deprecation period | Decided (maintainer) |
-| Q111 | A change to the documentation on `main` requests a rebuild of the site through a generic `workflow_dispatch` call (input `docs_sha`) of a target workflow; the target repository and workflow are variables, and the workflow does nothing without them | Decided (maintainer) |
+| Q111 | A change to the documentation on `main` requests a rebuild of the site through a generic `workflow_dispatch` call (input `docs_sha`) of a target workflow; the target repository is a secret and the target workflow a variable, and the workflow does nothing without them | Decided (maintainer) |
 | Q112 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q113 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q114 | Cloud decision | Cloud — recorded in the Cloud documentation |
@@ -83,7 +83,8 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q8 | AI suggestions through the OpenAI-compatible adapter; the provider is configuration | Decided (maintainer) |
 | Q9 | One generic SMTP adapter for every deployment | Decided (maintainer) |
 | Q66 | Errors through `ErrorReportPort`; internal `/metrics` endpoint; no metrics stack required | Settled → D27 (maintainer) |
-| Q90 | An AI endpoint on a private address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`, and a plain-`http` endpoint is accepted only on that host; the allowance covers that one origin, on the AI adapter's egress instance only | Decided (default) |
+| Q90 | An AI endpoint on a loopback, private, CGNAT or unique-local address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`, and a plain-`http` endpoint is accepted only on that host; the allowance covers that one origin, on the AI adapter's egress instance only | Decided (default) |
+| Q120 | An OIDC provider on a loopback, private, CGNAT or unique-local address is refused unless the operator names the exact host of its `ISSUER_URL` in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`; the allowance covers that issuer's origin, on the OIDC adapter's egress instance only, and extends Q90 | Decided (maintainer) |
 
 ### Infrastructure and operations
 
@@ -107,7 +108,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q12 | Built in the public CE repository's CI on GitHub-hosted runners and published to `ghcr.io/mdg-labs/slugbase` (public) | Decided (default) |
 | Q17 | Build SBOM (SPDX) and SLSA provenance attestations with BuildKit for every image | Decided (default) |
 | Q18 | None | Decided (default) |
-| Q92 | Release signing and registry timing: SBOM and provenance from the first release candidate, cosign signing and the public package in Phase 6, `:latest` only from a published release | Decided (default) |
+| Q92 | Release signing and registry timing: SBOM and provenance from the first release candidate, cosign signing and the public package in Phase 6, `:<semver>` pushed by a build, `:latest` and `:<major>.<minor>` only from a published release and never to an older version | Decided (default) |
 | Q56 | CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions… | Decided (default) |
 
 ### Stack and process
@@ -351,7 +352,7 @@ Cloud's backends are recorded in the Cloud documentation.
 ### Q90 — An AI endpoint on a private address
 **Status:** Decided (default) · **Due:** Phase 4 (AI feature) · **Affects:** doc 01 §6 (`EgressPort`, `AiSuggestPort`), doc 10 T6 and §5, doc 08 §3.5 (`egress/ssrf`), Q8
 
-**Decision: an AI endpoint on a loopback, private or CGNAT address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`. The allowance covers the one origin of `AI_BASE_URL` and is held only by the egress instance the AI adapter uses.** The AI settings are `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` and `AI_PROVIDER_NAME`; `AI_ALLOWED_PRIVATE_HOST` is the one more operator setting next to them (optional; CE self-host section of doc 07's key inventory; Cloud uses a public provider and leaves it unset). Member input can neither set nor widen it: the AI request URL is built from `AI_BASE_URL` alone, and a bookmark's URL or metadata reaches the provider only inside the request body.
+**Decision: an AI endpoint on a loopback, private, CGNAT or unique-local address is refused unless the operator names its exact host in `AI_ALLOWED_PRIVATE_HOST`. The allowance covers the one origin of `AI_BASE_URL` and is held only by the egress instance the AI adapter uses.** The AI settings are `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` and `AI_PROVIDER_NAME`; `AI_ALLOWED_PRIVATE_HOST` is the one more operator setting next to them (optional; CE self-host section of doc 07's key inventory; Cloud uses a public provider and leaves it unset). Member input can neither set nor widen it: the AI request URL is built from `AI_BASE_URL` alone, and a bookmark's URL or metadata reaches the provider only inside the request body.
 
 The matching rule, which the adapter (E4.3.2) implements as written:
 
@@ -362,7 +363,7 @@ The matching rule, which the adapter (E4.3.2) implements as written:
 - **Plain `http` is accepted only on the named host.** Configuration loading refuses to start when `AI_BASE_URL` has the scheme `http:` and its host is not the value of `AI_ALLOWED_PRIVATE_HOST` (unset, or another host), whether or not `AI_API_KEY` is set: the suggestion request carries the page address, its public metadata and the member's tag names, so it is not sent in clear across a network the operator did not name. The refusal names `AI_BASE_URL` (or `AI_ALLOWED_PRIVATE_HOST` when the two hosts differ) and no value. An `https:` endpoint is unaffected, on a public host without the allowance and on a private one with it. The rule compares hosts only: an operator who names a host in `AI_ALLOWED_PRIVATE_HOST` has accepted plain `http` for it, including a public one.
 - **Redirects** are followed by hand as for any request. A hop to the allowlisted origin is exempt again; a hop anywhere else is checked as a normal target and refused unless public. The cross-origin rules are unchanged: only the named headers follow (so `Authorization` stays with the origin it was sent to) and a 307 or 308 that would carry the body is refused.
 - **Everything else is unchanged:** the redirect limit, the time and size caps, the content-type allowlist and the decoded-body cap. There is no setting that relaxes TLS verification; an operator with a private CA trusts it through the process's usual CA environment.
-- **Where it lives:** `CreateEgressOptions` gains `privateOrigin?: string`, accepted in production (unlike `testOnly`). The composition root builds a second `HttpEgress` with it from `AI_BASE_URL` and hands that instance to the AI adapter only; the instance every other caller shares (metadata, favicon, OIDC discovery) is built without it, so the allowance is not a flag a caller can pass.
+- **Where it lives:** `CreateEgressOptions` gains `privateOrigin?: string`, accepted in production (unlike `testOnly`). The composition root builds a second `HttpEgress` with it from `AI_BASE_URL` and hands that instance to the AI adapter only; the instance every other caller shares (metadata, favicon) and the one the OIDC adapter holds (Q120) are built without it, so the allowance is not a flag a caller can pass. Q120 later let `privateOrigin` take a list; the AI instance still passes its one origin.
 
 **Options considered.**
 
@@ -386,9 +387,38 @@ The matching rule, which the adapter (E4.3.2) implements as written:
 - origin equivalence: default-port elision, case, IPv4 notation and IDNA match; a trailing dot does not;
 - the size, time and content-type caps hold for the allowlisted origin;
 - configuration refuses to start for each invalid shape of the value above and for a plain-`http` `AI_BASE_URL` whose host is not the named one, and an `https:` AI endpoint on a private address without the setting is `EgressBlocked` at the first request;
-- the composition root hands the allowance-bearing instance to the AI adapter and the plain one to the metadata, favicon and OIDC discovery callers.
+- the composition root hands the allowance-bearing instance to the AI adapter and the plain one to the metadata and favicon callers; the OIDC adapter holds an instance of its own, which carries no AI allowance (Q120).
 
 Q8 allows a self-hosted model, which usually listens on a private address, while T6 refuses private addresses with no exception. A public reverse proxy in front of the model would also work but moves the burden to every self-hoster; a general private-address exception is rejected because it would turn the metadata fetcher into an internal probe (T6).
+
+
+### Q120 — An OIDC provider on a private address
+**Status:** Decided (maintainer, 2026-11-10) · **Due:** Phase 2 (OIDC) · **Affects:** doc 01 §6 (`EgressPort`, `IdentityPort`), doc 02 §2.8, doc 10 T6 and §5, Q90, D22, D24
+
+**Decision: an OIDC provider on a loopback, private, CGNAT or unique-local address is refused unless the operator names the exact host of its `ISSUER_URL` in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`. The allowance covers the origin of that provider's `ISSUER_URL` and is held only by the egress instance the OIDC adapter uses.** The key is optional and per provider, next to the other `OIDC_<SLUG>_*` keys (CE self-host section of doc 07's key inventory; Cloud configures no OIDC provider on a private address and leaves it unset). It extends Q90 to a second operator-named destination, by the same reasoning: a self-hosted identity provider (Keycloak, Authentik and the like) next to SlugBase on a LAN or a compose network is a common CE setup, and the other ways in (a public address for a private service) move the exposure to the operator's network. It also covers the split-horizon case, where a public provider name resolves to a private address inside the operator's network.
+
+The matching rule is Q90's, applied to each provider:
+
+- **The value** is one bare host, parsed as `AI_ALLOWED_PRIVATE_HOST` is (no scheme, port, path, userinfo, wildcard, comma or network range). Configuration loading refuses to start, naming `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` and no value, when it is not a bare host or differs, after URL normalisation, from the host of that same provider's `OIDC_<SLUG>_ISSUER_URL`; the host of another provider's issuer does not match. A changed `ISSUER_URL` therefore never keeps an allowance meant for the old host. A disabled provider contributes nothing.
+- **A hop is exempt** only when its origin (scheme, normalised host and effective port) equals the origin of the `ISSUER_URL` of a provider that names its host. The same host on another port or scheme, or another private host, is an ordinary target.
+- **What is exempt** is the address check alone and only for loopback, RFC 1918, CGNAT and IPv6 unique-local addresses, as in Q90. Link-local (the metadata address among it), unspecified, multicast, reserved and documentation ranges stay refused, and one refused answer among several refuses the request.
+- **Discovery-named endpoints** (`jwks_uri`, `token_endpoint`) are fetched through the same instance and are exempt only when they sit on an exempt origin. On any other private host or on the metadata address they are refused, the provider is left unavailable (`keys_failed`) or the code exchange fails, and no connection is made. A redirect from an exempt origin to another private origin is refused for the same reason.
+- **Plain `http` and TLS are not relaxed.** An issuer in production still uses `https`, with a certificate the process trusts through its usual CA environment; the identity adapter's refusal of an `https` to `http` redirect holds. There is no setting that relaxes certificate verification.
+- **Where it lives:** `CreateEgressOptions.privateOrigin` takes one origin or a list, parsed as before. The composition root builds the identity instance with the issuer origins of the providers that name a host (`OIDC_PRIVATE_ORIGINS` of the server configuration) and hands it to the OIDC adapter only. The shared instance and the AI instance never carry them, and no per-request flag exists (Q90 option e).
+
+**Options considered.**
+
+| Option | Verdict |
+|---|---|
+| (a) Per provider, the exact issuer host named in `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST`, pinned to the issuer's origin on the identity instance | Chosen. A private provider works by setting one more variable per provider; the exception is a deliberate, reviewable line. |
+| (b) A limit of v1: a provider needs a public address | Rejected by the maintainer. Self-hosters would publish an identity provider, or run a proxy in front of it, only so that SlugBase can fetch its discovery document. |
+| (c) A general private-address exception or a network-range allowlist | Killed by the criterion: the server's fetches would become an internal probe (T6). |
+| (d) Treat the host of every `ISSUER_URL` as allowed without a second setting | Rejected. A mistyped issuer would reach a private address silently, as in Q90 option d. |
+| (e) One global `OIDC_ALLOWED_PRIVATE_HOSTS` list | Rejected. A provider's allowance would not follow its issuer and could be left behind when the issuer changes. |
+
+**Accepted residual risk.** The identity instance holds the origins of every provider that names a host, so a discovery document of one such provider can name an endpoint on the origin of another one. Both origins are named by the operator and the address check still applies to them as above, so this reaches no address the operator has not already named; it is listed in doc 10 §5 beside the AI allowance.
+
+**Tests:** an `an allowlisted identity origin` group in `packages/adapters/test/egress/ssrf.integration.test.ts` (each named origin reached, pinned; another port, scheme or private host, link-local, metadata, unspecified, multicast answers alone or mixed, and a redirect to another private origin or the metadata address refused with no connection; an instance without the option refuses the same request), the failure scenario in `packages/adapters/test/identity-egress.test.ts` (a document on a named origin whose `jwks_uri` or `token_endpoint` names another private host or the metadata address leaves the provider unavailable or fails the exchange, with no connection), the configuration cases in `packages/server/test/config/oidc.test.ts`, and the composition cases in `apps/slugbase/test/identity-egress.test.ts` (the identity instance carries exactly the named origins; the shared and AI instances carry none; a provider without the key gets no exemption). The Q90 tests stay as they are.
 
 ---
 
@@ -482,8 +512,8 @@ Running the app as the table owner silently disables RLS (owners bypass non-forc
 ### Q92 — Release signing and registry timing
 **Status:** Decided (default) · **Due:** Phase 4 for the release candidate, Phase 6 for signing and the public package · **Affects:** doc 08 §6.2 (`release.yml`), doc 10 T16, doc 12 Phases 4 and 6, Q12, Q17
 
-**Decision: the release candidate of Phase 4 is built by `release.yml` with SBOM and provenance attached and is pushed with its pre-release tag only; `:latest` and `:<major>.<minor>` do not move. Signing with cosign (keyless, the release workflow's identity on `main`), `scripts/verify-image.sh` and the switch of the registry package to public come in Phase 6, before 1.0.0. From then on every pushed image is signed, `:<semver>` and `:<major>.<minor>` are pushed when a release is built, and `:latest` (with `:<major>.<minor>`) moves only when the GitHub Release is published, after the signature of that digest is re-verified. A pre-release never moves either tag, and an existing version tag is never overwritten.**
-The registry is the one named in Q12. Making the package public late keeps an unsigned candidate from becoming the thing operators pull; the first image documented for operators is one they can verify.
+**Decision: the release candidate of Phase 4 is built by `release.yml` with SBOM and provenance attached and is pushed with its pre-release tag only; `:latest` and `:<major>.<minor>` do not move. Signing with cosign (keyless, the release workflow's identity on `main`), `scripts/verify-image.sh` and the switch of the registry package to public come in Phase 6, before 1.0.0. From then on every pushed image is signed, a build pushes `:<semver>` only, and both floating tags, `:latest` and `:<major>.<minor>`, move only when the GitHub Release is published, after the signature of that digest is re-verified, and only to a version that is not older than the highest published stable release they follow (`:latest` the highest overall, `:<major>.<minor>` the highest of its line). A pre-release never moves either tag, and an existing version tag is never overwritten.**
+A build is a draft release candidate, so a tag that operators follow must not move on a build; and `:<major>.<minor>` pushed by the first build of a minor would make the existing-tag check refuse every later patch of that minor. The version order exists because every bump leaves a draft that a maintainer can publish later, and publishing an old one must not move operators back. The registry is the one named in Q12. Making the package public late keeps an unsigned candidate from becoming the thing operators pull; the first image documented for operators is one they can verify.
 
 ---
 

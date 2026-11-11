@@ -14,8 +14,10 @@ type Mode = "code" | "backup";
 /**
  * Turns the second factor off: a code of the authenticator app (or a backup code) and the password, then a
  * confirmation. Nothing is sent before the member confirms, and a refusal is shown in the form behind the dialog.
+ * An account without a password (`hasPassword` false) gives none, neither the field nor a value in the request: the
+ * re-authentication through its provider stands in for it (doc 02 section 2.7), and the server refuses a password for it.
  */
-export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactElement {
+export function DisableTwoFactor({ hasPassword, onClose }: { hasPassword: boolean; onClose: () => void }): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -35,7 +37,7 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
 
   function submit(event: SyntheticEvent): void {
     event.preventDefault();
-    const missing = { code: !complete, password: password === "" };
+    const missing = { code: !complete, password: hasPassword && password === "" };
     setRequired(missing);
     if (!missing.code && !missing.password) {
       setFailure(undefined);
@@ -44,7 +46,8 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
   }
 
   async function disable(): Promise<void> {
-    const body: DisableRequest = mode === "code" ? { code, password } : { backupCode: given, password };
+    const credential = hasPassword ? { password } : {};
+    const body: DisableRequest = mode === "code" ? { code, ...credential } : { backupCode: given, ...credential };
     setPending(true);
     const outcome = await run((signal) => disableTwoFactor(router.options.context.api, body, signal));
     if (outcome.status === "skipped") {
@@ -56,7 +59,7 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
       setFailure(outcome.failure);
       return;
     }
-    // The session continues under a new token and the account signs in with its password alone.
+    // The session continues under a new token and the account no longer has a second factor: it signs in with its password alone, or through its provider when it has none.
     void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
     feedbackToast.success(t("settings.security.mfa.disable.done"));
     onClose();
@@ -72,6 +75,8 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
 
   const codeFailure = failure?.kind === "invalidCode";
   const passwordFailure = failure?.kind === "wrongPassword";
+  // An account that gained a password since this page loaded is refused without one; the field the server names is not shown.
+  const gainedPassword = passwordFailure && !hasPassword;
   const codeError = codeFailure
     ? failureMessage(failure)
     : required.code
@@ -83,7 +88,7 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
     <>
       <FormOverlay
         closeLabel={t("settings.security.mfa.close")}
-        description={t("settings.security.mfa.disable.description")}
+        description={hasPassword ? t("settings.security.mfa.disable.description") : t("settings.security.mfa.disable.descriptionNoPassword")}
         onOpenChange={(open) => {
           if (!open && !pending) {
             onClose();
@@ -93,6 +98,7 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
         title={t("settings.security.mfa.disable.title")}
       >
         <form className="flex flex-col gap-4" noValidate onSubmit={submit}>
+          {gainedPassword ? <Banner title={t("settings.security.mfa.disable.gained")} variant="error" /> : null}
           {failure === undefined || codeFailure || passwordFailure ? null : <Banner title={failureMessage(failure)} variant="error" />}
           {mode === "code" ? (
             <FormField error={codeError} label={t("settings.security.mfa.code.label")} name="code">
@@ -125,23 +131,25 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
           <Button className="self-start" disabled={pending} onClick={switchMode} type="button" variant="link">
             {mode === "code" ? t("settings.security.mfa.useBackup") : t("settings.security.mfa.useCode")}
           </Button>
-          <FormField
-            error={passwordFailure ? failureMessage(failure) : required.password ? t("settings.security.mfa.password.required") : undefined}
-            label={t("settings.security.mfa.password.label")}
-            name="password"
-          >
-            <SecretInput
-              autoComplete="current-password"
-              disabled={pending}
-              hideLabel={t("settings.security.password.hide")}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                setRequired((current) => ({ ...current, password: false }));
-              }}
-              showLabel={t("settings.security.password.show")}
-              value={password}
-            />
-          </FormField>
+          {hasPassword ? (
+            <FormField
+              error={passwordFailure ? failureMessage(failure) : required.password ? t("settings.security.mfa.password.required") : undefined}
+              label={t("settings.security.mfa.password.label")}
+              name="password"
+            >
+              <SecretInput
+                autoComplete="current-password"
+                disabled={pending}
+                hideLabel={t("settings.security.password.hide")}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setRequired((current) => ({ ...current, password: false }));
+                }}
+                showLabel={t("settings.security.password.show")}
+                value={password}
+              />
+            </FormField>
+          ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button disabled={pending} onClick={onClose} type="button" variant="outline">
               {t("settings.security.mfa.cancel")}
@@ -155,7 +163,7 @@ export function DisableTwoFactor({ onClose }: { onClose: () => void }): ReactEle
       <Confirm
         cancelLabel={t("settings.security.mfa.cancel")}
         confirmLabel={t("settings.security.mfa.disable.confirm")}
-        description={t("settings.security.mfa.disable.confirmDescription")}
+        description={hasPassword ? t("settings.security.mfa.disable.confirmDescription") : t("settings.security.mfa.disable.confirmDescriptionNoPassword")}
         destructive
         loading={pending}
         onConfirm={() => {

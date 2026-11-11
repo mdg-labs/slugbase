@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { fetchPageMetadata, type EgressPort } from "@slugbase/core";
+import { EgressBusy, fetchPageMetadata, type EgressPort } from "@slugbase/core";
 import { urlMetadataRepository, type QueuedJob, type UrlMetadataResult } from "@slugbase/db";
 import { z } from "zod";
 import { defineJob } from "../job.ts";
@@ -13,7 +13,8 @@ import { defineJob } from "../job.ts";
 // The fetch (`fetchPageMetadata`, which POST /api/v1/bookmarks/metadata uses too) goes through the egress port and nowhere else: the canonical URL (which carries no credentials, which the port refuses), at most the
 // first 512 KiB, and only `text/html` and `application/xhtml+xml`. A target the port refuses is recorded as `blocked`, a status outside 2xx, a
 // page of another type and any other error as `failed`; neither holds a field. Neither is an error of the job: the outcome is the cached answer,
-// and a bookmark whose fetch failed keeps the fields as entered (doc 02 section 5.4). The page is parsed as text by `parsePageMetadata`, which
+// and a bookmark whose fetch failed keeps the fields as entered (doc 02 section 5.4). A request the port refused for lack of a lookup slot (`busy`)
+// says nothing about the page, so it is not an answer: the job rejects with `EgressBusy` and stores nothing, and the queue's retry policy runs it again. The page is parsed as text by `parsePageMetadata`, which
 // executes and follows nothing. No transaction is open while the request runs, so a slow page holds no database connection. A database error
 // is an error of the job and is retried.
 //
@@ -32,6 +33,9 @@ export const FETCH_METADATA_TIMEOUT_MS = 10_000;
 
 async function fetchPage(egress: EgressPort, urlCanonical: string): Promise<UrlMetadataResult> {
   const outcome = await fetchPageMetadata(egress, urlCanonical, FETCH_METADATA_TIMEOUT_MS);
+  if (outcome.kind === "busy") {
+    throw new EgressBusy();
+  }
   return outcome.kind === "ok" ? { status: "ok", ...outcome.page } : { status: outcome.kind };
 }
 

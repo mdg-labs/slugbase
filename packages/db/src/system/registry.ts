@@ -125,6 +125,9 @@ export const systemOperations: readonly string[] = [
   "sys_account_access_mode",
   "sys_account_access_mode_due",
   "sys_account_access_mode_end",
+  "sys_mfa_secret_key_ids",
+  "sys_mfa_secrets_under_key",
+  "sys_mfa_reseal_swept",
 ];
 
 /**

@@ -35,6 +35,12 @@ SlugBase is for people who save and open links every day, alone or in a team: in
 ## Next steps
 
 - [Get started](getting-started.mdx)
+- [Slugs and /go](concepts/slugs.md)
+- [Organising bookmarks](concepts/organising-bookmarks.md)
+- [Workspaces and roles](concepts/workspaces-and-roles.mdx)
+- [Sharing](concepts/sharing.mdx)
+- [Teams and invitations](concepts/teams-and-invitations.mdx)
+- [Frequently asked questions](faq.md)
 - [Run SlugBase on your own server](/docs/self-hosting/install)
 - [Try SlugBase Cloud](https://cloud.slugbase.app)
 - [See pricing](https://slugbase.app/pricing)

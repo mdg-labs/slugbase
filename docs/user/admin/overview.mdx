@@ -1,0 +1,107 @@
+---
+title: "Instance Overview"
+description: "See the health and the setup of your self-hosted SlugBase, and learn what an instance admin can and cannot do."
+edition: ce
+order: 10
+---
+
+**Overview** is the first page of the **Admin** area. It shows how many accounts and workspaces your SlugBase has, which version runs, whether the background jobs are healthy and what the operator has set up.
+
+<Callout>
+Self-hosted only. The **Admin** area is for the instance admin of a self-hosted SlugBase. The operator guides are in the [self-hosting documentation](/docs/self-hosting).
+</Callout>
+
+<Screenshot alt="The Overview page with the counts, the version and the configuration" />
+
+## Prerequisites
+
+- You run a self-hosted SlugBase and your account is an instance admin. The first account, which first-run setup creates, is one. See [First-Run Setup](../access/first-run-setup.mdx).
+- You are signed in.
+
+## What an instance admin is
+
+An instance admin looks after the whole SlugBase, not one workspace. An instance admin creates workspaces, manages accounts, and reads the status of the server. Other people never see **Admin**. An account that is not an instance admin sees "You don't have access" if it opens the address.
+
+An instance admin does **not** get to read the content of workspaces. This is a deliberate rule:
+
+- The workspace list shows the name, the owners, the number of members and the creation date. It never shows bookmarks, folders or tags.
+- An instance admin sees a workspace's content only as a member of it. **Add me as member** adds you to a workspace on purpose, with the role of member. It needs a confirmation. SlugBase records it, and the workspace's owners see the entry **Instance administrator joined** in the workspace's [audit log](../workspace/audit-log.mdx).
+
+Every action of an instance admin is also written to an audit log of the instance. Workspace members cannot read it. See [Workspaces](workspaces.mdx), [Accounts](accounts.mdx) and [Settings and Status](settings-and-status.mdx).
+
+## Open the Overview
+
+1. Choose **Admin** in the sidebar.
+
+The **Administration** navigation, under **Instance**, lists **Overview**, **Workspaces**, **Accounts** and **Settings & status**.
+
+## Two-factor authentication for admins
+
+Some pages and actions need two-factor authentication on your own account, because they change the instance or who can reach it. SlugBase does not hide the pages. It stops the action and tells you why:
+
+- **Overview** is fully open, and so are the lists on **Workspaces** and the read-only part of **Settings & status**.
+- On **Settings & status**, a banner says **Changing the settings needs two-factor authentication**: "You can read the settings below. Turn on two-factor authentication for your account to change them." The controls that change a setting are replaced by the banner.
+- On **Workspaces**, **Add me as member**, **Re-issue owner invitation** and **Delete workspace** open **Turn on two-factor authentication first** instead of acting. Creating a workspace is open, but you can only invite the owner by email, not choose an existing account.
+- On **Accounts**, the page says **Accounts are not available yet**: "Turn on two-factor authentication to manage the accounts of this instance."
+
+To turn it on, choose **Set up two-factor authentication** where the prompt offers it, or open **Security** in your account menu. See [Security](../account/security.mdx). Choose **Not now** to stay where you are.
+
+## Read the Overview
+
+### Counts
+
+Three tiles show the number of **Accounts**, **Workspaces** and **Active sessions**.
+
+### Version and database
+
+| Line | What it shows |
+| ---- | ------------- |
+| **Version** | The version of SlugBase that runs. **Releases** opens the public releases page in a new tab. SlugBase never asks a server whether a newer version exists, so check that page yourself. |
+| **Migrations** | How many database changes are applied, for example "12 of 12 applied". **Up to date** or **Out of date**. |
+
+If **Migrations** says **Out of date**, the database does not match the version that runs. See [Upgrade SlugBase](/docs/self-hosting/upgrade).
+
+### Background jobs
+
+| Line | What it shows |
+| ---- | ------------- |
+| **Failed jobs** | **None**, or the number that failed, in red. |
+| **Waiting for a worker** | How many jobs are waiting, for example "2 jobs". |
+
+Failed jobs or a growing queue can mean the worker is not running. See [Run SlugBase Day to Day](/docs/self-hosting/operations).
+
+### Configuration
+
+**Configuration** says what the operator has set up. It is read-only: **Public registration**, **Email verification required**, **Mail**, **AI suggestions**, **Sign-in providers** and **Error reporting**. **Settings & status** shows the same list. See [Settings and Status](settings-and-status.mdx).
+
+## Field and option reference
+
+| Field / option | Description | Required |
+| -------------- | ----------- | -------- |
+| Accounts, Workspaces, Active sessions | Counts for the whole instance. | n/a |
+| Version, Releases | The running version, and a link to the public releases page. | n/a |
+| Migrations | How many database changes are applied, and whether that is all of them. | n/a |
+| Failed jobs, Waiting for a worker | The health of the background jobs. | n/a |
+| Configuration | What the operator set up. Read-only. | n/a |
+
+## Troubleshooting
+
+### The page says "You don't have access"
+
+Your account is not an instance admin. Ask an existing instance admin to make it one in [Accounts](accounts.mdx).
+
+### The page says "The status of the instance could not be loaded"
+
+Choose **Try again**. If it continues, check the logs of the server.
+
+### The page says "Your account could not be loaded"
+
+Choose **Try again**. **Admin** needs to know who you are before it shows anything.
+
+## Related pages
+
+- [Workspaces](workspaces.mdx)
+- [Accounts](accounts.mdx)
+- [Settings and Status](settings-and-status.mdx)
+- [Audit Log](../workspace/audit-log.mdx)
+- [Account Recovery and Security Checklist](/docs/self-hosting/security)
