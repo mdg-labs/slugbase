@@ -74,12 +74,10 @@
       "@esbuild-kit/core-utils>esbuild": "^0.25.0",
       "@ai-sdk/provider-utils": "^4.0.33",
       "@ladle/react>vite": "^6.4.5",
-      "minimatch@<11.0.1": "^11.0.1"
+      "minimatch@>=7.0.0 <11.0.1": "^11.0.1"
     },
     "patchedDependencies": {
-      "postgres@3.4.9": "patches/postgres@3.4.9.patch",
-      "@stoplight/spectral-core@1.24.0": "patches/@stoplight__spectral-core@1.24.0.patch",
-      "@redocly/openapi-core@1.34.20": "patches/@redocly__openapi-core@1.34.20.patch"
+      "postgres@3.4.9": "patches/postgres@3.4.9.patch"
     }
   }
 }
