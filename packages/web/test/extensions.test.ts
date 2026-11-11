@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { REGISTRATION_ACKNOWLEDGEMENTS_MAX } from "@slugbase/contracts";
 import { SLOT_NAMES, assertValidExtensions, isSlotName } from "../src/extensions/index.ts";
@@ -52,6 +53,24 @@ describe("assertValidExtensions", () => {
     expect(() => {
       assertValidExtensions([{ id: "legal", acknowledgements: [{ ...entry, label: "Label" }] }]);
     }).toThrow(message);
+  });
+
+  it.each([
+    ["an empty label", ""],
+    ["a blank label", "  "],
+    ["a null label", null],
+    ["an undefined label", undefined],
+    ["a boolean label", false],
+  ])("rejects an acknowledgement with %s", (_name, label) => {
+    expect(() => {
+      assertValidExtensions([{ id: "legal", acknowledgements: [{ id: "terms", version: "1", label }] }]);
+    }).toThrow(/acknowledgement "terms" of the web extension "legal" needs a label/);
+  });
+
+  it("accepts an acknowledgement whose label is an element or a number", () => {
+    expect(() => {
+      assertValidExtensions([{ id: "legal", acknowledgements: [{ id: "terms", version: "1", label: createElement("a", { href: "/terms" }, "Terms") }, { id: "age", version: "1", label: 16 }] }]);
+    }).not.toThrow();
   });
 
   it("rejects an acknowledgement id declared twice, within one extension or across two", () => {
