@@ -15,6 +15,11 @@
 -- CREATE privileges of the current database to the same state, and a second
 -- run changes nothing. All of it happens in one transaction, so a failure
 -- leaves nothing half applied. Per-table grants are not part of this script.
+--
+-- The session turns statement tracking and statement logging off before the
+-- first statement that carries a password, so that no password reaches the
+-- statistics views, the files pg_stat_statements keeps or the server log; the
+-- settings last for this session only, which ends with the script.
 
 \set ON_ERROR_STOP on
 
@@ -25,6 +30,16 @@ SELECT current_setting('is_superuser') = 'on' AS is_superuser \gset
     RAISE EXCEPTION 'roles.sql must be run by a superuser: it creates roles and changes ownership and privileges';
   END $$;
 \endif
+
+-- pg_stat_statements.track_utility is a placeholder setting on a server that has
+-- not preloaded the library, which a superuser may set.
+SET track_activities = off;
+SET pg_stat_statements.track_utility = off;
+SET log_statement = none;
+SET log_min_duration_statement = -1;
+SET log_min_duration_sample = -1;
+SET log_transaction_sample_rate = 0;
+SET log_min_error_statement = panic;
 
 \if :{?app_password}
 \else

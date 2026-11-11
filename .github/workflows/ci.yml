@@ -338,6 +338,19 @@ jobs:
           pnpm --filter slugbase exec vitest run --project integration compose-cli \
             --reporter=default --reporter=json --outputFile.json="$report"
           jq -e '.numTotalTests > 0 and .numPassedTests == .numTotalTests and .numPendingTests == 0 and .numTodoTests == 0' "$report" > /dev/null
+      # roles-statistics.integration.test.ts starts Postgres containers of its own
+      # (a first start with and without the pg_stat_statements preload), which a
+      # service container of the integration job cannot do; a skipped case fails
+      # the step, and the test removes its containers and volumes itself.
+      - name: Test role provisioning against the statistics views
+        env:
+          SLUGBASE_TEST_ROLES_STATISTICS: "1"
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/roles-statistics.json"
+          pnpm --filter @slugbase/db exec vitest run --project integration roles-statistics \
+            --reporter=default --reporter=json --outputFile.json="$report"
+          jq -e '.numTotalTests > 0 and .numPassedTests == .numTotalTests and .numPendingTests == 0 and .numTodoTests == 0' "$report" > /dev/null
       - name: Test the smoke script
         run: bash scripts/smoke-image.test.sh
       # Built here and not pushed (doc 08 §6.2); the script takes it by name. The
