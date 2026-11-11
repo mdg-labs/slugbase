@@ -57,6 +57,11 @@ export interface DefineJobOptions<Shape extends z.ZodRawShape> {
   readonly retry?: RetryPolicy;
   /** The queue keeps one waiting job for each singleton key; see `JobDefinition.dedupe`. Fixed when the queue is created. */
   readonly dedupe?: boolean;
+  /**
+   * What a payload key the job does not declare does: `refuse` (the default) fails the payload, `ignore` drops the key and reads the declared
+   * fields. A job whose payload a newer release may have added a field to, while a worker of this release still runs, ignores.
+   */
+  readonly undeclaredKeys?: "refuse" | "ignore";
 }
 
 /** A schedule: the named job runs on the cron expression, once across all workers. */
@@ -165,8 +170,9 @@ function resolveRetry(name: string, retry: RetryPolicy | undefined): ResolvedRet
 
 /**
  * Declares a job. The payload schema is limited to scalar fields because a
- * payload carries identifiers and the handler re-reads current state; the
- * schema is strict, so a payload with any other key is refused.
+ * payload carries identifiers and the handler re-reads current state; unless
+ * the job asks to `ignore` undeclared keys, the schema is strict, so a payload
+ * with any other key is refused. An ignored key is dropped without being read or logged.
  */
 export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobOptions<Shape>): JobDefinition<z.infer<z.ZodObject<Shape>> & JobPayload> {
   const { name } = options;
@@ -178,7 +184,7 @@ export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobO
       throw new JobDefinitionError(`job ${name}: payload field ${field} must be a string, number, boolean, enum or literal`);
     }
   }
-  const schema = z.strictObject(options.payload.shape);
+  const schema = options.undeclaredKeys === "ignore" ? z.object(options.payload.shape) : z.strictObject(options.payload.shape);
   const retry = resolveRetry(name, options.retry);
   type Payload = z.infer<z.ZodObject<Shape>> & JobPayload;
 

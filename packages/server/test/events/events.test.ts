@@ -176,9 +176,22 @@ describe("the event jobs", () => {
     await expect(jobFor([]).handle(data, moduleContext())).resolves.toBeUndefined();
   });
 
-  it("refuse a payload that is not the catalog's", async () => {
+  it("deliver the declared fields of a job queued by a newer release, dropping a key the catalog does not declare without logging it", async () => {
+    const seen: unknown[] = [];
+    const context = moduleContext();
+    const job = jobFor([registered("a", (event) => void seen.push(event))]);
+
+    await job.handle({ ...data, email: EMAIL, addedLater: "a later field" }, context);
+
+    expect(seen).toEqual([{ eventId: EVENT_ID, name: "account.created", payload: { accountId: ACCOUNT, path: "invitation", acknowledgements: [] } }]);
+    const logger = context.logger as ReturnType<typeof recordingLogger>;
+    expect(JSON.stringify([seen, logger.entries])).not.toContain(EMAIL);
+    expect(JSON.stringify(logger.entries)).not.toContain("a later field");
+  });
+
+  it("refuse a job whose declared fields are not the catalog's, whatever else it carries", async () => {
     const job = jobFor([registered("a", () => undefined)]);
-    await expect(job.handle({ ...data, email: EMAIL }, moduleContext())).rejects.toThrow();
+    await expect(job.handle({ ...data, path: "register", addedLater: "x" }, moduleContext())).rejects.toThrow();
     await expect(job.handle({ eventId: EVENT_ID, accountId: ACCOUNT, path: "register" }, moduleContext())).rejects.toThrow();
     await expect(job.handle({ accountId: ACCOUNT, path: "setup" }, moduleContext())).rejects.toThrow();
   });

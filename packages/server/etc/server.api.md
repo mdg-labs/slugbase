@@ -276,6 +276,7 @@ export interface DefineJobOptions<Shape extends z.ZodRawShape> {
     readonly payload: z.ZodObject<Shape>;
     // (undocumented)
     readonly retry?: RetryPolicy;
+    readonly undeclaredKeys?: "refuse" | "ignore";
 }
 
 // @public

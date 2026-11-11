@@ -68,7 +68,7 @@ function deepFrozen<Value>(value: Value): Value {
 /**
  * The event jobs. Delivery is at least once: a subscriber that failed makes the job run again, and every
  * subscriber sees the event again, so each is idempotent on `eventId`. One failing subscriber does not keep the
- * others from running in the attempt. The event is deeply frozen, so every subscriber sees the same payload. A failure is logged with the event name, the identifier and the module,
+ * others from running in the attempt. A payload key the catalog does not declare is dropped, never read or logged. The event is deeply frozen, so every subscriber sees the same payload. A failure is logged with the event name, the identifier and the module,
  * never the payload.
  */
 export function eventJobs(subscribersFor: (name: DomainEventName) => readonly RegisteredSubscriber[]): readonly JobDefinition[] {
@@ -76,6 +76,8 @@ export function eventJobs(subscribersFor: (name: DomainEventName) => readonly Re
     defineJob({
       name: eventJobName(name),
       payload: z.object({ eventId: EVENT_ID, ...payloadShape(name) }),
+      // A job queued by a newer release may carry a field this release's catalog lacks (doc 01 section 7.4); the worker reads the fields it declares.
+      undeclaredKeys: "ignore",
       handle: async ({ eventId, ...fields }, context) => {
         const subscribers = subscribersFor(name);
         if (subscribers.length === 0) {
