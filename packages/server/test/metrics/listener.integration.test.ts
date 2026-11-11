@@ -1,5 +1,5 @@
-import { createServer as createNetServer, connect, type Server as NetServer } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { createServer as createNetServer, connect, Server as NetServer } from "node:net";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer, type ModuleContext, type RunningServer, type ServerModule, type StartOptions } from "../../src/create-server.ts";
 import { createMetrics, exposeWorkerMetrics } from "../../src/metrics/metrics.ts";
 import { adapters, fakeAuthStore, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "../support.ts";
@@ -66,6 +66,7 @@ const running: RunningServer[] = [];
 const blockers: NetServer[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(running.splice(0).map((server) => server.shutdown()));
   await Promise.all(
     blockers.splice(0).map(
@@ -113,6 +114,17 @@ function refused(port: number): Promise<string> {
     });
     socket.on("error", (error: NodeJS.ErrnoException) => {
       resolve(error.code ?? "error");
+    });
+  });
+}
+
+function holdPort(): Promise<number> {
+  const blocker = createNetServer();
+  blockers.push(blocker);
+  return new Promise<number>((resolve) => {
+    blocker.listen(0, "127.0.0.1", () => {
+      const address = blocker.address();
+      resolve(typeof address === "object" && address !== null ? address.port : 0);
     });
   });
 }
@@ -268,10 +280,12 @@ describe("the internal metrics listener", () => {
     expect(await refused(listening.port)).toBe("ECONNREFUSED");
   });
 
-  it("refuses to start with the metrics port equal to the public one", async () => {
+  it("refuses to start with the metrics port equal to the public one, before opening any listener", async () => {
+    const taken = await holdPort();
+    const listen = vi.spyOn(NetServer.prototype, "listen");
     const database = fakeDatabase();
     const server = createServer({
-      config: serverConfig({ PORT: "45871", METRICS_PORT: "45871" }),
+      config: serverConfig({ PORT: String(taken), METRICS_PORT: String(taken) }),
       adapters: adapters(),
       modules: [],
       openApiDocument: documentOf([]),
@@ -280,18 +294,11 @@ describe("the internal metrics listener", () => {
       database,
     });
     await expect(server.start()).rejects.toThrow("METRICS_PORT must differ from PORT");
-    expect(await refused(45871)).toBe("ECONNREFUSED");
+    expect(listen).not.toHaveBeenCalled();
   });
 
   it("stops the public listener and closes the pool when the metrics port is taken", async () => {
-    const blocker = createNetServer();
-    blockers.push(blocker);
-    const taken = await new Promise<number>((resolve) => {
-      blocker.listen(0, "127.0.0.1", () => {
-        const address = blocker.address();
-        resolve(typeof address === "object" && address !== null ? address.port : 0);
-      });
-    });
+    const taken = await holdPort();
 
     const database = fakeDatabase();
     const server = createServer({
