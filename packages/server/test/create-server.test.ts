@@ -308,7 +308,7 @@ describe("createServer", () => {
 
 describe("the hooks of modules", () => {
   const seat = { workspaceId: "w1", accountId: "a1", invitationId: "i1" };
-  const registration = { email: "someone@example.com", path: "oidc" } as const;
+  const registration = { email: "someone@example.com", path: "oidc", acknowledgements: [] } as const;
 
   function hookServer(modules: readonly ServerModule[], hookTimeoutMs = 25) {
     const probe: ServerModule = {

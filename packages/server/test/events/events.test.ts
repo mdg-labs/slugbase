@@ -50,23 +50,40 @@ describe("the subscribers of a module", () => {
 });
 
 describe("queueDomainEvent", () => {
+  it("carries the acknowledgements as JSON text, since a job's payload holds scalar fields only", () => {
+    const acknowledgements = [{ id: "terms", version: "2026-01" }];
+    expect(queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "self-registration", acknowledgements }).data).toEqual({
+      eventId: EVENT_ID,
+      accountId: ACCOUNT,
+      path: "self-registration",
+      acknowledgements: JSON.stringify(acknowledgements),
+    });
+  });
+
+  it("refuses an acknowledgements list that breaks a bound", () => {
+    const nine = Array.from({ length: 9 }, (_, index) => ({ id: `doc-${String(index)}`, version: "1" }));
+    for (const acknowledgements of [nine, [{ id: "Terms", version: "1" }], [{ id: "terms", version: "" }]]) {
+      expect(() => queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "self-registration", acknowledgements })).toThrow();
+    }
+  });
+
   it("builds the job of an event, named for it, carrying the identifier and the payload", () => {
-    expect(queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "setup" })).toEqual({
+    expect(queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "setup", acknowledgements: [] })).toEqual({
       id: EVENT_ID,
       queue: "event.account.created",
-      data: { eventId: EVENT_ID, accountId: ACCOUNT, path: "setup" },
+      data: { eventId: EVENT_ID, accountId: ACCOUNT, path: "setup", acknowledgements: "[]" },
     });
     expect(eventJobName("account.created")).toBe("event.account.created");
   });
 
   it("refuses a payload the catalog does not declare, such as one with an email address", () => {
-    expect(() => queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "setup", email: EMAIL } as never)).toThrow();
-    expect(() => queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "register" } as never)).toThrow();
+    expect(() => queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "setup", acknowledgements: [], email: EMAIL } as never)).toThrow();
+    expect(() => queueDomainEvent(EVENT_ID, "account.created", { accountId: ACCOUNT, path: "register", acknowledgements: [] } as never)).toThrow();
   });
 });
 
 describe("the event jobs", () => {
-  const data = { eventId: EVENT_ID, accountId: ACCOUNT, path: "invitation" };
+  const data = { eventId: EVENT_ID, accountId: ACCOUNT, path: "invitation", acknowledgements: "[]" };
 
   function registered(module: string, handle: (event: AnyDomainEvent) => void | Promise<void>): RegisteredSubscriber {
     return { module, event: "account.created", handle };
@@ -98,7 +115,34 @@ describe("the event jobs", () => {
 
     await job.handle(data, moduleContext());
 
-    expect(seen).toEqual([`a:${EVENT_ID}:account.created:${JSON.stringify({ accountId: ACCOUNT, path: "invitation" })}`, `b:${EVENT_ID}`]);
+    expect(seen).toEqual([`a:${EVENT_ID}:account.created:${JSON.stringify({ accountId: ACCOUNT, path: "invitation", acknowledgements: [] })}`, `b:${EVENT_ID}`]);
+  });
+
+  it("deliver an event queued before the field existed with an empty list", async () => {
+    const seen: unknown[] = [];
+    const job = jobFor([registered("a", (event) => void seen.push(event.payload))]);
+
+    await job.handle({ eventId: EVENT_ID, accountId: ACCOUNT, path: "invitation" }, moduleContext());
+
+    expect(seen).toEqual([{ accountId: ACCOUNT, path: "invitation", acknowledgements: [] }]);
+  });
+
+  it("deliver the acknowledgements a job carries, and refuse a list that breaks a bound", async () => {
+    const seen: unknown[] = [];
+    const job = jobFor([registered("a", (event) => void seen.push(event.payload))]);
+    const acknowledgements = [{ id: "terms", version: "2026-01" }];
+
+    await job.handle({ ...data, acknowledgements: JSON.stringify(acknowledgements) }, moduleContext());
+
+    expect(seen).toEqual([{ accountId: ACCOUNT, path: "invitation", acknowledgements }]);
+    const nine = Array.from({ length: 9 }, (_, index) => ({ id: `doc-${String(index)}`, version: "1" }));
+    for (const bad of [nine, [{ id: "Terms", version: "1" }], [{ id: "terms", version: "" }], [{ id: "terms", version: "1" }, { id: "terms", version: "2" }], "terms"]) {
+      await expect(job.handle({ ...data, acknowledgements: JSON.stringify(bad) }, moduleContext())).rejects.toThrow();
+    }
+    for (const text of ["not json", "{", "x".repeat(3000)]) {
+      await expect(job.handle({ ...data, acknowledgements: text }, moduleContext())).rejects.toThrow();
+    }
+    await expect(job.handle({ ...data, acknowledgements: [] }, moduleContext())).rejects.toThrow();
   });
 
   it("do nothing when no module subscribes", async () => {

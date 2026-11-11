@@ -27,6 +27,7 @@ import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
 import type { QueuedJob } from '@slugbase/db';
+import type { RegistrationAcknowledgement } from '@slugbase/core';
 import { RegistrationSettings } from '@slugbase/core';
 import { StreamResponse } from '@slugbase/contracts';
 import type { TenantPrincipal } from '@slugbase/core';
@@ -960,6 +961,7 @@ export type RegistrationPath = "self-registration" | "invitation" | "oidc";
 
 // @public (undocumented)
 export interface RegistrationPolicyInput {
+    readonly acknowledgements: readonly RegistrationAcknowledgement[];
     // (undocumented)
     readonly email: string;
     // (undocumented)

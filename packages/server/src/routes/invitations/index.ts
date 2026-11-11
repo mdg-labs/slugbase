@@ -31,6 +31,7 @@ import {
   type InvitationSignupEvent,
   type MailPort,
   type PasswordPolicy,
+  type RegistrationAcknowledgement,
   type RegistrationSettings,
   type SessionCookieSpec,
   normalizeEmail,
@@ -303,7 +304,7 @@ export function invitationRoutes({
 
   // The form of the acceptance with registration fields. Whether the address has an account is told only after the
   // registration policy has answered for it, so a refused address learns nothing from the answer.
-  const acceptWithNewAccount = async (context: ChainContext, request: { readonly token: string; readonly displayName: string; readonly password: string }) => {
+  const acceptWithNewAccount = async (context: ChainContext, request: { readonly token: string; readonly displayName: string; readonly password: string; readonly acknowledgements: readonly RegistrationAcknowledgement[] }) => {
     const inspected = await inspectPending({ store }, { token: request.token });
     if (inspected.kind === "gone") {
       throw new ProblemError("token_expired", TOKEN_REFUSED);
@@ -312,7 +313,7 @@ export function invitationRoutes({
     if (hooks === undefined) {
       throw new Error("the accept route was reached without the hook dispatcher");
     }
-    await assertRegistrationAllowed(hooks, { email: normalizeEmail(inspected.preview.email), path: "invitation" });
+    await assertRegistrationAllowed(hooks, { email: normalizeEmail(inspected.preview.email), path: "invitation", acknowledgements: request.acknowledgements });
     const problems = passwordPolicy.check(request.password);
     if (problems.length > 0) {
       throw new ProblemError("weak_password", problems.includes("breached") ? BREACHED_DETAIL : LENGTH_DETAIL, {
@@ -328,6 +329,7 @@ export function invitationRoutes({
       token: request.token,
       accountId,
       displayName: request.displayName,
+      acknowledgements: request.acknowledgements,
       passwordHash: await hashPassword(request.password),
       locale: registrationLocale(context.req.raw.headers.get("accept-language")),
       session: {
@@ -397,7 +399,7 @@ export function invitationRoutes({
 
     route(acceptInvitation).handle(async ({ body }, context) => {
       if (body.displayName !== undefined && body.password !== undefined) {
-        return acceptWithNewAccount(context, { token: body.token, displayName: body.displayName, password: body.password });
+        return acceptWithNewAccount(context, { token: body.token, displayName: body.displayName, password: body.password, acknowledgements: body.acknowledgements ?? [] });
       }
       const { accountId, sessionId } = acceptingSessionOf(context);
       const takeAccountLimit = context.get("takeAccountLimit");

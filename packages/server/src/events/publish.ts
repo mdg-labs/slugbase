@@ -1,10 +1,17 @@
-import { parseDomainEventPayload, type DomainEventName, type DomainEventPayload } from "@slugbase/core";
+import { DOMAIN_EVENTS, parseDomainEventPayload, type DomainEventField, type DomainEventName, type DomainEventPayload } from "@slugbase/core";
 import type { QueuedJob } from "@slugbase/db";
 
 // Publication of a domain event (doc 01 section 7.1 and 8.1): the flow that makes the
 // change queues the event's job in the same transaction, so the event exists exactly
 // when the change is committed and a crash after the commit cannot lose it. The job
-// carries the event identifier and the catalog payload, scalars only.
+// carries the event identifier and the catalog payload. A job's payload holds scalar fields only
+// (the worker's `defineJob`), so the list of acknowledgements travels as its JSON text and the
+// event's job reads it back (`eventJobs`).
+
+/** The JSON text of an acknowledgements field in a job's payload. */
+function encodeEventJobField(field: DomainEventField, value: unknown): unknown {
+  return field.type === "acknowledgements" ? JSON.stringify(value) : value;
+}
 
 /** The queue and job name of an event: `event.account.created`. */
 export function eventJobName(name: DomainEventName): string {
@@ -18,5 +25,7 @@ export function eventJobName(name: DomainEventName): string {
  */
 export function queueDomainEvent<Name extends DomainEventName>(eventId: string, name: Name, payload: DomainEventPayload<Name>): QueuedJob {
   const checked = parseDomainEventPayload(name, payload);
-  return { id: eventId, queue: eventJobName(name), data: { eventId, ...checked } };
+  const fields: Readonly<Record<string, DomainEventField>> = DOMAIN_EVENTS[name];
+  const encoded = Object.fromEntries(Object.entries(checked).map(([key, value]) => [key, fields[key] === undefined ? value : encodeEventJobField(fields[key], value)]));
+  return { id: eventId, queue: eventJobName(name), data: { eventId, ...encoded } };
 }

@@ -42,6 +42,12 @@ async function problemOf(response: Response): Promise<Problem> {
   return (await response.json()) as Problem;
 }
 
+/** The problem document with the one field that differs by request taken out. */
+async function problemWithoutRequestId(response: Response): Promise<Problem> {
+  const problem = await problemOf(response);
+  return Object.fromEntries(Object.entries(problem).filter(([name]) => name !== "requestId")) as unknown as Problem;
+}
+
 function serve(options: { env?: Record<string, string>; modules?: readonly ServerModule[] } = {}): World {
   return harness.serve({
     entitlements: GRANTED,
@@ -190,7 +196,7 @@ describe("POST /api/v1/invitations/accept with a display name and a password", {
       { actor_account_id: account?.id, actor_label: "Grace Hopper", metadata: { role: "admin" } },
     ]);
     const createdJobs = await jobsNamed("event.account.created");
-    expect(createdJobs.map((job) => job.data)).toEqual([{ eventId: createdJobs[0]?.id, accountId: account?.id, path: "invitation" }]);
+    expect(createdJobs.map((job) => job.data)).toEqual([{ eventId: createdJobs[0]?.id, accountId: account?.id, path: "invitation", acknowledgements: "[]" }]);
     const joinedJobs = await jobsNamed("event.member.joined");
     expect(joinedJobs.map((job) => job.data)).toEqual([{ eventId: joinedJobs[0]?.id, workspaceId, accountId: account?.id, role: "admin" }]);
     expect(await jobsNamed("mail.send")).toEqual([]);
@@ -394,6 +400,154 @@ describe("POST /api/v1/invitations/accept with a display name and a password", {
     expect(limited.status).toBe(429);
     expect((await problemOf(limited)).code).toBe("rate_limited");
     expect(await accountsWithEmail("limited@example.test")).toEqual([]);
+  });
+});
+
+describe("the acknowledgements of the form of an invitation (doc 01 section 13.5)", { timeout: TEST_TIMEOUT_MS }, () => {
+  const TERMS = { id: "terms", version: "2026-01" };
+  const AGE = { id: "age_18", version: "1" };
+
+  /** A policy that requires the terms and records what it is asked. */
+  function requiresTerms(): { module: ServerModule; asked: { path: string; acknowledgements: readonly { id: string; version: string }[] }[] } {
+    const asked: { path: string; acknowledgements: readonly { id: string; version: string }[] }[] = [];
+    return {
+      asked,
+      module: {
+        name: "terms",
+        hooks: {
+          registrationPolicy: (input) => {
+            asked.push({ path: input.path, acknowledgements: input.acknowledgements });
+            return input.acknowledgements.some((entry) => entry.id === TERMS.id) ? HookResult.allow() : HookResult.refuse("terms_missing");
+          },
+        },
+        register: () => ({}),
+      },
+    };
+  }
+
+  it("hands the policy the list of the form and carries it in account.created, queued in the transaction that creates the account", async () => {
+    const { module, asked } = requiresTerms();
+    const world = serve({ modules: [module], env: { EMAIL_VERIFICATION_REQUIRED: "false" } });
+    const { a } = await workspace(world);
+    const { token } = await invite(world, a, "Acknowledging.Person@Example.test");
+
+    const created = await signup(world, token, { displayName: "Grace Hopper", password: PASSWORD, acknowledgements: [TERMS, AGE] });
+
+    expect(created.status).toBe(201);
+    expect(asked).toEqual([{ path: "invitation", acknowledgements: [TERMS, AGE] }]);
+    const [event] = await jobsNamed("event.account.created");
+    expect(JSON.parse(String(event?.data["acknowledgements"]))).toEqual([TERMS, AGE]);
+    expect(event?.data["path"]).toBe("invitation");
+  });
+
+  it("treats a form without the field as an empty list for the policy and the event", async () => {
+    const asked: unknown[] = [];
+    const world = serve({
+      modules: [
+        {
+          name: "spy",
+          hooks: {
+            registrationPolicy: (input) => {
+              asked.push(input.acknowledgements);
+              return HookResult.allow();
+            },
+          },
+          register: () => ({}),
+        },
+      ],
+      env: { EMAIL_VERIFICATION_REQUIRED: "false" },
+    });
+    const { a } = await workspace(world);
+    const { token } = await invite(world, a, "Plain.Person@Example.test");
+
+    expect((await signup(world, token)).status).toBe(201);
+
+    expect(asked).toEqual([[]]);
+    expect((await jobsNamed("event.account.created")).map((job) => job.data["acknowledgements"])).toEqual(["[]"]);
+  });
+
+  it("refuses a form without the required acknowledgement with one 403 registration_refused for an address that has an account and one that has none, creating nothing and leaving the invitation usable", async () => {
+    const { module } = requiresTerms();
+    const world = serve({ modules: [module] });
+    const { workspaceId, a } = await workspace(world);
+    const holder = await harness.person(world);
+    const taken = await invite(world, a, holder.account.email);
+    const fresh = await invite(world, a, "Unacknowledging.Person@Example.test");
+    const before = await harness.rolesOf(workspaceId);
+
+    const answers = [];
+    for (const token of [taken.token, fresh.token]) {
+      for (const acknowledgements of [undefined, [AGE]]) {
+        const refused = await signup(world, token, { displayName: "Grace Hopper", password: PASSWORD, ...(acknowledgements === undefined ? {} : { acknowledgements }) });
+        expect(refused.headers.get("set-cookie")).toBeNull();
+        answers.push({ status: refused.status, problem: await problemWithoutRequestId(refused) });
+      }
+    }
+
+    expect(answers[0]?.status).toBe(403);
+    expect(answers[0]?.problem.code).toBe("registration_refused");
+    for (const answer of answers) {
+      expect(answer).toEqual(answers[0]);
+    }
+    expect(await accountsWithEmail("unacknowledging.person@example.test")).toEqual([]);
+    expect(await harness.rolesOf(workspaceId)).toEqual(before);
+    expect(await invitationStatus(taken.id)).toEqual({ status: "pending", accepted_by: null });
+    expect(await invitationStatus(fresh.id)).toEqual({ status: "pending", accepted_by: null });
+    expect(await jobsNamed("event.account.created")).toEqual([]);
+  });
+
+  const violations: readonly (readonly [string, unknown])[] = [
+    ["more than 8 entries", Array.from({ length: 9 }, (_unused, index) => ({ id: `doc-${String(index)}`, version: "1" }))],
+    ["an id outside the grammar", [{ id: "Terms", version: "1" }]],
+    ["a repeated id", [TERMS, { id: "terms", version: "2" }]],
+    ["an empty version", [{ id: "terms", version: "" }]],
+    ["a version longer than 32 characters", [{ id: "terms", version: "v".repeat(33) }]],
+    ["a version with a control character", [{ id: "terms", version: "1\u0007" }]],
+    ["an unknown key inside an entry", [{ ...TERMS, accepted: true }]],
+  ];
+
+  it.each(violations)("answers 422 validation_failed for %s without asking the policy or writing anything", async (_name, acknowledgements) => {
+    const { module, asked } = requiresTerms();
+    const world = serve({ modules: [module] });
+    const { workspaceId, a } = await workspace(world);
+    const holder = await harness.person(world);
+    const taken = await invite(world, a, holder.account.email);
+    const fresh = await invite(world, a, "Invalid.Person@Example.test");
+    const before = await harness.rolesOf(workspaceId);
+
+    const answers = [];
+    for (const token of [taken.token, fresh.token]) {
+      const refused = await signup(world, token, { displayName: "Grace Hopper", password: PASSWORD, acknowledgements });
+      answers.push({ status: refused.status, problem: await problemWithoutRequestId(refused) });
+    }
+
+    expect(answers[0]?.status).toBe(422);
+    expect(answers[0]?.problem.code).toBe("validation_failed");
+    expect(answers[1]).toEqual(answers[0]);
+    expect(asked).toEqual([]);
+    expect(await accountsWithEmail("invalid.person@example.test")).toEqual([]);
+    expect(await harness.rolesOf(workspaceId)).toEqual(before);
+    expect(await invitationStatus(fresh.id)).toEqual({ status: "pending", accepted_by: null });
+    expect(await jobsNamed("event.account.created")).toEqual([]);
+  });
+
+  it("answers 422 validation_failed for the field on the form of the token alone, which creates no account, and leaves the invitation pending", async () => {
+    const { module, asked } = requiresTerms();
+    const world = serve({ modules: [module] });
+    const { a } = await workspace(world);
+    const holder = await harness.person(world);
+    const taken = await invite(world, a, holder.account.email);
+
+    for (const headers of [{} as Record<string, string>, { cookie: holder.cookie }]) {
+      const refused = await send(world, "POST", ACCEPT, headers, { token: taken.token, acknowledgements: [TERMS] });
+      expect(refused.status).toBe(422);
+      expect((await problemOf(refused)).code).toBe("validation_failed");
+    }
+
+    expect(asked).toEqual([]);
+    expect(await invitationStatus(taken.id)).toEqual({ status: "pending", accepted_by: null });
+    const accepted = await send(world, "POST", ACCEPT, { cookie: holder.cookie }, { token: taken.token });
+    expect(accepted.status).toBe(200);
   });
 });
 

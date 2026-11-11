@@ -122,7 +122,7 @@ export function acceptInvitationWithIdentity({ store, newId }: InvitationIdentit
     onAccepted: ({ workspaceId, role, accountId, displayName, created }) => {
       const events: InvitationSignupEvent[] = [];
       if (created) {
-        events.push({ eventId: newId(), name: "account.created", payload: { accountId, path: "invitation" } } satisfies DomainEvent<"account.created">);
+        events.push({ eventId: newId(), name: "account.created", payload: { accountId, path: "invitation", acknowledgements: [] } } satisfies DomainEvent<"account.created">);
       }
       events.push({ eventId: newId(), name: "member.joined", payload: { workspaceId, accountId, role } } satisfies DomainEvent<"member.joined">);
       return {

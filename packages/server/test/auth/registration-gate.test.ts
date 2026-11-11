@@ -23,25 +23,25 @@ async function refusal(run: Promise<void>): Promise<ProblemError> {
 
 describe("assertRegistrationAllowed", () => {
   it("allows with no module registered", async () => {
-    await expect(assertRegistrationAllowed(hookDispatcher(), { email: "someone@blocked.example", path: "self-registration" })).resolves.toBeUndefined();
+    await expect(assertRegistrationAllowed(hookDispatcher(), { email: "someone@blocked.example", path: "self-registration", acknowledgements: [] })).resolves.toBeUndefined();
   });
 
   it("allows an address the policy allows, on every path", async () => {
     const hooks = hookDispatcher(registrations(registrationPolicyModule()));
     for (const path of ["self-registration", "invitation", "oidc"] as const) {
-      await expect(assertRegistrationAllowed(hooks, { email: "someone@example.test", path })).resolves.toBeUndefined();
+      await expect(assertRegistrationAllowed(hooks, { email: "someone@example.test", path, acknowledgements: [] })).resolves.toBeUndefined();
     }
   });
 
   it("throws a 403 registration_refused for an address the policy refuses, on every path", async () => {
     const hooks = hookDispatcher(registrations(registrationPolicyModule()));
     for (const path of ["self-registration", "invitation", "oidc"] as const) {
-      const problem = await refusal(assertRegistrationAllowed(hooks, { email: "someone@blocked.example", path }));
+      const problem = await refusal(assertRegistrationAllowed(hooks, { email: "someone@blocked.example", path, acknowledgements: [] }));
       expect(problem.code).toBe("registration_refused");
     }
   });
 
-  it("hands the hook the address and the path and nothing else", async () => {
+  it("hands the hook the address, the path and the acknowledgements and nothing else", async () => {
     const seen: unknown[] = [];
     const spy: ServerModule = {
       name: "spy",
@@ -57,10 +57,59 @@ describe("assertRegistrationAllowed", () => {
     await assertRegistrationAllowed(hookDispatcher(registrations(spy)), {
       email: "someone@example.test",
       path: "oidc",
+      acknowledgements: [{ id: "terms", version: "2026-01" }],
       extra: "a field the gate does not forward",
     } as Parameters<typeof assertRegistrationAllowed>[1]);
 
-    expect(seen).toEqual([{ email: "someone@example.test", path: "oidc" }]);
+    expect(seen).toEqual([{ email: "someone@example.test", path: "oidc", acknowledgements: [{ id: "terms", version: "2026-01" }] }]);
+  });
+
+  it("hands each hook the acknowledgements as a frozen copy, so one hook cannot change what the next sees", async () => {
+    const seen: (readonly { id: string; version: string }[])[] = [];
+    const tamper: ServerModule = {
+      name: "tamper",
+      hooks: {
+        registrationPolicy: (input) => {
+          for (const attempt of [() => (input.acknowledgements as { id: string; version: string }[]).push({ id: "extra", version: "1" }), () => ((input.acknowledgements[0] as { id: string }).id = "changed")]) {
+            try {
+              attempt();
+            } catch {
+              // a frozen list refuses the change, which is what this checks
+            }
+          }
+          return HookResult.allow();
+        },
+      },
+      register: () => ({}),
+    };
+    const spy: ServerModule = {
+      name: "spy",
+      hooks: {
+        registrationPolicy: (input) => {
+          seen.push(input.acknowledgements);
+          return HookResult.allow();
+        },
+      },
+      register: () => ({}),
+    };
+    const given = [{ id: "terms", version: "2026-01" }];
+
+    await assertRegistrationAllowed(hookDispatcher(registrations(tamper, spy)), { email: "someone@example.test", path: "self-registration", acknowledgements: given });
+
+    expect(seen).toEqual([[{ id: "terms", version: "2026-01" }]]);
+    expect(given).toEqual([{ id: "terms", version: "2026-01" }]);
+  });
+
+  it("refuses with the same registration_refused when the policy requires an acknowledgement the request lacks", async () => {
+    const requires: ServerModule = {
+      name: "requires",
+      hooks: { registrationPolicy: (input) => (input.acknowledgements.some((entry) => entry.id === "terms") ? HookResult.allow() : HookResult.refuse("terms_missing")) },
+      register: () => ({}),
+    };
+    const hooks = hookDispatcher(registrations(requires));
+    const problem = await refusal(assertRegistrationAllowed(hooks, { email: "someone@example.test", path: "self-registration", acknowledgements: [] }));
+    expect(problem.code).toBe("registration_refused");
+    await expect(assertRegistrationAllowed(hooks, { email: "someone@example.test", path: "self-registration", acknowledgements: [{ id: "terms", version: "1" }] })).resolves.toBeUndefined();
   });
 
   it("fails with 503 unavailable when a hook throws or hangs, as the dispatcher does", async () => {
@@ -76,7 +125,7 @@ describe("assertRegistrationAllowed", () => {
     const hangs: ServerModule = { name: "hangs", hooks: { registrationPolicy: () => new Promise(() => undefined) }, register: () => ({}) };
     for (const module of [throws, hangs]) {
       const hooks = hookDispatcher(registrations(module));
-      const problem = await refusal(assertRegistrationAllowed(hooks, { email: "someone@example.test", path: "self-registration" }));
+      const problem = await refusal(assertRegistrationAllowed(hooks, { email: "someone@example.test", path: "self-registration", acknowledgements: [] }));
       expect(problem.code).toBe("unavailable");
     }
   }, 10_000);
@@ -95,7 +144,7 @@ describe("the refusal on the wire", () => {
               if (hooks === undefined) {
                 throw new Error("no hooks in the handler");
               }
-              await assertRegistrationAllowed(hooks, { email: new URL(context.req.url).searchParams.get("email") ?? "", path: "self-registration" });
+              await assertRegistrationAllowed(hooks, { email: new URL(context.req.url).searchParams.get("email") ?? "", path: "self-registration", acknowledgements: [] });
               return Response.json({ allowed: true });
             },
           },

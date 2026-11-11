@@ -4,6 +4,10 @@
       "AcceptInvitationRequest": {
         "additionalProperties": false,
         "properties": {
+          "acknowledgements": {
+            "$ref": "#/components/schemas/RegistrationAcknowledgements",
+            "description": "What the person acknowledged before the account was created: at most 8 entries, each an identifier and a version label, an identifier at most once; absent means none. Sent only with the display name and the password"
+          },
           "displayName": {
             "description": "The display name of the account to create; surrounding whitespace is removed. Sent with the password, by a person whose invited address has no account, and never with a session",
             "maxLength": 100,
@@ -5439,6 +5443,10 @@
       "RegisterRequest": {
         "additionalProperties": false,
         "properties": {
+          "acknowledgements": {
+            "$ref": "#/components/schemas/RegistrationAcknowledgements",
+            "description": "What the person acknowledged before registering: at most 8 entries, each an identifier and a version label, an identifier at most once; absent means none. The deployment's registration policy decides what it requires, and a request the policy refuses is answered 403 registration_refused like any other refusal"
+          },
           "displayName": {
             "description": "The new account's display name; surrounding whitespace is removed",
             "maxLength": 100,
@@ -5463,6 +5471,34 @@
           "password"
         ],
         "type": "object"
+      },
+      "RegistrationAcknowledgement": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The acknowledged document or statement: 1 to 32 characters of a-z, 0-9, underscore and hyphen",
+            "pattern": "^[a-z0-9_-]{1,32}$",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version label the person acknowledged: 1 to 32 characters, no control character",
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "RegistrationAcknowledgements": {
+        "items": {
+          "$ref": "#/components/schemas/RegistrationAcknowledgement"
+        },
+        "maxItems": 8,
+        "type": "array"
       },
       "RenameTagRequest": {
         "additionalProperties": false,

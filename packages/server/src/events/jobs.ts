@@ -1,4 +1,4 @@
-import { DOMAIN_EVENTS, DOMAIN_EVENT_NAMES, parseDomainEventPayload, type AnyDomainEvent, type DomainEventField, type DomainEventName } from "@slugbase/core";
+import { DOMAIN_EVENTS, DOMAIN_EVENT_NAMES, DomainEventPayloadError, parseDomainEventPayload, type AnyDomainEvent, type DomainEventField, type DomainEventName } from "@slugbase/core";
 import { z } from "zod";
 import { defineJob, type JobDefinition } from "../worker/job.ts";
 import { eventJobName } from "./publish.ts";
@@ -17,9 +17,41 @@ export class EventDeliveryError extends Error {
 
 const EVENT_ID = z.uuid();
 
+// The JSON text of a valid list is at most 1,977 characters: eight entries of an identifier of 32 characters and a version of 32 lone surrogates, which `JSON.stringify` writes as six characters each (checked with node). Keep this above that bound.
+const ACKNOWLEDGEMENTS_TEXT_MAX = 2048;
+
+function fieldSchema(field: DomainEventField): z.ZodType {
+  switch (field.type) {
+    case "uuid":
+      return z.uuid();
+    case "enum":
+      return z.enum(field.values);
+    case "acknowledgements":
+      // The JSON text of the list (see `queueDomainEvent`); a job queued by the release before the field existed has none, which is an empty list.
+      return z.string().max(ACKNOWLEDGEMENTS_TEXT_MAX).default("[]");
+  }
+}
+
 function payloadShape(name: DomainEventName): z.ZodRawShape {
   const fields: Readonly<Record<string, DomainEventField>> = DOMAIN_EVENTS[name];
-  return Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, field.type === "uuid" ? z.uuid() : z.enum(field.values)]));
+  return Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, fieldSchema(field)]));
+}
+
+/** The catalog payload of a job's fields: the text of an acknowledgements field is read back as its list. */
+function decoded(name: DomainEventName, fields: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const declared: Readonly<Record<string, DomainEventField>> = DOMAIN_EVENTS[name];
+  return Object.fromEntries(
+    Object.entries(fields).map(([key, value]) => {
+      if (declared[key]?.type !== "acknowledgements" || typeof value !== "string") {
+        return [key, value];
+      }
+      try {
+        return [key, JSON.parse(value) as unknown];
+      } catch {
+        throw new DomainEventPayloadError(name, `has no valid ${key}`);
+      }
+    }),
+  );
 }
 
 /**
@@ -38,7 +70,7 @@ export function eventJobs(subscribersFor: (name: DomainEventName) => readonly Re
         if (subscribers.length === 0) {
           return;
         }
-        const event = { eventId: EVENT_ID.parse(eventId), name, payload: parseDomainEventPayload(name, fields) } as AnyDomainEvent;
+        const event = { eventId: EVENT_ID.parse(eventId), name, payload: parseDomainEventPayload(name, decoded(name, fields)) } as AnyDomainEvent;
         const failed: string[] = [];
         for (const subscriber of subscribers) {
           try {

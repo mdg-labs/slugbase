@@ -4,8 +4,22 @@
 // do that). A payload holds scalar identifiers and enumerated values only: never
 // an email address, a name or any other personal data, because the payload travels
 // through the job queue and the logs of the subscribers (doc 10 T7). A subscriber
-// that needs more reads current state by identifier. Adding an event is a contract
-// change (doc 01 section 7.4).
+// that needs more reads current state by identifier. The one list a payload holds is the
+// bounded list of acknowledgements an account was created with: identifiers and short
+// version labels, at most 8 entries, never free text.
+// Adding an event is a contract change (doc 01 section 7.4).
+
+import {
+  REGISTRATION_ACKNOWLEDGEMENTS_MAX,
+  REGISTRATION_ACKNOWLEDGEMENT_ID_PATTERN,
+  REGISTRATION_ACKNOWLEDGEMENT_VERSION_MAX_LENGTH,
+} from "@slugbase/contracts";
+
+/** What the person creating an account acknowledged: a document or statement identifier and the version label seen (doc 01 section 13.5). */
+export interface RegistrationAcknowledgement {
+  readonly id: string;
+  readonly version: string;
+}
 
 /** How an account came to exist; `setup` is first-run setup, which the registration policy skips (doc 01 section 13.5). */
 export const ACCOUNT_CREATION_PATHS = ["self-registration", "invitation", "oidc", "setup"] as const;
@@ -23,13 +37,16 @@ const MEMBER_ROLES = ["owner", "admin", "member"] as const;
 /** The kinds of field a payload holds. */
 export type DomainEventField =
   | { readonly type: "uuid" }
-  | { readonly type: "enum"; readonly values: readonly [string, ...string[]] };
+  | { readonly type: "enum"; readonly values: readonly [string, ...string[]] }
+  | { readonly type: "acknowledgements" };
 
 /** The payload of every event, field by field. */
 export const DOMAIN_EVENTS = {
   "account.created": {
     accountId: { type: "uuid" },
     path: { type: "enum", values: ACCOUNT_CREATION_PATHS },
+    /** What the request that created the account carried: empty for first-run setup and for the paths with no form. */
+    acknowledgements: { type: "acknowledgements" },
   },
   /**
    * An account is gone, with everything personal to it: queued in the transaction that deletes the account row, so it
@@ -88,8 +105,12 @@ export const DOMAIN_EVENTS = {
 
 export type DomainEventName = keyof typeof DOMAIN_EVENTS;
 
-/** The value a field holds: the listed values of an enum, a string for an identifier. */
-export type DomainEventFieldValue<Field> = Field extends { readonly values: readonly (infer Value)[] } ? Value : string;
+/** The value a field holds: the listed values of an enum, the list of an acknowledgements field, a string for an identifier. */
+export type DomainEventFieldValue<Field> = Field extends { readonly type: "acknowledgements" }
+  ? readonly RegistrationAcknowledgement[]
+  : Field extends { readonly values: readonly (infer Value)[] }
+    ? Value
+    : string;
 
 /** The payload of the event `Name`. */
 export type DomainEventPayload<Name extends DomainEventName = DomainEventName> = {
@@ -122,7 +143,39 @@ export class DomainEventPayloadError extends Error {
   }
 }
 
+const CONTROL_CHARACTER = /\p{Cc}/u;
+
+function fitsAcknowledgements(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > REGISTRATION_ACKNOWLEDGEMENTS_MAX) {
+    return false;
+  }
+  const seen = new Set<string>();
+  for (const entry of value as readonly unknown[]) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return false;
+    }
+    const { id, version, ...rest } = entry as Readonly<Record<string, unknown>>;
+    if (Object.keys(rest).length > 0 || typeof id !== "string" || typeof version !== "string") {
+      return false;
+    }
+    if (
+      !REGISTRATION_ACKNOWLEDGEMENT_ID_PATTERN.test(id) ||
+      seen.has(id) ||
+      version.length < 1 ||
+      version.length > REGISTRATION_ACKNOWLEDGEMENT_VERSION_MAX_LENGTH ||
+      CONTROL_CHARACTER.test(version)
+    ) {
+      return false;
+    }
+    seen.add(id);
+  }
+  return true;
+}
+
 function fits(field: DomainEventField, value: unknown): boolean {
+  if (field.type === "acknowledgements") {
+    return fitsAcknowledgements(value);
+  }
   if (typeof value !== "string") {
     return false;
   }

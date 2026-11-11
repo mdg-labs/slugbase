@@ -1716,6 +1716,8 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         AcceptInvitationRequest: {
+            /** @description What the person acknowledged before the account was created: at most 8 entries, each an identifier and a version label, an identifier at most once; absent means none. Sent only with the display name and the password */
+            acknowledgements?: components["schemas"]["RegistrationAcknowledgements"];
             /** @description The display name of the account to create; surrounding whitespace is removed. Sent with the password, by a person whose invited address has no account, and never with a session */
             displayName?: string;
             /** @description The password of the account to create, 12 to 256 characters. Sent with the display name, by a person whose invited address has no account */
@@ -3522,6 +3524,8 @@ export interface components {
             code: string;
         };
         RegisterRequest: {
+            /** @description What the person acknowledged before registering: at most 8 entries, each an identifier and a version label, an identifier at most once; absent means none. The deployment's registration policy decides what it requires, and a request the policy refuses is answered 403 registration_refused like any other refusal */
+            acknowledgements?: components["schemas"]["RegistrationAcknowledgements"];
             /** @description The new account's display name; surrounding whitespace is removed */
             displayName: string;
             /**
@@ -3532,6 +3536,13 @@ export interface components {
             /** @description The new account's password, 12 to 256 characters */
             password: string;
         };
+        RegistrationAcknowledgement: {
+            /** @description The acknowledged document or statement: 1 to 32 characters of a-z, 0-9, underscore and hyphen */
+            id: string;
+            /** @description The version label the person acknowledged: 1 to 32 characters, no control character */
+            version: string;
+        };
+        RegistrationAcknowledgements: components["schemas"]["RegistrationAcknowledgement"][];
         RenameTagRequest: {
             /** @description The tag's name, 1 to 40 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique among the caller's tags without regard to case */
             name: string;

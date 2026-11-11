@@ -5,7 +5,7 @@ import type { TestDatabase } from "@slugbase/testing/db";
 import { hashPassword } from "../../src/auth/password.ts";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createRateLimitRegistry } from "../../src/config/index.ts";
-import { createServer, type Server } from "../../src/create-server.ts";
+import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
 import type { EntitlementCheck } from "../../src/http/authorize.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { memoryRateLimiter, type MemoryRateLimiter } from "../http/rate-limit-support.ts";
@@ -351,10 +351,12 @@ export interface ServeOptions {
   readonly mail?: MailPort;
   /** The entitlements the composition holds; none when absent. */
   readonly entitlements?: EntitlementCheck;
+  /** The modules composed into the server; none when absent. */
+  readonly modules?: readonly ServerModule[];
 }
 
 /** The whole chain over the migrated database, as the sign-in suites run it. */
-export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, openLimits = true, mail, entitlements }: ServeOptions = {}): AuthWorld {
+export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, openLimits = true, mail, entitlements, modules = [] }: ServeOptions = {}): AuthWorld {
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database),
@@ -366,7 +368,7 @@ export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, 
   const server = createServer({
     config,
     adapters: { ...adapters(config), rateLimit: limiter, tenantResolver: createAccountOnlyTenantResolver(), ...(mail === undefined ? {} : { mail }) },
-    modules: [],
+    modules,
     migrations: [],
     logger: logs,
     database: tenantDatabase(database),
