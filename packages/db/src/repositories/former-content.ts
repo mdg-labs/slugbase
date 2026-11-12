@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { folderBookmarks, folders } from "../schema/folders.ts";
+import { workspaceMembers } from "../schema/workspaces.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import { distinctIdentifiers, requireIdentifiers, uuidArray } from "./folder-links.ts";
 
@@ -21,6 +22,11 @@ import { distinctIdentifiers, requireIdentifiers, uuidArray } from "./folder-lin
 // rule of whose content it removes (no owner, no departure, no plan-archived bookmark, this workspace) and of who may call it (an owner or an admin of the workspace), so
 // the repository adds none: it hands over the identifiers and answers what the function answered. This is the narrow exception to T2 that doc 10 names for owners and
 // admins over ownerless content, a deletion through this method and no read of a row it does not list.
+//
+// Giving that content to a member is `sys_former_content_reassign` (src/sql/760-former-content-reassign.sql), the one path that changes the owner of a row to someone the row's
+// previous state names none of: `slugbase_app` has no privilege to write `owner_id`. As with the deletion the function holds the rules (whose content, who may call it, that the
+// recipient is a member of the workspace, the collisions of the departure and the filings that would cross owners), and the repository hands over the identifiers and answers what
+// the function answered. It is the second named exception to T2 in doc 10: a move through this method and no read of a row it does not list.
 
 /** An ownerless bookmark of the workspace, as the admins' list shows it. */
 export interface FormerBookmark {
@@ -51,6 +57,32 @@ export interface FormerContentDeleted {
   readonly foldersDeleted: number;
 }
 
+/** What a reassignment of former members' content did. */
+export interface FormerContentReassigned {
+  readonly bookmarksMoved: number;
+  readonly foldersMoved: number;
+  /** The moved bookmarks whose slug the recipient already owned: they arrived without a slug and with forwarding off. */
+  readonly slugsCleared: number;
+  /** The moved folders whose name the recipient already had: they arrived as `<name> (<n>)`. */
+  readonly foldersRenamed: number;
+  /** The filings of a moved folder or bookmark that would have linked two owners, removed in the same call. */
+  readonly filingsRemoved: number;
+}
+
+/** Why a reassignment wrote nothing: the recipient is no member of the workspace, or the call was refused (the caller is no owner or admin, or the workspace cannot be reached). */
+export type FormerContentReassignment =
+  | ({ readonly kind: "reassigned" } & FormerContentReassigned)
+  | { readonly kind: "recipient_not_member" }
+  | { readonly kind: "refused" };
+
+interface ReassignedRow extends Record<string, unknown> {
+  bookmarks_moved: number | null;
+  folders_moved: number | null;
+  slugs_cleared: number | null;
+  folders_renamed: number | null;
+  filings_removed: number | null;
+}
+
 interface DeletedRow extends Record<string, unknown> {
   bookmarks_deleted: number | null;
   folders_deleted: number | null;
@@ -75,6 +107,15 @@ export interface FormerContentRepository {
    * identifiers a list. Needs a transaction opened with a workspace.
    */
   delete(request: { readonly bookmarkIds: readonly string[]; readonly folderIds: readonly string[] }): Promise<FormerContentDeleted | undefined>;
+  /**
+   * Gives the bookmarks of `bookmarkIds` and the folders of `folderIds` that have no owner in the workspace of the transaction to `recipientId`, a member of the workspace, through
+   * `sys_former_content_reassign`, in the transaction. A slug the recipient owns is cleared on the moved bookmark with forwarding off, a folder name the recipient has becomes
+   * `<name> (<n>)`, and a filing that would link two owners is removed; `workspaces.bookmark_count` is unchanged. An identifier that names no such row (one a member owns, one a
+   * departure still holds, a plan-archived bookmark, another workspace's, a gone one) is skipped and is not told apart from another. Answers `recipient_not_member`, writing nothing,
+   * when `recipientId` is no member of the workspace (a member of another workspace included), and `refused`, writing nothing, when the account of the transaction is no owner or admin of
+   * the workspace or the workspace cannot be reached. At most 1 000 identifiers a list. Needs a transaction opened with a workspace.
+   */
+  reassign(request: { readonly bookmarkIds: readonly string[]; readonly folderIds: readonly string[]; readonly recipientId: string }): Promise<FormerContentReassignment>;
 }
 
 function requireWorkspace(tx: TenantTx, what: string): string {
@@ -156,6 +197,45 @@ export function formerContentRepository(tx: TenantTx): FormerContentRepository {
         throw new Error("sys_former_content_delete did not return exactly one answer");
       }
       return row.bookmarks_deleted === null || row.folders_deleted === null ? undefined : { bookmarksDeleted: row.bookmarks_deleted, foldersDeleted: row.folders_deleted };
+    },
+
+    async reassign({ bookmarkIds, folderIds, recipientId }) {
+      const workspaceId = requireWorkspace(tx, "reassigning the former members' content");
+      const wantedBookmarks = distinctIdentifiers(bookmarkIds);
+      const wantedFolders = distinctIdentifiers(folderIds);
+      requireIdentifiers(wantedBookmarks, "reassigning the former members' content");
+      requireIdentifiers(wantedFolders, "reassigning the former members' content");
+      requireIdentifiers([recipientId], "reassigning the former members' content");
+      const rows = await tenantHandle(tx).execute<ReassignedRow>(sql`
+        SELECT bookmarks_moved, folders_moved, slugs_cleared, folders_renamed, filings_removed
+        FROM public.sys_former_content_reassign(${workspaceId}::uuid, ${recipientId}::uuid, ${uuidArray(wantedBookmarks)}::uuid[], ${uuidArray(wantedFolders)}::uuid[])`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_former_content_reassign did not return exactly one answer");
+      }
+      if (
+        row.bookmarks_moved !== null &&
+        row.folders_moved !== null &&
+        row.slugs_cleared !== null &&
+        row.folders_renamed !== null &&
+        row.filings_removed !== null
+      ) {
+        return {
+          kind: "reassigned",
+          bookmarksMoved: row.bookmarks_moved,
+          foldersMoved: row.folders_moved,
+          slugsCleared: row.slugs_cleared,
+          foldersRenamed: row.folders_renamed,
+          filingsRemoved: row.filings_removed,
+        };
+      }
+      // The function answers nothing for a caller who may not reassign and for a recipient who is no member; the membership, read here in the same transaction, tells the two apart.
+      const member = await tenantHandle(tx)
+        .select({ accountId: workspaceMembers.accountId })
+        .from(workspaceMembers)
+        .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.accountId, recipientId.toLowerCase())))
+        .limit(1);
+      return member.length === 0 ? { kind: "recipient_not_member" } : { kind: "refused" };
     },
   };
 }

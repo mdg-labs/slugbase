@@ -2266,6 +2266,31 @@
           "done": "{summary} deleted.",
           "nothing": "Nothing was deleted. The content was already gone, or it has an owner again.",
           "partial": "Only {done, number} of {total, number} were deleted before an error. The rest is still selected; try again in a moment."
+        },
+        "reassign": {
+          "action": "Reassign to…",
+          "close": "Close",
+          "cancel": "Cancel",
+          "continue": "Continue",
+          "dialog": {
+            "title": "Reassign former members' content",
+            "description": "Choose the member who becomes the owner of {summary}."
+          },
+          "recipient": {
+            "label": "New owner",
+            "placeholder": "Search members",
+            "empty": "No member matches"
+          },
+          "recipientGone": "{name} is no longer a member of this workspace. Choose another member; your selection is kept.",
+          "title": "Reassign former members' content?",
+          "description": "{recipient} becomes the owner of {summary}. A bookmark whose slug {recipient} already uses loses its slug and stops forwarding. A folder whose name {recipient} already has gets a number added, as in “Reading (2)”. A filing that would link a folder and a bookmark with different owners is removed. Shares stay in force.",
+          "confirm": "Reassign",
+          "done": "{summary} reassigned to {recipient}.",
+          "nothing": "Nothing was reassigned. The content was already gone, or it has an owner again.",
+          "tooMany": "One reassignment takes at most {max, number} bookmarks and {max, number} folders. Reassign in smaller selections, and select each folder together with its bookmarks so that they stay filed together.",
+          "slugsCleared": "{count, plural, one {# slug was removed because the member already uses it.} other {# slugs were removed because the member already uses them.}}",
+          "foldersRenamed": "{count, plural, one {# folder was renamed because the member has a folder with that name.} other {# folders were renamed because the member has folders with those names.}}",
+          "filingsRemoved": "{count, plural, one {# filing was removed because its folder and bookmark have different owners.} other {# filings were removed because their folders and bookmarks have different owners.}}"
         }
       },
       "invite": {
@@ -3211,6 +3236,7 @@
         "left": "Member left",
         "joined": "Member joined",
         "former_content_deleted": "Former members' content deleted",
+        "former_content_reassigned": "Former members' content reassigned",
         "instance_admin_joined": "Instance administrator joined"
       },
       "invitation": {

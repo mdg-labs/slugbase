@@ -766,6 +766,26 @@ export interface FormerContentDeleted {
     readonly foldersDeleted: number;
 }
 
+// @public
+export interface FormerContentReassigned {
+    // (undocumented)
+    readonly bookmarksMoved: number;
+    readonly filingsRemoved: number;
+    // (undocumented)
+    readonly foldersMoved: number;
+    readonly foldersRenamed: number;
+    readonly slugsCleared: number;
+}
+
+// @public
+export type FormerContentReassignment = ({
+    readonly kind: "reassigned";
+} & FormerContentReassigned) | {
+    readonly kind: "recipient_not_member";
+} | {
+    readonly kind: "refused";
+};
+
 // @public (undocumented)
 export interface FormerContentRepository {
     delete(request: {
@@ -774,6 +794,11 @@ export interface FormerContentRepository {
     }): Promise<FormerContentDeleted | undefined>;
     listBookmarks(afterId: string | null, limit: number): Promise<readonly FormerBookmark[]>;
     listFolders(afterId: string | null, limit: number): Promise<readonly FormerFolder[]>;
+    reassign(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly folderIds: readonly string[];
+        readonly recipientId: string;
+    }): Promise<FormerContentReassignment>;
 }
 
 // @public (undocumented)

@@ -58,7 +58,7 @@ export { isTeamNameTaken, teamRepository } from "./repositories/teams.ts";
 export type { TeamRepository } from "./repositories/teams.ts";
 export { folderRepository, isFolderNameTaken } from "./repositories/folders.ts";
 export { formerContentRepository } from "./repositories/former-content.ts";
-export type { FormerBookmark, FormerContentDeleted, FormerContentRepository, FormerFolder } from "./repositories/former-content.ts";
+export type { FormerBookmark, FormerContentDeleted, FormerContentReassigned, FormerContentReassignment, FormerContentRepository, FormerFolder } from "./repositories/former-content.ts";
 export { goRepository } from "./repositories/go.ts";
 export { faviconRepository } from "./repositories/favicons.ts";
 export type { FaviconRecord, FaviconRepository, FaviconResult, FaviconSize } from "./repositories/favicons.ts";

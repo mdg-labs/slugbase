@@ -103,6 +103,11 @@ export interface WorkspaceSettingsServerOptions {
    * The server answers `{ bookmarksDeleted, foldersDeleted }` for the named rows it held.
    */
   readonly formerDelete?: (call: number, request: Request) => Response | Promise<Response> | undefined;
+  /**
+   * Answers `POST /workspace/former-content/reassign` instead of moving the rows it names out of the lists above, or leaves it to the server with undefined; `call` counts from 1.
+   * The server answers the five counts for the named rows it held, with nothing cleared, renamed or removed, and `404` naming `transferTo` for an account that is no member of the list of members.
+   */
+  readonly formerReassign?: (call: number, request: Request) => Response | Promise<Response> | undefined;
   /** The server has an AI port, and `/api/config` names the operator's display name for its provider. */
   readonly ai?: { readonly provider: string };
   /** The workspace's AI toggle as stored; on by default. */
@@ -350,6 +355,30 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       formerBookmarkRows = formerBookmarkRows.filter((row) => !(wanted.bookmarkIds ?? []).includes(row.id));
       formerFolderRows = formerFolderRows.filter((row) => !(wanted.folderIds ?? []).includes(row.id));
       return json({ bookmarksDeleted: bookmarksBefore - formerBookmarkRows.length, foldersDeleted: foldersBefore - formerFolderRows.length });
+    }
+    if (pathname === `${FORMER_CONTENT_PATH}/reassign` && request.method === "POST") {
+      const answer = options.formerReassign?.(call, request);
+      if (answer !== undefined) {
+        return answer;
+      }
+      const wanted = JSON.parse(text) as { bookmarkIds?: string[]; folderIds?: string[]; transferTo: string };
+      if (!members.some((member) => member.accountId === wanted.transferTo)) {
+        return json(
+          { type: "x", title: "x", status: 404, code: "not_found", detail: "x", requestId: "req-404", errors: [{ path: "transferTo", code: "not_found" }] },
+          { status: 404, contentType: "application/problem+json" },
+        );
+      }
+      const bookmarksBefore = formerBookmarkRows.length;
+      const foldersBefore = formerFolderRows.length;
+      formerBookmarkRows = formerBookmarkRows.filter((row) => !(wanted.bookmarkIds ?? []).includes(row.id));
+      formerFolderRows = formerFolderRows.filter((row) => !(wanted.folderIds ?? []).includes(row.id));
+      return json({
+        bookmarksMoved: bookmarksBefore - formerBookmarkRows.length,
+        foldersMoved: foldersBefore - formerFolderRows.length,
+        slugsCleared: 0,
+        foldersRenamed: 0,
+        filingsRemoved: 0,
+      });
     }
     const former = /^\/api\/v1\/workspace\/former-content\/(bookmarks|folders)$/.exec(pathname);
     if (former !== null && request.method === "GET") {

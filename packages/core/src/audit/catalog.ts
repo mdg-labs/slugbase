@@ -67,6 +67,10 @@ export const AUDIT_ACTIONS = {
   // An owner or an admin deleted former members' bookmarks and folders, those that have no owner, in one request (doc 02 section 2.10): how many bookmarks and how many folders
   // were deleted, and nothing about them. A request that deletes none records nothing.
   "member.former_content_deleted": { category: "member", metadata: { bookmarks: COUNT, folders: COUNT } },
+  // An owner or an admin gave former members' bookmarks and folders, those that have no owner, to a member in one request (doc 02 section 2.10): the receiving account and how many bookmarks
+  // and how many folders moved, and nothing about them. `transferTo` is the key that names an account in a member's departure too, so deleting the account removes it from this event
+  // (doc 05 section 7.1). A request that moves none records nothing.
+  "member.former_content_reassigned": { category: "member", metadata: { transferTo: { type: "uuid" }, bookmarks: COUNT, folders: COUNT } },
   // An instance admin made themselves a member of the workspace (doc 02 section 11.1). It is its own action, not a `member.joined`, so the
   // owners who read the log can tell an operator's privilege from an invitation accepted; the instance stream holds the matching event.
   "member.instance_admin_joined": { category: "member", metadata: { role: MEMBER_ROLE } },

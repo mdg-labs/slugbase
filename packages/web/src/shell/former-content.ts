@@ -1,6 +1,6 @@
 import { FORMER_CONTENT_DELETE_MAX, type ComponentTypes } from "@slugbase/contracts";
 import { infiniteQueryOptions } from "@tanstack/react-query";
-import type { ApiClient } from "../api/client.ts";
+import { ApiProblemError, type ApiClient } from "../api/client.ts";
 
 export type FormerBookmark = ComponentTypes["schemas"]["FormerBookmark"];
 export type FormerFolder = ComponentTypes["schemas"]["FormerFolder"];
@@ -94,4 +94,62 @@ export async function deleteFormerContent(
     onProgress({ bookmarksDeleted, foldersDeleted });
   }
   return { bookmarksDeleted, foldersDeleted };
+}
+
+/** What a reassignment did, in the units the server counts. */
+export type FormerContentReassigned = ComponentTypes["schemas"]["ReassignFormerContentResult"];
+
+/** The most identifiers of one list that one reassignment takes (the contract's limit of the operation). */
+export const FORMER_CONTENT_REASSIGN_MAX = FORMER_CONTENT_DELETE_MAX;
+
+/**
+ * Whether a selection is too large for one reassignment. A reassignment is exactly one request, because the server removes a filing between a moved row and a row that still
+ * has no owner: a selection cut into several requests would lose the filings between a folder in one request and a bookmark in another.
+ */
+export function isReassignSelectionTooLarge(bookmarkCount: number, folderCount: number): boolean {
+  return bookmarkCount > FORMER_CONTENT_REASSIGN_MAX || folderCount > FORMER_CONTENT_REASSIGN_MAX;
+}
+
+/**
+ * How a reassignment ended: the content went to the member (`reassigned`, what the server counted), or the member is no longer one (`recipientGone`: the server answered 404
+ * naming `transferTo`, and nothing moved).
+ */
+export type FormerContentReassignOutcome =
+  | { readonly status: "reassigned"; readonly reassigned: FormerContentReassigned }
+  | { readonly status: "recipientGone" };
+
+function isRecipientGone(caught: unknown): boolean {
+  return caught instanceof ApiProblemError && caught.status === 404 && caught.errors.some(({ path }) => path === "transferTo");
+}
+
+/**
+ * Gives the named former members' bookmarks and folders to `transferTo` (doc 04 section 10.5) in one request, so that every filing between a selected folder and a selected
+ * bookmark stays. A selection of more than `FORMER_CONTENT_REASSIGN_MAX` identifiers in a list is refused with an error before any request; an empty selection sends none. A 404
+ * naming `transferTo` is an answer (`recipientGone`); any other failure throws. The server skips an identifier that names no such row, so a repeat of the request is harmless.
+ */
+export async function reassignFormerContent(
+  api: ApiClient,
+  request: { readonly bookmarkIds: readonly string[]; readonly folderIds: readonly string[]; readonly transferTo: string },
+): Promise<FormerContentReassignOutcome> {
+  const { bookmarkIds, folderIds, transferTo } = request;
+  if (isReassignSelectionTooLarge(bookmarkIds.length, folderIds.length)) {
+    throw new RangeError(`A reassignment takes at most ${String(FORMER_CONTENT_REASSIGN_MAX)} bookmarks and ${String(FORMER_CONTENT_REASSIGN_MAX)} folders`);
+  }
+  if (bookmarkIds.length === 0 && folderIds.length === 0) {
+    return { status: "reassigned", reassigned: { bookmarksMoved: 0, foldersMoved: 0, slugsCleared: 0, foldersRenamed: 0, filingsRemoved: 0 } };
+  }
+  try {
+    const { data, error } = await api.POST("/api/v1/workspace/former-content/reassign", {
+      body: { ...(bookmarkIds.length === 0 ? {} : { bookmarkIds: [...bookmarkIds] }), ...(folderIds.length === 0 ? {} : { folderIds: [...folderIds] }), transferTo },
+    });
+    if (data === undefined) {
+      throw new Error("The former members' content reassignment did not answer with a document", { cause: error });
+    }
+    return { status: "reassigned", reassigned: data };
+  } catch (caught) {
+    if (isRecipientGone(caught)) {
+      return { status: "recipientGone" };
+    }
+    throw caught;
+  }
 }

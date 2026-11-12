@@ -24,6 +24,7 @@ export const AUDIT_EVENT_ACTIONS = [
   "member.left",
   "member.joined",
   "member.former_content_deleted",
+  "member.former_content_reassigned",
   "member.instance_admin_joined",
   "invitation.created",
   "invitation.resent",

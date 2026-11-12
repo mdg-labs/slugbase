@@ -6,13 +6,18 @@ import { useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderGlyph } from "../folders/folder-glyph.tsx";
 import { useFormat } from "../i18n/use-format.ts";
+import { FormerContentReassignDialog } from "./former-content-reassign-dialog.tsx";
+import { formerContentSummary } from "./former-content-summary.ts";
 import {
   FORMER_CONTENT_QUERY_KEY,
+  FORMER_CONTENT_REASSIGN_MAX,
   deleteFormerContent,
   formerBookmarksQuery,
   formerFoldersQuery,
+  isReassignSelectionTooLarge,
   type FormerBookmark,
   type FormerContentDeleted,
+  type FormerContentReassigned,
   type FormerFolder,
 } from "./former-content.ts";
 import { useActiveWorkspaceId } from "./workspace-members.ts";
@@ -89,8 +94,9 @@ function ListBlock<Row extends object>({ title, failedTitle, columns, rows, rowK
 /**
  * The content of former members of the workspace (doc 03 section 11.7, doc 02 section 2.10): the bookmarks and folders that have no owner because their
  * owner left the workspace or deleted their account, which only an owner or admin sees. Two tables, each paged by the server's cursor, each row selectable; the section says so
- * when both are empty. Delete acts on the selected rows after a confirmation that states the counts: the deletion is for good, with no trash and no undo. The lists are read
- * again after every deletion, whatever its outcome, and a selection keeps only the rows the lists still hold, so a failed request leaves it and a deleted row leaves it.
+ * when both are empty. Delete acts on the selected rows after a confirmation that states the counts: the deletion is for good, with no trash and no undo. Reassign to... gives
+ * the selected rows to a member picked in a dialog (FormerContentReassignDialog). The lists are read again after every deletion and every reassignment, whatever its outcome, and
+ * a selection keeps only the rows the lists still hold, so a failed request leaves it and a row that left the lists leaves it.
  */
 function FormerContentLists({ workspaceId }: { workspaceId: string }): ReactElement {
   const { t } = useTranslation();
@@ -104,23 +110,39 @@ function FormerContentLists({ workspaceId }: { workspaceId: string }): ReactElem
   const [chosenBookmarks, setChosenBookmarks] = useState<ReadonlySet<string>>(new Set());
   const [chosenFolders, setChosenFolders] = useState<ReadonlySet<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
   const progress = useRef<FormerContentDeleted>({ bookmarksDeleted: 0, foldersDeleted: 0 });
   // The selection is what is chosen and still listed: a row the lists no longer hold (deleted, or gone for another reason) is not selected any more.
   const selectedBookmarks = bookmarkRows.filter((row) => chosenBookmarks.has(row.id)).map((row) => row.id);
   const selectedFolders = folderRows.filter((row) => chosenFolders.has(row.id)).map((row) => row.id);
   const selectedCount = selectedBookmarks.length + selectedFolders.length;
+  // One reassignment is one request (it keeps the filings between the folders and the bookmarks selected together), so a selection past the server's limit is not offered.
+  const reassignTooLarge = isReassignSelectionTooLarge(selectedBookmarks.length, selectedFolders.length);
 
-  const summaryOf = (bookmarkCount: number, folderCount: number): string => {
-    const bookmarkText = t("settings.members.former.delete.count.bookmarks", { count: bookmarkCount });
-    const folderText = t("settings.members.former.delete.count.folders", { count: folderCount });
-    if (bookmarkCount > 0 && folderCount > 0) {
-      return t("settings.members.former.delete.count.both", { bookmarks: bookmarkText, folders: folderText });
-    }
-    return bookmarkCount > 0 ? bookmarkText : folderText;
-  };
+  const summaryOf = (bookmarkCount: number, folderCount: number): string => formerContentSummary(t, bookmarkCount, folderCount);
 
   // `invalidateQueries` resolves when both lists have been read again, and never rejects: a list whose request fails shows its own error with a retry.
   const readAgain = (): Promise<void> => queryClient.invalidateQueries({ queryKey: [...FORMER_CONTENT_QUERY_KEY, workspaceId] });
+
+  // What a finished reassignment says: the counts the server gave, and the slugs, folder names and filings the move changed on the way.
+  const reassigned = (result: FormerContentReassigned, recipientName: string): void => {
+    setReassigning(false);
+    setChosenBookmarks(new Set());
+    setChosenFolders(new Set());
+    if (result.bookmarksMoved + result.foldersMoved === 0) {
+      feedbackToast.info(t("settings.members.former.reassign.nothing"));
+      return;
+    }
+    const details = [
+      result.slugsCleared > 0 ? t("settings.members.former.reassign.slugsCleared", { count: result.slugsCleared }) : undefined,
+      result.foldersRenamed > 0 ? t("settings.members.former.reassign.foldersRenamed", { count: result.foldersRenamed }) : undefined,
+      result.filingsRemoved > 0 ? t("settings.members.former.reassign.filingsRemoved", { count: result.filingsRemoved }) : undefined,
+    ].filter((detail) => detail !== undefined);
+    feedbackToast.success(
+      t("settings.members.former.reassign.done", { summary: summaryOf(result.bookmarksMoved, result.foldersMoved), recipient: recipientName }),
+      details.length === 0 ? undefined : details.join(" "),
+    );
+  };
 
   const remove = useMutation({
     mutationKey: ["workspace", "former-content", "delete"],
@@ -256,9 +278,23 @@ function FormerContentLists({ workspaceId }: { workspaceId: string }): ReactElem
           >
             {t("settings.members.former.delete.action")}
           </Button>
+          <Button
+            disabled={selectedCount === 0 || remove.isPending || reassignTooLarge}
+            onClick={() => {
+              setReassigning(true);
+            }}
+            variant="outline"
+          >
+            {t("settings.members.former.reassign.action")}
+          </Button>
           <span aria-live="polite" className="text-muted-foreground text-sm">
             {selectedCount === 0 ? null : t("settings.members.former.selection.count", { count: selectedCount })}
           </span>
+          {reassignTooLarge ? (
+            <span className="basis-full text-destructive-text text-sm" role="status">
+              {t("settings.members.former.reassign.tooMany", { max: FORMER_CONTENT_REASSIGN_MAX })}
+            </span>
+          ) : null}
         </div>
       )}
       {loading ? <Loading label={t("settings.members.former.loading")} /> : null}
@@ -301,6 +337,17 @@ function FormerContentLists({ workspaceId }: { workspaceId: string }): ReactElem
         open={confirming}
         title={t("settings.members.former.delete.title")}
       />
+      {reassigning ? (
+        <FormerContentReassignDialog
+          bookmarkIds={selectedBookmarks}
+          folderIds={selectedFolders}
+          onClose={() => {
+            setReassigning(false);
+          }}
+          onReassigned={reassigned}
+          readAgain={readAgain}
+        />
+      ) : null}
     </section>
   );
 }

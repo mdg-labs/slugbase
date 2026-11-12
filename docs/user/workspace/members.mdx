@@ -1,11 +1,11 @@
 ---
 title: "Members"
-description: "Invite people, change roles, remove members, transfer ownership, manage pending invitations and see and delete the content former members left behind."
+description: "Invite people, change roles, remove members, transfer ownership, manage pending invitations and see, reassign and delete the content former members left behind."
 edition: both
 order: 20
 ---
 
-**Members** lists the people in the workspace and what each of them can do. Admins and owners use it to invite people, change roles, remove members, hand over ownership, and see and delete the bookmarks and folders that former members left behind.
+**Members** lists the people in the workspace and what each of them can do. Admins and owners use it to invite people, change roles, remove members, hand over ownership, and see, reassign and delete the bookmarks and folders that former members left behind.
 
 <Screenshot alt="The Members page with the members table and the pending invitations" />
 
@@ -26,7 +26,7 @@ On a self-hosted SlugBase, invitations and teams are always on. On SlugBase Clou
 | Change a role between admin and member | Yes | Yes, but not an owner's | No |
 | Make someone an owner, or change an owner's role | Yes | No | No |
 | Transfer ownership | Yes | No | No |
-| See and delete the content of former members | Yes | Yes | No |
+| See, reassign and delete the content of former members | Yes | Yes | No |
 | Remove a member | Yes | Yes, but not an owner | No |
 | Remove an owner | Yes | No | No |
 
@@ -65,7 +65,7 @@ If your SlugBase cannot send email, the dialog says so. The invitations are crea
 
 A link shows only once. If you lose it, choose **Copy invitation link** again for a new one.
 
-## See and delete the content of former members
+## See, reassign and delete the content of former members
 
 When someone deletes their account, or leaves or is removed and their content has no new owner, their bookmarks and folders stay in the workspace without an owner. **Former members' content** lists them, below **Invitations**. Only admins and owners see this section.
 
@@ -73,7 +73,28 @@ When someone deletes their account, or leaves or is removed and their content ha
 
 **Result:** you see what has no owner. When there is nothing, the section says "No content from former members".
 
-The lists leave out a bookmark that a plan archived, and the content of a member who just left until SlugBase has applied the choice made when they left. You cannot reassign this content from the page yet.
+The lists leave out a bookmark that a plan archived, and the content of a member who just left until SlugBase has applied the choice made when they left.
+
+To give content that has no owner to a member:
+
+1. Select the rows you want to give away. Use the checkbox in a row, or the checkbox in a table's header to select all the rows loaded so far.
+2. Choose **Reassign to…**. The button stays off while nothing is selected.
+3. In **New owner**, choose a member of the workspace. You can choose yourself. The list shows current members only.
+4. Choose **Continue**.
+5. Read the message. It says who becomes the owner of how many bookmarks and folders, and what the move changes.
+6. Choose **Reassign**.
+
+**Result:** SlugBase says what it moved, for example "3 bookmarks and 1 folder reassigned to Grace Hopper.", and loads both lists again. The member now owns the content and sees it in their own bookmarks and folders. The workspace's bookmark count does not change, and the shares and tags of the content stay as they are. The [Audit Log](audit-log.mdx) records that someone reassigned former members' content, with how many bookmarks and folders and who received them, but not their titles.
+
+The move keeps what the member already has:
+
+- A bookmark whose slug the member already uses arrives without its slug, and it no longer forwards. The message says how many slugs SlugBase removed.
+- A folder whose name the member already has, in any capitalisation, arrives with a number added, for example "Reading (2)". The message says how many folders SlugBase renamed.
+- A folder and a bookmark filed in it stay together only when the same member owns both. If you give away a folder without a bookmark filed in it, or a bookmark without its folder, SlugBase takes the bookmark out of the folder. The message says how many filings SlugBase removed. To keep a folder and its bookmarks together, select them all in one selection, and reassign them in one go.
+
+One reassignment takes at most 1,000 bookmarks and 1,000 folders. When you select more, **Reassign to…** stays off and a message says so. Reassign in smaller selections, and select each folder together with its bookmarks in the same selection: a folder and a bookmark you give away in two separate reassignments are no longer filed together, because the first reassignment has taken one of them out of the other's folder.
+
+SlugBase only moves content that has no owner. If a row you selected got an owner, or was already gone, it stays or is skipped, and the message says "Nothing was reassigned" when none of them could be moved. If the member you chose has left the workspace in the meantime, the dialog says so by name, keeps your selection and asks you to choose another member. If the move fails for another reason, SlugBase shows "The change was not saved", and your selection stays so that you can try again.
 
 To delete content that has no owner:
 
@@ -182,6 +203,18 @@ The page says "The bookmarks of former members could not be loaded" or "The fold
 ### Delete selected is off
 
 Nothing is selected. Select at least one row first.
+
+### Reassign to… is off
+
+Nothing is selected, or you selected more than 1,000 bookmarks or more than 1,000 folders. Select at least one row, and reassign larger selections in smaller ones, with each folder selected together with its bookmarks.
+
+### Reassigning former members' content says "The change was not saved"
+
+SlugBase did not move what you selected, and your selection stays. Choose **Reassign to…** again.
+
+### Reassigning says the member is no longer a member of the workspace
+
+The member you chose has left the workspace, or has been removed. Choose another member in **New owner**. Your selection is kept.
 
 ### Deleting former members' content says "The change was not saved"
 

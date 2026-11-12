@@ -104,6 +104,9 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   `deleteFormerContent` takes `bookmarkIds[]` and `folderIds[]`, a bookmark and a folder identifier. It acts on the ownerless rows of the workspace of the request through `formerContentRepository.delete` and `sys_former_content_delete`, which name the workspace
  *   in every statement, so an identifier of workspace B names no row of A: the answer is an empty `200` with zero counts and not `404`, which `runApiMatrix` is told by its `emptyAnswers` option, and B is as it was. The same block of the matrix
  *   runs the function and the repository method against B's ownerless rows directly.
+ *   `reassignFormerContent` takes `bookmarkIds[]` and `folderIds[]` as that deletion does and `transferTo`, the account that receives the rows, a member identifier: through `formerContentRepository.reassign` and `sys_former_content_reassign`, which name the
+ *   workspace in every statement and require the recipient to be a member of it, a `transferTo` of workspace B (a member of B, or any account that is no member of A) is `404` naming `transferTo` and moves nothing, and an identifier of B in a list names no
+ *   row of A. The same block of the matrix runs the function and the repository method against B's ownerless rows and B's members directly.
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
@@ -170,6 +173,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "previewBulkBookmarks.teamId": "team",
   "deleteFormerContent.bookmarkIds[]": "bookmark",
   "deleteFormerContent.folderIds[]": "folder",
+  "reassignFormerContent.bookmarkIds[]": "bookmark",
+  "reassignFormerContent.folderIds[]": "folder",
+  "reassignFormerContent.transferTo": "member",
   "createInvitation.teamIds[]": "team",
   "getTeam.id": "team",
   "updateTeam.id": "team",

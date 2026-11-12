@@ -1641,6 +1641,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspace/former-content/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give the bookmarks and folders of former members to a member */
+        post: operations["reassignFormerContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspace/leave": {
         parameters: {
             query?: never;
@@ -3633,6 +3650,29 @@ export interface components {
                 /** @description Migrations the build ships */
                 expected: number;
             };
+        };
+        ReassignFormerContentRequest: {
+            /** @description The bookmarks to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both */
+            bookmarkIds?: string[];
+            /** @description The folders to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both */
+            folderIds?: string[];
+            /**
+             * Format: uuid
+             * @description The account that receives the content: a current member of the workspace, with any role, the caller included
+             */
+            transferTo: string;
+        };
+        ReassignFormerContentResult: {
+            /** @description How many of the named bookmarks now belong to the member */
+            bookmarksMoved: number;
+            /** @description How many filings of a moved folder or bookmark were removed because they would have linked a folder and a bookmark of different owners */
+            filingsRemoved: number;
+            /** @description How many of the named folders now belong to the member */
+            foldersMoved: number;
+            /** @description How many of the moved folders arrived under the name `<name> (<n>)`, because the member already had a folder of that name */
+            foldersRenamed: number;
+            /** @description How many of the moved bookmarks arrived without their slug and with forwarding off, because the member already owned that slug */
+            slugsCleared: number;
         };
         ReauthRequest: {
             /** @description The account's current password */
@@ -14240,6 +14280,95 @@ export interface operations {
                 };
             };
             /** @description The query did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reassignFormerContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignFormerContentRequest"];
+            };
+        };
+        responses: {
+            /** @description What the request did, as counts only. It makes `transferTo` the owner of the named bookmarks and folders of the active workspace that have no owner; their other fields, shares and tag links stay, and the workspace's bookmark count does not change. A bookmark whose slug the member already owns arrives without a slug and with forwarding off (`slugsCleared`); a folder whose name the member already has, without regard to case, arrives as `<name> (<n>)` with the lowest free n from 2 (`foldersRenamed`); a filing of a moved folder or bookmark that would link a folder and a bookmark of different owners is removed (`filingsRemoved`). The whole request is one transaction: the moves, the removed filings and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never moved, and the answer does not say whether they exist, so a request that moves nothing is an ordinary 200 with zero counts. A request that moves something records one member.former_content_reassigned audit event with the recipient and the number of bookmarks and of folders, never a title, a URL or an identifier of a row; one that moves nothing records none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignFormerContentResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is moved */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and the move (nothing is moved), or `transferTo` is no member of the workspace, a member of another workspace included (the problem names `transferTo`); nothing is moved */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, no `transferTo`, a field the operation does not declare) */
             422: {
                 headers: {
                     [name: string]: unknown;

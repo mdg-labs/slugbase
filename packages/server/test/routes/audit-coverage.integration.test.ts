@@ -628,6 +628,42 @@ describe("the audit log of a workspace", () => {
         check: noContent,
       });
 
+      // An owner reassigns former members' content to a member (a bookmark and a folder that have no owner): one event with the recipient and the two counts and no title, address or
+      // identifier of a row; a request that names no such row moves nothing and records none, and a recipient that is no member is refused with nothing recorded.
+      const handedOver = await bookmarkOf(`${TITLE} handed over`, "private-address/handed-over");
+      const handedOverFolder = await post(owner, FOLDERS, { name: "Handed over folder" });
+      expect(handedOverFolder.status).toBe(201);
+      const handedOverFolderId = await idOf(handedOverFolder);
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE bookmarks SET owner_id = NULL WHERE id = ${handedOver}`;
+        await tx`UPDATE folders SET owner_id = NULL WHERE id = ${handedOverFolderId}`;
+      });
+      await run({
+        operationId: "reassignFormerContent",
+        label: "reassignFormerContent that moves nothing",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/reassign", { bookmarkIds: [single, uuidv7()], transferTo: member.account.id }),
+        events: [],
+      });
+      await run({
+        operationId: "reassignFormerContent",
+        label: "reassignFormerContent to an account that is no member",
+        actor: as(owner),
+        status: 404,
+        call: () => post(owner, "/api/v1/workspace/former-content/reassign", { bookmarkIds: [handedOver], folderIds: [handedOverFolderId], transferTo: removed.account.id }),
+        events: [],
+      });
+      await run({
+        operationId: "reassignFormerContent",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/reassign", { bookmarkIds: [handedOver], folderIds: [handedOverFolderId], transferTo: member.account.id }),
+        events: [event("member.former_content_reassigned", null, { transferTo: member.account.id, bookmarks: "1", folders: "1" })],
+        check: noContent,
+      });
+
       // An export and an import: counts only, one event for an export and one for an import that writes, none for a dry run.
       await run({
         operationId: "exportJson",

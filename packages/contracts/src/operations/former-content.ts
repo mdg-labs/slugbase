@@ -5,10 +5,10 @@ import { FOLDER_COLOR_MAX, FOLDER_COLOR_MIN } from "./folders.ts";
 // The operations of doc 04 section 10.5 that list the former members' content of the workspace the request acts in (doc 02 sections 2.10 and 3.6): the
 // bookmarks and folders that have no owner because their owner left the workspace or deleted their account. They are an admin's, are session-only
 // (they declare no token scope, so an API token never reaches them) and name no row, so they take no identifier. A row that still waits for the
-// content choice of the member who left (doc 05 section 7.5) is not listed, and neither is a plan-archived bookmark. The deletion of that content is an admin's
-// too and acts on the rows the lists hold and on no other.
+// content choice of the member who left (doc 05 section 7.5) is not listed, and neither is a plan-archived bookmark. The deletion and the reassignment of that content are an
+// admin's too and act on the rows the lists hold and on no other.
 
-/** The most identifiers of one list a deletion names (doc 04 section 10.5), the bound of folder filing (doc 04 section 10.7). */
+/** The most identifiers of one list a deletion or a reassignment names (doc 04 section 10.5), the bound of folder filing (doc 04 section 10.7). */
 export const FORMER_CONTENT_DELETE_MAX = 1000;
 
 export const FormerBookmarkSchema = z
@@ -158,6 +158,63 @@ export const deleteFormerContent = defineOperation({
       "The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and its deletion; nothing is deleted",
     ),
     422: problemResponse("The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, a field the operation does not declare)"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const ReassignFormerContentRequestSchema = z
+  .strictObject({
+    bookmarkIds: z
+      .array(z.uuid())
+      .min(1)
+      .max(FORMER_CONTENT_DELETE_MAX)
+      .optional()
+      .describe("The bookmarks to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both"),
+    folderIds: z
+      .array(z.uuid())
+      .min(1)
+      .max(FORMER_CONTENT_DELETE_MAX)
+      .optional()
+      .describe("The folders to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both"),
+    transferTo: z.uuid().describe("The account that receives the content: a current member of the workspace, with any role, the caller included"),
+  })
+  .refine((request) => request.bookmarkIds !== undefined || request.folderIds !== undefined, { message: "name at least one bookmark or folder" })
+  .meta({ id: "ReassignFormerContentRequest" });
+
+export const ReassignFormerContentResultSchema = z
+  .strictObject({
+    bookmarksMoved: z.number().int().min(0).describe("How many of the named bookmarks now belong to the member"),
+    foldersMoved: z.number().int().min(0).describe("How many of the named folders now belong to the member"),
+    slugsCleared: z.number().int().min(0).describe("How many of the moved bookmarks arrived without their slug and with forwarding off, because the member already owned that slug"),
+    foldersRenamed: z.number().int().min(0).describe("How many of the moved folders arrived under the name `<name> (<n>)`, because the member already had a folder of that name"),
+    filingsRemoved: z.number().int().min(0).describe("How many filings of a moved folder or bookmark were removed because they would have linked a folder and a bookmark of different owners"),
+  })
+  .meta({ id: "ReassignFormerContentResult" });
+
+export const reassignFormerContent = defineOperation({
+  method: "post",
+  path: "/api/v1/workspace/former-content/reassign",
+  operationId: "reassignFormerContent",
+  tag: "members",
+  summary: "Give the bookmarks and folders of former members to a member",
+  auth: "admin",
+  rate: "write",
+  request: { body: ReassignFormerContentRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "What the request did, as counts only. It makes `transferTo` the owner of the named bookmarks and folders of the active workspace that have no owner; their other fields, shares and tag links stay, and the workspace's bookmark count does not change. A bookmark whose slug the member already owns arrives without a slug and with forwarding off (`slugsCleared`); a folder whose name the member already has, without regard to case, arrives as `<name> (<n>)` with the lowest free n from 2 (`foldersRenamed`); a filing of a moved folder or bookmark that would link a folder and a bookmark of different owners is removed (`filingsRemoved`). The whole request is one transaction: the moves, the removed filings and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never moved, and the answer does not say whether they exist, so a request that moves nothing is an ordinary 200 with zero counts. A request that moves something records one member.former_content_reassigned audit event with the recipient and the number of bookmarks and of folders, never a title, a URL or an identifier of a row; one that moves nothing records none",
+      ReassignFormerContentResultSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is moved",
+    ),
+    404: problemResponse(
+      "The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and the move (nothing is moved), or `transferTo` is no member of the workspace, a member of another workspace included (the problem names `transferTo`); nothing is moved",
+    ),
+    422: problemResponse("The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, no `transferTo`, a field the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

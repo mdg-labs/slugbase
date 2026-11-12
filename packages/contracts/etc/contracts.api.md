@@ -345,7 +345,7 @@ export const AUDIT_ACTION_FILTER_MAX = 20;
 export const AUDIT_ACTOR_TYPES: readonly ["account", "api_token", "system"];
 
 // @public
-export const AUDIT_EVENT_ACTIONS: readonly ["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.former_content_deleted", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "bookmark.operator_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created", "import.completed"];
+export const AUDIT_EVENT_ACTIONS: readonly ["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.former_content_deleted", "member.former_content_reassigned", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "bookmark.operator_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created", "import.completed"];
 
 // @public
 export const AUDIT_EVENT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"];
@@ -2073,6 +2073,18 @@ export interface ComponentTypes {
                 applied: number | null;
                 expected: number;
             };
+        };
+        ReassignFormerContentRequest: {
+            bookmarkIds?: string[];
+            folderIds?: string[];
+            transferTo: string;
+        };
+        ReassignFormerContentResult: {
+            bookmarksMoved: number;
+            filingsRemoved: number;
+            foldersMoved: number;
+            foldersRenamed: number;
+            slugsCleared: number;
         };
         ReauthRequest: {
             password: string;
@@ -14143,6 +14155,87 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    reassignFormerContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ReassignFormerContentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ReassignFormerContentResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     reauthenticate: {
         parameters: {
             query?: never;
@@ -18849,6 +18942,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/workspace/former-content/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["reassignFormerContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/workspace/leave": {
         parameters: {
             query?: never;
@@ -19330,6 +19440,56 @@ export const ReadyStatusSchema: z.ZodObject<{
         expected: z.ZodNumber;
         applied: z.ZodNullable<z.ZodNumber>;
     }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const reassignFormerContent: {
+    readonly method: "post";
+    readonly path: "/api/v1/workspace/former-content/reassign";
+    readonly operationId: "reassignFormerContent";
+    readonly tag: "members";
+    readonly summary: "Give the bookmarks and folders of former members to a member";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            bookmarkIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            transferTo: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        bookmarksMoved: z.ZodNumber;
+        foldersMoved: z.ZodNumber;
+        slugsCleared: z.ZodNumber;
+        foldersRenamed: z.ZodNumber;
+        filingsRemoved: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ReassignFormerContentRequestSchema: z.ZodObject<{
+    bookmarkIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    transferTo: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ReassignFormerContentResultSchema: z.ZodObject<{
+    bookmarksMoved: z.ZodNumber;
+    foldersMoved: z.ZodNumber;
+    slugsCleared: z.ZodNumber;
+    foldersRenamed: z.ZodNumber;
+    filingsRemoved: z.ZodNumber;
 }, z.core.$strict>;
 
 // @public (undocumented)
