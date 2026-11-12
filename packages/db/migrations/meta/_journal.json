@@ -995,6 +995,13 @@
       "when": 1794321738128,
       "tag": "20261110144218_add_mfa_reseal_sweep",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1794477538398,
+      "tag": "20261112095858_drop_workspace_instance_created",
+      "breakpoints": true
     }
   ]
 }

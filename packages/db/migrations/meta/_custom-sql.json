@@ -1,4 +1,4 @@
 {
-  "sha256": "7170ee4a36ee04087141f8641751a21bbfc86680685770c8a0e5be06fde30c71",
-  "migration": "20261110144218_add_mfa_reseal_sweep"
+  "sha256": "2b599a10f045607ea0622f1f536ffa90b899302bf6ed20ed07bb1507a2281883",
+  "migration": "20261112095858_drop_workspace_instance_created"
 }

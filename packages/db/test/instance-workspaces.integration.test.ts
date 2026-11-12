@@ -352,15 +352,15 @@ describe("sys_instance_create_workspace for an owner account", () => {
     const forSelf = accountOwned(caller);
     const forInvitee = invited("flags.owner@example.test", "For an invitee");
     const flags = async (workspaceId: string) =>
-      (await asSystem(db, (tx) => tx<{ self_created: boolean; instance_created: boolean }[]>`SELECT self_created, instance_created FROM workspaces WHERE id = ${workspaceId}`))[0];
+      (await asSystem(db, (tx) => tx<{ self_created: boolean }[]>`SELECT self_created FROM workspaces WHERE id = ${workspaceId}`))[0];
 
     for (const request of [forOther, forSelf, forInvitee]) {
       expect((await create(caller, request)).kind).toBe("created");
     }
 
-    expect(await flags(forOther.workspaceId)).toEqual({ self_created: false, instance_created: true });
-    expect(await flags(forSelf.workspaceId)).toEqual({ self_created: true, instance_created: false });
-    expect(await flags(forInvitee.workspaceId)).toEqual({ self_created: false, instance_created: true });
+    expect(await flags(forOther.workspaceId)).toEqual({ self_created: false });
+    expect(await flags(forSelf.workspaceId)).toEqual({ self_created: true });
+    expect(await flags(forInvitee.workspaceId)).toEqual({ self_created: false });
   });
 
   it("does not make an owner of an account that is unknown or disabled, and writes, queues and records nothing", async () => {
@@ -832,9 +832,6 @@ describe("sys_instance_reissue_owner_invitation", () => {
         )),
       ];
 
-    const instanceCreated = async (workspaceId: string): Promise<boolean | undefined> =>
-      (await asSystem(db, (tx) => tx<{ instance_created: boolean }[]>`SELECT instance_created FROM workspaces WHERE id = ${workspaceId}`))[0]?.instance_created;
-
     it("writes an owner invitation created as a link link-issued with no mail ticket, and one that is mailed not link-issued with its own ticket", async () => {
       const caller = await admin();
       const linked = invited("linked.owner@example.test", "Linked", true);
@@ -846,8 +843,6 @@ describe("sys_instance_reissue_owner_invitation", () => {
       expect(await flagsOf(linked.workspaceId)).toMatchObject([{ status: "pending", mail_ticket: null, link_issued: true }]);
       const mailedOwner = mailed.owner;
       expect(await flagsOf(mailed.workspaceId)).toMatchObject([{ status: "pending", mail_ticket: mailedOwner.kind === "invitation" ? mailedOwner.invitationId : null, link_issued: false }]);
-      expect(await instanceCreated(linked.workspaceId)).toBe(true);
-      expect(await instanceCreated(mailed.workspaceId)).toBe(true);
     });
 
     it("writes a reissued owner invitation link-issued with no mail ticket when it is returned as a link, and not link-issued with its own ticket when mailed", async () => {
@@ -876,7 +871,6 @@ describe("sys_instance_reissue_owner_invitation", () => {
       );
       expect(created[0]).toMatchObject({ outcome: "created" });
       expect(await flagsOf(workspaceId)).toMatchObject([{ id: invitationId, status: "pending", mail_ticket: invitationId, link_issued: false }]);
-      expect(await instanceCreated(workspaceId)).toBe(true);
 
       const reissuedId = freshId();
       const reissued = await asAdmin(caller, (tx) =>

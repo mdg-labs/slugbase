@@ -86,7 +86,6 @@ describe("the workspace tables", () => {
       "version integer NOT NULL DEFAULT 1",
       "created_at timestamp with time zone NOT NULL DEFAULT now()",
       "updated_at timestamp with time zone NOT NULL DEFAULT now()",
-      "instance_created boolean NOT NULL DEFAULT false",
       "self_created boolean NOT NULL DEFAULT false",
     ]);
     expect(await columns("workspace_members")).toEqual([
