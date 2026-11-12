@@ -1,4 +1,6 @@
+import { createElement } from "react";
 import { describe, expect, it } from "vitest";
+import { REGISTRATION_ACKNOWLEDGEMENTS_MAX } from "@slugbase/contracts";
 import { SLOT_NAMES, assertValidExtensions, isSlotName } from "../src/extensions/index.ts";
 
 describe("assertValidExtensions", () => {
@@ -28,6 +30,69 @@ describe("assertValidExtensions", () => {
     expect(() => {
       assertValidExtensions([{ id: "billing", slots: unknown }]);
     }).toThrow(/"billing" fills the unknown slot "sidebar.header"/);
+  });
+
+  it("accepts acknowledgements across extensions up to the number one request carries", () => {
+    const entries = Array.from({ length: REGISTRATION_ACKNOWLEDGEMENTS_MAX }, (_, index) => ({ id: `doc-${String(index)}`, version: "2026-01", label: "Label" }));
+    expect(() => {
+      assertValidExtensions([
+        { id: "one", acknowledgements: entries.slice(0, 3) },
+        { id: "two", acknowledgements: entries.slice(3) },
+      ]);
+    }).not.toThrow();
+  });
+
+  it.each([
+    ["an id with an upper-case letter", { id: "Terms", version: "1" }, /"Terms" of the web extension "legal" has an invalid id/],
+    ["an empty id", { id: "", version: "1" }, /has an invalid id/],
+    ["an id longer than 32 characters", { id: "a".repeat(33), version: "1" }, /has an invalid id/],
+    ["an empty version", { id: "terms", version: "" }, /"terms" of the web extension "legal" has an invalid version/],
+    ["a version longer than 32 characters", { id: "terms", version: "v".repeat(33) }, /has an invalid version/],
+    ["a version with a control character", { id: "terms", version: "1\n2" }, /has an invalid version/],
+  ])("rejects an acknowledgement with %s", (_name, entry, message) => {
+    expect(() => {
+      assertValidExtensions([{ id: "legal", acknowledgements: [{ ...entry, label: "Label" }] }]);
+    }).toThrow(message);
+  });
+
+  it.each([
+    ["an empty label", ""],
+    ["a blank label", "  "],
+    ["a null label", null],
+    ["an undefined label", undefined],
+    ["a boolean label", false],
+  ])("rejects an acknowledgement with %s", (_name, label) => {
+    expect(() => {
+      assertValidExtensions([{ id: "legal", acknowledgements: [{ id: "terms", version: "1", label }] }]);
+    }).toThrow(/acknowledgement "terms" of the web extension "legal" needs a label/);
+  });
+
+  it("accepts an acknowledgement whose label is an element or a number", () => {
+    expect(() => {
+      assertValidExtensions([{ id: "legal", acknowledgements: [{ id: "terms", version: "1", label: createElement("a", { href: "/terms" }, "Terms") }, { id: "age", version: "1", label: 16 }] }]);
+    }).not.toThrow();
+  });
+
+  it("rejects an acknowledgement id declared twice, within one extension or across two", () => {
+    expect(() => {
+      assertValidExtensions([{ id: "legal", acknowledgements: [{ id: "terms", version: "1", label: "A" }, { id: "terms", version: "2", label: "B" }] }]);
+    }).toThrow(/acknowledgement id "terms" of the web extension "legal" is used twice/);
+    expect(() => {
+      assertValidExtensions([
+        { id: "legal", acknowledgements: [{ id: "terms", version: "1", label: "A" }] },
+        { id: "other", acknowledgements: [{ id: "terms", version: "1", label: "A" }] },
+      ]);
+    }).toThrow(/acknowledgement id "terms" of the web extension "other" is used twice/);
+  });
+
+  it("rejects more acknowledgements in total than one request carries", () => {
+    const entries = Array.from({ length: REGISTRATION_ACKNOWLEDGEMENTS_MAX + 1 }, (_, index) => ({ id: `doc-${String(index)}`, version: "1", label: "Label" }));
+    expect(() => {
+      assertValidExtensions([
+        { id: "one", acknowledgements: entries.slice(0, 5) },
+        { id: "two", acknowledgements: entries.slice(5) },
+      ]);
+    }).toThrow(new RegExp(`${String(REGISTRATION_ACKNOWLEDGEMENTS_MAX + 1)} acknowledgements; at most ${String(REGISTRATION_ACKNOWLEDGEMENTS_MAX)}`));
   });
 
   it("rejects a route path that is not absolute", () => {

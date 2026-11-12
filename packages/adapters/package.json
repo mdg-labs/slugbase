@@ -23,6 +23,8 @@
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace": "^2.12.0",
     "@sentry/node-core": "^10.75.2",
     "@slugbase/contracts": "workspace:*",
     "@slugbase/core": "workspace:*",

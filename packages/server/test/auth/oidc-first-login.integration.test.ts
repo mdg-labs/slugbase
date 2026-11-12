@@ -185,9 +185,9 @@ async function workspaceAudit(): Promise<{ actor_account_id: string | null; acto
   return [...rows];
 }
 
-async function eventsQueued(): Promise<{ accountId: unknown; path: unknown }[]> {
+async function eventsQueued(): Promise<{ accountId: unknown; path: unknown; acknowledgements: unknown }[]> {
   const rows = await database().owner<{ data: Record<string, unknown> }[]>`SELECT data FROM pgboss.job WHERE name = 'event.account.created' ORDER BY id`;
-  return rows.map((row) => ({ accountId: row.data["accountId"], path: row.data["path"] }));
+  return rows.map((row) => ({ accountId: row.data["accountId"], path: row.data["path"], acknowledgements: row.data["acknowledgements"] }));
 }
 
 async function sessionsOfEveryone(): Promise<number> {
@@ -206,12 +206,12 @@ async function verifiedAccount(email: string, options: { verified?: boolean; dis
   return seedAccount(database(), { email, emailVerified: options.verified ?? true, disabled: options.disabled ?? false, ...(options.password === undefined ? {} : { password: options.password }) });
 }
 
-function refusing(seen: { email: string; path: string }[]): ServerModule {
+function refusing(seen: { email: string; path: string; acknowledgements: readonly unknown[] }[]): ServerModule {
   return {
     name: "policy",
     hooks: {
       registrationPolicy: (input) => {
-        seen.push({ email: input.email, path: input.path });
+        seen.push({ email: input.email, path: input.path, acknowledgements: input.acknowledgements });
         return HookResult.refuse("blocked_domain");
       },
     },
@@ -265,7 +265,7 @@ describe("a first login by verified email", () => {
   });
 
   it("links an existing account without asking the registration policy: linking is not registering", async () => {
-    const seen: { email: string; path: string }[] = [];
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
     const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [refusing(seen)]);
     const holder = await verifiedAccount("policy-holder@example.test");
 
@@ -467,7 +467,7 @@ describe("a first login that creates an account", () => {
     expect(accounts).toHaveLength(1);
     expect(await workspaceCountOf(accounts[0]?.id ?? "")).toBe(0);
     expect(await workspaceAudit()).toEqual([]);
-    expect(await eventsQueued()).toEqual([{ accountId: accounts[0]?.id, path: "oidc" }]);
+    expect(await eventsQueued()).toEqual([{ accountId: accounts[0]?.id, path: "oidc", acknowledgements: "[]" }]);
   });
 
   it("creates a verified account without a password and signs it in, with a personal workspace and the account.created event when public registration is on", async () => {
@@ -489,7 +489,7 @@ describe("a first login that creates an account", () => {
     expect(await workspaceAudit()).toEqual([
       { actor_account_id: accountId, actor_label: "Ada Lovelace", action: "workspace.created", metadata: { name: "Ada Lovelace's workspace" } },
     ]);
-    expect(await eventsQueued()).toEqual([{ accountId, path: "oidc" }]);
+    expect(await eventsQueued()).toEqual([{ accountId, path: "oidc", acknowledgements: "[]" }]);
     expect((await world.server.fetch(new Request(new URL("/api/v1/me/sessions", world.origin), { headers: { cookie: `${SESSION_COOKIE}=${token ?? ""}` } }))).status).toBe(200);
   });
 
@@ -502,7 +502,7 @@ describe("a first login that creates an account", () => {
     const accountId = (await accountRows())[0]?.id ?? "";
     expect(await workspaceCountOf(accountId)).toBe(0);
     expect(await workspaceAudit()).toEqual([]);
-    expect(await eventsQueued()).toEqual([{ accountId, path: "oidc" }]);
+    expect(await eventsQueued()).toEqual([{ accountId, path: "oidc", acknowledgements: "[]" }]);
     expect(await sessionRows(database(), accountId)).toHaveLength(1);
   });
 
@@ -540,14 +540,14 @@ describe("a first login that creates an account", () => {
 
   describe("consults the registration policy through the shared gate with the oidc path", () => {
     it("asks it with the normalised address before anything is written, and a refusal ends in the generic failure", async () => {
-      const seen: { email: string; path: string }[] = [];
+      const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
       const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true", PUBLIC_REGISTRATION: "true" }), [refusing(seen)]);
 
       const refused = await login(world, { subject: "refused-subject", email: "Blocked@Example.test", emailVerified: true });
       const other = await login(world, { subject: "other-subject" });
 
       expectFailed(refused);
-      expect(seen).toEqual([{ email: "Blocked@Example.test", path: "oidc" }]);
+      expect(seen).toEqual([{ email: "Blocked@Example.test", path: "oidc", acknowledgements: [] }]);
       expect(await accountRows()).toEqual([]);
       expect(await identityRows()).toEqual([]);
       expect(await eventsQueued()).toEqual([]);
@@ -578,7 +578,7 @@ describe("a first login that creates an account", () => {
     });
 
     it("is not asked when the provider does not create accounts, or the address is outside its domains", async () => {
-      const seen: { email: string; path: string }[] = [];
+      const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
       const off = serve(provider(), [refusing(seen)]);
       expectFailed(await login(off, { subject: "no-gate-1", email: "newcomer@example.test", emailVerified: true }));
       const outside = serve(provider({ OIDC_IDP_AUTO_CREATE: "true", OIDC_IDP_ALLOWED_DOMAINS: "other.test" }), [refusing(seen)]);

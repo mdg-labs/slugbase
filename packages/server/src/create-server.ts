@@ -70,7 +70,7 @@ import { checkRegistrations, type ContractDocument } from "./routes/register.ts"
 import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import { createUsageBuffer, type UsageBuffer } from "./usage/buffer.ts";
 import { createReadReserve } from "./read-reserve.ts";
-import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
+import { monitorSlug, type JobDefinition, type ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
 export type { RateLimitState, TakeBucketLimit, TakeEmailLimit, TakenLimit } from "./http/rate-limit.ts";
@@ -494,11 +494,19 @@ export function compose(
     jobNames.add(job.name);
   }
   const scheduleNames = new Set<string>();
+  const scheduleOfSlug = new Map<string, string>();
   for (const schedule of schedules) {
     if (scheduleNames.has(schedule.name)) {
       throw new CompositionError("duplicate_schedule", `schedule ${schedule.name} is registered twice`);
     }
     scheduleNames.add(schedule.name);
+    // Two schedules with one monitor slug would report their runs to one monitor and hide a missed run.
+    const slug = monitorSlug(schedule.name);
+    const holder = scheduleOfSlug.get(slug);
+    if (holder !== undefined) {
+      throw new CompositionError("duplicate_schedule", `schedule ${schedule.name} has the monitor slug ${slug} of schedule ${holder}`);
+    }
+    scheduleOfSlug.set(slug, schedule.name);
     if (!jobNames.has(schedule.job)) {
       throw new CompositionError("unknown_job", `schedule ${schedule.name} names the job ${schedule.job}, which no module registers`);
     }

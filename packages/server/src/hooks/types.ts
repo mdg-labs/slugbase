@@ -1,3 +1,5 @@
+import type { RegistrationAcknowledgement } from "@slugbase/core";
+
 /** The result of a hook that can refuse (doc 01 section 13): allow, or refuse with a code. */
 export type HookResult<Code extends string = string> =
   | { readonly outcome: "allow" }
@@ -53,6 +55,8 @@ export type RegistrationPath = "self-registration" | "invitation" | "oidc";
 export interface RegistrationPolicyInput {
   readonly email: string;
   readonly path: RegistrationPath;
+  /** What the request acknowledged; empty on `oidc`, on `invitation` when the account comes from the provider's `invite` intent (neither has a form) and when a form request named none, so the path alone does not tell whether a form was sent. */
+  readonly acknowledgements: readonly RegistrationAcknowledgement[];
 }
 
 /**

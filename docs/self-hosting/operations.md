@@ -58,6 +58,26 @@ ERROR_REPORT_DSN=<your project's DSN>
 
 The server reports an error that ends a request with `500`, and the worker reports a job that fails. SlugBase removes personal data before anything leaves the process: it keeps no request data, headers, cookies, bodies or breadcrumbs, and it drops any value whose name looks like a password, token, key or code. An event that cannot be cleaned is dropped. With the key unset, errors go to the log and nowhere else. This is optional.
 
+### Tell the server from the worker, trace requests and watch scheduled jobs
+
+Every event that SlugBase sends carries the tag `process`, which is `server` or `worker`, so you can filter one from the other. Two more settings are off until you set them, and both need `ERROR_REPORT_DSN`.
+
+```sh
+ERROR_REPORT_TRACES_SAMPLE_RATE=0.1
+ERROR_REPORT_CHECK_INS=true
+```
+
+`ERROR_REPORT_TRACES_SAMPLE_RATE` is a number from 0 to 1. The server sends that share of its requests to your tracker as traces. A trace holds the method, the route template such as `/api/v1/bookmarks/{id}`, the outcome and the request id. It holds no path, query string, header, body or user. The same cleaning as for errors runs over it, and a trace that cannot be cleaned is dropped. The worker sends no traces. The sending queue holds 64 reports, so a burst that your tracker takes more slowly than it arrives loses the surplus; choose a rate that your traffic and your tracker can carry.
+
+`ERROR_REPORT_CHECK_INS=true` makes the worker report each attempt of a scheduled job to your tracker as a cron check-in: first `in_progress`, then `ok` or `error`, with how long the attempt took and your environment. A report that fails never changes the job. SlugBase does not create the monitors. Create one in your tracker for each job you want to watch, and give it the slug in the table. The slug is the schedule's name with each capital letter written in lower case after a hyphen and each dot written as a hyphen.
+
+| Monitor slug | Job | Runs |
+| ------------ | --- | ---- |
+| `rate-limit-purge-idle` | Removes idle rate-limit buckets | Every 15 minutes |
+| `retention-purge` | Deletes the records that are past their retention period | Every hour, on the hour |
+| `accounts-end-access-mode` | Ends export-only periods that have run out | Every day at 03:20 |
+| `secrets-reseal` | Re-encrypts stored second-factor secrets under the current encryption key | Every hour, 40 minutes past |
+
 ## Metrics
 
 Set `METRICS_PORT` in `.env` to a port that is not `PORT`, and the server and the worker each open a second listener on that port. It answers `/metrics` in the Prometheus text format and nothing else. Without the key there is no listener.

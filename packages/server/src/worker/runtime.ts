@@ -1,4 +1,4 @@
-import type { Adapters, DomainEventName } from "@slugbase/core";
+import type { Adapters, DomainEventName, MonitoredRun, MonitoredRunOutcome } from "@slugbase/core";
 import { createAccessModeStore, createDatabase, createMfaResealStore, createRateLimitStore, createRetentionStore, createWorkspaceDeletionStore, type Database } from "@slugbase/db";
 import { PgBoss } from "pg-boss";
 import type { WorkerConfig } from "../config/index.ts";
@@ -13,7 +13,7 @@ import {
 import { subscribersOf, type RegisteredSubscriber } from "../events/subscriber.ts";
 import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, exposeWorkerMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot, type WorkerMetrics } from "../metrics/index.ts";
-import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
+import { scheduleMonitors, type JobDefinition, type JobPayload, type ScheduleDefinition } from "./job.ts";
 import { createBuiltInModules } from "./built-in.ts";
 import { queueSettings, queueUpdates } from "./queues.ts";
 
@@ -144,11 +144,43 @@ export function createWorker(options: CreateWorkerOptions): Worker {
     }
   };
 
+  // Every attempt of a job that exactly one schedule names is a monitored run, under that schedule's slug; a job several
+  // schedules name is not monitored, since a run does not say which schedule queued it. The error port decides whether
+  // it reports runs at all. A failing report never changes the job's outcome.
+  let monitors: ReadonlyMap<string, string> = new Map<string, string>();
+  const startRun = async (jobName: string): Promise<MonitoredRun | undefined> => {
+    const slug = monitors.get(jobName);
+    const { errors } = options.adapters;
+    if (slug === undefined || errors.startMonitoredRun === undefined) {
+      return undefined;
+    }
+    try {
+      return await errors.startMonitoredRun(slug);
+    } catch (reportError) {
+      logger.warn("Monitored run report failed", { job: jobName, ...errorFields(reportError) });
+      return undefined;
+    }
+  };
+  const finishRun = async (run: MonitoredRun | undefined, outcome: MonitoredRunOutcome, jobName: string): Promise<void> => {
+    try {
+      await run?.finish(outcome);
+    } catch (reportError) {
+      logger.warn("Monitored run report failed", { job: jobName, ...errorFields(reportError) });
+    }
+  };
+
   let composition: Composition;
   try {
     // The event jobs read the subscribers when a job runs, which is after `composition` is assigned.
     const subscribersFor = (name: DomainEventName): readonly RegisteredSubscriber[] => subscribersOf(composition.subscribers, name);
     composition = compose([...createBuiltInModules(maintenanceStores, subscribersFor), ...options.modules], context, []);
+    const scheduled = scheduleMonitors(composition.schedules);
+    monitors = scheduled.slugs;
+    if (options.adapters.errors.startMonitoredRun !== undefined) {
+      for (const job of scheduled.unmonitored) {
+        logger.warn("A job several schedules name reports no monitored runs", { job });
+      }
+    }
   } catch (error) {
     void database.close();
     void closeMaintenanceStores();
@@ -185,6 +217,9 @@ export function createWorker(options: CreateWorkerOptions): Worker {
         migrate: false,
         createSchema: false,
         reindex: false,
+        // pg-boss would open spans through the global tracer provider; in `server --with-worker` that is the server's.
+        // The worker opens none (doc 01 section 12).
+        openTelemetry: { enabled: false },
       });
       boss.on("error", (error) => {
         logger.error("pg-boss reported an error", errorFields(error));
@@ -223,13 +258,16 @@ export function createWorker(options: CreateWorkerOptions): Worker {
               if (pending === undefined) {
                 return;
               }
+              const run = await startRun(job.name);
               try {
                 await job.handle(pending.data, context);
               } catch (error) {
                 logger.error("Job failed", { job: job.name, id: pending.id, attempt: pending.retryCount + 1, ...errorFields(error) });
                 await reportFailure(error, job.name);
+                await finishRun(run, "error", job.name);
                 throw error;
               }
+              await finishRun(run, "ok", job.name);
             },
           );
         }

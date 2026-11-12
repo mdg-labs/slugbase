@@ -566,6 +566,168 @@ describe("the registration policy (doc 01 section 13.5)", { timeout: TEST_TIMEOU
   });
 });
 
+describe("the acknowledgements of a registration (doc 01 section 13.5)", { timeout: TEST_TIMEOUT_MS }, () => {
+  const TERMS = { id: "terms", version: "2026-01" };
+  const AGE = { id: "age_18", version: "1" };
+
+  /** A composition that requires the terms of the registration policy and records what it is asked and what the event carries. */
+  function composed(): { module: ServerModule; asked: { path: string; acknowledgements: readonly { id: string; version: string }[] }[]; recorded: unknown[] } {
+    const asked: { path: string; acknowledgements: readonly { id: string; version: string }[] }[] = [];
+    const recorded: unknown[] = [];
+    return {
+      asked,
+      recorded,
+      module: {
+        name: "terms",
+        hooks: {
+          registrationPolicy: (input) => {
+            asked.push({ path: input.path, acknowledgements: input.acknowledgements });
+            return input.acknowledgements.some((entry) => entry.id === TERMS.id) ? HookResult.allow() : HookResult.refuse("terms_missing");
+          },
+        },
+        register: () => ({
+          subscribers: [
+            {
+              event: "account.created",
+              handle: (event) => {
+                recorded.push(event.payload);
+              },
+            },
+          ],
+        }),
+      },
+    };
+  }
+
+  it("hands the policy the list the request carried, and queues it in account.created in the transaction that writes the account", async () => {
+    const { module, asked } = composed();
+    const world = serve({ modules: [module], mail: new InMemoryMail() });
+
+    expect((await register(world, body({ acknowledgements: [TERMS, AGE] }))).status).toBe(202);
+
+    expect(asked).toEqual([{ path: "self-registration", acknowledgements: [TERMS, AGE] }]);
+    const [event] = await jobs("event.account.created");
+    expect(JSON.parse(String(event?.data["acknowledgements"]))).toEqual([TERMS, AGE]);
+    expect(Object.keys(event?.data ?? {}).sort()).toEqual(["accountId", "acknowledgements", "eventId", "path"]);
+  });
+
+  it("treats a body without the field as an empty list for the policy and the event", async () => {
+    const asked: unknown[] = [];
+    const module: ServerModule = {
+      name: "spy",
+      hooks: {
+        registrationPolicy: (input) => {
+          asked.push(input.acknowledgements);
+          return HookResult.allow();
+        },
+      },
+      register: () => ({}),
+    };
+    const world = serve({ modules: [module], mail: new InMemoryMail() });
+
+    expect((await register(world, body())).status).toBe(202);
+
+    expect(asked).toEqual([[]]);
+    expect((await jobs("event.account.created")).map((job) => job.data["acknowledgements"])).toEqual(["[]"]);
+  });
+
+  it("refuses a registration without the required acknowledgement with one 403 registration_refused, for an address that has an account as for one that has none, before anything is hashed or written", async () => {
+    const { module } = composed();
+    const world = serve({ modules: [module], mail: new InMemoryMail(), env: { TRUSTED_PROXY_HOPS: "1" } });
+    expect((await register(world, body({ email: "Taken@Example.test", acknowledgements: [TERMS] }), { forwardedFor: "198.51.100.1" })).status).toBe(202);
+    await database().owner`DELETE FROM pgboss.job WHERE name IN ('mail.send', 'event.account.created')`;
+    hashings.mockClear();
+    const before = await accounts();
+
+    const answers = [];
+    for (const [index, email] of ["taken@example.test", "TAKEN@EXAMPLE.TEST", "new@example.test"].entries()) {
+      answers.push(await answerOf(await register(world, body({ email, acknowledgements: [AGE] }), { forwardedFor: `198.51.100.${String(index + 2)}` })));
+    }
+
+    expect(answers[0]?.status).toBe(403);
+    expect(JSON.parse(answers[0]?.body ?? "{}")).toMatchObject({ code: "registration_refused" });
+    for (const answer of answers) {
+      expect(answer).toEqual(answers[0]);
+    }
+    expect(hashings).not.toHaveBeenCalled();
+    expect(await jobs()).toEqual([]);
+    expect(await accounts()).toEqual(before);
+  });
+
+  const violations: readonly (readonly [string, unknown])[] = [
+    ["more than 8 entries", Array.from({ length: 9 }, (_unused, index) => ({ id: `doc-${String(index)}`, version: "1" }))],
+    ["an id outside the grammar", [{ id: "Terms", version: "1" }]],
+    ["a repeated id", [TERMS, { id: "terms", version: "2" }]],
+    ["an empty version", [{ id: "terms", version: "" }]],
+    ["a version longer than 32 characters", [{ id: "terms", version: "v".repeat(33) }]],
+    ["a version with a control character", [{ id: "terms", version: "1\u0007" }]],
+    ["an unknown key inside an entry", [{ ...TERMS, accepted: true }]],
+  ];
+
+  it.each(violations)("answers 422 validation_failed for %s, the same for an address that has an account, without asking the policy or writing anything", async (_name, acknowledgements) => {
+    const { module, asked } = composed();
+    const world = serve({ modules: [module], mail: new InMemoryMail(), env: { TRUSTED_PROXY_HOPS: "1" } });
+    expect((await register(world, body({ email: "taken@example.test", acknowledgements: [TERMS] }), { forwardedFor: "198.51.100.1" })).status).toBe(202);
+    await database().owner`DELETE FROM pgboss.job WHERE name IN ('mail.send', 'event.account.created')`;
+    hashings.mockClear();
+    asked.length = 0;
+    const before = await accounts();
+
+    const answers = [];
+    for (const [index, email] of ["taken@example.test", "new@example.test"].entries()) {
+      answers.push(await answerOf(await register(world, body({ email, acknowledgements }), { forwardedFor: `198.51.100.${String(index + 2)}` })));
+    }
+
+    expect(answers[0]?.status).toBe(422);
+    expect(JSON.parse(answers[0]?.body ?? "{}")).toMatchObject({ code: "validation_failed" });
+    // Only the field errors that name the address's own value can differ; the entries here are the same for both.
+    expect(answers[1]).toEqual(answers[0]);
+    expect(asked).toEqual([]);
+    expect(hashings).not.toHaveBeenCalled();
+    expect(await jobs()).toEqual([]);
+    expect(await accounts()).toEqual(before);
+  });
+
+  describe("through the worker", () => {
+    let worker: RunningWorker | undefined;
+
+    afterEach(async () => {
+      await worker?.shutdown();
+      worker = undefined;
+    });
+
+    it("delivers account.created with the acknowledgements to a subscriber after the commit, and an event queued without the field as an empty list", async () => {
+      const { module, recorded } = composed();
+      const world = serve({ modules: [module], mail: new InMemoryMail() });
+      expect((await register(world, body({ acknowledgements: [TERMS] }))).status).toBe(202);
+      const [account] = await accounts();
+      // The job a release before the field existed queued: no `acknowledgements` in its data.
+      const legacyId = "0192f3a0-aaaa-7000-8000-00000000f0f0";
+      await database().owner`
+        INSERT INTO pgboss.job (id, name, data) VALUES (${legacyId}, 'event.account.created', ${database().owner.json({ eventId: legacyId, accountId: account?.id ?? "", path: "self-registration" })})`;
+      const config = loadConfig("worker", { ...productionEnv(), NODE_ENV: "test", DATABASE_URL: appUrl(database()) }).config;
+      worker = await createWorker({
+        config,
+        adapters: adapters(),
+        modules: [module],
+        logger: recordingLogger(),
+        database: tenantDatabase(database()),
+        pollingIntervalSeconds: POLL_SECONDS,
+        shutdownTimeoutMs: 500,
+      }).start();
+
+      const deadline = Date.now() + WAIT_MS;
+      while (recorded.length < 2 && Date.now() < deadline) {
+        await sleep(50);
+      }
+
+      expect(recorded).toHaveLength(2);
+      expect(recorded).toContainEqual({ accountId: account?.id, path: "self-registration", acknowledgements: [TERMS] });
+      expect(recorded).toContainEqual({ accountId: account?.id, path: "self-registration", acknowledgements: [] });
+    });
+  });
+});
+
 describe("the verification mail through the worker", { timeout: TEST_TIMEOUT_MS }, () => {
   const mail = new InMemoryMail();
   const workerLogs = recordingLogger();

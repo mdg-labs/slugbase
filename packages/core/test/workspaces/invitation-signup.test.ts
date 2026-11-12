@@ -39,6 +39,7 @@ function ask(token: string): InvitationSignupAsk {
   return {
     token,
     displayName: "Grace Hopper",
+    acknowledgements: [],
     passwordHash: "$argon2id$stub",
     locale: "de",
     seatLimit: 3,
@@ -74,9 +75,19 @@ describe("accepting an invitation with registration fields", () => {
       ipPrefix: "203.0.0.0/16",
     });
     expect(records?.events.map((event) => ({ name: event.name, payload: event.payload }))).toEqual([
-      { name: "account.created", payload: { accountId, path: "invitation" } },
+      { name: "account.created", payload: { accountId, path: "invitation", acknowledgements: [] } },
       { name: "member.joined", payload: { workspaceId: WORKSPACE, accountId, role: "admin" } },
     ]);
+  });
+
+  it("carries the acknowledgements of the request in account.created", async () => {
+    const token = generateCredentialToken();
+    const w = world({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "member", sessionCreated: true });
+    const acknowledgements = [{ id: "terms", version: "2026-01" }];
+
+    await acceptInvitationWithAccount(w.dependencies, { ...ask(token.value), acknowledgements });
+
+    expect(w.written[0]?.events[0]?.payload).toMatchObject({ path: "invitation", acknowledgements });
   });
 
   it("hands the store the account identifier the caller named, so a seat check and the acceptance that follows it name one account", async () => {
@@ -87,7 +98,7 @@ describe("accepting an invitation with registration fields", () => {
     await acceptInvitationWithAccount(w.dependencies, { ...ask(token.value), accountId });
 
     expect(w.asked[0]?.accountId).toBe(accountId);
-    expect(w.written[0]?.events.map((event) => event.payload)).toEqual([{ accountId, path: "invitation" }, { workspaceId: WORKSPACE, accountId, role: "member" }]);
+    expect(w.written[0]?.events.map((event) => event.payload)).toEqual([{ accountId, path: "invitation", acknowledgements: [] }, { workspaceId: WORKSPACE, accountId, role: "member" }]);
   });
 
   it("passes every refusal on and prepares no record for it", async () => {

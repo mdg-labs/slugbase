@@ -98,6 +98,10 @@ describe("unconfigured()", () => {
     await expect(errors.capture(new Error("x"))).resolves.toBeUndefined();
   });
 
+  it("offers no monitored run, so a caller reports none", () => {
+    expect("startMonitoredRun" in unconfigured().errors).toBe(false);
+  });
+
   it("answers no client error-report DSN, without failing", async () => {
     const { clientErrorReport } = unconfigured();
     await expect(clientErrorReport.dsn({ accountId: "a", workspaceId: undefined })).resolves.toBeNull();

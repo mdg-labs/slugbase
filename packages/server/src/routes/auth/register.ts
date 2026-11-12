@@ -13,7 +13,7 @@ import { route } from "../register.ts";
 // POST /api/v1/auth/register (doc 04 section 10.2, doc 02 sections 2.2 and 2.6, doc 10 T8). Whether an
 // address already has an account is the one thing the answer must never say: the checks that can refuse a
 // request read the deployment's settings, the password and the address alone (the registration policy sees
-// the address and the path, doc 01 section 13.5), and what follows is the same work whatever the database
+// the address, the path and the acknowledgements, doc 01 section 13.5), and what follows is the same work whatever the database
 // finds. Both outcomes hash the password, write in one transaction and queue one `mail.send` job for the
 // account identifier this request generated. Only a created account has it, so for an address that already
 // has an account the job finds nobody and sends nothing: a registration cannot make mail reach another
@@ -63,7 +63,8 @@ export function registerRoute({ store, settings, mail, passwordPolicy, hashPassw
     if (hooks === undefined) {
       throw new Error("the register route was reached without the hook dispatcher");
     }
-    await assertRegistrationAllowed(hooks, { email, path: "self-registration" });
+    const acknowledgements = body.acknowledgements ?? [];
+    await assertRegistrationAllowed(hooks, { email, path: "self-registration", acknowledgements });
 
     const accountId = uuidv7();
     const passwordHash = await hashPassword(body.password);
@@ -76,7 +77,7 @@ export function registerRoute({ store, settings, mail, passwordPolicy, hashPassw
       displayName: body.displayName,
       passwordHash,
       locale: registrationLocale(context.req.raw.headers.get("accept-language")),
-      onCreated: [...mailJobs, queueDomainEvent(uuidv7(), "account.created", { accountId, path: "self-registration" })],
+      onCreated: [...mailJobs, queueDomainEvent(uuidv7(), "account.created", { accountId, path: "self-registration", acknowledgements })],
       onTaken: mailJobs,
       // With no verification to wait for, the personal workspace is made with the account (doc 02 section 2.2).
       ...(ownedMax === undefined ? {} : { afterCreated: (id: string, writer: PersonalWorkspaceWriter) => provisionWorkspaceIn(id, writer, ownedMax) }),

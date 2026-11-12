@@ -192,14 +192,14 @@ describe("register", () => {
     expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
   });
 
-  it("takes a closed body of displayName, email and password, all required", () => {
+  it("takes a closed body of displayName, email and password, all required, and optional acknowledgements", () => {
     expect(operation?.["requestBody"]).toMatchObject({
       required: true,
       content: { "application/json": { schema: { $ref: "#/components/schemas/RegisterRequest" } } },
     });
     const body = schemas["RegisterRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(body.additionalProperties).toBe(false);
-    expect(Object.keys(body.properties).sort()).toEqual(["displayName", "email", "password"]);
+    expect(Object.keys(body.properties).sort()).toEqual(["acknowledgements", "displayName", "email", "password"]);
     expect([...body.required].sort()).toEqual(["displayName", "email", "password"]);
     const valid = { displayName: "Ada", email: "ada@example.test", password: "a long enough password" };
     expect(RegisterRequestSchema.parse({ ...valid, displayName: "  Ada  " }).displayName).toBe("Ada");

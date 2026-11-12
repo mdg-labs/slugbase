@@ -98,7 +98,7 @@ describe("accepting an invitation through a provider", () => {
     await acceptInvitationWithIdentity(existing.dependencies, ask());
 
     expect(created.written[0]?.events.map((event) => ({ name: event.name, payload: event.payload }))).toEqual([
-      { name: "account.created", payload: { accountId: ACCOUNT, path: "invitation" } },
+      { name: "account.created", payload: { accountId: ACCOUNT, path: "invitation", acknowledgements: [] } },
       { name: "member.joined", payload: { workspaceId: WORKSPACE, accountId: ACCOUNT, role: "member" } },
     ]);
     expect(existing.written[0]?.events.map((event) => event.name)).toEqual(["member.joined"]);

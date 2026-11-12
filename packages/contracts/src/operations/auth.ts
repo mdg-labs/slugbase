@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RegistrationAcknowledgementsSchema } from "./acknowledgements.ts";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { DisplayNameSchema } from "./me.ts";
 import { withoutNul } from "./text.ts";
@@ -28,6 +29,9 @@ export const RegisterRequestSchema = z
     displayName: DisplayNameSchema.describe("The new account's display name; surrounding whitespace is removed"),
     email: z.email().max(320).describe("The new account's email address; case does not matter"),
     password: z.string().describe("The new account's password, 12 to 256 characters"),
+    acknowledgements: RegistrationAcknowledgementsSchema.optional().describe(
+      "What the person acknowledged before registering: at most 8 entries, each an identifier and a version label, an identifier at most once; absent means none. The deployment's registration policy decides what it requires, and a request the policy refuses is answered 403 registration_refused like any other refusal",
+    ),
   })
   .meta({ id: "RegisterRequest" });
 

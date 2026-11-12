@@ -19,6 +19,7 @@ import {
   decodeBase64Key,
   displayName,
   envInteger,
+  envSampleRate,
   mailbox,
   optional,
   originUrl,
@@ -237,10 +238,16 @@ export const metricsFragment = envFragment({
 
 /**
  * The error-report destination (doc 01 sections 6 and 11), for the server and the worker. Unset
- * selects the no-op adapter, which reports nothing beyond the log.
+ * selects the no-op adapter, which reports nothing beyond the log. With a DSN, the sampled traces
+ * of the server's requests and the check-ins of the worker's scheduled jobs are two further opt-ins
+ * that are off by default; each process reads the one it uses.
  */
 export const errorReportFragment = envFragment({
-  shape: { ERROR_REPORT_DSN: optional(sentryDsn()) },
+  shape: {
+    ERROR_REPORT_DSN: optional(sentryDsn()),
+    ERROR_REPORT_TRACES_SAMPLE_RATE: optional(envSampleRate()),
+    ERROR_REPORT_CHECK_INS: envBoolean().default(false),
+  },
 });
 
 export const SMTP_SECURITIES = ["tls", "starttls", "none"] as const;

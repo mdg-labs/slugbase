@@ -281,12 +281,12 @@ async function expectUntouched(target: Invitation, accounts: number): Promise<vo
   expect(await jobData("event.member.joined")).toEqual([]);
 }
 
-function recording(seen: { email: string; path: string }[], answer: "allow" | "refuse"): ServerModule {
+function recording(seen: { email: string; path: string; acknowledgements: readonly unknown[] }[], answer: "allow" | "refuse"): ServerModule {
   return {
     name: "policy",
     hooks: {
       registrationPolicy: (input) => {
-        seen.push({ email: input.email, path: input.path });
+        seen.push({ email: input.email, path: input.path, acknowledgements: input.acknowledgements });
         return answer === "allow" ? HookResult.allow() : HookResult.refuse("blocked_domain");
       },
     },
@@ -300,7 +300,7 @@ async function verifiedAccount(email: string, options: { verified?: boolean; dis
 
 describe("accepting an invitation through a provider", () => {
   it("creates the verified account of the invited address even where the provider does not create accounts, links the identity, joins the workspace with the invited role and signs in with the workspace active", async () => {
-    const seen: { email: string; path: string }[] = [];
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
     const world = serve(provider({ EMAIL_VERIFICATION_REQUIRED: "true" }), [recording(seen, "allow")]);
     const target = await invitation("New.Person@Example.test", { role: "admin" });
 
@@ -319,7 +319,7 @@ describe("accepting an invitation through a provider", () => {
     expect((await membersOf(target.workspaceId))[created?.id ?? ""]).toBe("admin");
     expect(await invitationState(target.id)).toEqual({ status: "accepted", accepted_by: created?.id });
     expect(await personalWorkspaceCount(created?.id ?? "")).toBe(0);
-    expect(seen).toEqual([{ email: "New.Person@Example.test", path: "invitation" }]);
+    expect(seen).toEqual([{ email: "New.Person@Example.test", path: "invitation", acknowledgements: [] }]);
 
     const me = await world.server.fetch(new Request(new URL("/api/v1/me", world.origin), { headers: { cookie: `${SESSION_COOKIE}=${cookie ?? ""}` } }));
     expect(me.status).toBe(200);
@@ -329,7 +329,9 @@ describe("accepting an invitation through a provider", () => {
       memberships: [{ workspaceId: target.workspaceId, role: "admin" }],
     });
     const createdJobs = await jobData("event.account.created");
-    expect(createdJobs.map((data) => ({ accountId: data["accountId"], path: data["path"] }))).toEqual([{ accountId: created?.id, path: "invitation" }]);
+    expect(createdJobs.map((data) => ({ accountId: data["accountId"], path: data["path"], acknowledgements: data["acknowledgements"] }))).toEqual([
+      { accountId: created?.id, path: "invitation", acknowledgements: "[]" },
+    ]);
     expect((await jobData("event.member.joined")).map((data) => ({ workspaceId: data["workspaceId"], accountId: data["accountId"], role: data["role"] }))).toEqual([
       { workspaceId: target.workspaceId, accountId: created?.id, role: "admin" },
     ]);
@@ -339,7 +341,7 @@ describe("accepting an invitation through a provider", () => {
   });
 
   it("signs the account the identity is linked to in and joins it, creating no account and linking nothing twice", async () => {
-    const seen: { email: string; path: string }[] = [];
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
     const world = serve(provider(), [recording(seen, "refuse")]);
     const holder = await verifiedAccount("Linked@Example.test");
     await database().owner.begin(async (tx) => {
@@ -362,7 +364,7 @@ describe("accepting an invitation through a provider", () => {
   });
 
   it("links the identity to the verified account that holds the invited address, signs it in and joins it, without asking the registration policy", async () => {
-    const seen: { email: string; path: string }[] = [];
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
     const world = serve(provider(), [recording(seen, "refuse")]);
     const holder = await verifiedAccount("holder@example.test");
     const target = await invitation("Holder@Example.test");
@@ -451,14 +453,14 @@ describe("accepting an invitation through a provider", () => {
     });
 
     it("for an address the registration policy refuses, which it was asked about for the path invitation", async () => {
-      const seen: { email: string; path: string }[] = [];
+      const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
       const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [recording(seen, "refuse")]);
       const target = await invitation("Refused@Example.test");
 
       expectFailed(await accepted(world, target.token, { subject: "refused-subject", email: "refused@example.test", emailVerified: true }));
 
       await expectUntouched(target, 1);
-      expect(seen).toEqual([{ email: "Refused@Example.test", path: "invitation" }]);
+      expect(seen).toEqual([{ email: "Refused@Example.test", path: "invitation", acknowledgements: [] }]);
     });
 
     it("for an invitation that was revoked, replaced or has expired by the time the callback arrives", async () => {

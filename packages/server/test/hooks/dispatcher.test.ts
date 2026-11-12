@@ -15,7 +15,7 @@ import { adapters, recordingLogger, unlimitedSeats } from "../support.ts";
 
 const seat = { workspaceId: "w1", accountId: "a1", invitationId: "i1" } as const;
 const workspaceDeletion: DeletionGuardInput = { kind: "workspace", workspaceId: "w1", accountId: "a1", requestedBy: "member" };
-const registration = { email: "someone@example.com", path: "self-registration" } as const;
+const registration = { email: "someone@example.com", path: "self-registration", acknowledgements: [] } as const;
 
 const module = (name: string, hooks: ServerHooks, refusals: HookRegistration["refusals"] = { deletionGuard: ["billing_active"] }): HookRegistration => ({
   module: name,

@@ -23,6 +23,10 @@ export const acceptInvitation: {
             token: z.ZodString;
             displayName: z.ZodOptional<z.ZodString>;
             password: z.ZodOptional<z.ZodString>;
+            acknowledgements: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                version: z.ZodString;
+            }, z.core.$strict>>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -64,6 +68,10 @@ export const AcceptInvitationRequestSchema: z.ZodObject<{
     token: z.ZodString;
     displayName: z.ZodOptional<z.ZodString>;
     password: z.ZodOptional<z.ZodString>;
+    acknowledgements: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        version: z.ZodString;
+    }, z.core.$strict>>>;
 }, z.core.$strict>;
 
 // @public
@@ -559,13 +567,13 @@ export const BookmarkFolderSchema: z.ZodObject<{
 
 // @public (undocumented)
 export const BookmarkIdsQuerySchema: z.ZodObject<{
+    url: z.ZodOptional<z.ZodString>;
     scope: z.ZodDefault<z.ZodEnum<{
         all: "all";
         mine: "mine";
         shared_with_me: "shared_with_me";
         shared_by_me: "shared_by_me";
     }>>;
-    url: z.ZodOptional<z.ZodString>;
     tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
     q: z.ZodOptional<z.ZodString>;
     forwarding: z.ZodOptional<z.ZodEnum<{
@@ -1182,6 +1190,7 @@ export interface ComponentTypes {
     // (undocumented)
     schemas: {
         AcceptInvitationRequest: {
+            acknowledgements?: ComponentTypes["schemas"]["RegistrationAcknowledgements"];
             displayName?: string;
             password?: string;
             token: string;
@@ -2040,10 +2049,16 @@ export interface ComponentTypes {
             code: string;
         };
         RegisterRequest: {
+            acknowledgements?: ComponentTypes["schemas"]["RegistrationAcknowledgements"];
             displayName: string;
             email: string;
             password: string;
         };
+        RegistrationAcknowledgement: {
+            id: string;
+            version: string;
+        };
+        RegistrationAcknowledgements: ComponentTypes["schemas"]["RegistrationAcknowledgement"][];
         RenameTagRequest: {
             name: string;
         };
@@ -6139,13 +6154,13 @@ export const listBookmarkIds: {
     readonly scope: "read";
     readonly request: {
         readonly query: z.ZodObject<{
+            url: z.ZodOptional<z.ZodString>;
             scope: z.ZodDefault<z.ZodEnum<{
                 all: "all";
                 mine: "mine";
                 shared_with_me: "shared_with_me";
                 shared_by_me: "shared_by_me";
             }>>;
-            url: z.ZodOptional<z.ZodString>;
             tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
             q: z.ZodOptional<z.ZodString>;
             forwarding: z.ZodOptional<z.ZodEnum<{
@@ -18895,6 +18910,10 @@ export const register: {
             displayName: z.ZodString;
             email: z.ZodEmail;
             password: z.ZodString;
+            acknowledgements: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                version: z.ZodString;
+            }, z.core.$strict>>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -18912,7 +18931,32 @@ export const RegisterRequestSchema: z.ZodObject<{
     displayName: z.ZodString;
     email: z.ZodEmail;
     password: z.ZodString;
+    acknowledgements: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        version: z.ZodString;
+    }, z.core.$strict>>>;
 }, z.core.$strict>;
+
+// @public
+export const REGISTRATION_ACKNOWLEDGEMENT_ID_PATTERN: RegExp;
+
+// @public
+export const REGISTRATION_ACKNOWLEDGEMENT_VERSION_MAX_LENGTH = 32;
+
+// @public
+export const REGISTRATION_ACKNOWLEDGEMENTS_MAX = 8;
+
+// @public (undocumented)
+export const RegistrationAcknowledgementSchema: z.ZodObject<{
+    id: z.ZodString;
+    version: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const RegistrationAcknowledgementsSchema: z.ZodArray<z.ZodObject<{
+    id: z.ZodString;
+    version: z.ZodString;
+}, z.core.$strict>>;
 
 // @public (undocumented)
 export const removeFolderBookmarks: {

@@ -2810,6 +2810,9 @@ export const DOMAIN_EVENTS: {
             readonly type: "enum";
             readonly values: readonly ["self-registration", "invitation", "oidc", "setup"];
         };
+        readonly acknowledgements: {
+            readonly type: "acknowledgements";
+        };
     };
     readonly "account.deleted": {
         readonly accountId: {
@@ -2885,10 +2888,14 @@ export type DomainEventField = {
 } | {
     readonly type: "enum";
     readonly values: readonly [string, ...string[]];
+} | {
+    readonly type: "acknowledgements";
 };
 
 // @public
 export type DomainEventFieldValue<Field> = Field extends {
+    readonly type: "acknowledgements";
+} ? readonly RegistrationAcknowledgement[] : Field extends {
     readonly values: readonly (infer Value)[];
 } ? Value : string;
 
@@ -3098,6 +3105,7 @@ export interface ErrorReportContext {
 export interface ErrorReportPort extends Port {
     // (undocumented)
     capture(error: unknown, context?: ErrorReportContext): Promise<void>;
+    startMonitoredRun?(slug: string): Promise<MonitoredRun>;
 }
 
 // @public
@@ -5593,6 +5601,7 @@ export type InvitationRole = (typeof INVITATION_ROLES)[number];
 // @public (undocumented)
 export interface InvitationSignupAsk {
     readonly accountId?: string;
+    readonly acknowledgements: readonly RegistrationAcknowledgement[];
     // (undocumented)
     readonly displayName: string;
     readonly emailVerificationRequired: boolean;
@@ -5927,6 +5936,14 @@ export const METADATA_SITE_NAME_MAX_LENGTH = 100;
 
 // @public
 export const METADATA_TITLE_MAX_LENGTH = 300;
+
+// @public
+export interface MonitoredRun {
+    finish(outcome: MonitoredRunOutcome): Promise<void>;
+}
+
+// @public
+export type MonitoredRunOutcome = "ok" | "error";
 
 // @public (undocumented)
 export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;
@@ -6534,6 +6551,14 @@ export interface ReencodedIcon {
     readonly png32: Uint8Array;
     // (undocumented)
     readonly png64: Uint8Array;
+}
+
+// @public
+export interface RegistrationAcknowledgement {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly version: string;
 }
 
 // @public

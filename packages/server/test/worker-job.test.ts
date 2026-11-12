@@ -7,7 +7,9 @@ import {
   assertIdempotent,
   defineJob,
   defineSchedule,
+  monitorSlug,
 } from "../src/worker/index.ts";
+import { scheduleMonitors } from "../src/worker/job.ts";
 import { queueSettings, queueUpdates } from "../src/worker/queues.ts";
 import { moduleContext } from "./support.ts";
 
@@ -96,6 +98,31 @@ describe("defineSchedule", () => {
     expect(defineSchedule({ name: "retention.hourly", cron: "0 * * * *", job: "retention.purge" }).cron).toBe("0 * * * *");
     expect(defineSchedule({ name: "x", cron: "0 0 * * * *", job: "retention.purge" }).cron).toBe("0 0 * * * *");
     expect(() => defineSchedule({ name: "x", cron: "* * *", job: "retention.purge" })).toThrow(JobDefinitionError);
+  });
+});
+
+describe("monitorSlug", () => {
+  it.each([
+    ["rateLimit.purgeIdle", "rate-limit-purge-idle"],
+    ["retention.purge", "retention-purge"],
+    ["accounts.endAccessMode", "accounts-end-access-mode"],
+    ["secrets.reseal", "secrets-reseal"],
+    ["test.some-thing", "test-some-thing"],
+  ])("makes %s the slug %s", (name, slug) => {
+    expect(monitorSlug(name)).toBe(slug);
+  });
+});
+
+describe("scheduleMonitors", () => {
+  it("gives a job exactly one schedule names the slug of that schedule, and a job several schedules name no monitor", () => {
+    const monitors = scheduleMonitors([
+      defineSchedule({ name: "retention.purge", cron: "0 * * * *", job: "retention.purge" }),
+      defineSchedule({ name: "report.daily", cron: "0 3 * * *", job: "report.send" }),
+      defineSchedule({ name: "report.weekly", cron: "0 4 * * 1", job: "report.send" }),
+    ]);
+
+    expect([...monitors.slugs]).toEqual([["retention.purge", "retention-purge"]]);
+    expect(monitors.unmonitored).toEqual(["report.send"]);
   });
 });
 

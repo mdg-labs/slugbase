@@ -210,6 +210,8 @@ A key ends in the scope it limits. `IP` is the address of the client. `ACCOUNT` 
 | --- | ------- | -------- | ------- | ---- | ------------ |
 | `METRICS_PORT` | server, worker | No | None | whole number, 1 to 65535 | The port of the internal listener for `/metrics`. Unset opens no listener. Keep it off the public network. It must differ from `PORT`. |
 | `ERROR_REPORT_DSN` | server, worker | No | None | Sentry-protocol DSN | The DSN of your own error tracker, such as `<your DSN>`. Unset reports nothing beyond the log. Personal data is scrubbed before anything is sent. |
+| `ERROR_REPORT_TRACES_SAMPLE_RATE` | server, worker | No | None | a number from 0 to 1 | The share of requests, such as `0.1`, whose trace the server sends to the error tracker as a transaction. It needs `ERROR_REPORT_DSN`. Unset sends no trace. The worker opens no traces. Route templates are sent, never paths, queries, headers or bodies. |
+| `ERROR_REPORT_CHECK_INS` | server, worker | No | `false` | boolean | Whether the worker reports each run of a scheduled job to the error tracker as a cron check-in, under a monitor slug made from the schedule's name, as the operations guide lists. It needs `ERROR_REPORT_DSN`. Create the monitors in the tracker; SlugBase does not. |
 
 ## Built-in limits
 

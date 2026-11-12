@@ -189,6 +189,18 @@ const HAND_WRITTEN = {
     description:
       "The DSN of your own error tracker, such as `<your DSN>`. Unset reports nothing beyond the log. Personal data is scrubbed before anything is sent.",
   },
+  ERROR_REPORT_TRACES_SAMPLE_RATE: {
+    group: "observability",
+    type: { kind: "text", label: "a number from 0 to 1" },
+    description:
+      "The share of requests, such as `0.1`, whose trace the server sends to the error tracker as a transaction. It needs `ERROR_REPORT_DSN`. Unset sends no trace. The worker opens no traces. Route templates are sent, never paths, queries, headers or bodies.",
+  },
+  ERROR_REPORT_CHECK_INS: {
+    group: "observability",
+    type: { kind: "boolean" },
+    description:
+      "Whether the worker reports each run of a scheduled job to the error tracker as a cron check-in, under a monitor slug made from the schedule's name, as the operations guide lists. It needs `ERROR_REPORT_DSN`. Create the monitors in the tracker; SlugBase does not.",
+  },
   SMTP_HOST: {
     group: "mail",
     type: { kind: "text", label: "host name or IP address" },

@@ -273,6 +273,22 @@ describe("createServer", () => {
         "s is registered twice",
       ],
       [
+        "duplicate_schedule",
+        [
+          {
+            name: "slugs",
+            register: () => ({
+              jobs: [job("some.job"), job("other.job")],
+              schedules: [
+                defineSchedule({ name: "foo.bar", cron: "* * * * *", job: "some.job" }),
+                defineSchedule({ name: "foo-bar", cron: "* * * * *", job: "other.job" }),
+              ],
+            }),
+          },
+        ],
+        "foo-bar has the monitor slug foo-bar of schedule foo.bar",
+      ],
+      [
         "invalid_schedule",
         [
           {
@@ -308,7 +324,7 @@ describe("createServer", () => {
 
 describe("the hooks of modules", () => {
   const seat = { workspaceId: "w1", accountId: "a1", invitationId: "i1" };
-  const registration = { email: "someone@example.com", path: "oidc" } as const;
+  const registration = { email: "someone@example.com", path: "oidc", acknowledgements: [] } as const;
 
   function hookServer(modules: readonly ServerModule[], hookTimeoutMs = 25) {
     const probe: ServerModule = {

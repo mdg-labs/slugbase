@@ -16,4 +16,5 @@ export type {
   DomainEventName,
   DomainEventPayload,
   MemberContentChoice,
+  RegistrationAcknowledgement,
 } from "./catalog.ts";

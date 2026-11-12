@@ -95,7 +95,7 @@ export function completeSetupRoute({ config, store, hashPassword, cookie, passwo
       userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
       instanceEventId: uuidv7(),
       jobs: [
-        queueDomainEvent(uuidv7(), "account.created", { accountId, path: "setup" }),
+        queueDomainEvent(uuidv7(), "account.created", { accountId, path: "setup", acknowledgements: [] }),
         queueDomainEvent(uuidv7(), "workspace.created", { workspaceId, accountId }),
       ],
       audit: [

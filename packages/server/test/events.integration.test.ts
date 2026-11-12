@@ -140,7 +140,7 @@ describe("POST /api/v1/setup", { timeout: 40_000 }, () => {
     const jobs = await eventJobs();
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.state).toBe("created");
-    expect(jobs[0]?.data).toEqual({ eventId: jobs[0]?.id, accountId: account, path: "setup" });
+    expect(jobs[0]?.data).toEqual({ eventId: jobs[0]?.id, accountId: account, path: "setup", acknowledgements: "[]" });
     expect(JSON.stringify(jobs)).not.toContain(EMAIL);
   });
 
@@ -212,7 +212,7 @@ describe("the worker", { timeout: 60_000 }, () => {
     await until(() => received.length > 0, "the subscriber to receive the event");
     const [account] = await accountIds();
     const [job] = await eventJobs();
-    expect(received).toEqual([{ eventId: job?.id, name: "account.created", payload: { accountId: account, path: "setup" } }]);
+    expect(received).toEqual([{ eventId: job?.id, name: "account.created", payload: { accountId: account, path: "setup", acknowledgements: [] } }]);
     await until(async () => (await eventJobs())[0]?.state === "completed", "the job to complete");
   });
 

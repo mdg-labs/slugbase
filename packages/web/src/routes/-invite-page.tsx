@@ -17,6 +17,7 @@ import {
   type InvitationPreview,
   type Viewer,
 } from "../auth/accept-invitation.ts";
+import type { AcknowledgementEntries } from "../auth/acknowledgement-checks.tsx";
 import { AuthPage } from "../auth/auth-page.tsx";
 import { InvitationSignUpForm, type SignUpSettled } from "../auth/invitation-sign-up-form.tsx";
 import { LoginForm } from "../auth/login-form.tsx";
@@ -320,8 +321,8 @@ export function InvitePage({ token }: { token: string }): ReactElement {
     }
   }
 
-  async function signUp(displayName: string, password: string, signal: AbortSignal): Promise<AcceptOutcome> {
-    return acceptWithNewAccount(api, token, displayName, password, signal);
+  async function signUp(displayName: string, password: string, signal: AbortSignal, acknowledgements?: AcknowledgementEntries): Promise<AcceptOutcome> {
+    return acceptWithNewAccount(api, token, displayName, password, signal, acknowledgements);
   }
 
   const title = t("invite.title");

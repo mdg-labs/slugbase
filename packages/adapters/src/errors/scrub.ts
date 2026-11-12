@@ -7,6 +7,11 @@ const FILTERED = "[Filtered]";
 // Keys whose value is never sent, whatever it holds.
 const REDACTED_KEY = /pass(?:word|wd|phrase)|token|secret|code|key|authorization|cookie|credential/i;
 
+/** Whether the scrubber drops the value of a field with this name, whatever it holds. */
+export function isRedactedKey(name: string): boolean {
+  return REDACTED_KEY.test(name);
+}
+
 const MAX_STRING_LENGTH = 4096;
 const MAX_DEPTH = 12;
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RegistrationAcknowledgementsSchema } from "./acknowledgements.ts";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { DisplayNameSchema, WORKSPACE_ROLES } from "./me.ts";
 
@@ -220,10 +221,17 @@ export const AcceptInvitationRequestSchema = z
       "The display name of the account to create; surrounding whitespace is removed. Sent with the password, by a person whose invited address has no account, and never with a session",
     ),
     password: z.string().optional().describe("The password of the account to create, 12 to 256 characters. Sent with the display name, by a person whose invited address has no account"),
+    acknowledgements: RegistrationAcknowledgementsSchema.optional().describe(
+      "What the person acknowledged before the account was created: at most 8 entries, each an identifier and a version label, an identifier at most once; absent means none. Sent only with the display name and the password",
+    ),
   })
   .refine((request) => (request.displayName === undefined) === (request.password === undefined), {
     path: ["password"],
     message: "The display name and the password are sent together or not at all",
+  })
+  .refine((request) => request.acknowledgements === undefined || request.displayName !== undefined, {
+    path: ["acknowledgements"],
+    message: "The acknowledgements are sent with the display name and the password, which create the account",
   })
   .meta({ id: "AcceptInvitationRequest" });
 

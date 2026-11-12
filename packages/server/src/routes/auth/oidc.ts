@@ -268,7 +268,7 @@ export function oidcRoutes({
       accountId,
       displayName: federatedDisplayName(claims.displayName, email),
       locale: registrationLocale(context.req.raw.headers.get("accept-language")),
-      onCreated: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "oidc" })],
+      onCreated: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "oidc", acknowledgements: [] })],
       ...(ownedMax === undefined ? {} : { afterCreated: (id: string, writer: PersonalWorkspaceWriter) => provisionWorkspaceIn(id, writer, ownedMax) }),
     };
   };
@@ -280,7 +280,7 @@ export function oidcRoutes({
       throw new Error("the OIDC callback was reached without the hook dispatcher");
     }
     try {
-      await assertRegistrationAllowed(hooks, { email, path });
+      await assertRegistrationAllowed(hooks, { email, path, acknowledgements: [] });
     } catch (error) {
       if (error instanceof ProblemError && error.code === "registration_refused") {
         refused(context, provider, "registration_refused");

@@ -64,6 +64,7 @@ export function useConfig(): ApiConfig;
 
 // @public
 export interface WebExtension {
+    readonly acknowledgements?: readonly WebRegistrationAcknowledgement[];
     readonly id: string;
     readonly navigation?: readonly WebExtensionNavigationItem[];
     readonly routes?: readonly WebExtensionRoute[];
@@ -87,6 +88,13 @@ export interface WebExtensionRoute {
 export type WebExtensionSlots = {
     readonly [Name in SlotName]?: ComponentType;
 };
+
+// @public
+export interface WebRegistrationAcknowledgement {
+    readonly id: string;
+    readonly label: ReactNode;
+    readonly version: string;
+}
 
 // (No @packageDocumentation comment for this package)
 

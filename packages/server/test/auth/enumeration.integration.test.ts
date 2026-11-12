@@ -6,12 +6,14 @@ import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { hashPassword } from "../../src/auth/password.ts";
+import type { ServerModule } from "../../src/create-server.ts";
+import { HookResult } from "../../src/hooks/index.ts";
 import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { urlOf } from "../migrate/support.ts";
 import { GRANTED, acceptAs, freshAddress, inspect, invite, linkOf, markDeleting, randomToken, revoke, setExpiry, signup, workspaceWithAdmin } from "../invitations/support.ts";
 import { HOOK_TIMEOUT_MS, workspaceHarness } from "../workspaces/support.ts";
-import { CREDENTIAL_ENV, requestFlows, type RequestFlow } from "./credential-flows.ts";
+import { CREDENTIAL_ENV, REGISTER, STRONG_PASSWORD, requestFlows, type RequestFlow } from "./credential-flows.ts";
 import {
   attemptLogin,
   fastLatencyRatios,
@@ -19,6 +21,7 @@ import {
   LATENCY_ROUNDS,
   latencyCalls,
   medianLatencyRatio,
+  postJson,
   seedAccount,
   serveAuth,
   signInAttempt,
@@ -391,6 +394,105 @@ describe("the requests for an emailed link (T8)", () => {
         }
       },
     );
+  });
+});
+
+describe("POST /api/v1/auth/register with a policy that requires an acknowledgement (T8)", () => {
+  const mail = new InMemoryMail();
+  const fixtureHash = hashPassword("a long password for the accounts seeded in bulk");
+  let tag = 0;
+
+  // The decision depends on the address, the path and the acknowledgements, never on whether an account exists.
+  const requiresTerms: ServerModule = {
+    name: "requires-terms",
+    hooks: { registrationPolicy: (input) => (input.acknowledgements.some((entry) => entry.id === "terms") ? HookResult.allow() : HookResult.refuse("terms_missing")) },
+    register: () => ({}),
+  };
+  const ACKNOWLEDGED = [{ id: "terms", version: "2026-01" }];
+
+  const serve = () => serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, TRUSTED_PROXY_HOPS: "1", RATE_LIMIT_REGISTER_IP: "1000/hour" }, mail, modules: [requiresTerms] });
+
+  function registration(world: AuthWorld, email: string, acknowledgements: unknown, forwardedFor?: string): Promise<Response> {
+    const body = { displayName: "Ada Lovelace", email, password: STRONG_PASSWORD, ...(acknowledgements === undefined ? {} : { acknowledgements }) };
+    return world.server.fetch(postJson(world.origin, REGISTER, body, forwardedFor === undefined ? {} : { forwardedFor }));
+  }
+
+  async function jobCount(): Promise<number> {
+    const rows = await database().app<{ count: string }[]>`SELECT count(*)::text AS count FROM pgboss.job WHERE name IN ('mail.send', 'event.account.created')`;
+    return Number(rows[0]?.count ?? "0");
+  }
+
+  async function accountCount(): Promise<number> {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ count: string }[]>`SELECT count(*)::text AS count FROM accounts`;
+    });
+    return Number(rows[0]?.count ?? "0");
+  }
+
+  it("answers an address with a verified account, an unverified one and an unknown one the same 403 registration_refused when the acknowledgement is missing, and writes nothing", async () => {
+    const world = serve();
+    tag += 1;
+    const suffix = String(tag);
+    const verified = await seedAccount(database(), { emailVerified: true, email: `ack.verified.${suffix}@example.test` });
+    const unverified = await seedAccount(database(), { email: `ack.unverified.${suffix}@example.test` });
+    const addresses = [verified.email, verified.email.toUpperCase(), unverified.email, `ack.unknown.${suffix}@example.test`, `ACK.UNKNOWN.OTHER.${suffix}@EXAMPLE.TEST`];
+    const accountsBefore = await accountCount();
+    const jobsBefore = await jobCount();
+    const answers = [];
+    let hop = 0;
+    for (const email of addresses) {
+      for (const acknowledgements of [undefined, [], [{ id: "privacy", version: "1" }]]) {
+        // Each request comes from its own address, so the rate-limit headers, which count per address, read the same too.
+        hop += 1;
+        const response = await registration(world, email, acknowledgements, `198.51.${suffix}.${String(hop)}`);
+        expect(response.headers.get("set-cookie")).toBeNull();
+        answers.push(await answerOf(response));
+      }
+    }
+    expect(answers[0]?.status).toBe(403);
+    expect(JSON.parse(answers[0]?.body ?? "{}")).toMatchObject({ code: "registration_refused", status: 403 });
+    for (const answer of answers) {
+      expect(answer).toEqual(answers[0]);
+    }
+    expect(await accountCount()).toBe(accountsBefore);
+    expect(await jobCount()).toBe(jobsBefore);
+  });
+
+  it("answers an address with an account and a new one alike once the acknowledgement is given, and keeps both out of the refusal's latency class", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
+    const world = serve();
+    tag += 1;
+    const suffix = String(tag);
+    const calls = latencyCalls();
+    const taken = await Promise.all(
+      Array.from({ length: calls }, async (_unused, index) =>
+        (await seedAccount(database(), { emailVerified: true, email: `ack.taken.${suffix}.${String(index)}@example.test`, passwordHash: await fixtureHash })).email,
+      ),
+    );
+    const accepted = await registration(world, taken[0] ?? "", ACKNOWLEDGED, "198.51.100.1");
+    const fresh = await registration(world, `ack.fresh.${suffix}@example.test`, ACKNOWLEDGED, "198.51.100.2");
+    expect(accepted.status).toBe(202);
+    expect(await answerOf(accepted)).toEqual(await answerOf(fresh));
+
+    let unknown = 0;
+    let drawn = 1;
+    const reference = () => registration(world, `ack.latency.${suffix}.${String(unknown++)}@example.test`, ACKNOWLEDGED);
+    const probe = () => registration(world, taken[drawn++] ?? "", ACKNOWLEDGED);
+    // The registration spends its time hashing the password for a new address and for one that has an account, so the pairs are compared by their median.
+    const acknowledged = await medianLatencyRatio(reference, probe);
+    expect(acknowledged).toBeGreaterThan(0.5);
+    expect(acknowledged).toBeLessThan(2);
+
+    // The refusal answers before the password is hashed, for an address that has an account as for one that has none.
+    let refusedUnknown = 0;
+    let refusedTaken = 0;
+    const refusedReference = () => registration(world, `ack.refused.${suffix}.${String(refusedUnknown++)}@example.test`, []);
+    const refusedProbe = () => registration(world, taken[refusedTaken++ % taken.length] ?? "", []);
+    const ratios = await fastLatencyRatios(refusedReference, refusedProbe, SHORT_REQUEST_LATENCY_ROUNDS);
+    for (const [reading, ratio] of Object.entries(ratios)) {
+      expect(ratio, reading).toBeGreaterThan(0.5);
+      expect(ratio, reading).toBeLessThan(2);
+    }
   });
 });
 

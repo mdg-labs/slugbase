@@ -1,6 +1,6 @@
 import { prepareAuditRecord, type AuditRecord } from "../audit/writer.ts";
 import { hashCredentialToken } from "../auth/credential-tokens.ts";
-import type { DomainEvent } from "../events/catalog.ts";
+import type { DomainEvent, RegistrationAcknowledgement } from "../events/catalog.ts";
 import type { WorkspaceRole } from "../ports/tenant-resolver.ts";
 
 // Accepting an invitation with registration fields: the invited address has no account, and a token that reached
@@ -98,6 +98,8 @@ export interface InvitationSignupAsk {
   /** A UUIDv7 for the account, when the caller has told a seat check of it already; made here otherwise. */
   readonly accountId?: string;
   readonly displayName: string;
+  /** What the request acknowledged, carried in `account.created`; empty when it named none. */
+  readonly acknowledgements: readonly RegistrationAcknowledgement[];
   /** An argon2id PHC string of the password the policy accepted. */
   readonly passwordHash: string;
   readonly locale: string;
@@ -142,7 +144,7 @@ export async function acceptInvitationWithAccount({ store, newId }: InvitationSi
         ),
       ],
       events: [
-        { eventId: newId(), name: "account.created", payload: { accountId, path: "invitation" } },
+        { eventId: newId(), name: "account.created", payload: { accountId, path: "invitation", acknowledgements: ask.acknowledgements } },
         { eventId: newId(), name: "member.joined", payload: { workspaceId, accountId, role } },
       ],
     }),
