@@ -38,6 +38,7 @@
     "db:migrate": "pnpm --filter @slugbase/db db:migrate",
     "perf": "turbo run build --filter=slugbase --filter=@slugbase/testing && node scripts/perf/run.mjs",
     "perf:migrations": "turbo run build --filter=@slugbase/testing && node scripts/perf/migrations.mjs",
+    "db:snapshot": "turbo run build --filter=@slugbase/core... && node scripts/db-snapshot.mjs",
     "db:seed": "turbo run build --filter=@slugbase/core... && pnpm --filter @slugbase/testing db:seed",
     "api:gen": "pnpm --filter @slugbase/contracts api:gen",
     "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract",
