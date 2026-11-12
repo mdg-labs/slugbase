@@ -1,11 +1,12 @@
 import type { Database } from "@slugbase/db";
 import { describe, expect, it } from "vitest";
 import { createMetrics } from "../src/metrics/index.ts";
-import { READ_RESERVE, createReadReserve } from "../src/read-reserve.ts";
+import { READ_RESERVE, WORKSPACE_WRITERS, createReadReserve } from "../src/read-reserve.ts";
 import { sample } from "./metrics/support.ts";
 
 // The read reserve of the tenant pool (doc 01 section 9.2) with a `withTenant` whose transactions end when the test says so: a pool of five connections and a
-// reserve of three leave two places for the transactions of requests that write.
+// reserve of three leave two places for the transactions of requests that write. The tests of the per-workspace cap use a pool of ten, whose seven places the cap of
+// two writers a workspace spreads over several workspaces.
 
 const CONTEXT = { accountId: "0192f3a0-bbbb-7000-8000-000000000001", workspaceId: "0192f3a0-bbbb-7000-8000-000000000002", requestId: "reserve-test" };
 const TX = Object.freeze({ accountId: CONTEXT.accountId, workspaceId: CONTEXT.workspaceId, requestId: CONTEXT.requestId });
@@ -42,12 +43,14 @@ function fakeTenant(autoFinish: (name: string) => boolean = () => false): { read
 }
 
 const named = (requestId: string) => ({ ...CONTEXT, requestId });
+const inWorkspace = (workspace: string, requestId: string) => ({ ...CONTEXT, workspaceId: `0192f3a0-bbbb-7000-8000-${workspace.padStart(12, "0")}`, requestId });
+const accountLevel = (requestId: string) => ({ accountId: CONTEXT.accountId, requestId });
 
 /** Lets every promise that can settle without a timer or a database settle. */
 const settle = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve); });
 
-function setup(autoFinish?: (name: string) => boolean) {
-  const reserve = createReadReserve({ poolSize: 5, reserve: 3 });
+function setup(autoFinish?: (name: string) => boolean, options: { readonly poolSize?: number; readonly workspaceWriters?: number } = {}) {
+  const reserve = createReadReserve({ poolSize: options.poolSize ?? 5, reserve: 3, ...(options.workspaceWriters === undefined ? {} : { workspaceWriters: options.workspaceWriters }) });
   const tenant = fakeTenant(autoFinish);
   const withTenant = reserve.limit(tenant.withTenant);
   const request = <T>(method: string, run: () => Promise<T>): Promise<T> => reserve.inRequest(method, run);
@@ -60,6 +63,10 @@ function setup(autoFinish?: (name: string) => boolean) {
 describe("the read reserve", () => {
   it("is three of the ten connections the server's pool has", () => {
     expect(READ_RESERVE).toBe(3);
+  });
+
+  it("lets two writers of one workspace hold a place at once", () => {
+    expect(WORKSPACE_WRITERS).toBe(2);
   });
 
   it("lets the transactions of requests that write take the pool less the reserve and holds the next ones, in arrival order, until one ends", async () => {
@@ -174,8 +181,161 @@ describe("the read reserve", () => {
     expect(await scrape()).toBe(0);
   });
 
+  describe("per workspace", () => {
+    const wide = (autoFinish?: (name: string) => boolean, workspaceWriters?: number) => setup(autoFinish, { poolSize: 10, ...(workspaceWriters === undefined ? {} : { workspaceWriters }) });
+    const write = (setupped: ReturnType<typeof setup>, workspace: string, name: string, method = "POST") =>
+      setupped.request(method, () => setupped.withTenant(inWorkspace(workspace, name), () => Promise.resolve(name)));
+
+    it("lets the writers of one workspace hold two places and holds the rest, in arrival order, until one of them ends", async () => {
+      const s = wide();
+      const writers = ["a1", "a2", "a3", "a4", "a5"].map((name) => write(s, "a", name));
+      await settle();
+
+      expect(s.tenant.opened).toEqual(["a1", "a2"]);
+      s.finish("a2");
+      await settle();
+      expect(s.tenant.opened).toEqual(["a1", "a2", "a3"]);
+      s.finish("a1");
+      await settle();
+      expect(s.tenant.opened).toEqual(["a1", "a2", "a3", "a4"]);
+      s.finish("a3");
+      await settle();
+      expect(s.tenant.opened).toEqual(["a1", "a2", "a3", "a4", "a5"]);
+      for (const name of ["a4", "a5"]) {
+        s.finish(name);
+      }
+      expect(await Promise.all(writers)).toEqual(["a1", "a2", "a3", "a4", "a5"]);
+    });
+
+    it("does not let the writers that wait for their workspace block a writer of another, nor take a place of the pool", async () => {
+      const s = wide();
+      const a = ["a1", "a2", "a3", "a4", "a5"].map((name) => write(s, "a", name));
+      // Two places of the pool are taken by `a`; the five others are all that is left of the seven, and `a`'s three waiters must hold none of them.
+      const others = ["b", "c", "d", "e", "f"].map((workspace) => write(s, workspace, `${workspace}1`));
+      const ninth = write(s, "g", "g1");
+      await settle();
+
+      expect(s.tenant.opened).toEqual(["a1", "a2", "b1", "c1", "d1", "e1", "f1"]);
+      expect(s.reserve.waiting()).toBe(3 + 1);
+      s.finish("b1");
+      await settle();
+      expect(s.tenant.opened).toEqual(["a1", "a2", "b1", "c1", "d1", "e1", "f1", "g1"]);
+      for (const name of ["a1", "a2", "a3", "a4", "a5", "c1", "d1", "e1", "f1", "g1"]) {
+        s.finish(name);
+        await settle();
+      }
+      expect((await Promise.all([...a, ...others, ninth])).length).toBe(11);
+    });
+
+    it("never holds a transaction of an account-level call, which has no workspace, behind a workspace's writers", async () => {
+      const s = wide();
+      const writers = ["a1", "a2", "a3"].map((name) => write(s, "a", name));
+      const accounts = ["x1", "x2", "x3", "x4", "x5"].map((name) => s.request("POST", () => s.withTenant(accountLevel(name), () => Promise.resolve(name))));
+      await settle();
+
+      // The writers of a workspace take their place of it first, so the account-level ones open ahead of them; what counts is that all seven opened.
+      expect([...s.tenant.opened].sort()).toEqual(["a1", "a2", "x1", "x2", "x3", "x4", "x5"]);
+      for (const name of ["a1", "a2", "a3", "x1", "x2", "x3", "x4", "x5"]) {
+        s.finish(name);
+        await settle();
+      }
+      await Promise.all([...writers, ...accounts]);
+    });
+
+    it("does not count a read of the workspace, nor a call that joins an open transaction of it", async () => {
+      const s = wide((name) => name.startsWith("inner"), 1);
+      const outer = write(s, "a", "outer");
+      const read = s.request("GET", () => s.withTenant(inWorkspace("a", "read"), () => Promise.resolve("read")));
+      const nested = s.request("POST", () =>
+        s.withTenant(inWorkspace("b", "holder"), async () => {
+          for (const name of ["inner-1", "inner-2"]) {
+            await s.withTenant(inWorkspace("b", name), () => Promise.resolve(name));
+          }
+          return "holder";
+        }),
+      );
+      await settle();
+
+      expect([...s.tenant.opened].sort()).toEqual(["holder", "inner-1", "inner-2", "outer", "read"]);
+      expect(s.reserve.waiting()).toBe(0);
+      for (const name of ["read", "outer", "holder"]) {
+        s.finish(name);
+      }
+      expect(await Promise.all([outer, read, nested])).toEqual(["outer", "read", "holder"]);
+    });
+
+    it("gives the workspace's place and the pool's place back when the transaction fails, so the next writer of the workspace goes on", async () => {
+      const s = wide();
+      const failing = write(s, "a", "a1");
+      const second = write(s, "a", "a2");
+      const third = write(s, "a", "a3");
+      await settle();
+      expect(s.tenant.opened).toEqual(["a1", "a2"]);
+
+      s.tenant.held.get("a1")?.fail(new Error("the transaction failed"));
+      await expect(failing).rejects.toThrow("the transaction failed");
+      await settle();
+      expect(s.tenant.opened).toEqual(["a1", "a2", "a3"]);
+
+      // Every place of the pool is free again once the workspace's writers are done: seven writers of seven workspaces all open.
+      s.finish("a2");
+      s.finish("a3");
+      await Promise.all([second, third]);
+      const seven = ["b", "c", "d", "e", "f", "g", "h"].map((workspace) => write(s, workspace, `${workspace}1`));
+      await settle();
+      expect(s.tenant.opened.slice(3)).toEqual(["b1", "c1", "d1", "e1", "f1", "g1", "h1"]);
+      for (const workspace of ["b", "c", "d", "e", "f", "g", "h"]) {
+        s.finish(`${workspace}1`);
+      }
+      await Promise.all(seven);
+      expect(s.reserve.waiting()).toBe(0);
+    });
+
+    it("counts the writers that wait in memory, for their workspace or for the pool, as they come and go", async () => {
+      const s = wide();
+      expect(s.reserve.waiting()).toBe(0);
+      const a = ["a1", "a2", "a3", "a4"].map((name) => write(s, "a", name));
+      await settle();
+      expect(s.reserve.waiting()).toBe(2);
+
+      const others = ["b", "c", "d", "e", "f", "g"].map((workspace) => write(s, workspace, `${workspace}1`));
+      await settle();
+      // Seven places of the pool: a1, a2 and five of the six others; the sixth waits for the pool.
+      expect(s.reserve.waiting()).toBe(3);
+
+      s.finish("a1");
+      await settle();
+      expect(s.reserve.waiting()).toBe(2);
+      for (const name of ["a2", "a3", "a4", "b1", "c1", "d1", "e1", "f1", "g1"]) {
+        s.finish(name);
+        await settle();
+      }
+      await Promise.all([...a, ...others]);
+      expect(s.reserve.waiting()).toBe(0);
+    });
+
+    it("is reported by slugbase_db_tenant_writers_waiting", async () => {
+      const metrics = createMetrics();
+      const s = wide();
+      metrics.observeWritersWaiting(() => s.reserve.waiting());
+      const scrape = async (): Promise<number | undefined> => sample(await metrics.registry.render(), "slugbase_db_tenant_writers_waiting");
+      expect(await scrape()).toBe(0);
+
+      const writers = ["a1", "a2", "a3", "a4"].map((name) => write(s, "a", name));
+      await settle();
+      expect(await scrape()).toBe(2);
+      for (const name of ["a1", "a2", "a3", "a4"]) {
+        s.finish(name);
+        await settle();
+      }
+      await Promise.all(writers);
+      expect(await scrape()).toBe(0);
+    });
+  });
+
   it("refuses a pool that the reserve leaves no place in", () => {
     expect(() => createReadReserve({ poolSize: 3, reserve: 3 })).toThrow("larger than the reserve");
     expect(() => createReadReserve({ poolSize: 10, reserve: 0 })).toThrow("at least one");
+    expect(() => createReadReserve({ poolSize: 10, workspaceWriters: 0 })).toThrow("at least one place");
   });
 });

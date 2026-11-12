@@ -11,7 +11,7 @@
 //   import       `go_import` and `list_import`, the /go and list budgets while an import is in flight, which are ratios to the same run's steady /go and list p95 (budgets.js RATIO_BUDGETS): their
 //                cause is the import (its lock, its load), not /go or the list on their own, so they are not filed under `go` or `list`, whose budgets hold with no import. The issue lists every ratio row of
 //                the run, with both p95, the ratio and the limit, and says which missed because the import scenario was saturated or dropped arrivals, and which were not judged (only the steady side saturated, or dropped arrivals) and why,
-//                and the pool and the lock waits sampled while an import was in flight (`importPhase.pool`, `importPhase.lockWaits` of the result): they say whether the creates that wait for the import's lock held the server's connections
+//                and the pool, the writers waiting in memory and the lock waits sampled while an import was in flight (`importPhase.pool`, `importPhase.pool.writersWaiting`, `importPhase.lockWaits` of the result): they say whether the creates that wait for the import's lock held the server's connections
 //   write load   the write-load check of /go (doc 01 section 8.1), which is not a p95 and has its own issue
 // A run that exceeds a budget whose issue is open comments on that issue (the lowest number when the title is on several), and one whose issue is not open creates
 // it. The title must match exactly: an issue of another scenario, or one that names several, is never extended. A result that cannot be read, a budget of a scenario
@@ -140,11 +140,15 @@ export function parseResult(text) {
     fail("result.json has no importPhase");
   }
   requireCounts(result.importPhase.pool, ["intervalMs", "samples", "size", "max", "p95", "samplesAboveSize"], "importPhase.pool");
+  requireCounts(result.importPhase.pool.writersWaiting, ["max", "p95"], "importPhase.pool.writersWaiting");
   requireCounts(result.importPhase.lockWaits, ["intervalMs", "samples", "max", "p95"], "importPhase.lockWaits");
   for (const [name, figure] of [["importPhase.pool", result.importPhase.pool], ["importPhase.lockWaits", result.importPhase.lockWaits]]) {
     if (figure.samples < 1 || figure.p95 > figure.max) {
       fail(`${name} has no sample, or a p95 above its maximum`);
     }
+  }
+  if (result.importPhase.pool.writersWaiting.p95 > result.importPhase.pool.writersWaiting.max) {
+    fail("importPhase.pool.writersWaiting has a p95 above its maximum");
   }
   requireCounts(result.writeLoad, ["requests", "updates", "elapsedSeconds", "flushIntervalSeconds", "limit"], "writeLoad");
   if (typeof result.writeLoad.ok !== "boolean") {
@@ -210,7 +214,7 @@ function describe(result, group, rows, runUrl, event) {
     if (group === "import") {
       const { pool, lockWaits } = result.importPhase;
       lines.push(
-        `Sampled every ${String(pool.intervalMs)} ms while an import was in flight: the server had at most ${String(pool.max)} tenant transactions open or waiting (p95 ${String(pool.p95)}) against a pool of ${String(pool.size)} connections, and ${String(pool.samplesAboveSize)} of ${String(pool.samples)} samples were above the pool, which is transactions queueing; at most ${String(lockWaits.max)} backends of the database waited for a lock (p95 ${String(lockWaits.p95)}, ${String(lockWaits.samples)} samples).`,
+        `Sampled every ${String(pool.intervalMs)} ms while an import was in flight: the server had at most ${String(pool.max)} tenant transactions open or waiting (p95 ${String(pool.p95)}) against a pool of ${String(pool.size)} connections, and ${String(pool.samplesAboveSize)} of ${String(pool.samples)} samples were above the pool, which is transactions queueing; at most ${String(pool.writersWaiting.max)} writers waited in memory for a place of the read reserve (p95 ${String(pool.writersWaiting.p95)}), which hold no connection, so what is in flight above the pool and those writers is reads queued for a connection; at most ${String(lockWaits.max)} backends of the database waited for a lock (p95 ${String(lockWaits.p95)}, ${String(lockWaits.samples)} samples).`,
         "",
       );
     }

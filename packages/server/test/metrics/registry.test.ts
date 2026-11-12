@@ -133,12 +133,14 @@ describe("MetricsRegistry", () => {
       const attached = createMetrics();
       server.setPoolSize(10);
       attached.setPoolSize(5);
+      server.observeWritersWaiting(() => 3);
       attached.observeJobQueues(() => Promise.resolve([{ queue: "mail.send", deferred: 0, ready: 2, active: 1, oldestReadySeconds: 4 }]));
 
       const text = await server.registry.render([workerSamples(attached.registry)]);
 
       expect(text).toContain("slugbase_db_pool_size 10\nslugbase_db_pool_size{process=\"worker\"} 5\n");
       expect(text).toContain('slugbase_db_tenant_transactions_in_flight{process="worker"} 0');
+      expect(text).toContain('slugbase_db_tenant_writers_waiting 3\nslugbase_db_tenant_writers_waiting{process="worker"} 0\n');
       expect(text).toContain('slugbase_job_queue_depth{queue="mail.send",state="ready",process="worker"} 2');
       expect(text).toContain('slugbase_job_queue_oldest_ready_age_seconds{queue="mail.send",process="worker"} 4');
       expect(text.match(/^# TYPE slugbase_db_pool_size /gm)).toHaveLength(1);

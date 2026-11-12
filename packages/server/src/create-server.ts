@@ -606,6 +606,7 @@ export function createServer(options: CreateServerOptions): Server {
     metrics.setPoolSize(DEFAULT_SERVER_POOL_SIZE);
   }
   const readReserve = createReadReserve({ poolSize: DEFAULT_SERVER_POOL_SIZE });
+  metrics.observeWritersWaiting(() => readReserve.waiting());
   const context: ModuleContext = Object.freeze({
     config,
     logger,

@@ -36,7 +36,7 @@ interface Load {
 }
 
 interface ImportPhase {
-  pool: { intervalMs: number; samples: number; size: number; max: number; p95: number; samplesAboveSize: number };
+  pool: { intervalMs: number; samples: number; size: number; max: number; p95: number; samplesAboveSize: number; writersWaiting: { max: number; p95: number } };
   lockWaits: { intervalMs: number; samples: number; max: number; p95: number };
 }
 
@@ -100,7 +100,7 @@ function withinBudgets(): PerfResult {
     scenarios: Object.fromEntries(SCENARIOS.map((scenario) => [scenario, { completed: 1200, dropped: 0, peakVus: 3, maxVus: 100, saturated: false }])),
     budgets: budgets().map((budget) => withinLimit(budget)),
     importPhase: {
-      pool: { intervalMs: 250, samples: 120, size: 10, max: 8, p95: 6, samplesAboveSize: 0 },
+      pool: { intervalMs: 250, samples: 120, size: 10, max: 8, p95: 6, samplesAboveSize: 0, writersWaiting: { max: 2, p95: 1 } },
       lockWaits: { intervalMs: 250, samples: 120, max: 3, p95: 2 },
     },
     writeLoad: { requests: 10_000, updates: 2, elapsedSeconds: 8.1, flushIntervalSeconds: 10, limit: 2, ok: true },
@@ -269,11 +269,11 @@ describe("the issues a performance run files", () => {
   it("says in the import issue how many tenant transactions the server had open against its pool and how many backends waited for a lock while an import was in flight", () => {
     const queueing: PerfResult = {
       ...exceeding(withinBudgets(), "go during import"),
-      importPhase: { pool: { intervalMs: 250, samples: 118, size: 10, max: 17, p95: 15, samplesAboveSize: 41 }, lockWaits: { intervalMs: 250, samples: 118, max: 10, p95: 9 } },
+      importPhase: { pool: { intervalMs: 250, samples: 118, size: 10, max: 17, p95: 15, samplesAboveSize: 41, writersWaiting: { max: 6, p95: 5 } }, lockWaits: { intervalMs: 250, samples: 118, max: 10, p95: 9 } },
     };
     const body = plain(queueing)[0]?.body ?? "";
     expect(body).toContain(
-      "Sampled every 250 ms while an import was in flight: the server had at most 17 tenant transactions open or waiting (p95 15) against a pool of 10 connections, and 41 of 118 samples were above the pool, which is transactions queueing; at most 10 backends of the database waited for a lock (p95 9, 118 samples).",
+      "Sampled every 250 ms while an import was in flight: the server had at most 17 tenant transactions open or waiting (p95 15) against a pool of 10 connections, and 41 of 118 samples were above the pool, which is transactions queueing; at most 6 writers waited in memory for a place of the read reserve (p95 5), which hold no connection, so what is in flight above the pool and those writers is reads queued for a connection; at most 10 backends of the database waited for a lock (p95 9, 118 samples).",
     );
     // Only the import issue carries them: the issue of go does not.
     expect(plain(goAt230())[0]?.body).not.toContain("Sampled every");
@@ -393,6 +393,17 @@ describe("a result or a list of issues that cannot be read", () => {
     for (const key of ["intervalMs", "samples", "max", "p95"] as const) {
       expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, lockWaits: { ...sampled.importPhase.lockWaits, [key]: undefined } } })), `lockWaits ${key}`).toThrow(/importPhase\.lockWaits has no number/);
     }
+    // The writers waiting in memory are part of the pool figure: a result without them, or with one that is not a number, is refused.
+    expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, pool: { ...sampled.importPhase.pool, writersWaiting: undefined } } }))).toThrow(/importPhase\.pool\.writersWaiting is missing/);
+    for (const key of ["max", "p95"] as const) {
+      for (const bad of [undefined, null, "2", Number.NaN]) {
+        expect(
+          () => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, pool: { ...sampled.importPhase.pool, writersWaiting: { ...sampled.importPhase.pool.writersWaiting, [key]: bad } } } })),
+          `writersWaiting ${key} ${String(bad)}`,
+        ).toThrow(/importPhase\.pool\.writersWaiting has no number/);
+      }
+    }
+    expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, pool: { ...sampled.importPhase.pool, writersWaiting: { max: 1, p95: 2 } } } }))).toThrow(/writersWaiting has a p95 above its maximum/);
     // A figure with no sample behind it is a phase that was never measured, and a p95 above the maximum is no distribution.
     expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, pool: { ...sampled.importPhase.pool, samples: 0 } } }))).toThrow(/no sample/);
     expect(() => parseResult(text({ ...sampled, importPhase: { ...sampled.importPhase, lockWaits: { ...sampled.importPhase.lockWaits, p95: 9 } } }))).toThrow(/above its maximum/);
@@ -614,7 +625,7 @@ describe("the script and the job that run it", () => {
   }, SUBPROCESS_TIMEOUT_MS);
 
   it("writes the pool and the lock waits of the import phase to the job summary, from the names the result has them under", () => {
-    for (const field of ["pool.intervalMs", "pool.samples", "pool.max", "pool.p95", "pool.size", "pool.samplesAboveSize", "lockWaits.samples", "lockWaits.max", "lockWaits.p95"]) {
+    for (const field of ["pool.intervalMs", "pool.samples", "pool.max", "pool.p95", "pool.size", "pool.samplesAboveSize", "pool.writersWaiting.max", "pool.writersWaiting.p95", "lockWaits.samples", "lockWaits.max", "lockWaits.p95"]) {
       expect(workflow, field).toContain(`\\(.${field})`);
     }
     expect(workflow).toMatch(/jq -r '\.importPhase \| "Pool while an import was in flight/);

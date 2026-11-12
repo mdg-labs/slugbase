@@ -76,6 +76,8 @@ export interface Metrics {
    * counted again.
    */
   instrumentTenant(withTenant: Database["withTenant"]): Database["withTenant"];
+  /** Reports at each scrape how many writers the read reserve holds in memory; a process with no reserve reports 0. */
+  observeWritersWaiting(source: () => number): void;
   /** Reads the job queues at each scrape; the worker is the only process that has a source. */
   observeJobQueues(source: QueueSource): void;
 }
@@ -108,6 +110,15 @@ export function createMetrics(): Metrics {
   let transactions = 0;
   registry.onCollect(() => {
     inFlight.set({}, transactions);
+  });
+
+  const writersWaiting = registry.gauge(
+    "slugbase_db_tenant_writers_waiting",
+    "Writers the read reserve holds in memory for a place of their workspace or of the pool; they hold no connection, so the transactions in flight less the pool size and these is the reads queued for a connection.",
+  );
+  let writersSource: () => number = () => 0;
+  registry.onCollect(() => {
+    writersWaiting.set({}, writersSource());
   });
 
   const queueDepth = registry.gauge("slugbase_job_queue_depth", "Jobs in a queue, by queue and state (deferred, ready, active), as of the runtime's last count, at most a minute old.", [
@@ -150,6 +161,10 @@ export function createMetrics(): Metrics {
           transactions -= 1;
         }
       };
+    },
+
+    observeWritersWaiting(source) {
+      writersSource = source;
     },
 
     observeJobQueues(source) {
