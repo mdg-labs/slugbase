@@ -102,6 +102,7 @@ describe("the package entry point", () => {
         "entitlementRepository",
         "exportRepository",
         "folderRepository",
+        "formerContentRepository",
         "goRepository",
         "idempotencyRepository",
         "importRepository",

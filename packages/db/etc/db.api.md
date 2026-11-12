@@ -738,6 +738,50 @@ export type FolderShareRepository = FolderShareStore;
 // @public (undocumented)
 export function folderShareRepository(tx: TenantTx): FolderShareRepository;
 
+// @public
+export interface FormerBookmark {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly updatedAt: Date;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface FormerContentRepository {
+    listBookmarks(afterId: string | null, limit: number): Promise<readonly FormerBookmark[]>;
+    listFolders(afterId: string | null, limit: number): Promise<readonly FormerFolder[]>;
+}
+
+// @public (undocumented)
+export function formerContentRepository(tx: TenantTx): FormerContentRepository;
+
+// @public
+export interface FormerFolder {
+    readonly bookmarkCount: number;
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
 // @public (undocumented)
 export type GoRepository = GoStore & GoPreferenceStore & GoSuggestStore;
 

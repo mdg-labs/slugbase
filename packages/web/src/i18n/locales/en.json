@@ -2214,6 +2214,36 @@
         },
         "loading": "Loading invitations"
       },
+      "former": {
+        "title": "Former members' content",
+        "description": "Bookmarks and folders that belong to no one now, because their owner left the workspace or deleted their account. Only owners and admins see them.",
+        "loading": "Loading former members' content",
+        "empty": {
+          "title": "No content from former members",
+          "description": "When someone leaves the workspace or deletes their account, the bookmarks and folders they leave behind appear here."
+        },
+        "column": {
+          "created": "Created"
+        },
+        "bookmarks": {
+          "title": "Bookmarks",
+          "column": {
+            "title": "Title",
+            "host": "Host",
+            "slug": "Slug"
+          },
+          "noSlug": "No slug",
+          "loadFailed": "The bookmarks of former members could not be loaded"
+        },
+        "folders": {
+          "title": "Folders",
+          "column": {
+            "name": "Name",
+            "bookmarks": "Bookmarks"
+          },
+          "loadFailed": "The folders of former members could not be loaded"
+        }
+      },
       "invite": {
         "title": "Invite people",
         "description": "Invite people to this workspace by email.",

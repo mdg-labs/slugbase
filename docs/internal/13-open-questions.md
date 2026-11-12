@@ -678,7 +678,7 @@ The old spec said content "remains with the workspace" without naming an owner. 
 GDPR Article 17 favours a self-service path. Blocking on sole ownership prevents stranding teams. A 30-day grace period was considered and declined for v1, because it would need a soft-deleted account state everywhere.
 
 ### Q54 — Content of a deleted account in shared workspaces
-**Status:** Decided (maintainer) · **Due:** Phase 1 · **Affects:** doc 05 §7.1, doc 02 §3.5, doc 11
+**Status:** Decided (maintainer) · **Due:** Phase 1 · **Affects:** doc 05 §7.1, doc 02 §2.10, doc 11
 
 **Decision: bookmarks and folders the account created in workspaces with other members stay as ownerless workspace content ("Former member"); tags, preferences and AI cache are deleted. Workspaces where it was the only member are deleted entirely.**
 Matches the leave-a-workspace rule (content belongs to the workspace) and avoids breaking teammates' shared folders and slugs. The alternative (delete everything the person authored) is the stricter erasure reading; it is a legal call, hence Maintainer.

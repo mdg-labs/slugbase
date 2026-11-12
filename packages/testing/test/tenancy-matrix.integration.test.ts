@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { aiSuggestionRepository, bookmarkRepository, exportRepository, folderRepository, importRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
+import { aiSuggestionRepository, bookmarkRepository, exportRepository, folderRepository, formerContentRepository, importRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useTestDatabase } from "../src/db.ts";
@@ -325,7 +325,7 @@ describe("the matrix over the committed contract and the repository registry", (
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
     // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder, and the read, the change, the deletion and the replacement of the members of a team name a team (the replacement also the members of B in `accountIds`), and the list, the grant and the revocation of the shares of a bookmark name a bookmark of B in the path (the grant also a member and a team of B, the revocation also a share of B), and the list, the grant and the revocation of the shares of a folder name a folder of B in the path (with the same members, team and share); the search for share targets and the invitation list take no identifier.
     // The audit log's list names an account in `actorAccountId` and an entity in `entityId`, and answers an empty 200 for those of B.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(67);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(69);
     // Three sessions and six tokens of A, once on each of the twenty operations (the AI suggestion among them, which names no row of any workspace and reads and writes only the caller's own cache) that name no member other than the creation of a bookmark and twice on the creation of a bookmark (once for each of the two bookmarks of B put in its `slug`, which is mapped to a bookmark and judged with the folder and the tag of B in the same call), once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
@@ -336,7 +336,7 @@ describe("the matrix over the committed contract and the repository registry", (
     // The two exports name a bookmark, a folder and a tag of B in their selection (`id`, `folderId`, `tag` and the `hasSlug` filter, picked by its name): seven calls for each principal on each of them, the last term but one of the sum, answered an empty 200 since a selection names nothing of B to a caller of A.
     // Without a selection the exports name none, and are counted in the first term: they read the caller's own bookmarks, folders and tags of the workspace of the request, section by section.
     // The Netscape import names none either, and is counted in the first term: its one file part is a stream of bytes and no identifier, and what the file lists is text matched among the caller's own rows.
-    expect(report.attempts).toBe(9 * 27 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2 * 2 + 2 * 7));
+    expect(report.attempts).toBe(9 * 29 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2 * 2 + 2 * 7));
     assertMatrixPassed(report);
   });
 
@@ -1760,5 +1760,92 @@ describe("the operator removal across workspaces", () => {
       a: before.a,
       b: { rows: before.b.rows - 1, counter: before.b.counter - 1, events: before.b.events + 1 },
     });
+  });
+});
+
+// The lists of the former members' content read the bookmarks and folders that have no owner, and the policies of both tables name the workspace only (doc 05
+// section 2.4, doc 10 T1 and T2): the workspace and the missing owner are the repository's own terms. Both workspaces hold ownerless bookmarks and folders. From a
+// transaction acting in A, through the repository and with the application layer left out (the statement the repository would send, without its workspace
+// predicate), the lists hold A's rows and nothing of B; acting in B they hold B's, so the rows of B are real and the answer in A is the workspace's.
+describe("the former members' content across workspaces", () => {
+  const MEMBER_OF_A = "0192f3a0-3333-7000-8000-00000000a0f1";
+  const MEMBER_OF_B = "0192f3a0-3333-7000-8000-00000000b0f1";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0f7";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0f7";
+  const FOLDER_OF_A = "0192f3a0-2222-7000-8000-00000000a0f8";
+  const FOLDER_OF_B = "0192f3a0-2222-7000-8000-00000000b0f8";
+  const SEED_OF_A = "0192f3a0-2222-7000-8000-00000000a0f9";
+  const SEED_OF_B = "0192f3a0-2222-7000-8000-00000000b0f9";
+
+  it("lists the ownerless bookmarks and folders of the workspace of the transaction, through the repository and through the statement without its workspace predicate, and nothing of the other workspace", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: SEED_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: SEED_OF_B },
+    ]);
+    for (const [accountId, email] of [
+      [MEMBER_OF_A, "former-content-a@example.test"],
+      [MEMBER_OF_B, "former-content-b@example.test"],
+    ] as const) {
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+        await tx`INSERT INTO accounts (id, email, display_name) VALUES (${accountId}, ${email}, 'Matrix member') ON CONFLICT DO NOTHING`;
+      });
+    }
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_B}, 'owner') ON CONFLICT DO NOTHING`;
+      for (const [id, workspaceId] of [
+        [BOOKMARK_OF_A, PROBE_WORKSPACE_A],
+        [BOOKMARK_OF_B, PROBE_WORKSPACE_B],
+      ] as const) {
+        await tx`
+          INSERT INTO bookmarks (id, workspace_id, url, url_canonical, host, title)
+          VALUES (${id}, ${workspaceId}, 'https://example.com/former-matrix', 'https://example.com/former-matrix', 'example.com', 'former-matrix') ON CONFLICT DO NOTHING`;
+      }
+      for (const [id, workspaceId] of [
+        [FOLDER_OF_A, PROBE_WORKSPACE_A],
+        [FOLDER_OF_B, PROBE_WORKSPACE_B],
+      ] as const) {
+        await tx`INSERT INTO folders (id, workspace_id, name) VALUES (${id}, ${workspaceId}, 'former-matrix') ON CONFLICT DO NOTHING`;
+      }
+    });
+
+    const read = async (accountId: string, workspaceId: string) => ({
+      bookmarks: (await database().tenant.withTenant({ accountId, workspaceId, requestId: "matrix-former-content" }, (tx) => formerContentRepository(tx).listBookmarks(null, 100))).map((row) => row.id),
+      folders: (await database().tenant.withTenant({ accountId, workspaceId, requestId: "matrix-former-content" }, (tx) => formerContentRepository(tx).listFolders(null, 100))).map((row) => row.id),
+      bookmarksWithoutPredicate: (
+        await database().app.begin(async (tx) => {
+          await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true)`;
+          return tx<{ id: string }[]>`SELECT id FROM bookmarks WHERE owner_id IS NULL AND departure_id IS NULL AND plan_archived_at IS NULL ORDER BY id`;
+        })
+      ).map((row) => row.id),
+      foldersWithoutPredicate: (
+        await database().app.begin(async (tx) => {
+          await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true)`;
+          return tx<{ id: string }[]>`SELECT id FROM folders WHERE owner_id IS NULL AND departure_id IS NULL ORDER BY id`;
+        })
+      ).map((row) => row.id),
+    });
+
+    const inA = await read(MEMBER_OF_A, PROBE_WORKSPACE_A);
+    const inB = await read(MEMBER_OF_B, PROBE_WORKSPACE_B);
+
+    expect(inB.bookmarks).toEqual(expect.arrayContaining([BOOKMARK_OF_B, SEED_OF_B]));
+    expect(inB.folders).toEqual(expect.arrayContaining([FOLDER_OF_B]));
+    expect(inA.bookmarks).toEqual(expect.arrayContaining([BOOKMARK_OF_A, SEED_OF_A]));
+    expect(inA.folders).toEqual(expect.arrayContaining([FOLDER_OF_A]));
+    for (const listed of [inA.bookmarks, inA.bookmarksWithoutPredicate]) {
+      expect(listed).not.toContain(BOOKMARK_OF_B);
+      expect(listed).not.toContain(SEED_OF_B);
+    }
+    for (const listed of [inA.folders, inA.foldersWithoutPredicate]) {
+      expect(listed).not.toContain(FOLDER_OF_B);
+    }
+    expect(inA.bookmarksWithoutPredicate).toEqual([...inA.bookmarks].sort());
+    expect(inA.foldersWithoutPredicate).toEqual(inA.folders);
+    expect(inB.bookmarks.filter((id) => id === BOOKMARK_OF_A || id === SEED_OF_A)).toEqual([]);
+    expect(inB.folders).not.toContain(FOLDER_OF_A);
   });
 });

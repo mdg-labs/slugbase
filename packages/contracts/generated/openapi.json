@@ -3161,6 +3161,157 @@
         ],
         "type": "object"
       },
+      "FormerBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the bookmark was created, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "forwarding": {
+            "description": "Whether /go forwards to the bookmark by its slug",
+            "type": "boolean"
+          },
+          "host": {
+            "description": "The host name of the URL, lower case and in punycode",
+            "type": "string"
+          },
+          "id": {
+            "description": "The bookmark's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The bookmark's slug, null when it has none",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "When the bookmark last changed, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL as stored: normalised, and always http or https",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url",
+          "host",
+          "slug",
+          "forwarding",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "FormerBookmarkList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the workspace's bookmarks that have no owner, in the order of their identifiers, which is the order they were created in",
+            "items": {
+              "$ref": "#/components/schemas/FormerBookmark"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "FormerFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkCount": {
+            "description": "How many of the bookmarks that this list of bookmarks holds are filed in the folder: the ones that have no owner, are not waiting for the content choice of a member who left and are not plan-archived",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "color": {
+            "description": "The folder's colour, 1 to 8: the number of the --folder-N theme token",
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "createdAt": {
+            "description": "When the folder was created, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "icon": {
+            "description": "The folder's icon, a lucide icon name",
+            "type": "string"
+          },
+          "id": {
+            "description": "The folder's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "name": {
+            "description": "The folder's name, in the case it was entered in",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "color",
+          "bookmarkCount",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "FormerFolderList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the workspace's folders that have no owner, in the order of their identifiers, which is the order they were created in",
+            "items": {
+              "$ref": "#/components/schemas/FormerFolder"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
       "GoCandidate": {
         "additionalProperties": false,
         "properties": {
@@ -21005,6 +21156,264 @@
         ],
         "x-slugbase-auth": "admin",
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/workspace/former-content/bookmarks": {
+      "get": {
+        "operationId": "listFormerBookmarks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "The most rows to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page; valid only for the workspace and the list that issued it",
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormerBookmarkList"
+                }
+              }
+            },
+            "description": "One page of the active workspace's bookmarks that have no owner: those of a member who left or whose account was deleted. A bookmark that has an owner, one that still waits for the content choice of a member who left and one the plan archived are not listed, and no bookmark of another workspace is"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this workspace issued for this list"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the bookmarks of former members",
+        "tags": [
+          "members"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "read"
+      }
+    },
+    "/api/v1/workspace/former-content/folders": {
+      "get": {
+        "operationId": "listFormerFolders",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "The most rows to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page; valid only for the workspace and the list that issued it",
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormerFolderList"
+                }
+              }
+            },
+            "description": "One page of the active workspace's folders that have no owner: those of a member who left or whose account was deleted, each with how many of the bookmarks listed by listFormerBookmarks are filed in it. A folder that has an owner and one that still waits for the content choice of a member who left are not listed, and no folder of another workspace is"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this workspace issued for this list"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the folders of former members",
+        "tags": [
+          "members"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "read"
       }
     },
     "/api/v1/workspace/leave": {

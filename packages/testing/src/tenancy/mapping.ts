@@ -98,6 +98,10 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   calls it once for every principal of A, as a dry run that writes nothing, with the one-link file of the fixtures of the contract test; the import that writes goes through the same service and the same scoped repository as `importJson`, and
  *   is held to the workspace of the request by `packages/server/test/routes/import-netscape.integration.test.ts`.
  *
+ * - Former members' content: `listFormerBookmarks` and `listFormerFolders` take `limit` and a signed `cursor` and no identifier, so they take no entry. They read the ownerless bookmarks and folders of the workspace of the request
+ *   (`packages/db/src/repositories/former-content.ts`, whose statements name the workspace and the missing owner, since the policies of both tables name the workspace only), which the `describe("the former members' content across workspaces")` block of
+ *   `test/tenancy-matrix.integration.test.ts` holds to the workspace of the transaction: a caller of A reads no ownerless row of B, through the repository and with the workspace predicate left out.
+ *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
  * `bookmark` rows, so a caller that runs these operations adds `team` and `invitation` identifiers to workspace B, or the matrix reports

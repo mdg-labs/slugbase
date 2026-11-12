@@ -2214,6 +2214,36 @@
         },
         "loading": "Einladungen werden geladen"
       },
+      "former": {
+        "title": "Inhalte ehemaliger Mitglieder",
+        "description": "Lesezeichen und Ordner, die niemandem mehr gehören, weil die Person, der sie gehörten, den Workspace verlassen oder ihr Konto gelöscht hat. Nur Eigentümer und Admins sehen sie.",
+        "loading": "Inhalte ehemaliger Mitglieder werden geladen",
+        "empty": {
+          "title": "Keine Inhalte ehemaliger Mitglieder",
+          "description": "Wenn jemand den Workspace verlässt oder das Konto löscht, erscheinen hier die Lesezeichen und Ordner, die zurückbleiben."
+        },
+        "column": {
+          "created": "Erstellt"
+        },
+        "bookmarks": {
+          "title": "Lesezeichen",
+          "column": {
+            "title": "Titel",
+            "host": "Host",
+            "slug": "Slug"
+          },
+          "noSlug": "Kein Slug",
+          "loadFailed": "Die Lesezeichen ehemaliger Mitglieder konnten nicht geladen werden"
+        },
+        "folders": {
+          "title": "Ordner",
+          "column": {
+            "name": "Name",
+            "bookmarks": "Lesezeichen"
+          },
+          "loadFailed": "Die Ordner ehemaliger Mitglieder konnten nicht geladen werden"
+        }
+      },
       "invite": {
         "title": "Personen einladen",
         "description": "Lade Personen per E-Mail in diesen Workspace ein.",

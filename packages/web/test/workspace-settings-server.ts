@@ -55,6 +55,28 @@ export interface TestInvitation {
 
 export const INVITE_LINK_ORIGIN = "http://localhost:3000/invite/";
 
+export const FORMER_CONTENT_PATH = "/api/v1/workspace/former-content";
+
+export interface TestFormerBookmark {
+  readonly id: string;
+  readonly title: string;
+  readonly url: string;
+  readonly host: string;
+  readonly slug: string | null;
+  readonly forwarding: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface TestFormerFolder {
+  readonly id: string;
+  readonly name: string;
+  readonly icon: string;
+  readonly color: number;
+  readonly bookmarkCount: number;
+  readonly createdAt: string;
+}
+
 export interface WorkspaceSettingsServerOptions {
   /** Whether the server reports that it can send mail in `/api/config`; by default it cannot, as in the other fixtures. */
   readonly mail?: boolean;
@@ -70,6 +92,12 @@ export interface WorkspaceSettingsServerOptions {
   readonly invitationLink?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers `DELETE /invitations/{id}` instead of revoking; `call` counts from 1. */
   readonly invitationDelete?: (call: number, request: Request) => Response | Promise<Response>;
+  /** The ownerless bookmarks and folders of the workspace that `GET /workspace/former-content/{bookmarks,folders}` list, in pages of `formerPageSize` or all at once; none by default. */
+  readonly formerBookmarks?: readonly TestFormerBookmark[];
+  readonly formerFolders?: readonly TestFormerFolder[];
+  readonly formerPageSize?: number;
+  /** Answers `GET /workspace/former-content/{bookmarks,folders}` instead of the list, or leaves it to the server with undefined; `call` counts from 1 for each list. */
+  readonly formerGet?: (list: "bookmarks" | "folders", call: number, request: Request) => Response | Promise<Response> | undefined;
   /** The server has an AI port, and `/api/config` names the operator's display name for its provider. */
   readonly ai?: { readonly provider: string };
   /** The workspace's AI toggle as stored; on by default. */
@@ -303,6 +331,19 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       if (answer !== undefined) {
         return answer;
       }
+    }
+    const former = /^\/api\/v1\/workspace\/former-content\/(bookmarks|folders)$/.exec(pathname);
+    if (former !== null && request.method === "GET") {
+      const list = former[1] === "bookmarks" ? "bookmarks" : "folders";
+      const answer = options.formerGet?.(list, call, request);
+      if (answer !== undefined) {
+        return answer;
+      }
+      const rows = list === "bookmarks" ? (options.formerBookmarks ?? []) : (options.formerFolders ?? []);
+      const size = options.formerPageSize ?? Math.max(rows.length, 1);
+      const start = Number(new URL(request.url).searchParams.get("cursor") ?? 0);
+      const next = start + size;
+      return json({ items: rows.slice(start, next), nextCursor: next < rows.length ? String(next) : null });
     }
     if (pathname === ME_PATH && request.method === "GET") {
       return options.meGet?.(call) ?? json(me());

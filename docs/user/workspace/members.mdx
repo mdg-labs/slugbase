@@ -1,11 +1,11 @@
 ---
 title: "Members"
-description: "Invite people, change roles, remove members, transfer ownership and manage pending invitations."
+description: "Invite people, change roles, remove members, transfer ownership, manage pending invitations and see the content former members left behind."
 edition: both
 order: 20
 ---
 
-**Members** lists the people in the workspace and what each of them can do. Admins and owners use it to invite people, change roles, remove members and hand over ownership.
+**Members** lists the people in the workspace and what each of them can do. Admins and owners use it to invite people, change roles, remove members, hand over ownership and see the bookmarks and folders that former members left behind.
 
 <Screenshot alt="The Members page with the members table and the pending invitations" />
 
@@ -26,6 +26,7 @@ On a self-hosted SlugBase, invitations and teams are always on. On SlugBase Clou
 | Change a role between admin and member | Yes | Yes, but not an owner's | No |
 | Make someone an owner, or change an owner's role | Yes | No | No |
 | Transfer ownership | Yes | No | No |
+| See the content of former members | Yes | Yes | No |
 | Remove a member | Yes | Yes, but not an owner | No |
 | Remove an owner | Yes | No | No |
 
@@ -63,6 +64,16 @@ If your SlugBase cannot send email, the dialog says so. The invitations are crea
 | **Revoke** | Asks "Revoke the invitation for" the address. The link stops working at once, and you can invite the person again later. |
 
 A link shows only once. If you lose it, choose **Copy invitation link** again for a new one.
+
+## See the content of former members
+
+When someone deletes their account, or leaves or is removed and their content has no new owner, their bookmarks and folders stay in the workspace without an owner. **Former members' content** lists them, below **Invitations**. Only admins and owners see this section.
+
+**Bookmarks** shows each bookmark's **Title**, **Host**, **Slug** and when it was **Created**. A bookmark without a slug says **No slug**. **Folders** shows each folder's **Name**, how many bookmarks from this list are filed in it under **Bookmarks**, and when it was **Created**. Choose **Show more** to see further rows.
+
+**Result:** you see what has no owner. When there is nothing, the section says "No content from former members".
+
+The lists leave out a bookmark that a plan archived, and the content of a member who just left until SlugBase has applied the choice made when they left. You cannot reassign or delete this content from the page yet.
 
 ## Change a role
 
@@ -152,6 +163,14 @@ SlugBase gives the reason. The person may be the last owner, or the member you c
 ### The page says "The members could not be loaded"
 
 Choose **Try again**.
+
+### Former members' content says it could not be loaded
+
+The page says "The bookmarks of former members could not be loaded" or "The folders of former members could not be loaded". Choose **Try again** beside the list that failed. The other list stays as it is.
+
+### Former members' content is empty
+
+Nobody has left content behind. Content appears here when an account is deleted, and when the person chosen to receive a removed member's content had already left the workspace.
 
 ## Related pages
 

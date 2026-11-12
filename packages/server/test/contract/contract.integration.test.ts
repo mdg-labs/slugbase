@@ -374,12 +374,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the hundred and seven that need a session also answers 401 without one, each of the eighteen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the eighty-three whose policy has a role below it (the forty-nine of a member, the fifteen
+    // One valid request for each operation. Each of the hundred and nine that need a session also answers 401 without one, each of the eighteen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the eighty-five whose policy has a role below it (the forty-nine of a member, the seventeen
     // of an admin, the two of an owner and the sixteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
     // Each of the twenty-four that declare the write scope answers 403 token_scope to a token that may only read, each of the nine that declare an entitlement answers
     // 403 to an account without it (the seven of sharing declare none: their handlers decide the entitlement by the kind of target), and each of the forty-four that name a member, a recipient, a team, an invitation, a bookmark, a share, a slug, a host, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 107 + 18 + 83 + 25 + 10 + 44);
+    expect(report.calls).toBe(operations.length + 109 + 18 + 85 + 25 + 10 + 44);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -598,7 +598,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
   }
 
-  it("passes for the sixty-seven tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its shares of bookmarks and folders, its remembered choices and its audit log as they were", { timeout: MATRIX_TIMEOUT_MS }, async () => {
+  it("passes for the sixty-nine tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its teams, its shares of bookmarks and folders, its remembered choices and its audit log as they were", { timeout: MATRIX_TIMEOUT_MS }, async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -801,8 +801,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2 + 10 * 2 * EXPORT_SELECTION_CALLS);
     expect(report.failures).toEqual([]);
-    expect(report.tenantScoped).toBe(67);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(67);
+    expect(report.tenantScoped).toBe(69);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(69);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
     // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
     // 200 that reports nothing affected, a filter on the folder and the tags of B matches nothing, and a folder or a tag of B is the declared 404 whichever action names it. Where it is not (a token that
@@ -850,7 +850,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The search for share targets names none, the list of the shares of a bookmark names each of the two bookmarks of B once, the grant each of the two bookmarks with each of the three members of B and the team of B once (as the two requests that carry the member and the team apart), and the revocation each of the two bookmarks with the share of B once. The list of the shares of a folder names the one folder of B once, the grant the folder with each of the three members of B and the team of B once, and the revocation the folder with the share of B once.
     // The bulk request and its preview name each of the two bookmarks of B in `ids` once for each of the two in `filter.hasSlug` and for each of the three members of B in `accountId`: twelve calls each, of which the four they had before are in the sum above and the further eight each are added at its end.
     // The audit log names none once, each of the three members of B in `actorAccountId` once and each of the two bookmarks of B in `entityId` once; the three are empty pages, as the caller has no event they match.
-    const calls = 25 + (3 + 3 + 3 + 3 * 3 + 3) + (1 + 3 + 2) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2 * 2 + 2 * EXPORT_SELECTION_CALLS;
+    const calls = 25 + 2 + (3 + 3 + 3 + 3 * 3 + 3) + (1 + 3 + 2) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2 * 2 + 2 * EXPORT_SELECTION_CALLS;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     // The calls of the two exports are refused the same way, for each principal: all their inputs go in one query, which is malformed. The first term of the sum counts the two exports no more, since each now takes identifiers.
