@@ -758,8 +758,20 @@ export interface FormerBookmark {
     readonly url: string;
 }
 
+// @public
+export interface FormerContentDeleted {
+    // (undocumented)
+    readonly bookmarksDeleted: number;
+    // (undocumented)
+    readonly foldersDeleted: number;
+}
+
 // @public (undocumented)
 export interface FormerContentRepository {
+    delete(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly folderIds: readonly string[];
+    }): Promise<FormerContentDeleted | undefined>;
     listBookmarks(afterId: string | null, limit: number): Promise<readonly FormerBookmark[]>;
     listFolders(afterId: string | null, limit: number): Promise<readonly FormerFolder[]>;
 }

@@ -2233,6 +2233,8 @@
             "slug": "Slug"
           },
           "noSlug": "Kein Slug",
+          "select": "{title} auswählen",
+          "selectAll": "Alle geladenen Lesezeichen auswählen",
           "loadFailed": "Die Lesezeichen ehemaliger Mitglieder konnten nicht geladen werden"
         },
         "folders": {
@@ -2241,7 +2243,29 @@
             "name": "Name",
             "bookmarks": "Lesezeichen"
           },
+          "select": "{name} auswählen",
+          "selectAll": "Alle geladenen Ordner auswählen",
           "loadFailed": "Die Ordner ehemaliger Mitglieder konnten nicht geladen werden"
+        },
+        "selection": {
+          "label": "Ausgewählte Inhalte ehemaliger Mitglieder",
+          "count": "{count, plural, one {# ausgewählt} other {# ausgewählt}}"
+        },
+        "delete": {
+          "action": "Auswahl löschen",
+          "title": "Inhalte ehemaliger Mitglieder löschen?",
+          "description": "Das Löschen von {summary} ist endgültig. Es entfernt auch ihre Freigaben, Tags und Einordnungen in Ordnern. Es gibt keinen Papierkorb und kein Rückgängigmachen.",
+          "foldersNote": "Beim Löschen eines Ordners werden die darin eingeordneten Lesezeichen nicht gelöscht. Wähle sie ebenfalls aus, um sie zu löschen.",
+          "confirm": "Löschen",
+          "cancel": "Abbrechen",
+          "count": {
+            "bookmarks": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}}",
+            "folders": "{count, plural, one {# Ordner} other {# Ordner}}",
+            "both": "{bookmarks} und {folders}"
+          },
+          "done": "{summary} gelöscht.",
+          "nothing": "Es wurde nichts gelöscht. Die Inhalte waren schon weg oder gehören wieder jemandem.",
+          "partial": "Nur {done, number} von {total, number} wurden vor einem Fehler gelöscht. Der Rest bleibt ausgewählt; versuche es gleich noch einmal."
         }
       },
       "invite": {
@@ -3186,6 +3210,7 @@
         "removed": "Mitglied entfernt",
         "left": "Mitglied ausgetreten",
         "joined": "Mitglied beigetreten",
+        "former_content_deleted": "Inhalte ehemaliger Mitglieder gelöscht",
         "instance_admin_joined": "Instanzadministrator beigetreten"
       },
       "invitation": {

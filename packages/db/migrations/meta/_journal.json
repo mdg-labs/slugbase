@@ -1009,6 +1009,13 @@
       "when": 1794484003306,
       "tag": "20261112114643_add_operator_bookmark_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1794495397029,
+      "tag": "20261112145637_add_former_content_delete",
+      "breakpoints": true
     }
   ]
 }

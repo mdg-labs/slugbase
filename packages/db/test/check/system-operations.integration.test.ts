@@ -207,6 +207,7 @@ describe("the shipped chain", () => {
       "sys_favicon_put",
       "slug_preferences_forget_unreadable",
       "sys_member_departure_apply",
+      "sys_former_content_delete",
       "sys_instance_set_account_access_mode",
       "sys_instance_list_account_access_modes",
       "sys_account_set_access_mode",

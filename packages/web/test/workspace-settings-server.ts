@@ -98,6 +98,11 @@ export interface WorkspaceSettingsServerOptions {
   readonly formerPageSize?: number;
   /** Answers `GET /workspace/former-content/{bookmarks,folders}` instead of the list, or leaves it to the server with undefined; `call` counts from 1 for each list. */
   readonly formerGet?: (list: "bookmarks" | "folders", call: number, request: Request) => Response | Promise<Response> | undefined;
+  /**
+   * Answers `POST /workspace/former-content/delete` instead of deleting the rows it names from the lists above, or leaves it to the server with undefined; `call` counts from 1.
+   * The server answers `{ bookmarksDeleted, foldersDeleted }` for the named rows it held.
+   */
+  readonly formerDelete?: (call: number, request: Request) => Response | Promise<Response> | undefined;
   /** The server has an AI port, and `/api/config` names the operator's display name for its provider. */
   readonly ai?: { readonly provider: string };
   /** The workspace's AI toggle as stored; on by default. */
@@ -175,6 +180,8 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   let issued = 0;
   let left = false;
   const received: Received[] = [];
+  let formerBookmarkRows: readonly TestFormerBookmark[] = options.formerBookmarks ?? [];
+  let formerFolderRows: readonly TestFormerFolder[] = options.formerFolders ?? [];
   const counts = new Map<string, number>();
 
   const workspace = () => ({
@@ -332,6 +339,18 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
         return answer;
       }
     }
+    if (pathname === `${FORMER_CONTENT_PATH}/delete` && request.method === "POST") {
+      const answer = options.formerDelete?.(call, request);
+      if (answer !== undefined) {
+        return answer;
+      }
+      const wanted = JSON.parse(text) as { bookmarkIds?: string[]; folderIds?: string[] };
+      const bookmarksBefore = formerBookmarkRows.length;
+      const foldersBefore = formerFolderRows.length;
+      formerBookmarkRows = formerBookmarkRows.filter((row) => !(wanted.bookmarkIds ?? []).includes(row.id));
+      formerFolderRows = formerFolderRows.filter((row) => !(wanted.folderIds ?? []).includes(row.id));
+      return json({ bookmarksDeleted: bookmarksBefore - formerBookmarkRows.length, foldersDeleted: foldersBefore - formerFolderRows.length });
+    }
     const former = /^\/api\/v1\/workspace\/former-content\/(bookmarks|folders)$/.exec(pathname);
     if (former !== null && request.method === "GET") {
       const list = former[1] === "bookmarks" ? "bookmarks" : "folders";
@@ -339,7 +358,7 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       if (answer !== undefined) {
         return answer;
       }
-      const rows = list === "bookmarks" ? (options.formerBookmarks ?? []) : (options.formerFolders ?? []);
+      const rows = list === "bookmarks" ? formerBookmarkRows : formerFolderRows;
       const size = options.formerPageSize ?? Math.max(rows.length, 1);
       const start = Number(new URL(request.url).searchParams.get("cursor") ?? 0);
       const next = start + size;

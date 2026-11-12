@@ -2233,6 +2233,8 @@
             "slug": "Slug"
           },
           "noSlug": "No slug",
+          "select": "Select {title}",
+          "selectAll": "Select all loaded bookmarks",
           "loadFailed": "The bookmarks of former members could not be loaded"
         },
         "folders": {
@@ -2241,7 +2243,29 @@
             "name": "Name",
             "bookmarks": "Bookmarks"
           },
+          "select": "Select {name}",
+          "selectAll": "Select all loaded folders",
           "loadFailed": "The folders of former members could not be loaded"
+        },
+        "selection": {
+          "label": "Selected content of former members",
+          "count": "{count, plural, one {# selected} other {# selected}}"
+        },
+        "delete": {
+          "action": "Delete selected",
+          "title": "Delete former members' content?",
+          "description": "Deleting {summary} is permanent. It also removes their shares, tags and filings in folders. There is no trash and no undo.",
+          "foldersNote": "Deleting a folder does not delete the bookmarks filed in it. Select them too to delete them.",
+          "confirm": "Delete",
+          "cancel": "Cancel",
+          "count": {
+            "bookmarks": "{count, plural, one {# bookmark} other {# bookmarks}}",
+            "folders": "{count, plural, one {# folder} other {# folders}}",
+            "both": "{bookmarks} and {folders}"
+          },
+          "done": "{summary} deleted.",
+          "nothing": "Nothing was deleted. The content was already gone, or it has an owner again.",
+          "partial": "Only {done, number} of {total, number} were deleted before an error. The rest is still selected; try again in a moment."
         }
       },
       "invite": {
@@ -3186,6 +3210,7 @@
         "removed": "Member removed",
         "left": "Member left",
         "joined": "Member joined",
+        "former_content_deleted": "Former members' content deleted",
         "instance_admin_joined": "Instance administrator joined"
       },
       "invitation": {

@@ -101,6 +101,9 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Former members' content: `listFormerBookmarks` and `listFormerFolders` take `limit` and a signed `cursor` and no identifier, so they take no entry. They read the ownerless bookmarks and folders of the workspace of the request
  *   (`packages/db/src/repositories/former-content.ts`, whose statements name the workspace and the missing owner, since the policies of both tables name the workspace only), which the `describe("the former members' content across workspaces")` block of
  *   `test/tenancy-matrix.integration.test.ts` holds to the workspace of the transaction: a caller of A reads no ownerless row of B, through the repository and with the workspace predicate left out.
+ *   `deleteFormerContent` takes `bookmarkIds[]` and `folderIds[]`, a bookmark and a folder identifier. It acts on the ownerless rows of the workspace of the request through `formerContentRepository.delete` and `sys_former_content_delete`, which name the workspace
+ *   in every statement, so an identifier of workspace B names no row of A: the answer is an empty `200` with zero counts and not `404`, which `runApiMatrix` is told by its `emptyAnswers` option, and B is as it was. The same block of the matrix
+ *   runs the function and the repository method against B's ownerless rows directly.
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
@@ -165,6 +168,8 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "previewBulkBookmarks.tagIds[]": "tag",
   "previewBulkBookmarks.accountId": "member",
   "previewBulkBookmarks.teamId": "team",
+  "deleteFormerContent.bookmarkIds[]": "bookmark",
+  "deleteFormerContent.folderIds[]": "folder",
   "createInvitation.teamIds[]": "team",
   "getTeam.id": "team",
   "updateTeam.id": "team",

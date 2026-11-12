@@ -5,7 +5,11 @@ import { FOLDER_COLOR_MAX, FOLDER_COLOR_MIN } from "./folders.ts";
 // The operations of doc 04 section 10.5 that list the former members' content of the workspace the request acts in (doc 02 sections 2.10 and 3.6): the
 // bookmarks and folders that have no owner because their owner left the workspace or deleted their account. They are an admin's, are session-only
 // (they declare no token scope, so an API token never reaches them) and name no row, so they take no identifier. A row that still waits for the
-// content choice of the member who left (doc 05 section 7.5) is not listed, and neither is a plan-archived bookmark.
+// content choice of the member who left (doc 05 section 7.5) is not listed, and neither is a plan-archived bookmark. The deletion of that content is an admin's
+// too and acts on the rows the lists hold and on no other.
+
+/** The most identifiers of one list a deletion names (doc 04 section 10.5), the bound of folder filing (doc 04 section 10.7). */
+export const FORMER_CONTENT_DELETE_MAX = 1000;
 
 export const FormerBookmarkSchema = z
   .strictObject({
@@ -101,6 +105,59 @@ export const listFormerFolders = defineOperation({
     ),
     404: problemResponse("The request acts in no workspace, or the workspace is being deleted"),
     422: problemResponse("The query did not pass validation"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const DeleteFormerContentRequestSchema = z
+  .strictObject({
+    bookmarkIds: z
+      .array(z.uuid())
+      .min(1)
+      .max(FORMER_CONTENT_DELETE_MAX)
+      .optional()
+      .describe("The bookmarks to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both"),
+    folderIds: z
+      .array(z.uuid())
+      .min(1)
+      .max(FORMER_CONTENT_DELETE_MAX)
+      .optional()
+      .describe("The folders to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both"),
+  })
+  .refine((request) => request.bookmarkIds !== undefined || request.folderIds !== undefined, { message: "name at least one bookmark or folder" })
+  .meta({ id: "DeleteFormerContentRequest" });
+
+export const DeleteFormerContentResultSchema = z
+  .strictObject({
+    bookmarksDeleted: z.number().int().min(0).describe("How many of the named bookmarks were deleted"),
+    foldersDeleted: z.number().int().min(0).describe("How many of the named folders were deleted"),
+  })
+  .meta({ id: "DeleteFormerContentResult" });
+
+export const deleteFormerContent = defineOperation({
+  method: "post",
+  path: "/api/v1/workspace/former-content/delete",
+  operationId: "deleteFormerContent",
+  tag: "members",
+  summary: "Delete the bookmarks and folders of former members",
+  auth: "admin",
+  rate: "write",
+  request: { body: DeleteFormerContentRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "What the request deleted, as counts only. It deletes the named bookmarks and folders of the active workspace that have no owner, with their shares, filings, tag links and remembered go choices, for good: there is no trash and no undo. The whole request is one transaction: the rows, the workspace's bookmark count (which falls by the bookmarks deleted) and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never deleted, and the answer does not say whether they exist, so a request that deletes nothing is an ordinary 200 with zero counts. A request that deletes something records one member.former_content_deleted audit event with the number of bookmarks and of folders, never a title, a URL or an identifier; one that deletes nothing records none",
+      DeleteFormerContentResultSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is deleted",
+    ),
+    404: problemResponse(
+      "The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and its deletion; nothing is deleted",
+    ),
+    422: problemResponse("The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, a field the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

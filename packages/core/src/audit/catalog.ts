@@ -64,6 +64,9 @@ export const AUDIT_ACTIONS = {
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.joined": { category: "member", metadata: { role: MEMBER_ROLE } },
+  // An owner or an admin deleted former members' bookmarks and folders, those that have no owner, in one request (doc 02 section 2.10): how many bookmarks and how many folders
+  // were deleted, and nothing about them. A request that deletes none records nothing.
+  "member.former_content_deleted": { category: "member", metadata: { bookmarks: COUNT, folders: COUNT } },
   // An instance admin made themselves a member of the workspace (doc 02 section 11.1). It is its own action, not a `member.joined`, so the
   // owners who read the log can tell an operator's privilege from an invitation accepted; the instance stream holds the matching event.
   "member.instance_admin_joined": { category: "member", metadata: { role: MEMBER_ROLE } },

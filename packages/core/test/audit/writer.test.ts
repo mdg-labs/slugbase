@@ -51,7 +51,7 @@ function memoryStore(): { store: AuditStore; records: AuditRecord[] } {
 
 describe("the audit catalog", () => {
   it("groups the recorded actions by category and declares the metadata of each", () => {
-    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "bookmark.operator_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created", "import.completed"]);
+    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.former_content_deleted", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "bookmark.operator_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created", "import.completed"]);
     for (const name of AUDIT_ACTION_NAMES) {
       expect(AUDIT_ACTIONS[name].category).toBe(name.split(".")[0]);
     }
@@ -64,6 +64,7 @@ describe("the audit catalog", () => {
     expect(Object.keys(AUDIT_ACTIONS["member.removed"].metadata)).toEqual(["content", "transferTo"]);
     expect(Object.keys(AUDIT_ACTIONS["member.left"].metadata)).toEqual(["content", "transferTo"]);
     expect(Object.keys(AUDIT_ACTIONS["member.joined"].metadata)).toEqual(["role"]);
+    expect(Object.keys(AUDIT_ACTIONS["member.former_content_deleted"].metadata)).toEqual(["bookmarks", "folders"]);
     expect(Object.keys(AUDIT_ACTIONS["member.instance_admin_joined"].metadata)).toEqual(["role"]);
     expect(Object.keys(AUDIT_ACTIONS["invitation.created"].metadata)).toEqual(["role"]);
     expect(Object.keys(AUDIT_ACTIONS["invitation.resent"].metadata)).toEqual(["role"]);

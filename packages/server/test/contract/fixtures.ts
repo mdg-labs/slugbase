@@ -156,6 +156,14 @@ export const FIXTURES: ContractFixtures = {
   listMembers: {},
   listFormerBookmarks: {},
   listFormerFolders: {},
+  // The deletion of former members' content names its rows by identifier and answers 200 for an identifier that names no ownerless row of the workspace of the request,
+  // whoever holds that row (a gone one, an owned one and one of workspace B alike), saying nothing of whether it exists, so the valid request and the request naming a
+  // bookmark and a folder of workspace B are the same 200 with zero counts. The matrix picks `bookmarkIds[]` and `folderIds[]` and checks that B is unchanged.
+  deleteFormerContent: {
+    body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID], folderIds: [UNKNOWN_FOLDER_ID] },
+    status: 200,
+    foreign: { body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID], folderIds: [UNKNOWN_FOLDER_ID] } },
+  },
   updateMember: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" }, status: 404, foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" } } },
   // The removal names a member by account identifier and the content choice may name a recipient, so its valid request is the declared 404
   // for an account that is no member, and a recipient that is a member of workspace B is the same 404. The walker owns the workspace it acts in

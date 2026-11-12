@@ -600,6 +600,34 @@ describe("the audit log of a workspace", () => {
         check: noContent,
       });
 
+      // An owner deletes former members' content (a bookmark and a folder that have no owner): one event with the two counts and no title, address or identifier; a request
+      // that names no such row deletes nothing and records none.
+      const former = await bookmarkOf(`${TITLE} former`, "private-address/former");
+      const formerFolder = await post(owner, FOLDERS, { name: "Former folder" });
+      expect(formerFolder.status).toBe(201);
+      const formerFolderId = await idOf(formerFolder);
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE bookmarks SET owner_id = NULL WHERE id = ${former}`;
+        await tx`UPDATE folders SET owner_id = NULL WHERE id = ${formerFolderId}`;
+      });
+      await run({
+        operationId: "deleteFormerContent",
+        label: "deleteFormerContent that deletes nothing",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/delete", { bookmarkIds: [single, uuidv7()] }),
+        events: [],
+      });
+      await run({
+        operationId: "deleteFormerContent",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/delete", { bookmarkIds: [former], folderIds: [formerFolderId] }),
+        events: [event("member.former_content_deleted", null, { bookmarks: "1", folders: "1" })],
+        check: noContent,
+      });
+
       // An export and an import: counts only, one event for an export and one for an import that writes, none for a dry run.
       await run({
         operationId: "exportJson",

@@ -1,11 +1,11 @@
 ---
 title: "Members"
-description: "Invite people, change roles, remove members, transfer ownership, manage pending invitations and see the content former members left behind."
+description: "Invite people, change roles, remove members, transfer ownership, manage pending invitations and see and delete the content former members left behind."
 edition: both
 order: 20
 ---
 
-**Members** lists the people in the workspace and what each of them can do. Admins and owners use it to invite people, change roles, remove members, hand over ownership and see the bookmarks and folders that former members left behind.
+**Members** lists the people in the workspace and what each of them can do. Admins and owners use it to invite people, change roles, remove members, hand over ownership, and see and delete the bookmarks and folders that former members left behind.
 
 <Screenshot alt="The Members page with the members table and the pending invitations" />
 
@@ -26,7 +26,7 @@ On a self-hosted SlugBase, invitations and teams are always on. On SlugBase Clou
 | Change a role between admin and member | Yes | Yes, but not an owner's | No |
 | Make someone an owner, or change an owner's role | Yes | No | No |
 | Transfer ownership | Yes | No | No |
-| See the content of former members | Yes | Yes | No |
+| See and delete the content of former members | Yes | Yes | No |
 | Remove a member | Yes | Yes, but not an owner | No |
 | Remove an owner | Yes | No | No |
 
@@ -65,7 +65,7 @@ If your SlugBase cannot send email, the dialog says so. The invitations are crea
 
 A link shows only once. If you lose it, choose **Copy invitation link** again for a new one.
 
-## See the content of former members
+## See and delete the content of former members
 
 When someone deletes their account, or leaves or is removed and their content has no new owner, their bookmarks and folders stay in the workspace without an owner. **Former members' content** lists them, below **Invitations**. Only admins and owners see this section.
 
@@ -73,7 +73,18 @@ When someone deletes their account, or leaves or is removed and their content ha
 
 **Result:** you see what has no owner. When there is nothing, the section says "No content from former members".
 
-The lists leave out a bookmark that a plan archived, and the content of a member who just left until SlugBase has applied the choice made when they left. You cannot reassign or delete this content from the page yet.
+The lists leave out a bookmark that a plan archived, and the content of a member who just left until SlugBase has applied the choice made when they left. You cannot reassign this content from the page yet.
+
+To delete content that has no owner:
+
+1. Select the rows you want to delete. Use the checkbox in a row, or the checkbox in a table's header to select all the rows loaded so far.
+2. Choose **Delete selected**. The button stays off while nothing is selected.
+3. Read the message. It says how many bookmarks and folders go, for example "Deleting 3 bookmarks and 1 folder is permanent."
+4. Choose **Delete**.
+
+**Result:** SlugBase says what it deleted, for example "3 bookmarks and 1 folder deleted.", and loads both lists again. The deletion also removes the shares, tags and filings in folders of what it deletes. There is no trash and no undo. Deleting a folder does not delete the bookmarks filed in it. Select them too to delete them. The workspace's bookmark count goes down by the bookmarks deleted, and the [Audit Log](audit-log.mdx) records that someone deleted former members' content, with how many bookmarks and folders, but not their titles.
+
+SlugBase only deletes content that has no owner. If a row you selected got an owner, or was already gone, it stays or is skipped, and the message says "Nothing was deleted" when none of them could be deleted. If the deletion fails, SlugBase shows "The change was not saved", and your selection stays so that you can try again.
 
 ## Change a role
 
@@ -167,6 +178,14 @@ Choose **Try again**.
 ### Former members' content says it could not be loaded
 
 The page says "The bookmarks of former members could not be loaded" or "The folders of former members could not be loaded". Choose **Try again** beside the list that failed. The other list stays as it is.
+
+### Delete selected is off
+
+Nothing is selected. Select at least one row first.
+
+### Deleting former members' content says "The change was not saved"
+
+SlugBase did not delete what you selected, or deleted only part of it. When it deleted part, it says how many were deleted before the error and keeps the rest selected. Choose **Delete selected** again.
 
 ### Former members' content is empty
 

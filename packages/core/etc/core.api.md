@@ -591,6 +591,17 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "member.former_content_deleted": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly bookmarks: {
+                readonly type: "count";
+            };
+            readonly folders: {
+                readonly type: "count";
+            };
+        };
+    };
     readonly "member.instance_admin_joined": {
         readonly category: "member";
         readonly metadata: {

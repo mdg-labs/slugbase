@@ -16,6 +16,7 @@ const ACTION_LABELS: Readonly<Record<AuditAction, (t: TFunction) => string>> = {
   "member.removed": (t) => t("audit.actions.member.removed"),
   "member.left": (t) => t("audit.actions.member.left"),
   "member.joined": (t) => t("audit.actions.member.joined"),
+  "member.former_content_deleted": (t) => t("audit.actions.member.former_content_deleted"),
   "member.instance_admin_joined": (t) => t("audit.actions.member.instance_admin_joined"),
   "invitation.created": (t) => t("audit.actions.invitation.created"),
   "invitation.resent": (t) => t("audit.actions.invitation.resent"),

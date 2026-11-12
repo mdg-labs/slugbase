@@ -2336,6 +2336,56 @@
         ],
         "type": "object"
       },
+      "DeleteFormerContentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkIds": {
+            "description": "The bookmarks to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "folderIds": {
+            "description": "The folders to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteFormerContentResult": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarksDeleted": {
+            "description": "How many of the named bookmarks were deleted",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "foldersDeleted": {
+            "description": "How many of the named folders were deleted",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bookmarksDeleted",
+          "foldersDeleted"
+        ],
+        "type": "object"
+      },
       "DisableMfaRequest": {
         "anyOf": [
           {
@@ -21285,6 +21335,120 @@
         ],
         "x-slugbase-auth": "admin",
         "x-slugbase-rate": "read"
+      }
+    },
+    "/api/v1/workspace/former-content/delete": {
+      "post": {
+        "operationId": "deleteFormerContent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteFormerContentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteFormerContentResult"
+                }
+              }
+            },
+            "description": "What the request deleted, as counts only. It deletes the named bookmarks and folders of the active workspace that have no owner, with their shares, filings, tag links and remembered go choices, for good: there is no trash and no undo. The whole request is one transaction: the rows, the workspace's bookmark count (which falls by the bookmarks deleted) and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never deleted, and the answer does not say whether they exist, so a request that deletes nothing is an ordinary 200 with zero counts. A request that deletes something records one member.former_content_deleted audit event with the number of bookmarks and of folders, never a title, a URL or an identifier; one that deletes nothing records none"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is deleted"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and its deletion; nothing is deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, a field the operation does not declare)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Delete the bookmarks and folders of former members",
+        "tags": [
+          "members"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "write"
       }
     },
     "/api/v1/workspace/former-content/folders": {

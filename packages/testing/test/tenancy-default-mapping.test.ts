@@ -164,6 +164,7 @@ describe("PATH_PARAMETER_MAPPING", () => {
       "previewBulkBookmarks.tagIds[]": "tag",
       "previewBulkBookmarks.accountId": "member",
       "previewBulkBookmarks.teamId": "team",
+      "deleteFormerContent.folderIds[]": "folder",
       "createInvitation.teamIds[]": "team",
       "getTeam.id": "team",
       "updateTeam.id": "team",

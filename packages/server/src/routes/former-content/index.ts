@@ -1,10 +1,13 @@
-import { listFormerBookmarks, listFormerFolders } from "@slugbase/contracts";
-import { formerContentRepository } from "@slugbase/db";
+import { deleteFormerContent, listFormerBookmarks, listFormerFolders } from "@slugbase/contracts";
+import { createAuditWriter, type AuditActor } from "@slugbase/core";
+import { accountProfileRepository, auditEventRepository, formerContentRepository } from "@slugbase/db";
 import { z } from "zod";
+import { uuidv7 } from "../../auth/uuidv7.ts";
 import { createPageCursorCodec, type PageCursorCodec } from "../../auth/page-cursor.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
+import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { route } from "../register.ts";
 
 // GET /api/v1/workspace/former-content/bookmarks and GET /api/v1/workspace/former-content/folders (doc 04 section 10.5, doc 02 sections 2.10 and 3.6,
@@ -14,6 +17,13 @@ import { route } from "../register.ts";
 // request is bound to, which the tenant stage resolved from the session, and name no row: which rows a list holds is the repository's rule
 // (packages/db/src/repositories/former-content.ts). Each list pages by a keyset cursor signed with a key derived for that list and bound to the
 // workspace, so a cursor of one list or of one workspace is refused 400 by another.
+//
+// POST /api/v1/workspace/former-content/delete deletes the rows of those lists the request names, for good (doc 04 section 10.5, doc 02 section 2.10, doc 10 T1, T2 and T11).
+// It is an admin's and session-only like the lists. It is the one place a request deletes content its caller does not own, so the repository's method is the only database
+// path to it (`sys_former_content_delete`, which holds the rule of which rows go and of who may call it); the route adds the audit event, in the transaction of the deletion, so
+// the rows, the workspace's bookmark count and the event commit or roll back together. An identifier that names no such row is skipped and not told apart from another. A request
+// that deletes nothing writes no event. The function answers nothing when the caller is no owner or admin any more or the workspace is being deleted, and that is 404: the
+// authorization stage has already refused a caller who is not an admin with 403, so it can only be a role lost during the request.
 
 const NO_WORKSPACE = "No such resource.";
 
@@ -85,6 +95,33 @@ export function formerContentRoutes({ cursorSecret }: FormerContentRoutesOptions
           nextCursor: fetched.length > query.limit && last !== undefined ? folderCursors.encode(last.id, tenant.workspaceId) : null,
         },
       };
+    }),
+
+    route(deleteFormerContent).handle(async ({ body }, context) => {
+      const tenant = tenantOf(context);
+      const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+      const deleted = await tenant.withTenant(async (tx) => {
+        const profile = await accountProfileRepository(tx).profile();
+        if (profile === undefined) {
+          return undefined;
+        }
+        const result = await formerContentRepository(tx).delete({ bookmarkIds: body.bookmarkIds ?? [], folderIds: body.folderIds ?? [] });
+        if (result !== undefined && (result.bookmarksDeleted > 0 || result.foldersDeleted > 0)) {
+          const actor: AuditActor = { type: "account", accountId: tenant.accountId, label: profile.displayName };
+          await createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }).write({
+            action: "member.former_content_deleted",
+            workspaceId: tenant.workspaceId,
+            actor,
+            metadata: { bookmarks: String(result.bookmarksDeleted), folders: String(result.foldersDeleted) },
+            ipPrefix,
+          });
+        }
+        return result;
+      });
+      if (deleted === undefined) {
+        throw new ProblemError("not_found", NO_WORKSPACE);
+      }
+      return { status: 200, body: deleted };
     }),
   ];
 }
