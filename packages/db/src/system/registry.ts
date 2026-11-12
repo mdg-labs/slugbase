@@ -14,6 +14,11 @@
  * every check of the others, except that `slugbase_app` must not be able to
  * execute it, so a ceiling or a guard the callers apply cannot be got round by
  * calling it directly.
+ *
+ * An entry of `operatorSystemOperations` is an operator operation: whoever
+ * holds the database calls it, after `SET ROLE slugbase_system`, and no
+ * application path does. The rule holds it to the same checks, and `slugbase_app`
+ * and `PUBLIC` must not be able to execute it.
  */
 export const systemOperations: readonly string[] = [
   "sys_rate_limit_take",
@@ -108,6 +113,7 @@ export const systemOperations: readonly string[] = [
   "sys_bookmark_count_take_many",
   "sys_bookmark_delete",
   "sys_bookmark_delete_many",
+  "sys_bookmark_operator_delete",
   "sys_bookmark_archive_set",
   "sys_flush_open_counts",
   "sys_go_other_workspaces",
@@ -135,3 +141,9 @@ export const systemOperations: readonly string[] = [
  * 3.3). Each is also listed in `systemOperations`.
  */
 export const internalSystemOperations: readonly string[] = ["sys_create_workspace"];
+
+/**
+ * The system operations that only the operator calls, with the database login (doc 05 section 3.3, doc 10 section 2.10). Each is also listed in
+ * `systemOperations`.
+ */
+export const operatorSystemOperations: readonly string[] = ["sys_bookmark_operator_delete"];

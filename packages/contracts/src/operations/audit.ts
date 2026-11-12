@@ -35,6 +35,7 @@ export const AUDIT_EVENT_ACTIONS = [
   "bookmark.archived",
   "bookmark.restored",
   "bookmark.bulk_deleted",
+  "bookmark.operator_deleted",
   "share.granted",
   "share.revoked",
   "share.bulk_granted",

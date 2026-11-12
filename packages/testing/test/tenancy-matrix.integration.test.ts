@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { aiSuggestionRepository, bookmarkRepository, exportRepository, folderRepository, importRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -1673,5 +1674,91 @@ describe("the page by title across workspaces", () => {
     expect(inB.listedAll).toEqual([...OWN_IN_B]);
     expect(inA.listedAll).not.toContain(OTHER_IN_A);
     expect((await page(PROBE_WORKSPACE_A, "title_desc")).listedAll).toEqual([]);
+  });
+});
+
+// The removal of one bookmark by the instance operator is `sys_bookmark_operator_delete`, a system operation that names its workspace and its bookmark itself, runs
+// without the policies and answers the migration login only (doc 05 section 3.3, doc 10 section 2.10, T1 and T2). From a transaction acting in A, with the settings
+// of withTenant and the function called by hand with the application layer left out, naming the bookmark of B or its own workspace, the role of the application is refused
+// and no bookmark, counter or event of A or B moves. The same call by the operator removes the bookmark of B alone, so the rows of B are real and the refusal in A is the grant's.
+describe("the operator removal across workspaces", () => {
+  const MEMBER_OF_A = "0192f3a0-3333-7000-8000-00000000a0e1";
+  const OWN_OF_A = "0192f3a0-2222-7000-8000-00000000a0e2";
+  const OWN_OF_B = "0192f3a0-2222-7000-8000-00000000b0e2";
+  const SEED_OF_A = "0192f3a0-2222-7000-8000-00000000a0e3";
+  const SEED_OF_B = "0192f3a0-2222-7000-8000-00000000b0e3";
+  const REFUSED = "42501";
+
+  interface Stored {
+    readonly rows: number;
+    readonly counter: number;
+    readonly events: number;
+  }
+
+  async function storedOf(workspaceId: string): Promise<Stored> {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<Stored[]>`
+        SELECT (SELECT count(*) FROM bookmarks WHERE workspace_id = ${workspaceId})::int AS rows,
+               bookmark_count AS counter,
+               (SELECT count(*) FROM audit_events WHERE workspace_id = ${workspaceId} AND action = 'bookmark.operator_deleted')::int AS events
+        FROM workspaces WHERE id = ${workspaceId}`;
+    });
+    return rows[0] ?? { rows: -1, counter: -1, events: -1 };
+  }
+
+  /** The code of the refusal of a call the way withTenant makes it: the settings of the account and the workspace and nothing else, as slugbase_app. */
+  async function refusalOf(workspaceId: string, bookmarkId: string): Promise<string | undefined> {
+    try {
+      await database().app.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true), set_config('app.workspace_id', ${PROBE_WORKSPACE_A}, true)`;
+        await tx`SELECT public.sys_bookmark_operator_delete(${workspaceId}::uuid, ${bookmarkId}::uuid, ${randomUUID()}::uuid, 'Matrix probe')`;
+      });
+    } catch (error) {
+      return (error as { code?: string }).code;
+    }
+    return undefined;
+  }
+
+  it("is refused to a transaction acting in A, for the bookmark of B and for its own, and moves no bookmark, counter or event; the operator removes the bookmark of B alone", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: SEED_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: SEED_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${MEMBER_OF_A}, 'operator-matrix@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'owner') ON CONFLICT DO NOTHING`;
+      for (const [id, workspaceId] of [
+        [OWN_OF_A, PROBE_WORKSPACE_A],
+        [OWN_OF_B, PROBE_WORKSPACE_B],
+      ] as const) {
+        await tx`
+          INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+          VALUES (${id}, ${workspaceId}, ${MEMBER_OF_A}, 'https://example.com/operator-matrix', 'https://example.com/operator-matrix', 'example.com', 'operator-matrix') ON CONFLICT DO NOTHING`;
+      }
+      await tx`UPDATE workspaces SET bookmark_count = (SELECT count(*) FROM bookmarks WHERE workspace_id = workspaces.id AND plan_archived_at IS NULL) WHERE id IN (${PROBE_WORKSPACE_A}, ${PROBE_WORKSPACE_B})`;
+    });
+    const before = { a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) };
+    expect(before.b.rows).toBeGreaterThanOrEqual(2);
+    expect(before.b.counter).toBe(before.b.rows);
+
+    expect(await refusalOf(PROBE_WORKSPACE_B, OWN_OF_B)).toBe(REFUSED);
+    expect(await refusalOf(PROBE_WORKSPACE_A, OWN_OF_B)).toBe(REFUSED);
+    expect(await refusalOf(PROBE_WORKSPACE_A, OWN_OF_A)).toBe(REFUSED);
+    expect({ a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) }).toEqual(before);
+
+    const removed = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ removed: boolean }[]>`SELECT public.sys_bookmark_operator_delete(${PROBE_WORKSPACE_B}::uuid, ${OWN_OF_B}::uuid, ${randomUUID()}::uuid, 'Matrix control') AS removed`;
+    });
+    expect(removed[0]?.removed).toBe(true);
+    expect({ a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) }).toEqual({
+      a: before.a,
+      b: { rows: before.b.rows - 1, counter: before.b.counter - 1, events: before.b.events + 1 },
+    });
   });
 });

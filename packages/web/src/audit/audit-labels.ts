@@ -28,6 +28,7 @@ const ACTION_LABELS: Readonly<Record<AuditAction, (t: TFunction) => string>> = {
   "bookmark.archived": (t) => t("audit.actions.bookmark.archived"),
   "bookmark.restored": (t) => t("audit.actions.bookmark.restored"),
   "bookmark.bulk_deleted": (t) => t("audit.actions.bookmark.bulk_deleted"),
+  "bookmark.operator_deleted": (t) => t("audit.actions.bookmark.operator_deleted"),
   "share.granted": (t) => t("audit.actions.share.granted"),
   "share.revoked": (t) => t("audit.actions.share.revoked"),
   "share.bulk_granted": (t) => t("audit.actions.share.bulk_granted"),
@@ -80,6 +81,7 @@ const METADATA_LABELS: Readonly<Record<string, (t: TFunction) => string>> = {
   slugsDropped: (t) => t("audit.metadata.slugsDropped"),
   foldersCreated: (t) => t("audit.metadata.foldersCreated"),
   tagsCreated: (t) => t("audit.metadata.tagsCreated"),
+  reason: (t) => t("audit.metadata.reason"),
 };
 
 function labelOf<Key extends string>(labels: Readonly<Record<Key, (t: TFunction) => string>>, t: TFunction, key: string): string | undefined {

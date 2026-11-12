@@ -577,6 +577,29 @@ describe("the audit log of a workspace", () => {
       await run({ label: "archiveBookmarks", actor: { accountId: "system" }, call: asJob((tx) => archiveBookmarks(tx, request)), events: [event("bookmark.archived", null, { count: "2" })] });
       await run({ label: "restoreBookmarks", actor: { accountId: "system" }, call: asJob((tx) => restoreBookmarks(tx, request)), events: [event("bookmark.restored", null, { count: "2" })] });
 
+      // The instance operator removes an ownerless bookmark with the database login, which no operation reaches: the system is the actor, labelled with the login, and the
+      // event holds the bookmark's identifier and the operator's reason, never its title or address.
+      const orphan = await bookmarkOf(`${TITLE} orphaned`, "private-address/orphaned");
+      const operatorEventId = uuidv7();
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE bookmarks SET owner_id = NULL WHERE id = ${orphan}`;
+      });
+      await run({
+        label: "sys_bookmark_operator_delete",
+        actor: { accountId: "system", label: "slugbase_migrator" },
+        call: async () => {
+          const removed = await database().owner.begin(async (tx) => {
+            await tx`SET LOCAL ROLE slugbase_system`;
+            return tx<{ removed: boolean }[]>`SELECT sys_bookmark_operator_delete(${workspaceId}::uuid, ${orphan}::uuid, ${operatorEventId}::uuid, 'Court order, ref. 2026-123') AS removed`;
+          });
+          expect(removed[0]?.removed).toBe(true);
+          return undefined;
+        },
+        events: [event("bookmark.operator_deleted", { type: "bookmark", id: orphan }, { reason: "Court order, ref. 2026-123" })],
+        check: noContent,
+      });
+
       // An export and an import: counts only, one event for an export and one for an import that writes, none for a dry run.
       await run({
         operationId: "exportJson",

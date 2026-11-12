@@ -4,7 +4,7 @@ import { hashSqlFiles } from "../../scripts/migration-sql.ts";
 import { checkRules, formatReport, runChecks } from "../../src/check/index.ts";
 import { createSystemOperationsRule, systemOperationsRule } from "../../src/check/system-operations.ts";
 import type { Finding } from "../../src/check/types.ts";
-import { internalSystemOperations, systemOperations } from "../../src/system/registry.ts";
+import { internalSystemOperations, operatorSystemOperations, systemOperations } from "../../src/system/registry.ts";
 import { createTestDatabase, type TestDatabase } from "../../src/testing.ts";
 import { PACKAGE } from "./package-copy.ts";
 
@@ -76,15 +76,19 @@ function fixture(options: Fixture = {}): string {
 
 // The scratch databases are clones of the migrated template, so they hold the
 // shipped system operations; the registry under test is theirs plus its own.
-async function lint(database: TestDatabase, registry: readonly string[], internal: readonly string[] = []): Promise<readonly Finding[]> {
-  return createSystemOperationsRule([...systemOperations, ...registry], [...internalSystemOperations, ...internal]).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles });
+async function lint(database: TestDatabase, registry: readonly string[], internal: readonly string[] = [], operator: readonly string[] = []): Promise<readonly Finding[]> {
+  return createSystemOperationsRule([...systemOperations, ...registry], [...internalSystemOperations, ...internal], [...operatorSystemOperations, ...operator]).run({
+    packageDir: PACKAGE,
+    sql: database.app,
+    hashSqlFiles,
+  });
 }
 
-async function lintFixture(options: Fixture, internal = false): Promise<readonly Finding[]> {
+async function lintFixture(options: Fixture, kind: "ordinary" | "internal" | "operator" = "ordinary"): Promise<readonly Finding[]> {
   const database = await scratch();
   await superuser(database).unsafe(fixture(options));
   const name = options.name ?? "sys_fixture";
-  return lint(database, [name], internal ? [name] : []);
+  return lint(database, [name], kind === "internal" ? [name] : [], kind === "operator" ? [name] : []);
 }
 
 function finding(message: string, name = "sys_fixture"): Finding {
@@ -191,6 +195,7 @@ describe("the shipped chain", () => {
       "sys_bookmark_count_take_many",
       "sys_bookmark_delete",
       "sys_bookmark_delete_many",
+      "sys_bookmark_operator_delete",
       "sys_bookmark_archive_set",
       "sys_flush_open_counts",
       "sys_go_other_workspaces",
@@ -214,6 +219,8 @@ describe("the shipped chain", () => {
     ]);
     expect(internalSystemOperations).toEqual(["sys_create_workspace"]);
     expect(internalSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);
+    expect(operatorSystemOperations).toEqual(["sys_bookmark_operator_delete"]);
+    expect(operatorSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();
     expect(await systemOperationsRule.run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles })).toEqual([]);
@@ -318,15 +325,15 @@ describe("system-operations", () => {
     const INTERNAL_APP = "is an internal system operation but slugbase_app can execute it";
 
     it("passes when only its owner can execute it", async () => {
-      expect(await lintFixture({ appExecute: false }, true)).toEqual([]);
+      expect(await lintFixture({ appExecute: false }, "internal")).toEqual([]);
     }, HOOK_TIMEOUT_MS);
 
     it("fails when slugbase_app can execute it", async () => {
-      expect(await lintFixture({ appExecute: true }, true)).toEqual([finding(INTERNAL_APP)]);
+      expect(await lintFixture({ appExecute: true }, "internal")).toEqual([finding(INTERNAL_APP)]);
     }, HOOK_TIMEOUT_MS);
 
     it("fails when PUBLIC can execute it", async () => {
-      expect(await lintFixture({ appExecute: false, publicExecute: true }, true)).toEqual([finding("has EXECUTE granted to PUBLIC")]);
+      expect(await lintFixture({ appExecute: false, publicExecute: true }, "internal")).toEqual([finding("has EXECUTE granted to PUBLIC")]);
     }, HOOK_TIMEOUT_MS);
 
     it.each([
@@ -335,7 +342,7 @@ describe("system-operations", () => {
       ["a mutable search_path", { searchPath: undefined }, PIN_MESSAGE],
       ["dynamic SQL", { language: "plpgsql", body: "BEGIN EXECUTE 'select 1'; RETURN 1; END" }, "contains EXECUTE: a system operation takes no dynamic SQL"],
     ] satisfies [string, Fixture, string][])("still fails %s", async (_name, options, message) => {
-      expect(await lintFixture({ ...options, appExecute: false }, true)).toEqual([finding(message)]);
+      expect(await lintFixture({ ...options, appExecute: false }, "internal")).toEqual([finding(message)]);
     }, HOOK_TIMEOUT_MS);
 
     it("leaves a non-internal operation that slugbase_app cannot execute failing", async () => {
@@ -344,9 +351,41 @@ describe("system-operations", () => {
 
     it("fails an internal entry that is not in the registry, naming it", async () => {
       const database = await scratch();
-      expect(await createSystemOperationsRule(systemOperations, [...internalSystemOperations, "sys_unlisted"]).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles })).toEqual([
+      expect(await createSystemOperationsRule(systemOperations, [...internalSystemOperations, "sys_unlisted"], operatorSystemOperations).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles })).toEqual([
         { rule: ID, object: "function public.sys_unlisted", message: "is marked internal but is not in the system operation registry" },
       ]);
+    }, HOOK_TIMEOUT_MS);
+  });
+
+  describe("an operator operation", () => {
+    const OPERATOR_APP = "is an operator system operation but slugbase_app can execute it";
+
+    it("passes when only its owner can execute it", async () => {
+      expect(await lintFixture({ appExecute: false }, "operator")).toEqual([]);
+    }, HOOK_TIMEOUT_MS);
+
+    it("fails when slugbase_app can execute it", async () => {
+      expect(await lintFixture({ appExecute: true }, "operator")).toEqual([finding(OPERATOR_APP)]);
+    }, HOOK_TIMEOUT_MS);
+
+    it("fails when PUBLIC can execute it", async () => {
+      expect(await lintFixture({ appExecute: false, publicExecute: true }, "operator")).toEqual([finding("has EXECUTE granted to PUBLIC")]);
+    }, HOOK_TIMEOUT_MS);
+
+    it.each([
+      ["a function that is not SECURITY DEFINER", { definer: false }, "is in the system operation registry but is not SECURITY DEFINER"],
+      ["a function with the wrong owner", { owner: "slugbase_owner" }, "is owned by slugbase_owner, not slugbase_system"],
+      ["a mutable search_path", { searchPath: undefined }, PIN_MESSAGE],
+      ["dynamic SQL", { language: "plpgsql", body: "BEGIN EXECUTE 'select 1'; RETURN 1; END" }, "contains EXECUTE: a system operation takes no dynamic SQL"],
+    ] satisfies [string, Fixture, string][])("still fails %s", async (_name, options, message) => {
+      expect(await lintFixture({ ...options, appExecute: false }, "operator")).toEqual([finding(message)]);
+    }, HOOK_TIMEOUT_MS);
+
+    it("fails an operator entry that is not in the registry, naming it", async () => {
+      const database = await scratch();
+      expect(
+        await createSystemOperationsRule(systemOperations, internalSystemOperations, [...operatorSystemOperations, "sys_unlisted"]).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles }),
+      ).toEqual([{ rule: ID, object: "function public.sys_unlisted", message: "is marked operator but is not in the system operation registry" }]);
     }, HOOK_TIMEOUT_MS);
   });
 

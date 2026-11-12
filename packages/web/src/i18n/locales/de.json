@@ -3173,7 +3173,8 @@
       "bookmark": {
         "archived": "Lesezeichen archiviert",
         "restored": "Lesezeichen wiederhergestellt",
-        "bulk_deleted": "Lesezeichen gelöscht"
+        "bulk_deleted": "Lesezeichen gelöscht",
+        "operator_deleted": "Lesezeichen vom Instanzbetreiber entfernt"
       },
       "share": {
         "granted": "Freigabe erteilt",
@@ -3223,7 +3224,8 @@
       "failed": "Fehlgeschlagen",
       "slugsDropped": "Verworfene Slugs",
       "foldersCreated": "Erstellte Ordner",
-      "tagsCreated": "Erstellte Tags"
+      "tagsCreated": "Erstellte Tags",
+      "reason": "Grund"
     }
   },
   "sharing": {

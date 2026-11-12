@@ -710,6 +710,16 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "bookmark.operator_deleted": {
+        readonly category: "bookmark";
+        readonly metadata: {
+            readonly reason: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
     readonly "share.granted": {
         readonly category: "share";
         readonly metadata: {

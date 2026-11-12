@@ -3173,7 +3173,8 @@
       "bookmark": {
         "archived": "Bookmarks archived",
         "restored": "Bookmarks restored",
-        "bulk_deleted": "Bookmarks deleted"
+        "bulk_deleted": "Bookmarks deleted",
+        "operator_deleted": "Bookmark removed by the instance operator"
       },
       "share": {
         "granted": "Share granted",
@@ -3223,7 +3224,8 @@
       "failed": "Failed",
       "slugsDropped": "Slugs dropped",
       "foldersCreated": "Folders created",
-      "tagsCreated": "Tags created"
+      "tagsCreated": "Tags created",
+      "reason": "Reason"
     }
   },
   "sharing": {

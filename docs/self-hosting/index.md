@@ -36,6 +36,7 @@ The people you invite use SlugBase as described in [Get started](../user/getting
 | [Account recovery and security checklist](security.md) | Get people back into locked accounts, and check the security settings an operator must get right. |
 | [Environment settings](environment.md) | Look up every environment key, its default and what it sets, and see which limits are fixed. |
 | [Check the bookmark counter](check-bookmark-counter.md) | Find workspaces whose bookmark counter differs from the number of their bookmarks, without changing anything. |
+| [Remove a bookmark as the operator](remove-bookmark.md) | Remove one bookmark of any workspace with SQL, whoever owns it, and record that you did. |
 
 ## Next steps
 

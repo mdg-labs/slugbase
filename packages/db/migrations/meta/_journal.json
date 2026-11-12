@@ -1002,6 +1002,13 @@
       "when": 1794477538398,
       "tag": "20261112095858_drop_workspace_instance_created",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1794484003306,
+      "tag": "20261112114643_add_operator_bookmark_delete",
+      "breakpoints": true
     }
   ]
 }

@@ -46,6 +46,9 @@ const FLAG: AuditMetadataField = { type: "text", minLength: 4, maxLength: 5 };
 /** What happens to a departing member's content: `transfer` or `delete`. */
 const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLength: 8 };
 
+/** Why the instance operator removed a bookmark: a plain text of 1 to 100 characters, read by the workspace's admins, so never personal data. */
+const OPERATOR_REASON: AuditMetadataField = { type: "text", minLength: 1, maxLength: 100 };
+
 /** How many rows a bulk change touched; the one thing such an event says about them, never a title or a URL. */
 const COUNT: AuditMetadataField = { type: "count" };
 
@@ -79,6 +82,9 @@ export const AUDIT_ACTIONS = {
   "bookmark.restored": { category: "bookmark", metadata: { count: COUNT } },
   // A member deleted several of their bookmarks in one request (doc 02 section 5.8): the number deleted, and nothing about them.
   "bookmark.bulk_deleted": { category: "bookmark", metadata: { count: COUNT } },
+  // Whoever holds the database removed one bookmark of the workspace, whatever its owner, with the system operation sys_bookmark_operator_delete (doc 10 section 2.10).
+  // The actor is the system, labelled with the database login; the entity is the bookmark and the reason, given by the operator, is the one thing the event says about the removal.
+  "bookmark.operator_deleted": { category: "bookmark", metadata: { reason: OPERATOR_REASON } },
   // A bookmark or a folder was shared with a member or a team, or a share was revoked (doc 02 section 8). The event is about the bookmark or the folder (its
   // entity type says which) and says nothing of it but its identifier: the log is read by administrators, who have no implicit access to a member's content.
   // The target is named by kind, identifier and the name it had; the deletion of a member's account removes `targetId` from the events that name it (doc 05 section 7.1).
