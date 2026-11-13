@@ -1,3 +1,4 @@
+import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { goRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
@@ -272,6 +273,8 @@ describe("the suggestions on a workspace whose GIN indexes hold pending lists", 
   // The first call of a connection is not counted (it loads the catalogs) and is the first of the five that are planned for their values; four broad prefixes follow, then every call from the sixth on is made with
   // the plan the connection keeps, in an order that puts the prefixes that few slugs have among those that thousands have.
   const WARM_UP = "zzz";
+  // The passes of the sequence the least of each prefix is taken over (see the last case).
+  const PASSES = 3;
   const SEQUENCE = ["s", "d", "m", "g", "gh", "zz", "docs-", "a", "9", "slug-1", "gh", "mail", "slug-12", "zz", "a", "9", "slug-12", "slug-1", "s"];
 
   beforeAll(async () => {
@@ -283,16 +286,30 @@ describe("the suggestions on a workspace whose GIN indexes hold pending lists", 
   }, HOOK_TIMEOUT_MS);
 
   interface Call {
+    /** The blocks of the execution (the `Plan` of `EXPLAIN`), the statements the function runs included. */
     readonly blocks: number;
+    /** The blocks the planning of the outer statement touched (the `Planning` section of `EXPLAIN`), which is catalog work and not part of `blocks`. */
+    readonly planningBlocks: number;
     readonly ms: number;
   }
 
   /**
-   * The shared blocks of each call of `prefixes`, in order, on one connection, so that what the connection planned for the first calls is what the later ones run. `customPlans` sets the plan cache mode of the
-   * transaction, which the function's own setting overrides while it has one.
+   * A connection of its own as slugbase_app, to the endpoint of the pool of the test database. A pool hands the earlier cases of this file the connection they used before, and the connection keeps the plan its
+   * function made on their vacuumed fixture (the plan of the trigram index, which is also what the regression makes), so the calls would no longer show what a connection plans after the opens have left pending lists.
    */
-  async function callsOf(prefixes: readonly string[], customPlans = false): Promise<Map<string, Call[]>> {
-    return db.app.begin(async (tx) => {
+  function freshConnection(): postgres.Sql {
+    const { host, port, database, user } = db.app.options;
+    // The typings of postgres.js give the parsed password as null, which a connection made with one does not have.
+    const pass: unknown = db.app.options.pass;
+    return postgres({ host: host[0], port: port[0], database, username: user, password: typeof pass === "string" ? pass : undefined, max: 1, onnotice: () => undefined, connection: { application_name: "slugbase-test-harness" } });
+  }
+
+  /**
+   * The shared blocks of each call of `prefixes`, in order, on one connection (`connection`, the pool of the test database by default), so that what the connection planned for the first calls is what the later ones run.
+   * `customPlans` sets the plan cache mode of the transaction, which the function's own setting overrides while it has one.
+   */
+  async function callsOf(prefixes: readonly string[], customPlans = false, connection: postgres.Sql = db.app): Promise<Map<string, Call[]>> {
+    return connection.begin(async (tx) => {
       await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true), set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MS)}, true)`;
       if (customPlans) {
         await tx`SELECT set_config('plan_cache_mode', 'force_custom_plan', true)`;
@@ -300,13 +317,18 @@ describe("the suggestions on a workspace whose GIN indexes hold pending lists", 
       const byPrefix = new Map<string, Call[]>();
       for (const [index, prefix] of [WARM_UP, ...prefixes].entries()) {
         const { sql, params } = statementOf(prefix);
-        const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: { "Shared Hit Blocks"?: number; "Shared Read Blocks"?: number }; "Execution Time": number }[] }[]>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`, params as never[]);
+        const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: { "Shared Hit Blocks"?: number; "Shared Read Blocks"?: number }; Planning?: { "Shared Hit Blocks"?: number; "Shared Read Blocks"?: number }; "Execution Time": number }[] }[]>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`, params as never[]);
         const explained = rows[0]?.["QUERY PLAN"][0];
         if (explained === undefined) {
           throw new Error("EXPLAIN returned no plan");
         }
         if (index > 0) {
-          byPrefix.set(prefix, [...(byPrefix.get(prefix) ?? []), { blocks: (explained.Plan["Shared Hit Blocks"] ?? 0) + (explained.Plan["Shared Read Blocks"] ?? 0), ms: explained["Execution Time"] }]);
+          const call: Call = {
+            blocks: (explained.Plan["Shared Hit Blocks"] ?? 0) + (explained.Plan["Shared Read Blocks"] ?? 0),
+            planningBlocks: (explained.Planning?.["Shared Hit Blocks"] ?? 0) + (explained.Planning?.["Shared Read Blocks"] ?? 0),
+            ms: explained["Execution Time"],
+          };
+          byPrefix.set(prefix, [...(byPrefix.get(prefix) ?? []), call]);
         }
       }
       return byPrefix;
@@ -321,16 +343,37 @@ describe("the suggestions on a workspace whose GIN indexes hold pending lists", 
 
   it("touches no more blocks for a prefix on a connection that has run other suggestions than the plan made for the values of the call", async () => {
     // The reference: every prefix planned with its own values, whatever the function says. The calls: the mix, on one connection, with the plan cache mode left to the function.
-    const calls = await callsOf(SEQUENCE);
     const reference = await callsOf([...new Set(SEQUENCE), ...new Set(SEQUENCE)], true);
-    const report = (byPrefix: Map<string, Call[]>) => Object.fromEntries([...byPrefix].map(([prefix, runs]) => [prefix, runs.map((run) => `${String(run.blocks)} blocks ${run.ms.toFixed(1)} ms`)]));
-    process.stdout.write(`go suggest work in one connection with pending lists (each call, in order): ${JSON.stringify(report(calls))}, planned for the values: ${JSON.stringify(report(reference))}\n`);
+    const plannedOf = (prefix: string) => Math.min(...(reference.get(prefix) ?? []).map((run) => run.blocks));
+    const boundOf = (prefix: string) => plannedOf(prefix) * 1.5 + 100;
+    const report = (byPrefix: Map<string, Call[]>) =>
+      Object.fromEntries([...byPrefix].map(([prefix, runs]) => [prefix, runs.map((run) => `${String(run.blocks)} blocks of execution, ${String(run.planningBlocks)} of planning, ${run.ms.toFixed(1)} ms`)]));
+    // The calls are made in up to PASSES passes, each on a connection of its own, and the least of a prefix over every call of every pass is what is held, as `blocksOfStatement` holds the least of its runs: a pass stops
+    // the repetition when every prefix is under its bound, and a prefix that is over its bound in every call of every pass fails.
+    const passes: Map<string, Call[]>[] = [];
+    const leastOf = (prefix: string) => Math.min(...passes.flatMap((byPrefix) => (byPrefix.get(prefix) ?? []).map((run) => run.blocks)));
+    for (let pass = 0; pass < PASSES; pass += 1) {
+      const connection = freshConnection();
+      try {
+        passes.push(await callsOf(SEQUENCE, false, connection));
+      } finally {
+        await connection.end({ timeout: 5 });
+      }
+      if (SEQUENCE.every((prefix) => leastOf(prefix) < boundOf(prefix))) {
+        break;
+      }
+    }
+    process.stdout.write(
+      `go suggest work in one connection with pending lists (each call, in order, one entry per pass): ${JSON.stringify(passes.map(report))}, planned for the values: ${JSON.stringify(report(reference))}\n`,
+    );
 
-    for (const [prefix, runs] of calls) {
-      const planned = Math.min(...(reference.get(prefix) ?? []).map((run) => run.blocks));
-      // The same plan touches nearly the same blocks run after run, apart from a call that meets a backend whose caches were reset (the first call of `a` touched 1 683 blocks and the next 230); a plan that has
-      // stopped using the trigram index touches several times as many in every call for a prefix that few slugs have, so the least of the calls of a prefix is what is held.
-      expect(Math.min(...runs.map((run) => run.blocks)), prefix).toBeLessThan(planned * 1.5 + 100);
+    for (const prefix of new Set(SEQUENCE)) {
+      // The same plan touches nearly the same blocks run after run, apart from a call that meets a backend whose caches were reset (the first call of `a` touched 1 683 blocks and the next 230; both calls of `gh` of a
+      // single pass touched 1 647 against 252 planned, on a connection with no regression); a plan that has stopped using the trigram index touches several times as many in every call for a prefix that
+      // few slugs have, so the least of the calls of a prefix over the passes is what is held, and a failure names the execution and planning blocks of every call of the prefix.
+      const calls = passes.flatMap((byPrefix) => byPrefix.get(prefix) ?? []);
+      const detail = `${prefix}: planned ${String(plannedOf(prefix))}, calls as [execution blocks, planning blocks] ${JSON.stringify(calls.map((run) => [run.blocks, run.planningBlocks]))}`;
+      expect(leastOf(prefix), detail).toBeLessThan(boundOf(prefix));
     }
   }, HOOK_TIMEOUT_MS);
 });
