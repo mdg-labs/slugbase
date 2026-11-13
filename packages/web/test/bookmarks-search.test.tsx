@@ -1,5 +1,6 @@
 import type { ComponentTypes } from "@slugbase/contracts";
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { notifyManager } from "@tanstack/react-query";
+import { act, configure, fireEvent, getConfig, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
@@ -16,6 +17,12 @@ type Transport = (request: Request) => Promise<Response>;
 const OWNER = "0192f3a0-bbbb-7000-8000-000000000001";
 const BOOKMARKS = "/api/v1/bookmarks";
 const IDLE_MS = 150;
+// How long any wait of this file for the page to catch up lasts. Every wait here is for a list read to show: the narrowed list, the empty state or the loading state. A read, the
+// router and the render that follow it are not on the faked timer, and on a host running every package's tests at once they have outlasted the 10 s `allowSlowRender` allows, so
+// the waits of the file take one bound sized like the heavy tests instead of a per-call one. A wait that finds its element returns at once, so only a failing test pays for it,
+// and the describes get twice that bound as their test timeout so the wait can expire before the test does.
+const LIST_WAIT_MS = HEAVY_TEST_TIMEOUT_MS;
+const SEARCH_TEST_TIMEOUT_MS = 2 * HEAVY_TEST_TIMEOUT_MS;
 
 function bookmarkOf(n: number, overrides: Partial<Bookmark> = {}): Bookmark {
   return {
@@ -108,7 +115,13 @@ function stubServer(all: readonly Bookmark[]): Server {
 let restoreWait: () => void = () => undefined;
 
 beforeAll(() => {
-  restoreWait = allowSlowRender();
+  const restoreSlowRender = allowSlowRender();
+  const previous = getConfig().asyncUtilTimeout;
+  configure({ asyncUtilTimeout: LIST_WAIT_MS });
+  restoreWait = () => {
+    configure({ asyncUtilTimeout: previous });
+    restoreSlowRender();
+  };
 });
 
 afterAll(() => {
@@ -152,7 +165,7 @@ const WORLD = [
   bookmarkOf(4, { title: "Cooking", slug: "cook" }),
 ];
 
-describe("the search field of the bookmark list", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+describe("the search field of the bookmark list", { timeout: SEARCH_TEST_TIMEOUT_MS }, () => {
   it("writes the text to the address and asks for it once the member has paused for 150 ms, not for each key, and shows the narrowed list with a chip", async () => {
     const server = stubServer(WORLD);
     await openApp("/bookmarks");
@@ -161,8 +174,12 @@ describe("the search field of the bookmark list", { timeout: HEAVY_TEST_TIMEOUT_
     const before = server.lists().length;
 
     // Only the timers are faked, and only while the member types, so the debounce is measured on the timer and not on how long the
-    // router, the query and the render take to follow it, which depends on the load of the host.
+    // router, the query and the render take to follow it, which depends on the load of the host. The query client tells its observers
+    // of a change in a later task that it arms with `setTimeout`; one armed on the faked timer after the last advance is dropped when the
+    // real one comes back, and the observer is never told, so the list stays as it was. They are armed on the real timer for as long as it is faked.
+    const realSetTimeout = globalThis.setTimeout;
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    notifyManager.setScheduler((callback) => realSetTimeout(callback, 0));
     try {
       await type(field, "w");
       await type(field, "widg");
@@ -176,6 +193,7 @@ describe("the search field of the bookmark list", { timeout: HEAVY_TEST_TIMEOUT_
       });
     } finally {
       vi.useRealTimers();
+      notifyManager.setScheduler((callback) => setTimeout(callback, 0));
     }
 
     await waitFor(() => {
@@ -326,7 +344,7 @@ describe("the search field of the bookmark list", { timeout: HEAVY_TEST_TIMEOUT_
   });
 });
 
-describe("the search field of the Forwarding slugs", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+describe("the search field of the Forwarding slugs", { timeout: SEARCH_TEST_TIMEOUT_MS }, () => {
   it("asks for the slugs the text matches, with the slugs filter kept, after the member pauses, and leaves the address alone", async () => {
     const server = stubServer(WORLD);
     await openApp("/forwarding");
