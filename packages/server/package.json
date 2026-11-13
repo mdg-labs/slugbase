@@ -23,7 +23,7 @@
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.4",
+    "@hono/node-server": "^2.1.6",
     "@node-rs/argon2": "2.2.2",
     "@opentelemetry/api": "^1.9.1",
     "@scalar/api-reference": "^1.73.1",
