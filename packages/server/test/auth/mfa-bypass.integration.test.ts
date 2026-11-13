@@ -3,6 +3,7 @@ import type { AuthStore } from "@slugbase/db";
 import { FixedClock } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { mfaSecretOptions } from "../../src/auth/mfa.ts";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Server } from "../../src/create-server.ts";
@@ -219,7 +220,8 @@ async function expectInvalidCode(response: Response, label: string): Promise<voi
 }
 
 describe("a time step that was accepted once (T17)", () => {
-  it("is not accepted again, nor is any earlier one, by sign-in, re-authentication, regeneration or disabling", async () => {
+  // Argon2id hashing and verification at the production cost, and dozens of requests over the database: 0.6 s alone, 2.1 s beside 60 busy loops (issue 891).
+  it("is not accepted again, nor is any earlier one, by sign-in, re-authentication, regeneration or disabling", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const world = serve();
     const { account } = await enrol(world);
     // The enrolment accepted the previous step. A code one step ahead is inside the window, and signing in with it moves the account's step forward.
@@ -430,7 +432,8 @@ describe("what is never written down (T7)", () => {
     });
   });
 
-  it("keeps secrets, codes, backup codes and QR payloads out of every log line, error report and error answer of the MFA operations", async () => {
+  // Three enrolments with their argon2id work and dozens of requests: 0.6 s alone, 1.8 s beside 60 busy loops (issue 891).
+  it("keeps secrets, codes, backup codes and QR payloads out of every log line, error report and error answer of the MFA operations", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const key = testKey("key-1");
     const world = serve({ keys: [key] });
     const { account, backupCodes, shown } = await enrol(world);

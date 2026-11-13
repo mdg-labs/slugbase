@@ -5,6 +5,7 @@ import type { Adapters } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { getConstructionPlans } from "pg-boss";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { z } from "zod";
 import { loadConfig } from "../src/config/index.ts";
 import { NotIdempotentError, assertIdempotent, createWorker, defineJob, defineSchedule } from "../src/worker/index.ts";
@@ -106,7 +107,8 @@ async function until(check: () => Promise<boolean> | boolean, timeoutMs: number,
 }
 
 describe("two workers on one database", () => {
-  it("runs a job once, on one of them", async () => {
+  // Two worker starts, a polling interval and a two-second wait to see that no second run follows: 2.7 s alone, 2.9 s beside 60 busy loops (issue 891).
+  it("runs a job once, on one of them", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const runs: string[] = [];
     const jobFor = (instance: string) =>
       defineJob({
