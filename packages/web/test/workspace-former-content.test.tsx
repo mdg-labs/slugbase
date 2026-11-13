@@ -638,6 +638,24 @@ describe("reassigning the former members' content", () => {
     expect(screen.queryByText("2 selected")).toBeNull();
   }, SLOW_TEST_TIMEOUT_MS);
 
+  it("reads the member's own folders again after a reassignment, so folders moved to oneself appear in the sidebar", async () => {
+    const stub = server({
+      members: [SELF, GRACE],
+      formerFolders: [RESEARCH],
+      formerReassign: () => json({ bookmarksMoved: 0, foldersMoved: 1, slugsCleared: 0, foldersRenamed: 0, filingsRemoved: 0 }),
+      // The sidebar's list of the member's own folders.
+      other: (request) => Promise.resolve(new URL(request.url).pathname === "/api/v1/folders" ? json({ items: [], nextCursor: null }) : problem(404, "not_found", "req-404")),
+    });
+    await openMembers();
+
+    const confirmation = await reachConfirmation("Ada Lovelace", ["Select Research"]);
+    const sidebarReadsBefore = stub.received("GET", "/api/v1/folders").length;
+    await press(within(confirmation).getByRole("button", { name: "Reassign" }));
+
+    expect(await screen.findByText("1 folder reassigned to Ada Lovelace.")).toBeTruthy();
+    expect(stub.received("GET", "/api/v1/folders").length).toBeGreaterThan(sidebarReadsBefore);
+  }, SLOW_TEST_TIMEOUT_MS);
+
   it("keeps the confirmation open, with its wait, until the lists have been read again, and only then closes it, says what was moved and clears the selection", async () => {
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {

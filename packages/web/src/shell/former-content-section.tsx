@@ -5,6 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderGlyph } from "../folders/folder-glyph.tsx";
+import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { FormerContentReassignDialog } from "./former-content-reassign-dialog.tsx";
 import { formerContentSummary } from "./former-content-summary.ts";
@@ -121,8 +122,13 @@ function FormerContentLists({ workspaceId }: { workspaceId: string }): ReactElem
 
   const summaryOf = (bookmarkCount: number, folderCount: number): string => formerContentSummary(t, bookmarkCount, folderCount);
 
-  // `invalidateQueries` resolves when both lists have been read again, and never rejects: a list whose request fails shows its own error with a retry.
-  const readAgain = (): Promise<void> => queryClient.invalidateQueries({ queryKey: [...FORMER_CONTENT_QUERY_KEY, workspaceId] });
+  // `invalidateQueries` resolves when both lists have been read again, and never rejects: a list whose request fails shows its own error with a retry. The member's own
+  // folders (the sidebar, mounted beside this page) are read again too, since a reassignment to oneself adds folders to them; that read is not waited for, so a sidebar
+  // whose list fails and retries does not hold the confirmation open.
+  const readAgain = (): Promise<void> => {
+    void queryClient.invalidateQueries({ queryKey: FOLDERS_QUERY_KEY });
+    return queryClient.invalidateQueries({ queryKey: [...FORMER_CONTENT_QUERY_KEY, workspaceId] });
+  };
 
   // What a finished reassignment says: the counts the server gave, and the slugs, folder names and filings the move changed on the way.
   const reassigned = (result: FormerContentReassigned, recipientName: string): void => {
