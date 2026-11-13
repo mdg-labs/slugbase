@@ -482,19 +482,34 @@ describe("Manage teams", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const dialog = await openManage("Grace Hopper");
     // Platform is deleted elsewhere after the page was read.
     world.teams = world.teams.filter((stored) => stored.id !== PLATFORM);
+    // A toast closes on its own after 5 s, which a loaded host outlasts before the last step, so the toasts are counted as they are
+    // shown and not read from the page at the end.
+    const saved = new Set<Element>();
+    const watch = new MutationObserver(() => {
+      for (const title of document.querySelectorAll("[data-slot='toast-title']")) {
+        if (title.textContent === "Teams of Grace Hopper saved.") {
+          saved.add(title);
+        }
+      }
+    });
+    watch.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-    await press(within(dialog).getByRole("button", { name: "Remove Platform" }));
-    await press(within(dialog).getByRole("button", { name: "Save teams" }));
-    expect(await screen.findByText("Teams of Grace Hopper saved.")).toBeTruthy();
-    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`)).toHaveLength(0);
+    try {
+      await press(within(dialog).getByRole("button", { name: "Remove Platform" }));
+      await press(within(dialog).getByRole("button", { name: "Save teams" }));
+      expect(await screen.findByText("Teams of Grace Hopper saved.")).toBeTruthy();
+      expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`)).toHaveLength(0);
 
-    const again = await openManage("Grace Hopper");
-    world.teams = world.teams.filter((stored) => stored.id !== SUPPORT);
-    await chooseTeam(again, "Support");
-    await press(within(again).getByRole("button", { name: "Save teams" }));
+      const again = await openManage("Grace Hopper");
+      world.teams = world.teams.filter((stored) => stored.id !== SUPPORT);
+      await chooseTeam(again, "Support");
+      await press(within(again).getByRole("button", { name: "Save teams" }));
 
-    expect((await within(again).findByRole("alert")).textContent).toContain("A team you chose no longer exists.");
-    expect(screen.getAllByText("Teams of Grace Hopper saved.")).toHaveLength(1);
+      expect((await within(again).findByRole("alert")).textContent).toContain("A team you chose no longer exists.");
+      expect(saved.size).toBe(1);
+    } finally {
+      watch.disconnect();
+    }
   });
 
   const UNKNOWN_MEMBER = () =>
