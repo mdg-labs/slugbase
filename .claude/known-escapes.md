@@ -68,6 +68,7 @@ existing line by adding its PR number.
 - **shared phrase, one meaning** — a generated description reuses one phrase for every setting of a kind and the phrase states one setting's purpose ("the address a message is for"), which is false for the others — PR 825
 - **documented secret exposed** — an operator command or example passes a secret as a process argument, or writes it unquoted into a file Compose interpolates, so the value leaks to the process list or changes on a `$` — PR 825
 - **verified then re-referenced** — an operator procedure verifies an artefact by its digest and then deploys it by a mutable reference (a version tag), so what runs can differ from what was checked and the step contradicts the guide it summarises — PR 863
+- **workaround outlives the feature** — a change adds an in-app way to do something (admins deleting ownerless content) and an operator page written for when there was none still says nobody in the app can, so readers take the privileged path the feature replaced — PR 882
 
 ## Processes
 
@@ -105,6 +106,7 @@ existing line by adding its PR number.
 - **absence read from a cache** — a client concludes from a cached list that a thing does not exist (a folder named in the address) and acts on it (clears the filter, says it is gone), though the list may predate the thing (made on another device), so a valid choice is thrown away — PR 587
 - **first read outlives an invalidation** — a read with no data yet is not restarted by `invalidateQueries`, which keeps its in-flight fetch, so an answer asked for before a session or scope change stands unless the change cancels the read first — PR 685
 - **late write answer into a shared key** — a mutation's `onSuccess` writes a cache key that names no scope after the scope may have changed, replacing the current scope's data with the previous one's — PR 685
+- **sibling view not refreshed** — a mutation on one page changes rows another mounted view lists (folders reassigned to oneself, shown in the sidebar) and invalidates only its own page's queries, so the other view stays stale until a refocus or remount — PR 882
 - **unload request not kept alive** — a request sent from a page-leave path (`pagehide`, an unmount) omits `keepalive`, so the browser may cancel it as the page goes and the deferred write never happens — PR 612
 
 ## Input handling
