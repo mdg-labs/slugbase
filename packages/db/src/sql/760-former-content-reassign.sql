@@ -29,6 +29,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- cleared and forwarding turned off; a folder whose name the recipient already has, without regard to case, is named `<name> (<n>)` with the lowest n >= 2 that the
 -- recipient has no folder of, the base cut so that the result is at most 64 characters, the folders judged in the order of their creation and each against the ones moved
 -- before it. The other columns, the shares on the content (they are keyed by the bookmark and the folder) and the tag links stay as they were.
+-- The recipient's own writers (a folder created or renamed, a slug set) take no lock of the workspace, so a name or slug they write in a transaction that commits while
+-- a row is being moved is not seen by the check that precedes the update. The update of each row therefore runs in a block that catches the unique violation of
+-- folders_owner_name_key or bookmarks_owner_slug_key and resolves it as the check would have: the next free name for a folder, a cleared slug with forwarding off for a
+-- bookmark. A unique violation of any other constraint is raised again and ends the call.
 --
 -- Filings stay the owner's (doc 13 Q22): a folder_bookmarks row links a folder and a bookmark of one owner. A row whose bookmark or folder was moved by this call and whose
 -- two sides now have different owners (a folder moved with a bookmark that stays ownerless, or the two moved to different recipients by two calls) is deleted in
@@ -49,7 +53,10 @@ DECLARE
   v_candidate text;
   v_suffix text;
   v_n integer;
-  v_moved_bookmarks uuid[];
+  v_constraint text;
+  v_bookmark record;
+  v_clash boolean;
+  v_moved_bookmarks uuid[] := '{}';
   v_moved_folders uuid[] := '{}';
 BEGIN
   IF p_workspace_id IS NULL OR p_recipient IS NULL OR p_bookmark_ids IS NULL OR p_folder_ids IS NULL THEN
@@ -106,15 +113,25 @@ BEGIN
     v_base := v_folder.name::text;
     v_candidate := v_base;
     v_n := 2;
-    WHILE EXISTS (
-      SELECT 1 FROM public.folders g
-      WHERE g.workspace_id = p_workspace_id AND g.owner_id = p_recipient AND g.name = v_candidate::citext
-    ) LOOP
+    LOOP
+      IF NOT EXISTS (
+        SELECT 1 FROM public.folders g
+        WHERE g.workspace_id = p_workspace_id AND g.owner_id = p_recipient AND g.name = v_candidate::citext
+      ) THEN
+        BEGIN
+          UPDATE public.folders SET owner_id = p_recipient, name = v_candidate WHERE id = v_folder.id;
+          EXIT;
+        EXCEPTION WHEN unique_violation THEN
+          GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+          IF v_constraint IS DISTINCT FROM 'folders_owner_name_key' THEN
+            RAISE;
+          END IF;
+        END;
+      END IF;
       v_suffix := ' (' || v_n::text || ')';
       v_candidate := rtrim(left(v_base, 64 - length(v_suffix))) || v_suffix;
       v_n := v_n + 1;
     END LOOP;
-    UPDATE public.folders SET owner_id = p_recipient, name = v_candidate WHERE id = v_folder.id;
     v_moved_folders := v_moved_folders || v_folder.id;
     folders_moved := folders_moved + 1;
     IF v_candidate <> v_base THEN
@@ -122,25 +139,35 @@ BEGIN
     END IF;
   END LOOP;
 
-  WITH released AS (
-    SELECT b.id,
-           b.slug IS NOT NULL AND EXISTS (
-             SELECT 1 FROM public.bookmarks r WHERE r.workspace_id = b.workspace_id AND r.owner_id = p_recipient AND r.slug = b.slug) AS clash
-    FROM public.bookmarks b
+  FOR v_bookmark IN
+    SELECT b.id, b.slug FROM public.bookmarks b
     WHERE b.workspace_id = p_workspace_id AND b.owner_id IS NULL AND b.departure_id IS NULL AND b.plan_archived_at IS NULL AND b.id = ANY (p_bookmark_ids)
-  ),
-  moved AS (
-    UPDATE public.bookmarks b
-    SET owner_id = p_recipient,
-        slug = CASE WHEN r.clash THEN NULL ELSE b.slug END,
-        forwarding = CASE WHEN r.clash THEN false ELSE b.forwarding END
-    FROM released r
-    WHERE b.id = r.id
-    RETURNING b.id, r.clash
-  )
-  SELECT count(*), count(*) FILTER (WHERE m.clash), coalesce(array_agg(m.id), '{}')
-  INTO bookmarks_moved, slugs_cleared, v_moved_bookmarks
-  FROM moved m;
+    ORDER BY b.id
+  LOOP
+    v_clash := v_bookmark.slug IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.bookmarks r WHERE r.workspace_id = p_workspace_id AND r.owner_id = p_recipient AND r.slug = v_bookmark.slug);
+    IF NOT v_clash THEN
+      IF v_bookmark.slug IS NULL THEN
+        UPDATE public.bookmarks SET owner_id = p_recipient WHERE id = v_bookmark.id;
+      ELSE
+        BEGIN
+          UPDATE public.bookmarks SET owner_id = p_recipient WHERE id = v_bookmark.id;
+        EXCEPTION WHEN unique_violation THEN
+          GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+          IF v_constraint IS DISTINCT FROM 'bookmarks_owner_slug_key' THEN
+            RAISE;
+          END IF;
+          v_clash := true;
+        END;
+      END IF;
+    END IF;
+    IF v_clash THEN
+      UPDATE public.bookmarks SET owner_id = p_recipient, slug = NULL, forwarding = false WHERE id = v_bookmark.id;
+      slugs_cleared := slugs_cleared + 1;
+    END IF;
+    v_moved_bookmarks := v_moved_bookmarks || v_bookmark.id;
+    bookmarks_moved := bookmarks_moved + 1;
+  END LOOP;
 
   WITH removed AS (
     DELETE FROM public.folder_bookmarks fb

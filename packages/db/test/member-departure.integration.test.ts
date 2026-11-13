@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { accountDeletionRepository, memberRepository, type QueuedJob } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { withUncommittedWrite } from "./support/concurrent-write.ts";
 import { seedTeam, shareBookmark, shareThroughFolder } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace, workspaceChecksum } from "./support/workspace-fixture.ts";
 
@@ -566,4 +567,78 @@ describe("the operation's own guards", () => {
     expect(await bookmarksIn(c.workspaceId)).toHaveLength(1);
     expect(await apply(c.workspaceId, departure, "delete", c.owner)).toMatchObject({ bookmarksDeleted: 1 });
   });
+});
+
+// The recipient's own writers take no lock of the workspace, so a name or slug they commit while the departure is applied is invisible to the check that precedes the update.
+// The failure scenario: the recipient's transaction holds a folder named like a released one, or a slug like a released bookmark's, uncommitted; the update waits on it, and when
+// it commits the update raised the unique violation and the worker's job failed instead of renaming the folder or clearing the slug.
+describe("a departure with the choice transfer, against the recipient's concurrent writes", () => {
+  it("FAILURE SCENARIO: renames a released folder to the next free name when the recipient commits a same-named folder, without regard to case, while the call waits", async () => {
+    const c = await cast();
+    const folder = await folderOf(c.workspaceId, c.a, "Research");
+    const departure = await depart(c, c.a, "transfer", c.owner);
+
+    const applied = await withUncommittedWrite(
+      db,
+      (tx) => tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${freshId()}, ${c.workspaceId}, ${c.owner}, 'RESEARCH')`,
+      () => apply(c.workspaceId, departure, "transfer", c.owner),
+    );
+
+    expect(applied).toEqual({ ...NOTHING, foldersMoved: 1, foldersRenamed: 1 });
+    expect((await foldersIn(c.workspaceId)).find((row) => row.id === folder)).toMatchObject({ name: "Research (2)", owner_id: c.owner, departure_id: null });
+  }, 60_000);
+
+  it("keeps the name when the recipient's competing folder is rolled back", async () => {
+    const c = await cast();
+    const folder = await folderOf(c.workspaceId, c.a, "Research");
+    const departure = await depart(c, c.a, "transfer", c.owner);
+
+    const applied = await withUncommittedWrite(
+      db,
+      (tx) => tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${freshId()}, ${c.workspaceId}, ${c.owner}, 'Research')`,
+      () => apply(c.workspaceId, departure, "transfer", c.owner),
+      { commit: false },
+    );
+
+    expect(applied).toEqual({ ...NOTHING, foldersMoved: 1 });
+    expect((await foldersIn(c.workspaceId)).find((row) => row.id === folder)).toMatchObject({ name: "Research", owner_id: c.owner });
+  }, 60_000);
+
+  it("FAILURE SCENARIO: clears the slug and the forwarding of a released bookmark when the recipient commits the same slug while the call waits, and counts it", async () => {
+    const c = await cast();
+    const clashing = await bookmarkOf(c.workspaceId, c.a, { slug: "spec", forwarding: true });
+    const free = await bookmarkOf(c.workspaceId, c.a, { slug: "docs", forwarding: true });
+    const departure = await depart(c, c.a, "transfer", c.owner);
+
+    const applied = await withUncommittedWrite(
+      db,
+      (tx) => tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
+        VALUES (${freshId()}, ${c.workspaceId}, ${c.owner}, 'https://example.com/own', 'https://example.com/own', 'example.com', 'Own', 'spec', true)`,
+      () => apply(c.workspaceId, departure, "transfer", c.owner),
+    );
+
+    expect(applied).toEqual({ ...NOTHING, bookmarksMoved: 2, slugsCleared: 1 });
+    const rows = await bookmarksIn(c.workspaceId);
+    expect(rows.find((row) => row.id === clashing)).toMatchObject({ owner_id: c.owner, slug: null, forwarding: false, departure_id: null });
+    expect(rows.find((row) => row.id === free)).toMatchObject({ owner_id: c.owner, slug: "docs", forwarding: true });
+  }, 60_000);
+
+  it("keeps the slug when the recipient's competing bookmark is rolled back", async () => {
+    const c = await cast();
+    const bookmark = await bookmarkOf(c.workspaceId, c.a, { slug: "spec", forwarding: true });
+    const departure = await depart(c, c.a, "transfer", c.owner);
+
+    const applied = await withUncommittedWrite(
+      db,
+      (tx) => tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
+        VALUES (${freshId()}, ${c.workspaceId}, ${c.owner}, 'https://example.com/own', 'https://example.com/own', 'example.com', 'Own', 'spec', true)`,
+      () => apply(c.workspaceId, departure, "transfer", c.owner),
+      { commit: false },
+    );
+
+    expect(applied).toEqual({ ...NOTHING, bookmarksMoved: 1 });
+    expect((await bookmarksIn(c.workspaceId)).find((row) => row.id === bookmark)).toMatchObject({ owner_id: c.owner, slug: "spec", forwarding: true });
+  }, 60_000);
 });
