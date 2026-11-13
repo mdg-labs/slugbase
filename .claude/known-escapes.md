@@ -47,6 +47,10 @@ existing line by adding its PR number.
 
 - **path filter without the checker** — a job that runs a check only when its content changes omits the checker and its dependencies from the filter, so a tighter rule is first seen on the next unrelated content change — PR 685
 
+- **regex guard** — a shape check admits characters the consumer's grammar does not (the brackets and colons of an IPv6 literal in a CSP host-source), so a configured value passes validation and the consumer then drops it silently — PR 894
+
+- **generated copy without its check** — files generated from a source have a `--check` mode that no lint, gate or CI step runs, so a change to the source lands with stale generated copies — PR 894
+
 ## Design docs
 
 - **cache key** — a cached value depends on a scope the key omits (an account-scoped value in a workspace-keyed cache) — PR 354
@@ -156,6 +160,8 @@ existing line by adding its PR number.
 - **negative case satisfied by another violation** — a test that a checker reports a bad value asserts only that some violation occurs, and its fixture also breaks another rule (a repeated directive), so it passes whatever the checker does with the value — PR 775
 - **fixture without the variant** — a test of a normalisation (an escape decoder, an alphabet mapping) uses an input holding nothing to normalise (a plain spelling, a key with no `+` or `/`), so the branch it names never runs — PR 775
 - **guard tested on some call sites** — a guard applied at several call sites (an https-to-http refusal on discovery, key sets and the token exchange) has tests for only some of them, so dropping it from another still passes — PR 775
+- **release only on success** — a test helper that holds a resource for the call under test (an uncommitted transaction) releases it only on its success path, so a throw from the call or from its own poll leaves the resource held and every later step hangs behind it — PR 894
+- **deadline read as the event** — a race helper treats its own deadline passing as proof that the awaited event happened (the call waiting on a held lock), so a call that was only slow passes without exercising the race — PR 894
 
 ## Web UI
 
