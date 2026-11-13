@@ -12,7 +12,8 @@
 #   5 unproven: act exited 0 but the job never ran (skipped by its `if:`).
 #
 # Settings come from .claude/workflow.json `act` (null or absent disables it):
-#   platforms  { runs-on label: image } passed as -P, e.g. runners01
+#   platforms  { runs-on label: image } passed as -P, e.g. runners01; an
+#              unnamed runners01-light gets runners01's image
 #   neverRun   job-id globs never run locally (deploy, migrate, publish, …)
 #   timeout    seconds for the run, and for waiting on another lane; default 1800
 #
@@ -60,9 +61,13 @@ timeout 20 docker info >/dev/null 2>&1 || unavailable "no Docker daemon reachabl
 
 limit=$(jq -r '.timeout // 1800' <<<"$cfg")
 platforms=()
+# runners01-light is the same machine as runners01 with a different label, so
+# a config that names only runners01 still runs a light job.
 while IFS= read -r p; do
   [[ -n $p ]] && platforms+=(-P "$p")
-done < <(jq -r '(.platforms // {}) | to_entries[] | "\(.key)=\(.value)"' <<<"$cfg")
+done < <(jq -r '(.platforms // {})
+  | if has("runners01") and (has("runners01-light") | not) then . + {"runners01-light": .runners01} else . end
+  | to_entries[] | "\(.key)=\(.value)"' <<<"$cfg")
 mapfile -t never < <(jq -r '(.neverRun // [])[]' <<<"$cfg")
 
 real_cache=${XDG_CACHE_HOME:-$HOME/.cache}

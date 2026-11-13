@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { MigrationError } from "@slugbase/db";
 import { getRollbackPlans } from "pg-boss";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { createServer, type RunningServer } from "../../src/create-server.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
@@ -64,7 +65,8 @@ interface Problem {
 }
 
 describe("MIGRATE_ON_START=true", () => {
-  it("answers the probes at once, refuses the rest with 503 unavailable until the migration is done, then serves", async () => {
+  // The migration holds a two-second pg_sleep so the probes are asked while it runs, and the server starts around it: 2.4 s alone, 3.5 s beside 60 busy loops (issue 891).
+  it("answers the probes at once, refuses the rest with 503 unavailable until the migration is done, then serves", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const slow = chains.chain("slowstart", ["SELECT pg_sleep(2); CREATE TABLE public.slowstart_one (id int);"]);
     const { server } = composition({ MIGRATE_ON_START: "true" }, [slow]);
     let started = false;

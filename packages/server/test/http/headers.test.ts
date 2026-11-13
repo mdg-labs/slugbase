@@ -10,12 +10,17 @@ import {
   type RouteBinding,
   type StageImplementations,
 } from "../../src/http/chain.ts";
-import { HEADER_RULES, declaredCachePolicy } from "../../src/http/headers.ts";
+import { HEADER_RULES, declaredCachePolicy, type ContentSecurityOptions } from "../../src/http/headers.ts";
 import { problemDocument } from "../../src/http/problem.ts";
 import { hookDispatcher, operation, recordingLogger, tenantDependencies, rateLimitDependencies } from "../support.ts";
-import { directivesOf, expectSecurityHeaders } from "./headers-support.ts";
+import { directiveNamesOf, directivesOf, expectSecurityHeaders } from "./headers-support.ts";
 
-function app(bindings: readonly RouteBinding[], stages: StageImplementations = {}, appOrigin = "https://bookmarks.example.com") {
+function app(
+  bindings: readonly RouteBinding[],
+  stages: StageImplementations = {},
+  appOrigin = "https://bookmarks.example.com",
+  contentSecurity?: ContentSecurityOptions,
+) {
   const hono = new Hono<ChainEnv>();
   installChain(
     hono,
@@ -24,6 +29,7 @@ function app(bindings: readonly RouteBinding[], stages: StageImplementations = {
       routes: new RouteTable(bindings),
       trustedProxyHops: 0,
       appOrigin,
+      ...(contentSecurity === undefined ? {} : { contentSecurity }),
       challenge: unconfigured().challenge,
       errors: unconfigured().errors,
       ...tenantDependencies(), ...rateLimitDependencies(),
@@ -129,6 +135,61 @@ describe("Strict-Transport-Security follows the scheme of APP_ORIGIN", () => {
   ])("for %s", async (origin, https) => {
     const response = await app([ping], {}, origin).request("/api/v1/ping");
     expectSecurityHeaders(response.headers, { https });
+  });
+});
+
+const DEFAULT_POLICY = "default-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+
+describe("the Content-Security-Policy a composition adds origins to", () => {
+  const policyOf = async (contentSecurity?: ContentSecurityOptions, path = "/api/v1/ping") =>
+    (await app([ping], {}, "https://bookmarks.example.com", contentSecurity).request(path)).headers.get("content-security-policy");
+
+  it.each<[string, ContentSecurityOptions | undefined]>([
+    ["absent", undefined],
+    ["empty", {}],
+    ["two empty lists", { scriptSources: [], connectSources: [] }],
+  ])("is byte-identical to the default policy when the option is %s", async (_name, option) => {
+    expect(await policyOf(option)).toBe(DEFAULT_POLICY);
+  });
+
+  it("appends the script origins to script-src after 'self', in the given order, and nothing else changes", async () => {
+    const policy = await policyOf({ scriptSources: ["https://b.example", "https://a.example:8443"] });
+    expect(policy).toBe(
+      "default-src 'self'; script-src 'self' https://b.example https://a.example:8443; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    );
+  });
+
+  it("adds one connect-src directive after img-src for the connect origins, and nothing else changes", async () => {
+    const policy = await policyOf({ connectSources: ["https://ingest.example"] });
+    expect(policy).toBe(
+      "default-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self' https://ingest.example; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    );
+  });
+
+  it("keeps a script origin out of connect-src and a connect origin out of script-src", async () => {
+    const policy = (await policyOf({ scriptSources: ["https://cdn.example"], connectSources: ["https://ingest.example"] })) ?? "";
+    expect(directivesOf(policy).get("script-src")).toEqual(["'self'", "https://cdn.example"]);
+    expect(directivesOf(policy).get("connect-src")).toEqual(["'self'", "https://ingest.example"]);
+    expect(directivesOf(policy).get("default-src")).toEqual(["'self'"]);
+    expect(directiveNamesOf(policy).sort()).toEqual(
+      ["base-uri", "connect-src", "default-src", "frame-ancestors", "img-src", "object-src", "script-src"],
+    );
+  });
+
+  it("is on a problem answer, a static answer and a /go answer as it is on a 200", async () => {
+    const option = { scriptSources: ["https://cdn.example"], connectSources: ["https://ingest.example"] };
+    const wanted = await policyOf(option);
+    expect(wanted).not.toBe(DEFAULT_POLICY);
+    expect(await policyOf(option, "/api/v1/missing")).toBe(wanted);
+    expect(await policyOf(option, "/go/docs")).toBe(wanted);
+    const staged = app([], { authentication: () => Promise.resolve(problemDocument("req-0123456789", { code: "unauthenticated", detail: "Sign in." })) }, "https://bookmarks.example.com", option);
+    const denied = await staged.request("/api/v1/ping");
+    expect(denied.status).toBe(401);
+    expect(denied.headers.get("content-security-policy")).toBe(wanted);
+  });
+
+  it("refuses a malformed origin when the stage is built, so no policy is ever made from it", () => {
+    expect(() => app([ping], {}, "https://bookmarks.example.com", { scriptSources: ["https://*.example"] })).toThrow("https://*.example");
   });
 });
 

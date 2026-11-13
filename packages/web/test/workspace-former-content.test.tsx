@@ -791,10 +791,13 @@ describe("reassigning the former members' content", () => {
     const stub = server({ members: [SELF, GRACE], formerBookmarks: many, formerFolders: [RESEARCH] });
     await openMembers();
 
-    await choose("Select Research");
+    // The page holds 1 001 rows, and a query by role walks every one of them (about 1.5 s each on a busy host), so the checkboxes are found by their label, and the
+    // check that no dialog opened ignores accessibility filtering: only the two selections below re-render the rows, and the rest of the test stays cheap.
+    await screen.findByLabelText("Select Research");
+    await press(screen.getByLabelText("Select Research"));
     expect(screen.getByRole("button", { name: "Reassign to…" }).hasAttribute("disabled")).toBe(false);
     expect(screen.queryByText(/One reassignment takes at most/)).toBeNull();
-    await choose("Select all loaded bookmarks");
+    await press(screen.getByLabelText("Select all loaded bookmarks"));
 
     expect(screen.getByText("1,002 selected")).toBeTruthy();
     expect(
@@ -804,7 +807,7 @@ describe("reassigning the former members' content", () => {
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reassign to…" }).hasAttribute("disabled")).toBe(true);
     await press(screen.getByRole("button", { name: "Reassign to…" }));
-    expect(screen.queryByRole("dialog", { name: "Reassign former members' content" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Reassign former members' content", hidden: true })).toBeNull();
     expect(stub.received("POST", REASSIGN_PATH)).toHaveLength(0);
     // The deletion has no such limit on the screen: it splits its own requests.
     expect(screen.getByRole("button", { name: "Delete selected" }).hasAttribute("disabled")).toBe(false);

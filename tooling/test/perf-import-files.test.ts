@@ -20,9 +20,29 @@ interface JsonDocument {
 
 const COLLIDING = ["docs", "gh", "jira"];
 const REPEATS = [0, 1, 2, 5];
+// The repeats whose names are compared for disjointness: the first (whose names carry no marker), the second (the first with one) and the eleventh, whose marker `r10` begins with the second's `r1`. Every repeat from the second on is
+// made by the same code from its number alone, so two of them tell apart any two; more would only build more files.
+const COMPARED = [0, 1, 10];
 const links = (body: string): string[] => [...body.matchAll(/<A HREF="([^"]+)"/g)].map((match) => match[1] ?? "");
 const folders = (body: string): string[] => [...body.matchAll(/<H3>([^<]+)<\/H3>/g)].map((match) => match[1] ?? "");
 const tagsOf = (body: string): string[] => [...body.matchAll(/TAGS="([^"]+)"/g)].flatMap((match) => (match[1] ?? "").split(","));
+
+// Each repeat's files are built, and the JSON parsed, once for the tests of this file that read them (building a file of 5000 bookmarks is the cost of these tests); the ones that build files to compare them with others do so themselves.
+const memoized = <Value>(make: (repeat: number) => Value): ((repeat: number) => Value) => {
+  const made = new Map<number, Value>();
+  return (repeat) => {
+    const known = made.get(repeat);
+    if (known !== undefined) {
+      return known;
+    }
+    const value = make(repeat);
+    made.set(repeat, value);
+    return value;
+  };
+};
+const netscapeOf = memoized((repeat) => buildNetscapeFile({ repeat }));
+const jsonOf = memoized((repeat) => buildJsonFile({ collidingSlugs: COLLIDING, repeat }));
+const documentOf = memoized((repeat) => JSON.parse(jsonOf(repeat).body) as JsonDocument);
 
 describe("the files of the repeats of the import phase", () => {
   it("makes the first repeat the files that are made with no repeat", () => {
@@ -32,8 +52,8 @@ describe("the files of the repeats of the import phase", () => {
   });
 
   it("gives each repeat addresses, folders and tags that no other repeat's file names, in both files", () => {
-    const netscape = REPEATS.map((repeat) => buildNetscapeFile({ repeat }).body);
-    const json = REPEATS.map((repeat) => JSON.parse(buildJsonFile({ collidingSlugs: COLLIDING, repeat }).body) as JsonDocument);
+    const netscape = COMPARED.map((repeat) => netscapeOf(repeat).body);
+    const json = COMPARED.map((repeat) => documentOf(repeat));
     const disjoint = (sets: readonly (readonly string[])[]): void => {
       const all = sets.flat();
       expect(new Set(all).size).toBe(sets.reduce((sum, set) => sum + new Set(set).size, 0));
@@ -57,8 +77,8 @@ describe("the files of the repeats of the import phase", () => {
     const first = buildNetscapeFile();
     const firstJson = buildJsonFile({ collidingSlugs: COLLIDING });
     for (const repeat of REPEATS) {
-      const netscape = buildNetscapeFile({ repeat });
-      const json = buildJsonFile({ collidingSlugs: COLLIDING, repeat });
+      const netscape = netscapeOf(repeat);
+      const json = jsonOf(repeat);
       expect(netscape.bookmarks).toBe(5000);
       expect(json.bookmarks).toBe(5000);
       expect(netscape.bytes).toBe(first.bytes);
@@ -71,7 +91,7 @@ describe("the files of the repeats of the import phase", () => {
 
   it("gives every slug a repeat keeps the grammar of a slug and the marker of its repeat, and every address a bookmark's length", () => {
     for (const repeat of REPEATS.filter((value) => value > 0)) {
-      const document = JSON.parse(buildJsonFile({ collidingSlugs: COLLIDING, repeat }).body) as JsonDocument;
+      const document = documentOf(repeat);
       const kept = document.bookmarks.flatMap((bookmark) => (bookmark.slug?.startsWith("json-import-") === true ? [bookmark.slug] : []));
       expect(kept.length).toBeGreaterThan(1000);
       for (const slug of kept) {
@@ -80,7 +100,7 @@ describe("the files of the repeats of the import phase", () => {
       for (const bookmark of document.bookmarks) {
         expect(bookmark.url).toMatch(new RegExp(`^https://json\\.import\\.example\\.test/r${String(repeat)}/p/\\d{5}$`));
       }
-      for (const link of links(buildNetscapeFile({ repeat }).body)) {
+      for (const link of links(netscapeOf(repeat).body)) {
         expect(link.length).toBeLessThanOrEqual(2048);
         expect(link).toMatch(new RegExp(`^https://netscape\\.import\\.example\\.test/r${String(repeat)}/p/\\d{5}/a*$`));
       }

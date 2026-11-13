@@ -3,6 +3,7 @@ export type { BuildInfo } from "./build-info.ts";
 export * from "./config/index.ts";
 export { CHAIN_STAGES, CompositionError, createServer } from "./create-server.ts";
 export {
+  ANALYTICS_CONSENT_REFUSAL_CODE,
   DEFAULT_HOOK_TIMEOUT_MS,
   DELETION_REFUSAL_CODES,
   HOOK_NAMES,
@@ -10,6 +11,9 @@ export {
   REGISTRATION_REFUSAL_CODE,
 } from "./hooks/index.ts";
 export type {
+  AnalyticsConsentCredential,
+  AnalyticsConsentPolicyInput,
+  AnalyticsConsentRefusalCode,
   DeletionGuardInput,
   DeletionRefusalCode,
   HookDispatcher,
@@ -45,6 +49,7 @@ export type {
 } from "./routes/register.ts";
 export type { ProblemErrorOptions, ProblemFieldError } from "./http/problem.ts";
 export type { AccessModeSource } from "./http/access-mode.ts";
+export type { ContentSecurityOptions } from "./http/headers.ts";
 export type { EntitlementCheck, EntitlementSubject, EntitlementUpgradeCheck, SecondFactorCheck } from "./http/authorize.ts";
 export type { InstanceAdminGrantCheck } from "./routes/instance/index.ts";
 export type {

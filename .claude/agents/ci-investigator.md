@@ -13,10 +13,11 @@ You investigate exactly **one** failing CI check. The repo's own rules are in
 
 1. **Identify** the workflow, the job and the failing step, from
    `.github/workflows/*.yml`.
-2. **Read the job log:** `.claude/scripts/gh-rest.sh pr-checks <n>` lists a
+2. **Read the job log:** `.claude/scripts/gh-helpers.sh pr-checks <n>` lists a
    PR's checks, and the number after `/job/` in a failing check's `url` is
-   its job id. Then `.claude/scripts/gh-rest.sh job-log <job-id>`. Never call
-   `gh` yourself; the scripts scope every call to the repository.
+   its job id. Then `gh run view --job <job-id> -R <repo> --log-failed`, where
+   `<repo>` is `workflow.json` `repo`. Every `gh` call names the repository;
+   in a scratch clone `gh` would infer a local path.
 3. **Reproduce locally** with the `checks` entry or `gate` command that
    matches the failing step, bounded with an explicit timeout. When no entry
    matches and `act` is set, run the failing job itself:

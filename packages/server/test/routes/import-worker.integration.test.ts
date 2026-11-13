@@ -1,6 +1,7 @@
 import { ImportRequestSchema, ImportResultSchema } from "@slugbase/contracts";
 import { assertBookmarkCountMatches, useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { importWorker, ImportWorker, ImportWorkerBusy } from "../../src/import-worker/client.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 import { NETSCAPE, bookmarkFile, uploadRequest } from "./netscape-upload.ts";
@@ -68,7 +69,8 @@ function watchRequestThread() {
 }
 
 describe("POST /api/v1/import/json on the import worker", () => {
-  it("parses and validates the file on the worker and never on the request thread, and writes what it always wrote", async () => {
+  // It starts the import worker thread and imports 3000 bookmarks: 0.7 s alone, 2.2 to 3.5 s beside 60 busy loops (issue 891).
+  it("parses and validates the file on the worker and never on the request thread, and writes what it always wrote", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const world = harness.serve({ env: RELAXED });
     const { a, shared } = await setup(world);
     const watching = watchRequestThread();

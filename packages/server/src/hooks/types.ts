@@ -25,6 +25,10 @@ export type DeletionRefusalCode = (typeof DELETION_REFUSAL_CODES)[number];
 export const REGISTRATION_REFUSAL_CODE = "registration_refused" as const;
 export type RegistrationRefusalCode = typeof REGISTRATION_REFUSAL_CODE;
 
+/** Every refusal reason of the analytics consent policy answers with this one code (doc 04 section 3). */
+export const ANALYTICS_CONSENT_REFUSAL_CODE = "preference_managed" as const;
+export type AnalyticsConsentRefusalCode = typeof ANALYTICS_CONSENT_REFUSAL_CODE;
+
 export interface SeatCheckInput {
   readonly workspaceId: string;
   readonly accountId: string;
@@ -59,6 +63,16 @@ export interface RegistrationPolicyInput {
   readonly acknowledgements: readonly RegistrationAcknowledgement[];
 }
 
+/** The kind of credential that made the request. */
+export type AnalyticsConsentCredential = "session" | "apiToken";
+
+export interface AnalyticsConsentPolicyInput {
+  readonly accountId: string;
+  /** The choice the request asks to store. */
+  readonly analyticsConsent: "unset" | "granted" | "denied";
+  readonly credential: AnalyticsConsentCredential;
+}
+
 /**
  * The hooks a module registers (doc 01 section 13). Each receives plain values
  * and identifiers, never a database handle, and runs after authentication,
@@ -71,6 +85,8 @@ export interface ServerHooks {
   readonly deletionGuard?: (input: DeletionGuardInput) => HookResult<DeletionRefusalCode> | Promise<HookResult<DeletionRefusalCode>>;
   /** Runs before an account is created; any refusal reason answers `registration_refused`. */
   readonly registrationPolicy?: (input: RegistrationPolicyInput) => HookResult | Promise<HookResult>;
+  /** Runs before `PATCH /me` stores `analyticsConsent`; any refusal reason answers `preference_managed`. */
+  readonly analyticsConsentPolicy?: (input: AnalyticsConsentPolicyInput) => HookResult | Promise<HookResult>;
 }
 
 export type HookName = keyof ServerHooks;
@@ -84,4 +100,4 @@ export interface HookRefusals {
   readonly deletionGuard?: readonly DeletionRefusalCode[];
 }
 
-export const HOOK_NAMES = ["seatCheck", "deletionGuard", "registrationPolicy"] as const satisfies readonly HookName[];
+export const HOOK_NAMES = ["seatCheck", "deletionGuard", "registrationPolicy", "analyticsConsentPolicy"] as const satisfies readonly HookName[];

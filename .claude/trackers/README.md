@@ -2,7 +2,7 @@
 
 Every skill and agent talks about work items in the terms on this page. The repo's `.claude/workflow.json` `tracker.type` picks which mapping applies:
 
-- [github.md](github.md): GitHub issues through `.claude/scripts/gh-rest.sh`. This is the default.
+- [github.md](github.md): GitHub issues through `gh`, always with the repository named. This is the default.
 - [kaneo.md](kaneo.md): Kaneo through its MCP server, with GitHub issues as a read-only mirror.
 
 When a skill says "the tracker", it means the operations below, done the way the mapping says. Nothing outside the mapping files names a tracker API.
@@ -34,6 +34,7 @@ new/backlog ──triage──▶ ready ──executor──▶ in-progress ─�
 |--------|--------|------|
 | `new` / `backlog` | Tracker automation, or whoever files the item | It is filed and has not been triaged yet |
 | `ready` | `triage` | Triage has passed the readiness check |
+| `blocked` | Tracker automation (GitHub) | A `new`/`ready` item has an open blocker that is not yet `implemented`; it returns to `ready` (or `new` if untriaged) when the blockers clear |
 | `ready` (again) | orchestrator | The item was blocked, escalated, or dropped for the promotion budget |
 | `in-progress` | `task-executor` | Before its first edit. The orchestrator sets it as a backstop right after dispatch |
 | `in-review` | `task-executor` | After the item's commit is made in its scratch clone |

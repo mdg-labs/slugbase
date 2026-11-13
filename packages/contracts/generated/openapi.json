@@ -5448,6 +5448,7 @@
               "reauth_required",
               "forbidden",
               "registration_refused",
+              "preference_managed",
               "cross_site_request",
               "token_scope",
               "account_export_only",
@@ -16195,7 +16196,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself"
+            "description": "The request did not come from the application itself (cross_site_request), or the deployment manages the analytics consent choice and refused this change (preference_managed, with the field analyticsConsent in errors); nothing is written, none of the other fields of the request included"
           },
           "422": {
             "content": {

@@ -27,7 +27,10 @@ CREATE OR REPLACE FUNCTION public.app_departure_id() RETURNS uuid
 --     may have taken them to keep the ownerless namespace unique and keep the originals in departure_slug, departure_forwarding and departure_name, which are given back
 --     and cleared here. A bookmark whose slug the recipient already owns has the slug cleared and forwarding turned off; a folder whose name the recipient already has
 --     gets the name `<name> (<n>)` with the lowest n >= 2 the recipient has no folder of (the base cut so that the result is at most 64 characters), in the order of
---     the folders' creation. The shares on the content are keyed by the bookmark and folder and stay as they were, and so do the filings. When the recipient is no
+--     the folders' creation. The shares on the content are keyed by the bookmark and folder and stay as they were, and so do the filings. The recipient's own writers
+--     take no lock of the workspace, so a name or slug they commit while a row is being moved is not seen by the check that precedes the update: the update of each row runs
+--     in a block that catches the unique violation of folders_owner_name_key or bookmarks_owner_slug_key and resolves it as the check would have (the next free name, a
+--     cleared slug with forwarding off); a unique violation of any other constraint is raised again and ends the call. When the recipient is no
 --     member any more, no row moves: the content loses its departure_id and the saved originals and stays ownerless as the release left it, with the slug cleared and the
 --     name changed where an ownerless row held them, so it obeys the ownerless uniqueness like the content of a deleted account does.
 --   'delete': the released bookmarks and folders are deleted with what references them by foreign key (shares, filings, tag links, remembered go choices), and the
@@ -47,6 +50,9 @@ DECLARE
   v_candidate text;
   v_suffix text;
   v_n integer;
+  v_constraint text;
+  v_bookmark record;
+  v_clash boolean;
 BEGIN
   IF p_workspace_id IS NULL OR p_departure_id IS NULL OR p_content IS NULL OR p_recipient IS NULL OR p_content NOT IN ('transfer', 'delete') THEN
     RAISE EXCEPTION 'sys_member_departure_apply needs a workspace, a departure, a content choice of transfer or delete and a recipient'
@@ -113,45 +119,69 @@ BEGIN
     v_base := v_folder.name::text;
     v_candidate := v_base;
     v_n := 2;
-    WHILE EXISTS (
-      SELECT 1 FROM public.folders g
-      WHERE g.workspace_id = p_workspace_id AND g.owner_id = p_recipient AND g.name = v_candidate::citext
-    ) LOOP
+    LOOP
+      IF NOT EXISTS (
+        SELECT 1 FROM public.folders g
+        WHERE g.workspace_id = p_workspace_id AND g.owner_id = p_recipient AND g.name = v_candidate::citext
+      ) THEN
+        BEGIN
+          UPDATE public.folders SET owner_id = p_recipient, departure_id = NULL, departure_name = NULL, name = v_candidate WHERE id = v_folder.id;
+          EXIT;
+        EXCEPTION WHEN unique_violation THEN
+          GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+          IF v_constraint IS DISTINCT FROM 'folders_owner_name_key' THEN
+            RAISE;
+          END IF;
+        END;
+      END IF;
       v_suffix := ' (' || v_n::text || ')';
       v_candidate := rtrim(left(v_base, 64 - length(v_suffix))) || v_suffix;
       v_n := v_n + 1;
     END LOOP;
-    UPDATE public.folders SET owner_id = p_recipient, departure_id = NULL, departure_name = NULL, name = v_candidate WHERE id = v_folder.id;
     folders_moved := folders_moved + 1;
     IF v_candidate <> v_base THEN
       folders_renamed := folders_renamed + 1;
     END IF;
   END LOOP;
 
-  WITH released AS (
+  FOR v_bookmark IN
     SELECT b.id,
            coalesce(b.slug, b.departure_slug) AS slug,
-           CASE WHEN b.departure_slug IS NOT NULL THEN b.departure_forwarding ELSE b.forwarding END AS forwarding,
-           coalesce(b.slug, b.departure_slug) IS NOT NULL AND EXISTS (
-             SELECT 1 FROM public.bookmarks r WHERE r.workspace_id = b.workspace_id AND r.owner_id = p_recipient AND r.slug = coalesce(b.slug, b.departure_slug)) AS clash
+           CASE WHEN b.departure_slug IS NOT NULL THEN b.departure_forwarding ELSE b.forwarding END AS forwarding
     FROM public.bookmarks b
     WHERE b.workspace_id = p_workspace_id AND b.owner_id IS NULL AND b.departure_id = p_departure_id
     ORDER BY b.id
     FOR UPDATE OF b
-  ),
-  moved AS (
-    UPDATE public.bookmarks b
-    SET owner_id = p_recipient,
-        departure_id = NULL,
-        departure_slug = NULL,
-        departure_forwarding = NULL,
-        slug = CASE WHEN r.clash THEN NULL ELSE r.slug END,
-        forwarding = CASE WHEN r.clash THEN false ELSE r.forwarding END
-    FROM released r
-    WHERE b.id = r.id
-    RETURNING r.clash
-  )
-  SELECT count(*), count(*) FILTER (WHERE m.clash) INTO bookmarks_moved, slugs_cleared FROM moved m;
+  LOOP
+    v_clash := v_bookmark.slug IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.bookmarks r WHERE r.workspace_id = p_workspace_id AND r.owner_id = p_recipient AND r.slug = v_bookmark.slug);
+    IF NOT v_clash THEN
+      IF v_bookmark.slug IS NULL THEN
+        UPDATE public.bookmarks
+        SET owner_id = p_recipient, departure_id = NULL, departure_slug = NULL, departure_forwarding = NULL, slug = NULL, forwarding = v_bookmark.forwarding
+        WHERE id = v_bookmark.id;
+      ELSE
+        BEGIN
+          UPDATE public.bookmarks
+          SET owner_id = p_recipient, departure_id = NULL, departure_slug = NULL, departure_forwarding = NULL, slug = v_bookmark.slug, forwarding = v_bookmark.forwarding
+          WHERE id = v_bookmark.id;
+        EXCEPTION WHEN unique_violation THEN
+          GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+          IF v_constraint IS DISTINCT FROM 'bookmarks_owner_slug_key' THEN
+            RAISE;
+          END IF;
+          v_clash := true;
+        END;
+      END IF;
+    END IF;
+    IF v_clash THEN
+      UPDATE public.bookmarks
+      SET owner_id = p_recipient, departure_id = NULL, departure_slug = NULL, departure_forwarding = NULL, slug = NULL, forwarding = false
+      WHERE id = v_bookmark.id;
+      slugs_cleared := slugs_cleared + 1;
+    END IF;
+    bookmarks_moved := bookmarks_moved + 1;
+  END LOOP;
   RETURN;
 END
 $$;

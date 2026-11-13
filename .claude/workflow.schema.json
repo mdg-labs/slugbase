@@ -97,7 +97,7 @@
       ]
     },
     "promotionBudget": {
-      "description": "Cap on reviewable files in the integration \u2192 production diff (CodeRabbit's Essentials limit is 150 files per PR, counted after path_filters); null disables the budget.",
+      "description": "Cap on reviewable files in the integration \u2192 production diff (CodeRabbit's Advanced limit is 300 files per PR, counted after path_filters); null disables the budget.",
       "type": [
         "integer",
         "null"
@@ -105,20 +105,49 @@
       "minimum": 1
     },
     "review": {
-      "description": "The review bots pr-review works with. A round collects the findings of every listed bot that completed a review of the PR's head, and needs at least one; a listed bot that skipped or was rate limited is reported, not treated as clean. CodeQL is not listed: pr-review reads code scanning alerts on every repository that has an analysis.",
+      "description": "The PR review bot pr-review works with, and how CodeRabbit is used around it. A round collects the findings of the listed bot when it completed a review of the PR's head; a skipped or rate-limited review is reported, not treated as clean. CodeQL is not listed: pr-review reads code scanning alerts on every repository that has an analysis.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "reviewers": {
-          "description": "Default [\"kodus\", \"coderabbit\"]. pr-review never requests a review from either; the maintainer does (`@kody start-review`, `@coderabbitai review`).",
+          "description": "Default [\"coderabbit\"]. pr-review never requests a review; the maintainer does (`@coderabbitai review`). Automatic reviews are off org-wide.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
           "items": {
             "enum": [
-              "kodus",
               "coderabbit"
             ]
+          }
+        },
+        "localCli": {
+          "description": "Opt-in, default false. When true, orchestrate's task-verifier also runs a local CodeRabbit CLI review (`coderabbit review --agent --committed`) of the unit on its first attempt, as a second opinion it verifies before using. CLI reviews draw on the CLI allowance (10 per developer per hour on Advanced), not the PR one. Needs the `coderabbit` CLI installed and authenticated on the machine; without it the verifier says so and judges without it.",
+          "type": "boolean",
+          "default": false
+        },
+        "linkedRepositories": {
+          "description": "CodeRabbit multi-repo analysis for this repo: the repositories its reviews read for cross-repo context and breaking changes. setup writes them into the repo's .coderabbit.yaml (knowledge_base.linked_repositories), never into the central config. Same org, CodeRabbit installed on each; a public repo links only public repos, so private code never reaches a public PR comment. At most 10 (the Advanced plan's limit; entries past it are ignored).",
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "repository"
+            ],
+            "properties": {
+              "repository": {
+                "description": "owner/name, in the same organization.",
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+              },
+              "instructions": {
+                "description": "What the linked repo holds and why it matters to this one (at most 2000 characters).",
+                "type": "string",
+                "maxLength": 2000
+              }
+            }
           }
         }
       }
@@ -179,7 +208,7 @@
           "$ref": "#/$defs/label"
         },
         "maintainerOnly": {
-          "description": "Label for work only the maintainer may run (e.g. needs-sudo); orchestrate prepares it instead of dispatching it. Maintainer-applied: gh-rest.sh refuses to add it.",
+          "description": "Label for work only the maintainer may run (e.g. needs-sudo); orchestrate prepares it instead of dispatching it. Maintainer-applied: the guard-maintainer-labels.sh hook refuses a gh command that adds it.",
           "$ref": "#/$defs/label"
         },
         "extra": {
@@ -529,7 +558,7 @@
           "type": "string"
         },
         "maintainerApplied": {
-          "description": "Only the maintainer applies this label, because a CI gate or a skill reads it as the maintainer's approval (e.g. migration:contract). gh-rest.sh issue-create and issue-edit refuse to add it; removing it stays possible. A guard against accidents, not a security boundary: an agent calling the API directly with the same credential can still apply it.",
+          "description": "Only the maintainer applies this label, because a CI gate or a skill reads it as the maintainer's approval (e.g. migration:contract). The guard-maintainer-labels.sh hook refuses a gh command that adds it; removing it stays possible. A guard against accidents, not a security boundary: a body sent with gh api --input, or another client with the same credential, can still apply it.",
           "type": "boolean"
         }
       }

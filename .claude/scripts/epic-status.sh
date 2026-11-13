@@ -21,6 +21,9 @@
 set -euo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=workflow-config.sh
+source "$HERE/workflow-config.sh"
+REPO=$(wf_repo)
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
@@ -28,11 +31,9 @@ die() { printf '%s\n' "$*" >&2; exit 1; }
 epic=$1
 [[ $epic =~ ^[0-9]+$ ]] || die "epic must be a number, got '$epic'"
 
-# "<state> <status label or ->" per sub-issue, one per line. REST already
-# spells state lowercase ("open"/"closed"); ascii_downcase here is
-# defensive, not a fixup for an inconsistency — gh-rest.sh reads
-# everything over REST, so there is no GraphQL-flavoured "OPEN"/"CLOSED"
-# left anywhere in this script.
+# "<state> <status label or ->" per sub-issue, one per line. REST spells
+# state lowercase ("open"/"closed"); ascii_downcase here is defensive, in
+# case a GraphQL-flavoured "OPEN"/"CLOSED" ever reaches it.
 #
 # Read into a checked assignment rather than `mapfile < <(...)`: a process
 # substitution's exit status is not propagated and `set -e` cannot see it,
@@ -41,7 +42,7 @@ epic=$1
 # sub-issues — and the script reported "nothing to roll up" and exited 0
 # without ever having read the epic's real state.
 subs_raw=$(
-  "$HERE/gh-rest.sh" sub-issues "$epic" \
+  gh api --paginate "repos/$REPO/issues/$epic/sub_issues?per_page=100" \
     --jq '.[] | "\(.state | ascii_downcase) \([.labels[].name | select(startswith("status:"))] | first // "-")"'
 ) || die "could not read #$epic's sub-issues — refusing to roll up its status"
 

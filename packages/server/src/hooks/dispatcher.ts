@@ -2,10 +2,13 @@ import type { ClientErrorReportPort, ClientErrorReportRequest, SeatEntitlements 
 import type { Logger } from "../create-server.ts";
 import { ProblemError } from "../http/problem.ts";
 import {
+  ANALYTICS_CONSENT_REFUSAL_CODE,
   DELETION_REFUSAL_CODES,
   HOOK_NAMES,
   HookResult,
   REGISTRATION_REFUSAL_CODE,
+  type AnalyticsConsentPolicyInput,
+  type AnalyticsConsentRefusalCode,
   type DeletionGuardInput,
   type DeletionRefusalCode,
   type HookName,
@@ -38,7 +41,7 @@ export interface HookDispatcherOptions {
 
 /**
  * What a call site consults to take part in the decisions of doc 01 section 13.
- * The seat check, the deletion guard and the registration policy fail closed: a
+ * The seat check, the deletion guard, the registration policy and the analytics consent policy fail closed: a
  * hook that throws, times out or answers outside its contract makes the
  * dispatcher throw a `503 unavailable` problem, so the flow's transaction rolls
  * back and nothing is written.
@@ -56,6 +59,8 @@ export interface HookDispatcher {
   deletionGuard(input: DeletionGuardInput): Promise<HookResult<DeletionRefusalCode>>;
   /** Allow, or `registration_refused` whatever the reason a hook gave. */
   registrationPolicy(input: RegistrationPolicyInput): Promise<HookResult<RegistrationRefusalCode>>;
+  /** Allow, or `preference_managed` whatever the reason a hook gave. */
+  analyticsConsentPolicy(input: AnalyticsConsentPolicyInput): Promise<HookResult<AnalyticsConsentRefusalCode>>;
   /** The DSN for the account's own profile; `null` when there is no source or it fails. */
   clientErrorReportDsn(request: ClientErrorReportRequest): Promise<string | null>;
 }
@@ -194,7 +199,7 @@ export function createHookDispatcher(options: HookDispatcherOptions): HookDispat
         (DELETION_REFUSAL_CODES as readonly unknown[]).includes(answer.code) &&
         (registration.refusals?.deletionGuard as readonly unknown[] | undefined)?.includes(answer.code) === true));
 
-  const isRegistrationAnswer = (answer: unknown): answer is HookResult =>
+  const isReasonedAnswer = (answer: unknown): answer is HookResult =>
     isRecord(answer) &&
     (answer.outcome === "allow" ||
       (answer.outcome === "refuse" && typeof answer.code === "string" && answer.code !== ""));
@@ -222,9 +227,16 @@ export function createHookDispatcher(options: HookDispatcherOptions): HookDispat
     },
 
     async registrationPolicy(input) {
-      const answers = await consult("registrationPolicy", input, isRegistrationAnswer);
+      const answers = await consult("registrationPolicy", input, isReasonedAnswer);
       return answers.some((answer) => answer.outcome === "refuse")
         ? HookResult.refuse(REGISTRATION_REFUSAL_CODE)
+        : HookResult.allow();
+    },
+
+    async analyticsConsentPolicy(input) {
+      const answers = await consult("analyticsConsentPolicy", input, isReasonedAnswer);
+      return answers.some((answer) => answer.outcome === "refuse")
+        ? HookResult.refuse(ANALYTICS_CONSENT_REFUSAL_CODE)
         : HookResult.allow();
     },
 

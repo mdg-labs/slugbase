@@ -16,6 +16,7 @@ import type { Authenticator } from "./http/authenticate.ts";
 import type { AccessModeSource } from "./http/access-mode.ts";
 import { denyEntitlements, noUpgradeAvailable, type EntitlementCheck, type SecondFactorCheck } from "./http/authorize.ts";
 import { bodyLimits } from "./http/body-limits.ts";
+import { contentSecurityProblem, type ContentSecurityOptions } from "./http/headers.ts";
 import {
   RouteTable,
   installChain,
@@ -233,6 +234,14 @@ export interface CreateServerOptions {
   readonly instanceAdminGrant?: InstanceAdminGrantCheck;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
+  /**
+   * `https` origins added to the `Content-Security-Policy` of every response (doc 01 section 4 step 2): `scriptSources` after
+   * `'self'` in `script-src`, `connectSources` in a `connect-src 'self' …` directive. The composition root's choice, never an
+   * edition flag (D4): the Community Edition adds none, and without this option, or with empty lists, its policy is unchanged.
+   * Each entry is a bare origin written as `new URL(entry).origin` writes it (no path, query, fragment, userinfo, wildcard or
+   * default port); anything else, and a repeated entry, refuses the start with `invalid_content_security`.
+   */
+  readonly contentSecurity?: ContentSecurityOptions;
 }
 
 /** The operations that stay answered while the server migrates: the process probes. */
@@ -294,6 +303,7 @@ export type CompositionErrorCode =
   | "duplicate_route"
   | "invalid_route"
   | "invalid_web_root"
+  | "invalid_content_security"
   | "missing_policy"
   | "undocumented_operation"
   | "policy_mismatch"
@@ -536,6 +546,13 @@ function canCutConnections(server: ServerType): server is ServerType & { closeAl
 export function createServer(options: CreateServerOptions): Server {
   const { config, logger } = options;
   assertAdapters(options.adapters);
+  if (options.contentSecurity !== undefined) {
+    // Before any pool is made: a policy that admits more than the listed origins is never built.
+    const problem = contentSecurityProblem(options.contentSecurity);
+    if (problem !== undefined) {
+      throw new CompositionError("invalid_content_security", problem);
+    }
+  }
 
   const committedDocument = loadCommittedDocument();
   const openApiDocument = options.openApiDocument ?? committedDocument;
@@ -801,6 +818,7 @@ export function createServer(options: CreateServerOptions): Server {
     }),
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
     appOrigin: config.APP_ORIGIN,
+    ...(options.contentSecurity === undefined ? {} : { contentSecurity: options.contentSecurity }),
     challenge: adapters.challenge,
     errors: adapters.errors,
     rateLimit: adapters.rateLimit,

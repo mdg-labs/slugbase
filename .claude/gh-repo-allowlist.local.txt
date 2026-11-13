@@ -1,0 +1,8 @@
+# check-gh-repo.sh's exemption list for this repository's own files.
+#
+# Each line is "<file, relative to the repo root>::<substring of the flagged
+# line>": prose or test text that names a `gh` command without its repository
+# only to describe or search for it — never a live call.
+scripts/release-tag.test.sh::grep -n 'gh release create'
+scripts/verify-image.test.sh::line_of 'gh release create'
+scripts/perf/README.md::(`gh issue list --state open --json number,title`)

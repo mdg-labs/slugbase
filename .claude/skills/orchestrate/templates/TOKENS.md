@@ -31,6 +31,7 @@ fields that are theirs to complete. Leave those untouched.
 | `ENTRY_POINTS` | CLAUDE.md `### Entry points`, as a comma-separated list |
 | `THREAT_MODEL` | `threatModel`. Drop the block when it is null |
 | `ACT`, `ACT_TIMEOUT` | `act` is set in workflow.json and the unit's scope can touch `.github/workflows/**` or `.github/actions/**`; `ACT_TIMEOUT` is `act.timeout` (default 1800) |
+| `CODERABBIT_CLI`, `CR_BASE` | `review.localCli` is `true`, the step-0 machine check found `coderabbit` installed and authenticated, and the attempt is the unit's first; `CR_BASE` is the full SHA of `origin/<base>` in the unit's clone (step 7) |
 | `CHECKS` | Each `checks` entry whose `paths` the unit's scope can touch, as `- <paths>: \`<run>\``, then `- Before handing off: \`<gate>\``. A cross-repo landing uses its entry's `gate` |
 | `KNOWN_ESCAPES_PATH` | `<TOOLS_ROOT>/.claude/known-escapes.md` |
 | `TEMPLATES_DIR` | `<TOOLS_ROOT>/.claude/skills/orchestrate/templates` |

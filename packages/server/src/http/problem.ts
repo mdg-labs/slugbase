@@ -33,6 +33,7 @@ const PROBLEM_TITLES: Record<ProblemCode, string> = {
   reauth_required: "Re-authentication required",
   forbidden: "Forbidden",
   registration_refused: "Registration refused",
+  preference_managed: "Preference managed elsewhere",
   cross_site_request: "Cross-site request refused",
   token_scope: "Token scope insufficient",
   account_export_only: "Account is export-only",

@@ -5,6 +5,7 @@ import { bookmarkRepository, formerContentRepository, memberRepository, TenantCo
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { tenantHandle, type TenantTx } from "../src/tenant.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { withUncommittedWrite } from "./support/concurrent-write.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The former members' content of a workspace (doc 02 section 2.10, doc 05 sections 2.4 and 7.5, doc 10 T1 and T2). The failure scenario: the policies of
@@ -1243,4 +1244,106 @@ describe("a reassignment against another call, a bulk delete and a member's remo
     expect(during).toEqual({ kind: "refused" });
     expect(await bookmarkState(ownerless)).toMatchObject({ owner_id: null });
   }, 30_000);
+});
+
+// The recipient's own writers (a folder created or renamed, a slug set) take no lock of the workspace, so a name or slug they write while a reassignment runs is
+// invisible to the check that precedes its update. The failure scenario: the recipient's transaction holds a folder named like the one being moved, or a slug like the
+// moved bookmark's, uncommitted; the update of the reassignment waits on it, and when it commits the update raised the unique violation and the whole call rolled back
+// instead of renaming the folder or clearing the slug.
+describe("sys_former_content_reassign against the recipient's concurrent writes", () => {
+  const insertFolder = (workspaceId: string, ownerId: string, name: string) => (tx: postgres.TransactionSql) =>
+    tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${freshId()}, ${workspaceId}, ${ownerId}, ${name})`;
+
+  const insertBookmark = (workspaceId: string, ownerId: string, slug: string) => (tx: postgres.TransactionSql) =>
+    tx`
+      INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
+      VALUES (${freshId()}, ${workspaceId}, ${ownerId}, 'https://example.com/own', 'https://example.com/own', 'example.com', 'Own', ${slug}, true)`;
+
+  it("FAILURE SCENARIO: renames a moved folder to the next free name when the recipient commits a same-named folder, without regard to case, while the call waits", async () => {
+    const scene = await deleteScene();
+    const folder = await seedFolder(scene.id, "Research");
+
+    const answer = await withUncommittedWrite(db, insertFolder(scene.id, scene.member, "RESEARCH"), () => reassignAs(scene, scene.admin, scene.member, [], [folder]));
+
+    expect(answer).toEqual({ bookmarks_moved: 0, folders_moved: 1, slugs_cleared: 0, folders_renamed: 1, filings_removed: 0 });
+    expect(await folderState(folder)).toEqual({ owner_id: scene.member, departure_id: null, name: "Research (2)" });
+  }, 60_000);
+
+  it("skips every name the recipient commits meanwhile: `Research` and `Research (2)` lead to `Research (3)`", async () => {
+    const scene = await deleteScene();
+    const folder = await seedFolder(scene.id, "Research");
+
+    const answer = await withUncommittedWrite(
+      db,
+      async (tx) => {
+        await insertFolder(scene.id, scene.member, "Research")(tx);
+        await insertFolder(scene.id, scene.member, "research (2)")(tx);
+      },
+      () => reassignAs(scene, scene.admin, scene.member, [], [folder]),
+    );
+
+    expect(answer).toEqual({ bookmarks_moved: 0, folders_moved: 1, slugs_cleared: 0, folders_renamed: 1, filings_removed: 0 });
+    expect(await folderState(folder)).toEqual({ owner_id: scene.member, departure_id: null, name: "Research (3)" });
+  }, 60_000);
+
+  it("keeps the name when the recipient's competing folder is rolled back", async () => {
+    const scene = await deleteScene();
+    const folder = await seedFolder(scene.id, "Research");
+
+    const answer = await withUncommittedWrite(db, insertFolder(scene.id, scene.member, "Research"), () => reassignAs(scene, scene.admin, scene.member, [], [folder]), {
+      commit: false,
+    });
+
+    expect(answer).toEqual({ bookmarks_moved: 0, folders_moved: 1, slugs_cleared: 0, folders_renamed: 0, filings_removed: 0 });
+    expect(await folderState(folder)).toEqual({ owner_id: scene.member, departure_id: null, name: "Research" });
+  }, 60_000);
+
+  it("FAILURE SCENARIO: clears the slug and turns forwarding off on a moved bookmark when the recipient commits the same slug while the call waits, and counts it", async () => {
+    const scene = await deleteScene();
+    const clashing = await seedBookmark({ workspaceId: scene.id, title: "Former spec", slug: "spec", forwarding: true });
+    const free = await seedBookmark({ workspaceId: scene.id, title: "Former wiki", slug: "wiki", forwarding: true });
+    await syncCounter(scene.id);
+
+    const answer = await withUncommittedWrite(db, insertBookmark(scene.id, scene.member, "spec"), () => reassignAs(scene, scene.admin, scene.member, [clashing, free], []));
+
+    expect(answer).toEqual({ bookmarks_moved: 2, folders_moved: 0, slugs_cleared: 1, folders_renamed: 0, filings_removed: 0 });
+    expect(await bookmarkState(clashing)).toEqual({ owner_id: scene.member, departure_id: null, slug: null, forwarding: false });
+    expect(await bookmarkState(free)).toEqual({ owner_id: scene.member, departure_id: null, slug: "wiki", forwarding: true });
+  }, 60_000);
+
+  it("keeps the slug when the recipient's competing bookmark is rolled back", async () => {
+    const scene = await deleteScene();
+    const bookmark = await seedBookmark({ workspaceId: scene.id, title: "Former spec", slug: "spec", forwarding: true });
+
+    const answer = await withUncommittedWrite(db, insertBookmark(scene.id, scene.member, "spec"), () => reassignAs(scene, scene.admin, scene.member, [bookmark], []), {
+      commit: false,
+    });
+
+    expect(answer).toEqual({ bookmarks_moved: 1, folders_moved: 0, slugs_cleared: 0, folders_renamed: 0, filings_removed: 0 });
+    expect(await bookmarkState(bookmark)).toEqual({ owner_id: scene.member, departure_id: null, slug: "spec", forwarding: true });
+  }, 60_000);
+
+  it("still ends the call, moving nothing, on a unique violation of another constraint than the name and slug keys", async () => {
+    const scene = await deleteScene();
+    const folder = await seedFolder(scene.id, "Research");
+    const bookmark = await seedBookmark({ workspaceId: scene.id, title: "Former spec", slug: "spec", forwarding: true });
+    // The same uniqueness under other names is a different constraint to the function, which must not resolve it.
+    await db.owner.unsafe("ALTER TABLE folders RENAME CONSTRAINT folders_owner_name_key TO folders_other_key; ALTER INDEX bookmarks_owner_slug_key RENAME TO bookmarks_other_key");
+    try {
+      const folderRefusal = await refusedWith(
+        withUncommittedWrite(db, insertFolder(scene.id, scene.member, "Research"), () => reassignAs(scene, scene.admin, scene.member, [], [folder])),
+      );
+      const slugRefusal = await refusedWith(
+        withUncommittedWrite(db, insertBookmark(scene.id, scene.member, "spec"), () => reassignAs(scene, scene.admin, scene.member, [bookmark], [])),
+      );
+
+      expect(folderRefusal).toBe("23505");
+      expect(slugRefusal).toBe("23505");
+    } finally {
+      await db.owner.unsafe("ALTER TABLE folders RENAME CONSTRAINT folders_other_key TO folders_owner_name_key; ALTER INDEX bookmarks_other_key RENAME TO bookmarks_owner_slug_key");
+    }
+
+    expect(await folderState(folder)).toEqual({ owner_id: null, departure_id: null, name: "Research" });
+    expect(await bookmarkState(bookmark)).toEqual({ owner_id: null, departure_id: null, slug: "spec", forwarding: true });
+  }, 60_000);
 });

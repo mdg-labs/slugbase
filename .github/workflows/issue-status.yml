@@ -1,60 +1,123 @@
 name: Issue status
 
-# The machine-owned end of the status:* lifecycle. Agents own the middle of it
+# The machine-owned part of the status:* lifecycle. Agents own the middle of it
 # (in-progress → in-review → implemented, see .claude/skills/orchestrate);
 # this owns the two ends, where there is no agent in the loop — an issue being
-# filed, and an issue being closed.
+# filed, and an issue being closed — and status:blocked, which follows the
+# native blocked-by links.
 #
-# It also assigns the maintainer to any issue that has no assignee, on the same
-# triggers — no extra event types just for that; ownership is set on issues this
-# job is already awake for. An issue that already has an assignee is never
-# touched.
+# It also closes a milestone once no open issue or pull request is left in it
+# (on close, and when the last open one is removed from it), reopens it when an
+# issue in it is reopened, and assigns the maintainer to any issue that has no
+# assignee. An issue that already has an assignee is never touched.
 #
-# Deliberately NOT triggered on labeled/unlabeled. Every status change is a
-# label change, so that would wake this workflow twice per transition (a PATCH
-# that swaps labels emits both events) — dozens of runs per orchestrate run,
-# all of them finding nothing to do. The one-status invariant doesn't need it:
+# Blocked. An issue is blocked while any of its blocked-by issues is open and
+# not at status:implemented (that one has landed on the integration branch,
+# which executors branch from). Only an issue at status:new or status:ready is
+# moved to status:blocked; at any other status an executor may own it, so it is
+# left alone. When the last blocker is gone the issue goes back to status:ready,
+# or to status:new when it was never triaged (no "## Original report"). The
+# dependents are recomputed when:
+#   - the issue itself is opened or reopened;
+#   - a blocker is closed;
+#   - a blocker enters or leaves status:implemented (labeled / unlabeled below).
+# A new blocked-by edge is not a trigger here: GitHub sends an issue_dependencies
+# webhook event, but its docs do not list it among the events an Actions
+# workflow can use, so it is not relied on. .claude/scripts/gh-helpers.sh
+# add-blocked-by recomputes the dependent itself right after adding the edge.
+#
+# labeled / unlabeled are triggers only for status:implemented, where the job
+# `if` below skips every other label, because that is the one status change
+# that decides whether another issue is blocked. Every other status change
+# would wake this twice (a PATCH that swaps labels emits both events) for
+# nothing, and the one-status invariant doesn't need it:
 # .claude/scripts/issue-status.sh replaces the label set in a single call, so
 # an agent cannot leave two behind in the first place. This job still
 # normalises what it finds whenever it does run, which covers a hand edit at
-# the next open/close.
+# the next open/close. Writes made with the workflow's GITHUB_TOKEN start no
+# new runs, so its own label swaps cannot loop. The concurrency group is on the
+# job, so a run the `if` skips does not queue behind a running one.
 
 on:
   issues:
-    types: [opened, closed, reopened]
+    types: [opened, closed, reopened, demilestoned, labeled, unlabeled]
 
 permissions:
   issues: write
 
-concurrency:
-  group: issue-status-${{ github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
   set-status:
+    if: ${{ (github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'status:implemented' }}
+    concurrency:
+      group: issue-status-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    # A short job: on the self-hosted runners it runs on runners01-light.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      - uses: actions/github-script@v7
         with:
           script: |
             const { action } = context.payload;
             // An organisation cannot be an assignee, so the maintainer is named
             // explicitly. Rendered by setup from workflow.json "maintainer".
             const MAINTAINER = 'mdguggenbichler';
+            // The status:* labels as [{ name, color, description }], rendered
+            // by setup from scripts/status-labels.txt, the one place they are
+            // defined.
+            const STATUS_LABELS = [{"name":"status:new","color":"ededed","description":"Filed, not yet triaged"},{"name":"status:ready","color":"bfd4f2","description":"Triaged and ready to be picked up"},{"name":"status:blocked","color":"d93f0b","description":"Waiting on an open blocker (a native blocked-by link)"},{"name":"status:in-progress","color":"fbca04","description":"An executor is implementing this"},{"name":"status:in-review","color":"d4c5f9","description":"Implementation committed, awaiting verification"},{"name":"status:implemented","color":"c2e0c6","description":"Verification passed, landed on the integration branch"},{"name":"status:closed","color":"586069","description":"Closed as completed"},{"name":"status:cancelled","color":"8b4513","description":"Closed as not planned, or as a duplicate"}];
             const issue_number = context.payload.issue.number;
 
             const TERMINAL = ['status:closed', 'status:cancelled'];
+            // The statuses a blocker can move an issue between. Any other one
+            // may be owned by an executor and is never touched for blocking.
+            const BLOCKABLE = ['status:new', 'status:ready'];
             const namesOf = issue => issue.labels.map(l => (typeof l === 'string' ? l : l.name));
             const statusesOf = issue => namesOf(issue).filter(n => n.startsWith('status:'));
-            const read = async () =>
-              (await github.rest.issues.get({ ...context.repo, issue_number })).data;
+            const read = async n =>
+              (await github.rest.issues.get({ ...context.repo, issue_number: n })).data;
             // GitHub answers 404 for a label the issue no longer carries; a
             // racing writer removing it first is the same outcome.
-            const remove = async name => {
+            const remove = async (n, name) => {
               try {
-                await github.rest.issues.removeLabel({ ...context.repo, issue_number, name });
+                await github.rest.issues.removeLabel({ ...context.repo, issue_number: n, name });
               } catch (err) {
                 if (err.status !== 404) throw err;
+              }
+            };
+            // GitHub creates a label that is missing on addLabels, but grey and
+            // without a description. Create it from its definition first.
+            const ensured = new Set();
+            const ensureLabel = async name => {
+              if (ensured.has(name)) return;
+              try {
+                await github.rest.issues.getLabel({ ...context.repo, name });
+              } catch (err) {
+                if (err.status !== 404) throw err;
+                const def = STATUS_LABELS.find(l => l.name === name);
+                if (def) {
+                  try {
+                    await github.rest.issues.createLabel({
+                      ...context.repo, name, color: def.color, description: def.description,
+                    });
+                  } catch (err2) {
+                    // A racing run created it first.
+                    if (err2.status !== 422) throw err2;
+                  }
+                }
+              }
+              ensured.add(name);
+            };
+            // The issues on the other end of a native dependency link:
+            // 'blocked_by' (what blocks n) or 'blocking' (what n blocks).
+            const dependencies = async (n, kind) => {
+              const found = [];
+              for (let page = 1; ; page++) {
+                const { data } = await github.request(
+                  'GET /repos/{owner}/{repo}/issues/{issue_number}/dependencies/{kind}',
+                  { ...context.repo, issue_number: n, kind, per_page: 100, page },
+                );
+                found.push(...data);
+                if (data.length < 100) return found;
               }
             };
 
@@ -84,24 +147,13 @@ jobs:
               return null;
             };
 
-            // Re-read the issue instead of trusting context.payload.issue. The
-            // payload is a snapshot taken when the event fired; this job starts
-            // seconds later, and in that window an agent that just ran
-            // gh-rest.sh issue-create has typically already called
-            // .claude/scripts/issue-status.sh. Deciding on the snapshot put
-            // status:new over the status the script had just set (seen in
-            // practice: ready reverted to new). The read sits right before the
-            // writes, and the assignment below waits until they are done, so the
-            // window a racing writer can land in stays as small as it can be.
-            const live = await read();
-            const statuses = statusesOf(live);
-            const want = decide(live, statuses);
-
-            if (want === null) {
-              core.info(`#${issue_number}: nothing to do (${statuses.join(', ') || 'no status'})`);
-            } else if (statuses.length === 1 && statuses[0] === want) {
-              core.info(`#${issue_number} is already ${want}`);
-            } else {
+            // Writes the status this run wants onto issue n, whose statuses were
+            // read just before. Used for the triggering issue and for every
+            // other issue a blocker change touches, so the race handling below
+            // applies to all of them. `yields` says a status someone else set
+            // meanwhile wins over ours: true for status:new and for the
+            // blocked/unblocked moves, which are defaults, not decisions.
+            const writeStatus = async (n, want, statuses, yields = want === 'status:new') => {
               // Only the status labels that change are written: addLabels for
               // ours, removeLabel for each one it replaces. Never setLabels,
               // which replaces the whole set, so writing back a set read
@@ -110,43 +162,146 @@ jobs:
               // run normalises them), never none. Added even when the read
               // already showed it: that read can be stale, and addLabels is
               // idempotent.
-              await github.rest.issues.addLabels({ ...context.repo, issue_number, labels: [want] });
-              for (const n of statuses.filter(n => n !== want)) await remove(n);
+              await ensureLabel(want);
+              await github.rest.issues.addLabels({ ...context.repo, issue_number: n, labels: [want] });
+              for (const s of statuses.filter(s => s !== want)) await remove(n, s);
 
               // A writer can still land between the read and these writes.
               // Re-read after them (the point is to see the racing writer's
-              // label if it landed) and, if there are now two statuses, settle
-              // on one: status:new is this job's default for an issue nobody
-              // classified, so a status anyone else set wins over it. closed,
-              // cancelled and a hand-made cleanup are this job's to decide, so
-              // ours wins over theirs.
-              const after = statusesOf(await read());
+              // label if it landed) and settle on one status: when ours yields
+              // (status:new, this job's default for an issue nobody
+              // classified, or a blocked/unblocked move) a status anyone else
+              // set wins over it. closed, cancelled and a hand-made cleanup
+              // are this job's to decide, so ours wins over theirs. A writer
+              // that swaps the whole set in one call (as issue-status.sh does)
+              // can leave theirs alone, without ours.
+              const after = statusesOf(await read(n));
               if (after.length === 0) {
                 // A racing writer removed ours after we added it, and we then
                 // removed theirs: put ours back rather than leave none.
-                await github.rest.issues.addLabels({ ...context.repo, issue_number, labels: [want] });
-                core.info(`#${issue_number}: raced to no status → ${want}`);
+                await github.rest.issues.addLabels({ ...context.repo, issue_number: n, labels: [want] });
+                core.info(`#${n}: raced to no status → ${want}`);
               } else if (after.length > 1) {
-                const others = after.filter(n => n !== want).sort();
-                const winner = want === 'status:new' ? others[0] : want;
-                for (const n of after.filter(n => n !== winner)) await remove(n);
-                core.info(`#${issue_number}: raced (${after.join(', ')}) → kept ${winner}`);
+                const others = after.filter(s => s !== want).sort();
+                const winner = yields ? others[0] : want;
+                for (const s of after.filter(s => s !== winner)) await remove(n, s);
+                core.info(`#${n}: raced (${after.join(', ')}) → kept ${winner}`);
               } else if (after[0] !== want) {
-                // A racing writer replaced ours with its own. Settle it the
-                // way two statuses are settled above.
-                if (want !== 'status:new') {
-                  await github.rest.issues.addLabels({ ...context.repo, issue_number, labels: [want] });
-                  await remove(after[0]);
+                if (yields) {
+                  core.info(`#${n}: raced → kept ${after[0]}`);
+                } else {
+                  await github.rest.issues.addLabels({ ...context.repo, issue_number: n, labels: [want] });
+                  await remove(n, after[0]);
+                  core.info(`#${n}: raced (${after[0]}) → ${want}`);
                 }
-                core.info(`#${issue_number}: raced (${after[0]}) → kept ${want === 'status:new' ? after[0] : want}`);
               } else {
-                core.info(`#${issue_number}: ${statuses.join(', ') || 'none'} → ${want}`);
+                core.info(`#${n}: ${statuses.join(', ') || 'none'} → ${want}`);
               }
+            };
+
+            // Brings issue n's blocked state in line with its blocked-by links,
+            // from a fresh read of both. A blocker that is open and not at
+            // status:implemented blocks. Moves only new/ready to blocked, and
+            // only blocked back to ready (or new when untriaged: the body has
+            // no "## Original report", the marker issue-readiness.sh uses).
+            const reconcile = async n => {
+              const it = await read(n);
+              if (it.state !== 'open') return;
+              const statuses = statusesOf(it);
+              if (statuses.length !== 1) return;
+              const [current] = statuses;
+              if (![...BLOCKABLE, 'status:blocked'].includes(current)) return;
+              const blockers = (await dependencies(n, 'blocked_by'))
+                .filter(b => b.state === 'open' && !namesOf(b).includes('status:implemented'));
+              let want = current;
+              if (blockers.length) {
+                want = 'status:blocked';
+              } else if (current === 'status:blocked') {
+                want = (it.body || '').includes('## Original report') ? 'status:ready' : 'status:new';
+              }
+              if (want === current) return;
+              core.info(`#${n}: ${blockers.length} open blocker(s)`);
+              await writeStatus(n, want, statuses, true);
+            };
+            // The 'blocking' list can include issues of other repositories,
+            // whose numbers mean nothing here: skip them. (A blocker of another
+            // repository in a 'blocked_by' list still counts, from the state
+            // and labels the payload carries; it is never re-read here.) Each
+            // dependent is isolated: one that throws is collected, the rest are
+            // still done, and the job is failed at the end with the summary.
+            const sameRepo = d => !d.repository_url ||
+              d.repository_url.toLowerCase().endsWith(
+                `/repos/${context.repo.owner}/${context.repo.repo}`.toLowerCase());
+            const reconcileBlockedBy = async n => {
+              const errors = [];
+              for (const d of await dependencies(n, 'blocking')) {
+                if (!sameRepo(d)) {
+                  core.info(`#${d.number}: in another repository (${d.repository_url}), skipped`);
+                  continue;
+                }
+                try {
+                  await reconcile(d.number);
+                } catch (err) {
+                  errors.push(`#${d.number}: ${err.message}`);
+                }
+              }
+              if (errors.length) core.setFailed(`could not update dependents: ${errors.join('; ')}`);
+            };
+
+            // A milestone closes when nothing in it is open (its count includes
+            // open pull requests, which rightly keep it open) and reopens when
+            // something in it is reopened. Read fresh: the issue's own copy of
+            // the milestone is a snapshot.
+            const settleMilestone = async (number, reopen) => {
+              if (!number) return;
+              const { data: m } = await github.rest.issues.getMilestone({
+                ...context.repo, milestone_number: number,
+              });
+              const state = reopen ? 'open' : m.open_issues === 0 ? 'closed' : m.state;
+              if (m.state === state) return;
+              await github.rest.issues.updateMilestone({
+                ...context.repo, milestone_number: number, state,
+              });
+              core.info(`milestone "${m.title}": ${m.state} → ${state}`);
+            };
+
+            if (action === 'labeled' || action === 'unlabeled') {
+              // The job `if` lets only status:implemented through. Entering it
+              // can unblock what this issue blocks; leaving it (an integration
+              // PR dropped) blocks them again.
+              await reconcileBlockedBy(issue_number);
+              return;
+            }
+            if (action === 'demilestoned') {
+              // The payload's milestone is the one the issue left.
+              await settleMilestone((context.payload.milestone || {}).number, false);
+              return;
+            }
+
+            // Re-read the issue instead of trusting context.payload.issue. The
+            // payload is a snapshot taken when the event fired; this job starts
+            // seconds later, and in that window an agent that just created
+            // the issue has typically already called
+            // .claude/scripts/issue-status.sh. Deciding on the snapshot put
+            // status:new over the status the script had just set (seen in
+            // practice: ready reverted to new). The read sits right before the
+            // writes, and the assignment below waits until they are done, so the
+            // window a racing writer can land in stays as small as it can be.
+            const live = await read(issue_number);
+            const statuses = statusesOf(live);
+            const want = decide(live, statuses);
+
+            if (want === null) {
+              core.info(`#${issue_number}: nothing to do (${statuses.join(', ') || 'no status'})`);
+            } else if (statuses.length === 1 && statuses[0] === want) {
+              core.info(`#${issue_number} is already ${want}`);
+            } else {
+              await writeStatus(issue_number, want, statuses);
             }
 
             // Assign the maintainer to anything nobody owns yet. This rides on
-            // the triggers the status lifecycle already needs (deliberately no
-            // new event types), so it only fires on an issue this workflow was
+            // the triggers the status lifecycle already needs (no event types
+            // just for it), so it only fires on an issue this workflow was
             // touching anyway. Runs after the status write so it cannot widen
             // the window between that write and the read it is based on.
             //
@@ -168,4 +323,14 @@ jobs:
               } catch (err) {
                 core.warning(`#${issue_number}: could not assign @${MAINTAINER}: ${err.message}`);
               }
+            }
+
+            // What the new state means for other issues and the milestone.
+            if (action === 'closed') {
+              // The milestone first: a failing dependent must not skip it.
+              await settleMilestone((live.milestone || {}).number, false);
+              await reconcileBlockedBy(issue_number);
+            } else {
+              await reconcile(issue_number);
+              if (action === 'reopened') await settleMilestone((live.milestone || {}).number, true);
             }

@@ -18,6 +18,11 @@ import { route } from "../register.ts";
 // answers the account afterwards, applying every change in one statement. The account is the
 // principal's, never a value of the request, and the body is a closed object, so
 // a field the operation does not declare is a 422 before the handler runs.
+// A body that carries `analyticsConsent` first asks the composition's analytics consent policy
+// (doc 01 section 13.7), before the transaction opens: a refusal is 403 `preference_managed` and
+// writes no field of the request, and a hook that fails is 503 from the dispatcher.
+
+const PREFERENCE_MANAGED = "This preference is managed by the deployment and cannot be changed here.";
 
 export interface ProfileRoutesOptions {
   readonly withTenant: Database["withTenant"];
@@ -83,6 +88,22 @@ export function profileRoutes({ withTenant }: ProfileRoutesOptions): RouteBindin
       const principal = context.get("principal");
       if (principal === undefined) {
         throw new ProblemError("unauthenticated", "Authentication is required.");
+      }
+      if (body.analyticsConsent !== undefined) {
+        const hooks = context.get("hooks");
+        if (hooks === undefined) {
+          throw new Error("the profile route was reached without the hook dispatcher");
+        }
+        const verdict = await hooks.analyticsConsentPolicy({
+          accountId: principal.accountId,
+          analyticsConsent: body.analyticsConsent,
+          credential: principal.kind === "session" ? "session" : "apiToken",
+        });
+        if (verdict.outcome === "refuse") {
+          throw new ProblemError("preference_managed", PREFERENCE_MANAGED, {
+            errors: [{ path: "analyticsConsent", code: "preference_managed" }],
+          });
+        }
       }
       const profile = await withTenant({ accountId: principal.accountId, requestId: requestIdOf(context) }, (tx) =>
         accountProfileRepository(tx).updateProfile({
