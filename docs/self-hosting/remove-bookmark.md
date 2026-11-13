@@ -4,7 +4,7 @@ description: Remove one bookmark of any workspace with SQL, whoever owns it, whe
 edition: ce
 ---
 
-Sometimes you must remove one bookmark: a court or authority order, or a moderation decision under your own terms. A member can delete only their own bookmarks. A bookmark whose owner has left the workspace has no owner, so nobody in the workspace can delete it. This page shows the SQL statement that removes one such bookmark and records that you did.
+Sometimes you must remove one bookmark: a court or authority order, or a moderation decision under your own terms. A member can delete only their own bookmarks. A bookmark whose owner has left the workspace has no owner, and the workspace's owners and admins can delete or reassign it on the **Members** page (see [Members](../user/workspace/members.mdx#see-reassign-and-delete-the-content-of-former-members)). This page is for every other removal: a bookmark a member still owns, or a workspace whose owners and admins cannot or will not act. It shows the SQL statement that removes one bookmark, whoever owns it, and records that you did.
 
 The removal is final. SlugBase has no trash and no undo.
 
