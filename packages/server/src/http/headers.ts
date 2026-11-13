@@ -31,7 +31,10 @@ export interface ContentSecurityOptions {
 
 // What a CSP host source is made of, once the entry has round-tripped through `URL`:
 // the serialiser also leaves `*`, quotes, `;` and `,` in a host, and each would end or extend the directive.
-const SOURCE_SHAPE = /^https:\/\/[a-z0-9.:[\]-]+$/;
+// The host holds host-name characters only, so an IPv6 literal (brackets, colons) is out: it is not a CSP
+// `host-source`, a browser drops it from the directive, and the origin would silently have no effect. The one
+// colon is the port separator.
+const SOURCE_SHAPE = /^https:\/\/[a-z0-9.-]+(?::[0-9]+)?$/;
 
 function sourceProblem(entry: unknown, seen: ReadonlySet<string>): string | undefined {
   if (typeof entry !== "string") {
@@ -45,7 +48,7 @@ function sourceProblem(entry: unknown, seen: ReadonlySet<string>): string | unde
     origin = undefined;
   }
   if (origin === undefined || !SOURCE_SHAPE.test(origin)) {
-    return "is not a bare https origin (scheme, host and optional non-default port, lower case, with no path, query, fragment, userinfo or wildcard)";
+    return "is not a bare https origin (scheme, a host name or IPv4 address and optional non-default port, lower case, with no path, query, fragment, userinfo, wildcard or IPv6 literal)";
   }
   return seen.has(origin) ? "is listed twice" : undefined;
 }

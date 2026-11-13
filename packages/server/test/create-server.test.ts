@@ -105,6 +105,8 @@ describe("createServer content security", () => {
     ["a semicolon inside the host", { scriptSources: ["https://a;b.example"] }],
     ["an upper-case origin", { scriptSources: ["HTTPS://A.EXAMPLE"] }],
     ["an explicit default port", { scriptSources: ["https://a.example:443"] }],
+    ["an IPv6 literal", { connectSources: ["https://[2001:db8::1]"] }],
+    ["an IPv6 literal with a port", { scriptSources: ["https://[2001:db8::1]:8443"] }],
     ["surrounding whitespace", { connectSources: [" https://a.example"] }],
     ["an empty entry", { connectSources: [""] }],
     ["a non-string entry", { scriptSources: [42 as unknown as string] }],
@@ -136,10 +138,30 @@ describe("createServer content security", () => {
     expect(error.message).not.toContain("https://ok.example");
   });
 
-  it("accepts the same origin in both lists, a port and an IPv6 host", async () => {
-    const { policies } = await policiesOf({ scriptSources: ["https://a.example:8443"], connectSources: ["https://a.example:8443", "https://[2001:db8::1]"] });
+  it("names an IPv6 literal it refuses, before any pool opens", () => {
+    const database = fakeDatabase();
+    const error = failure(() =>
+      createServer({
+        config: serverConfig(),
+        adapters: adapters(),
+        modules: [],
+        openApiDocument: documentOf([]),
+        migrations: [],
+        logger: recordingLogger(),
+        database,
+        contentSecurity: { connectSources: ["https://ok.example", "https://[2001:db8::1]"] },
+      }),
+    );
+    expect(error.code).toBe("invalid_content_security");
+    expect(error.message).toContain("https://[2001:db8::1]");
+    expect(error.message).not.toContain("https://ok.example");
+    expect(database.closed.count).toBe(0);
+  });
+
+  it("accepts the same origin in both lists, a port and an IPv4 host", async () => {
+    const { policies } = await policiesOf({ scriptSources: ["https://a.example:8443"], connectSources: ["https://a.example:8443", "https://192.0.2.1"] });
     expect(policies[0]).toContain("script-src 'self' https://a.example:8443;");
-    expect(policies[0]).toContain("connect-src 'self' https://a.example:8443 https://[2001:db8::1];");
+    expect(policies[0]).toContain("connect-src 'self' https://a.example:8443 https://192.0.2.1;");
   });
 });
 
