@@ -134,7 +134,7 @@ describe("assertValidExtensions", () => {
 });
 
 describe("the slot names", () => {
-  it("are the ten of doc 03, in its order", () => {
+  it("are the eleven of doc 03, in its order", () => {
     expect(SLOT_NAMES).toEqual([
       "sidebar.workspacePlan",
       "sidebar.footer",
@@ -146,6 +146,7 @@ describe("the slot names", () => {
       "dashboard.top",
       "auth.footer",
       "auth.register.footer",
+      "noWorkspace.footer",
     ]);
   });
 

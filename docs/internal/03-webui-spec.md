@@ -196,6 +196,7 @@ Slots CE's shell renders; with no extensions they render nothing. Cloud fills th
 | `dashboard.top` | Above the dashboard counts |
 | `auth.footer` | Footer of the authentication card on every auth page, beside the language switch (legal links on Cloud) |
 | `auth.register.footer` | Under the registration form, above its submit button (text; terms acceptance is declared as acknowledgements, §1.3, not through a slot) |
+| `noWorkspace.footer` | Foot of the `/no-workspace` page, which sits outside the app shell and the authentication card (§1.6; legal links on Cloud) |
 
 ---
 
@@ -235,7 +236,7 @@ Shows workspace name, inviter, role. Branches per doc 02 §3.4: signed in as the
 
 ### 1.6 `/no-workspace`
 
-For accounts with no membership: create a workspace (where allowed) or "Waiting for an invitation" with the account email shown and a sign-out link. An instance admin also gets a link to `/admin`. An account that acts in no workspace can open only the account pages (`/settings/account/*`) and the admin area (`/admin/*`, still 403 for anyone who is not an instance admin); every other page sends it here.
+For accounts with no membership: create a workspace (where allowed) or "Waiting for an invitation" with the account email shown and a sign-out link. An instance admin also gets a link to `/admin`. The page ends with the slot `noWorkspace.footer`, in a footer element rendered only when an extension fills it. An account that acts in no workspace can open only the account pages (`/settings/account/*`) and the admin area (`/admin/*`, still 403 for anyone who is not an instance admin); every other page sends it here.
 
 **Components:** `empty-state`; `form-overlay` for create.
 

@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
-import { createWebApp } from "../src/index.ts";
+import { createWebApp, type WebExtension } from "../src/index.ts";
 import { ACCOUNT_BODY, ACTIVE_WORKSPACE_PATH, PRODUCT_NAME, WORKSPACES_PATH, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 import { HOME, LOGOUT_PATH, NEW_ID, stubWorkspaceServer } from "./workspace-server.ts";
 
@@ -18,9 +18,9 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-async function mountApp(): Promise<void> {
-  const App = createWebApp({ extensions: [] });
-  await renderApp(<App />);
+async function mountApp(extensions: readonly WebExtension[] = []): Promise<HTMLElement> {
+  const App = createWebApp({ extensions });
+  return (await renderApp(<App />)).container;
 }
 
 const noWorkspace = { workspaces: [], active: null } as const;
@@ -224,5 +224,41 @@ describe("the guards around /no-workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, 
 
     expect(await screen.findByRole("heading", { level: 1, name: `Welcome to ${PRODUCT_NAME}` })).toBeTruthy();
     expect(window.location.pathname).toBe("/");
+  });
+});
+
+const LEGAL_LINKS: WebExtension = {
+  id: "legal",
+  slots: {
+    "noWorkspace.footer": () => (
+      <nav aria-label="Legal">
+        <a href="/imprint">Imprint</a>
+      </nav>
+    ),
+  },
+};
+
+const footerOf = (container: HTMLElement): HTMLElement | null => container.querySelector("[data-slot='no-workspace-footer']");
+
+describe("noWorkspace.footer", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  it("shows an extension's links at the foot of the page, after its content", async () => {
+    stubWorkspaceServer({ ...noWorkspace });
+    const container = await mountApp([LEGAL_LINKS]);
+
+    const heading = await screen.findByRole("heading", { level: 1, name: "Waiting for an invitation" });
+    const footer = footerOf(container);
+    expect(footer).not.toBeNull();
+    expect(within(footer as HTMLElement).getByRole("link", { name: "Imprint" }).getAttribute("href")).toBe("/imprint");
+    expect(heading.compareDocumentPosition(footer as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("leaves the page without a footer when no extension fills it", async () => {
+    stubWorkspaceServer({ ...noWorkspace });
+    const container = await mountApp([{ id: "other" }]);
+
+    await screen.findByRole("heading", { level: 1, name: "Waiting for an invitation" });
+    expect(footerOf(container)).toBeNull();
+    expect(container.querySelector("footer")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Imprint" })).toBeNull();
   });
 });
