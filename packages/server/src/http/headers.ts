@@ -13,23 +13,84 @@ const NO_STORE = "no-store";
 const PROBLEM_CONTENT_TYPE = "application/problem+json";
 const CORS_HEADER_PREFIX = "access-control-";
 
-// Scripts load from the app's own origin only; no source allows an inline script
-// or `eval`, and a page that needs an inline script takes a hash or a nonce
-// (doc 01 section 4 step 2). Styles load from the app's own origin too: there is
-// no `style-src`, so no inline `<style>` element and no `style` attribute. Favicons
-// come from the app's own proxy.
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "img-src 'self' data:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
+// Scripts load from the app's own origin only, and so do connections (`default-src`);
+// no source allows an inline script or `eval`, and a page that needs an inline script
+// takes a hash or a nonce (doc 01 section 4 step 2). Styles load from the app's own
+// origin too: there is no `style-src`, so no inline `<style>` element and no `style`
+// attribute. Favicons come from the app's own proxy. A composition may add `https`
+// origins to `script-src` and `connect-src` (`ContentSecurityOptions`) and nothing else.
+const SELF = "'self'";
 
-/** What every response carries. */
+/** The `https` origins a composition adds to the policy; each is a bare origin, as `new URL(entry).origin` writes it. */
+export interface ContentSecurityOptions {
+  /** Origins script may load from, after `'self'`. */
+  readonly scriptSources?: readonly string[];
+  /** Origins script may connect to (fetch, XHR, WebSocket, beacons), after `'self'`: a `connect-src` directive is added. */
+  readonly connectSources?: readonly string[];
+}
+
+// What a CSP host source is made of, once the entry has round-tripped through `URL`:
+// the serialiser also leaves `*`, quotes, `;` and `,` in a host, and each would end or extend the directive.
+const SOURCE_SHAPE = /^https:\/\/[a-z0-9.:[\]-]+$/;
+
+function sourceProblem(entry: unknown, seen: ReadonlySet<string>): string | undefined {
+  if (typeof entry !== "string") {
+    return "is not a string";
+  }
+  let origin: string | undefined;
+  try {
+    const url = new URL(entry);
+    origin = url.protocol === "https:" && url.origin === entry ? entry : undefined;
+  } catch {
+    origin = undefined;
+  }
+  if (origin === undefined || !SOURCE_SHAPE.test(origin)) {
+    return "is not a bare https origin (scheme, host and optional non-default port, lower case, with no path, query, fragment, userinfo or wildcard)";
+  }
+  return seen.has(origin) ? "is listed twice" : undefined;
+}
+
+/** What is wrong with the options, naming the entry, or `undefined` when they hold only distinct `https` origins. */
+export function contentSecurityProblem(options: ContentSecurityOptions): string | undefined {
+  for (const name of ["scriptSources", "connectSources"] as const) {
+    const list: unknown = options[name];
+    if (list === undefined) {
+      continue;
+    }
+    if (!Array.isArray(list)) {
+      return `contentSecurity.${name} must be a list of https origins`;
+    }
+    const seen = new Set<string>();
+    for (const entry of list as unknown[]) {
+      const problem = sourceProblem(entry, seen);
+      if (problem !== undefined) {
+        return `contentSecurity.${name} entry ${JSON.stringify(entry)} ${problem}`;
+      }
+      seen.add(entry as string);
+    }
+  }
+  return undefined;
+}
+
+function contentSecurityPolicy(options: ContentSecurityOptions): string {
+  const problem = contentSecurityProblem(options);
+  if (problem !== undefined) {
+    throw new Error(problem);
+  }
+  const connect = options.connectSources ?? [];
+  return [
+    "default-src 'self'",
+    ["script-src", SELF, ...(options.scriptSources ?? [])].join(" "),
+    "img-src 'self' data:",
+    ...(connect.length === 0 ? [] : [["connect-src", SELF, ...connect].join(" ")]),
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+/** What every response carries besides the `Content-Security-Policy`. */
 const BASE_HEADERS: Readonly<Record<string, string>> = {
-  "content-security-policy": CONTENT_SECURITY_POLICY,
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-content-type-options": "nosniff",
   "cross-origin-opener-policy": "same-origin",
@@ -110,6 +171,8 @@ function appliesTo(rule: HeaderRule, path: string): boolean {
 export interface SecurityHeadersOptions {
   /** `APP_ORIGIN`: the scheme decides whether `Strict-Transport-Security` is sent. */
   readonly appOrigin: string;
+  /** Origins added to the `Content-Security-Policy`; by default none. */
+  readonly contentSecurity?: ContentSecurityOptions;
 }
 
 export interface SecurityHeaders {
@@ -119,7 +182,8 @@ export interface SecurityHeaders {
   apply(context: ChainContext): void;
 }
 
-export function createSecurityHeaders({ appOrigin }: SecurityHeadersOptions): SecurityHeaders {
+export function createSecurityHeaders({ appOrigin, contentSecurity = {} }: SecurityHeadersOptions): SecurityHeaders {
+  const policy = contentSecurityPolicy(contentSecurity);
   const transport: Readonly<Record<string, string>> =
     new URL(appOrigin).protocol === "https:" ? { "strict-transport-security": STRICT_TRANSPORT_SECURITY } : {};
 
@@ -135,7 +199,7 @@ export function createSecurityHeaders({ appOrigin }: SecurityHeadersOptions): Se
       }
     }
 
-    const wanted: Record<string, string> = { ...BASE_HEADERS, ...transport };
+    const wanted: Record<string, string> = { ...BASE_HEADERS, "content-security-policy": policy, ...transport };
     for (const rule of HEADER_RULES) {
       if (appliesTo(rule, path)) {
         Object.assign(wanted, rule.headers);

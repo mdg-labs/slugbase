@@ -9,6 +9,7 @@ import {
   type ServerModule,
 } from "../src/create-server.ts";
 import { HookResult } from "../src/hooks/index.ts";
+import type { ContentSecurityOptions } from "../src/http/headers.ts";
 import { defineJob, defineSchedule } from "../src/worker/index.ts";
 import { adapters, fakeDatabase, operation, recordingLogger, serverConfig, documentFor, documentOf } from "./support.ts";
 
@@ -18,7 +19,7 @@ function job(name: string) {
   return defineJob({ name, payload: noPayload, handle: () => Promise.resolve() });
 }
 
-function compose(modules: readonly ServerModule[] = [], overrides: { adapters?: Adapters } = {}) {
+function compose(modules: readonly ServerModule[] = [], overrides: { adapters?: Adapters; contentSecurity?: ContentSecurityOptions } = {}) {
   const logger = recordingLogger();
   const database = fakeDatabase();
   const server = createServer({
@@ -29,6 +30,7 @@ function compose(modules: readonly ServerModule[] = [], overrides: { adapters?: 
     migrations: [],
     logger,
     database,
+    ...(overrides.contentSecurity === undefined ? {} : { contentSecurity: overrides.contentSecurity }),
   });
   return { server, logger, database };
 }
@@ -50,6 +52,95 @@ const pingModule = (name = "ping", path = "/api/v1/ping", operationId = "ping"):
   register: () => ({
     routes: [{ operation: operation("get", path, operationId), handler: () => Response.json({ pong: name }) }],
   }),
+});
+
+const DEFAULT_POLICY = "default-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+
+describe("createServer content security", () => {
+  const policiesOf = async (contentSecurity?: ContentSecurityOptions) => {
+    const { server } = compose([], contentSecurity === undefined ? {} : { contentSecurity });
+    const health = await server.fetch(new Request("http://localhost/health"));
+    const unknown = await server.fetch(new Request("http://localhost/api/v1/nothing-here"));
+    const go = await server.fetch(new Request("http://localhost/go/docs"));
+    return {
+      statuses: [health.status, unknown.status],
+      policies: [health, unknown, go].map((response) => response.headers.get("content-security-policy")),
+    };
+  };
+
+  it.each<[string, ContentSecurityOptions | undefined]>([
+    ["absent", undefined],
+    ["empty", {}],
+    ["two empty lists", { scriptSources: [], connectSources: [] }],
+  ])("sends the default policy byte for byte when the option is %s", async (_name, option) => {
+    const { policies } = await policiesOf(option);
+    expect(policies).toEqual([DEFAULT_POLICY, DEFAULT_POLICY, DEFAULT_POLICY]);
+  });
+
+  it("puts a configured script origin in script-src and a connect origin in connect-src of every answer", async () => {
+    const wanted =
+      "default-src 'self'; script-src 'self' https://cdn.example; img-src 'self' data:; connect-src 'self' https://ingest.example:8443; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+    const { statuses, policies } = await policiesOf({
+      scriptSources: ["https://cdn.example"],
+      connectSources: ["https://ingest.example:8443"],
+    });
+    expect(statuses).toEqual([200, 404]);
+    expect(policies).toEqual([wanted, wanted, wanted]);
+  });
+
+  it.each<[string, ContentSecurityOptions]>([
+    ["a plain-http origin", { scriptSources: ["http://a.example"] }],
+    ["a trailing slash", { scriptSources: ["https://a.example/"] }],
+    ["a path", { connectSources: ["https://a.example/x"] }],
+    ["a query", { scriptSources: ["https://a.example?q"] }],
+    ["a fragment", { scriptSources: ["https://a.example#f"] }],
+    ["userinfo", { scriptSources: ["https://user@a.example"] }],
+    ["a wildcard host", { scriptSources: ["https://*.example"] }],
+    ["a wildcard as the only source", { connectSources: ["*"] }],
+    ["a scheme-only source", { scriptSources: ["https:"] }],
+    ["a quoted keyword", { scriptSources: ["'unsafe-inline'"] }],
+    ["a quoted keyword in connect", { connectSources: ["'self'"] }],
+    ["a smuggled directive", { scriptSources: ["https://a.example; script-src *"] }],
+    ["a comma", { scriptSources: ["https://a.example,https://b.example"] }],
+    ["a semicolon inside the host", { scriptSources: ["https://a;b.example"] }],
+    ["an upper-case origin", { scriptSources: ["HTTPS://A.EXAMPLE"] }],
+    ["an explicit default port", { scriptSources: ["https://a.example:443"] }],
+    ["surrounding whitespace", { connectSources: [" https://a.example"] }],
+    ["an empty entry", { connectSources: [""] }],
+    ["a non-string entry", { scriptSources: [42 as unknown as string] }],
+    ["a duplicate script origin", { scriptSources: ["https://a.example", "https://a.example"] }],
+    ["a duplicate connect origin", { connectSources: ["https://a.example:8443", "https://a.example:8443"] }],
+    ["a list that is not a list", { scriptSources: "https://a.example" as unknown as readonly string[] }],
+  ])("refuses %s with invalid_content_security before anything is composed", (_name, contentSecurity) => {
+    const database = fakeDatabase();
+    const error = failure(() =>
+      createServer({
+        config: serverConfig(),
+        adapters: adapters(),
+        modules: [],
+        openApiDocument: documentOf([]),
+        migrations: [],
+        logger: recordingLogger(),
+        database,
+        contentSecurity,
+      }),
+    );
+    expect(error.code).toBe("invalid_content_security");
+    expect(error.message).toContain("contentSecurity");
+    expect(database.closed.count).toBe(0);
+  });
+
+  it("names the offending entry", () => {
+    const error = failure(() => compose([], { contentSecurity: { scriptSources: ["https://ok.example", "https://bad.example/x"] } }));
+    expect(error.message).toContain("https://bad.example/x");
+    expect(error.message).not.toContain("https://ok.example");
+  });
+
+  it("accepts the same origin in both lists, a port and an IPv6 host", async () => {
+    const { policies } = await policiesOf({ scriptSources: ["https://a.example:8443"], connectSources: ["https://a.example:8443", "https://[2001:db8::1]"] });
+    expect(policies[0]).toContain("script-src 'self' https://a.example:8443;");
+    expect(policies[0]).toContain("connect-src 'self' https://a.example:8443 https://[2001:db8::1];");
+  });
 });
 
 describe("createServer", () => {

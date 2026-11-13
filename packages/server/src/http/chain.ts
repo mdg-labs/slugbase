@@ -11,7 +11,7 @@ import { createAuthentication, type Authenticator, type Principal } from "./auth
 import { createAuthorization, type EntitlementCheck, type EntitlementUpgradeCheck, type SecondFactorCheck } from "./authorize.ts";
 import { bodyLimits } from "./body-limits.ts";
 import { createCrossSiteProtection } from "./cross-site.ts";
-import { createSecurityHeaders } from "./headers.ts";
+import { createSecurityHeaders, type ContentSecurityOptions } from "./headers.ts";
 import { createIdempotency } from "./idempotency.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRateLimiting, type RateLimitState, type TakeBucketLimit, type TakeEmailLimit } from "./rate-limit.ts";
@@ -155,6 +155,8 @@ export interface ChainDependencies {
   readonly trustedProxyHops: number;
   /** `APP_ORIGIN`: an `https` origin turns on `Strict-Transport-Security`. */
   readonly appOrigin: string;
+  /** Origins a composition adds to the `Content-Security-Policy` (stage 2); by default none. */
+  readonly contentSecurity?: ContentSecurityOptions;
   /** Verifies the bot-protection solution of a `marketing-form` request (stage 5). */
   readonly challenge: ChallengePort;
   /** Receives every unexpected failure (stage 11). */
@@ -301,6 +303,7 @@ export function installChain(
     routes,
     trustedProxyHops,
     appOrigin,
+    contentSecurity,
     challenge,
     errors,
     rateLimit,
@@ -318,7 +321,7 @@ export function installChain(
     now,
   } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
-  const securityHeaders = createSecurityHeaders({ appOrigin });
+  const securityHeaders = createSecurityHeaders({ appOrigin, ...(contentSecurity === undefined ? {} : { contentSecurity }) });
   const rateLimiting = createRateLimiting({
     limiter: rateLimit,
     registry: rateLimits,

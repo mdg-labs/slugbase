@@ -130,7 +130,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "invalid_subscriber" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "invalid_subscriber" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "invalid_content_security" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -159,6 +159,12 @@ export interface ConfigIssue {
 
 // @public
 export type ConfigOf<Schema extends EnvSchema> = Schema extends EnvSchema<infer Shape, infer Collected> ? z.infer<z.ZodObject<Shape>> & Collected : never;
+
+// @public
+export interface ContentSecurityOptions {
+    readonly connectSources?: readonly string[];
+    readonly scriptSources?: readonly string[];
+}
 
 // @public
 export interface ContractDocument {
@@ -200,6 +206,7 @@ export interface CreateServerOptions {
     readonly buildInfo?: BuildInfo;
     // (undocumented)
     readonly config: ServerConfig;
+    readonly contentSecurity?: ContentSecurityOptions;
     readonly database?: Database;
     readonly entitlements?: EntitlementCheck;
     readonly hookTimeoutMs?: number;
