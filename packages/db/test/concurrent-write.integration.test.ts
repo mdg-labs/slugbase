@@ -74,4 +74,33 @@ describe("withUncommittedWrite", () => {
     expect(rows.map((row) => row.note)).toEqual(["clash"]);
     await expect(note(held.id)).resolves.toBe("clash");
   });
+
+  it("fails when the call stays pending past the deadline without waiting on the held write", async () => {
+    const held = holdRow();
+
+    // The call only returns once it finds the held write committed, which the helper does after the deadline: a helper that took the deadline for a wait would pass.
+    const findsCommitted = async (): Promise<string | undefined> => {
+      for (let attempt = 0; attempt < 1_000; attempt += 1) {
+        const rows = await db.app<{ note: string }[]>`SELECT note FROM concurrent_write_probe WHERE id = ${held.id}`;
+        if (rows[0] !== undefined) {
+          return rows[0].note;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      return undefined;
+    };
+
+    await expect(withUncommittedWrite(db, held.write, findsCommitted, { deadlineMs: 300 })).rejects.toThrow(/did not exercise the race/);
+
+    // The held write was still released and committed.
+    await expect(note(held.id)).resolves.toBe("held");
+  }, 60_000);
+
+  it("fails when the call finishes without waiting on the held write", async () => {
+    const held = holdRow();
+
+    await expect(withUncommittedWrite(db, held.write, () => Promise.resolve("done"))).rejects.toThrow(/finished without waiting/);
+
+    await expect(note(held.id)).resolves.toBe("held");
+  });
 });

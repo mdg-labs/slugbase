@@ -9,13 +9,14 @@ const POLL_MS = 25;
  * Runs `call` while another transaction holds an uncommitted write, and commits that transaction once `call` is waiting on it: the write the call
  * could not see when it checked is then committed under it, which is what a writer that takes none of the call's locks does. The wait is found as a
  * session of the test database waiting for another transaction to end, so nothing else may wait on one in that database meanwhile.
- * When `commit` is false the held transaction is rolled back instead.
+ * When `commit` is false the held transaction is rolled back instead. The race counts as exercised only when that wait was seen within `deadlineMs`: a call that
+ * finishes first, or is still running unseen waiting when the deadline passes, fails the test, so a call delayed by load cannot pass by finding the write committed.
  */
 export async function withUncommittedWrite<T>(
   database: TestDatabase,
   write: (tx: postgres.TransactionSql) => Promise<unknown>,
   call: () => Promise<T>,
-  options: { commit?: boolean } = {},
+  options: { commit?: boolean; deadlineMs?: number } = {},
 ): Promise<T> {
   let held = (): void => undefined;
   let written = (): void => undefined;
@@ -39,21 +40,25 @@ export async function withUncommittedWrite<T>(
   await Promise.race([writtenSignal, holder]);
   let outcome: Promise<{ readonly value: T } | { readonly error: unknown }> | undefined;
   let failure: { readonly error: unknown } | undefined;
-  let blocked = false;
+  let exercised = false;
+  let settledFirst = false;
   try {
     outcome = call().then(
       (value) => ({ value }) as const,
       (error: unknown) => ({ error }) as const,
     );
-    const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+    const deadline = Date.now() + (options.deadlineMs ?? BLOCKED_DEADLINE_MS);
     const state = { settled: false };
     void outcome.then(() => {
       state.settled = true;
     });
-    while (!state.settled && Date.now() < deadline && !(await waiting(database))) {
-      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    while (!exercised && !state.settled && Date.now() < deadline) {
+      exercised = await waiting(database);
+      if (!exercised) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+      }
     }
-    blocked = !state.settled;
+    settledFirst = state.settled;
   } catch (error) {
     failure = { error };
   }
@@ -68,8 +73,12 @@ export async function withUncommittedWrite<T>(
   if (failure !== undefined) {
     throw failure.error;
   }
-  if (!blocked) {
-    throw new Error("the call finished without waiting on the held write, so the test did not exercise the race");
+  if (!exercised) {
+    throw new Error(
+      settledFirst
+        ? "the call finished without waiting on the held write, so the test did not exercise the race"
+        : "the call was not seen waiting on the held write before the deadline, so the test did not exercise the race",
+    );
   }
   if (result === undefined) {
     throw new Error("the call was never started");
