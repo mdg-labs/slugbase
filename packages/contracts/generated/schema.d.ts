@@ -3616,7 +3616,7 @@ export interface components {
              * @description Stable machine identifier
              * @enum {string}
              */
-            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "account_export_only" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
+            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "preference_managed" | "cross_site_request" | "token_scope" | "account_export_only" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
             /** @description English explanation; may contain user-supplied values */
             detail: string;
             /** @description Per-field errors */
@@ -10311,7 +10311,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself */
+            /** @description The request did not come from the application itself (cross_site_request), or the deployment manages the analytics consent choice and refused this change (preference_managed, with the field analyticsConsent in errors); nothing is written, none of the other fields of the request included */
             403: {
                 headers: {
                     [name: string]: unknown;

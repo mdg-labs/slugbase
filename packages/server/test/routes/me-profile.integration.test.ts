@@ -4,7 +4,8 @@ import { ACCENT_PRESETS as CONTRACT_ACCENT_PRESETS } from "@slugbase/contracts";
 import { ACCENT_PRESETS as DB_ACCENT_PRESETS, type AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
-import { createServer, type Authenticator, type Server } from "../../src/create-server.ts";
+import { createServer, type Authenticator, type Server, type ServerModule } from "../../src/create-server.ts";
+import { HookResult, type AnalyticsConsentPolicyInput, type ServerHooks } from "../../src/hooks/index.ts";
 import { seedAccount, seedMembership, seedWorkspace, sessionRows, storeFor, type SeededAccount } from "../auth/support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
@@ -45,16 +46,17 @@ interface World {
   readonly origin: string;
 }
 
-function serve(): World {
+function serve(modules: readonly ServerModule[] = [], hookTimeoutMs?: number): World {
   const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()) });
   const server = createServer({
     config,
     adapters: { ...adapters(config), tenantResolver: createAccountOnlyTenantResolver() },
-    modules: [{ name: "tokens", register: () => ({ routes: [], authenticators: [bearer] }) }],
+    modules: [{ name: "tokens", register: () => ({ routes: [], authenticators: [bearer] }) }, ...modules],
     migrations: [],
     logger: recordingLogger(),
     database: tenantDatabase(database()),
     authStore: store,
+    ...(hookTimeoutMs === undefined ? {} : { hookTimeoutMs }),
   });
   return { server, origin: config.APP_ORIGIN };
 }
@@ -462,5 +464,118 @@ describe("PATCH /api/v1/me", () => {
     const response = await patch(world, { as: `Bearer token:${ada.id}:${workspace}`, body: { displayName: "By token" } });
     expect(response.status).toBe(403);
     expect(await snapshot(ada.id)).toEqual(before);
+  });
+});
+
+describe("PATCH /api/v1/me with an analytics consent policy", () => {
+  function policyModule(hook: NonNullable<ServerHooks["analyticsConsentPolicy"]>): { readonly module: ServerModule; readonly seen: AnalyticsConsentPolicyInput[] } {
+    const seen: AnalyticsConsentPolicyInput[] = [];
+    return {
+      module: {
+        name: "consent-proof",
+        hooks: {
+          analyticsConsentPolicy: (input) => {
+            seen.push(input);
+            return hook(input);
+          },
+        },
+        register: () => ({}),
+      },
+      seen,
+    };
+  }
+
+  it("refuses the field with 403 preference_managed and writes no field of the request", async () => {
+    const { module, seen } = policyModule(() => HookResult.refuse("managed_elsewhere"));
+    const world = serve([module]);
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+    const before = await snapshot(ada.id);
+
+    const response = await patch(world, { as: browser, body: { analyticsConsent: "granted", theme: "dark" } });
+
+    expect(response.status).toBe(403);
+    expect(await problem(response)).toMatchObject({
+      code: "preference_managed",
+      errors: [{ path: "analyticsConsent", code: "preference_managed" }],
+    });
+    expect(seen).toEqual([{ accountId: ada.id, analyticsConsent: "granted", credential: "session" }]);
+    expect(await snapshot(ada.id)).toEqual(before);
+    expect((await me(world, browser)).account).toMatchObject({ theme: "system", analyticsConsent: "unset" });
+  });
+
+  it("answers the same code whatever reason the hook gave", async () => {
+    for (const reason of ["a", "managed_elsewhere", "anything else"]) {
+      const { module } = policyModule(() => HookResult.refuse(reason));
+      const world = serve([module]);
+      const browser = await signIn(world, await seedAccount(database()));
+      const response = await patch(world, { as: browser, body: { analyticsConsent: "denied" } });
+      expect(response.status, reason).toBe(403);
+      expect((await problem(response)).code, reason).toBe("preference_managed");
+    }
+  });
+
+  it("applies a body without the field and never consults the hook", async () => {
+    const { module, seen } = policyModule(() => HookResult.refuse("managed_elsewhere"));
+    const world = serve([module]);
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+
+    const response = await patch(world, { as: browser, body: { theme: "dark", displayName: "Ada" } });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ theme: "dark", displayName: "Ada", analyticsConsent: "unset" });
+    expect(await snapshot(ada.id)).toMatchObject({ theme: "dark", display_name: "Ada", analytics_consent: "unset", consent_at: null });
+    expect(seen).toHaveLength(0);
+  });
+
+  it("does not consult the hook for a body that fails validation", async () => {
+    const { module, seen } = policyModule(() => HookResult.refuse("managed_elsewhere"));
+    const world = serve([module]);
+    const browser = await signIn(world, await seedAccount(database()));
+    const response = await patch(world, { as: browser, body: { analyticsConsent: "maybe" } });
+    expect(response.status).toBe(422);
+    expect(seen).toHaveLength(0);
+  });
+
+  it("writes the choice and its time when the hook allows", async () => {
+    const { module, seen } = policyModule(() => HookResult.allow());
+    const world = serve([module]);
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+
+    const response = await patch(world, { as: browser, body: { analyticsConsent: "granted", theme: "dark" } });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ analyticsConsent: "granted", theme: "dark" });
+    expect(await snapshot(ada.id)).toMatchObject({ analytics_consent: "granted", theme: "dark", consent_at: expect.any(Date) as Date });
+    expect(seen).toHaveLength(1);
+  });
+
+  it("is 503 unavailable and writes nothing when the hook throws, hangs or answers outside its contract", async () => {
+    const failing: [string, NonNullable<ServerHooks["analyticsConsentPolicy"]>][] = [
+      [
+        "throws",
+        () => {
+          throw new Error("down");
+        },
+      ],
+      ["hangs", () => new Promise(() => undefined)],
+      ["refuses with an empty reason", () => HookResult.refuse("")],
+      ["answers nothing", () => undefined as never],
+    ];
+    for (const [name, hook] of failing) {
+      const { module } = policyModule(hook);
+      const world = serve([module], 50);
+      const ada = await seedAccount(database());
+      const browser = await signIn(world, ada);
+      const before = await snapshot(ada.id);
+
+      const response = await patch(world, { as: browser, body: { analyticsConsent: "granted", theme: "dark" } });
+
+      expect(response.status, name).toBe(503);
+      expect((await problem(response)).code, name).toBe("unavailable");
+      expect(await snapshot(ada.id), name).toEqual(before);
+    }
   });
 });

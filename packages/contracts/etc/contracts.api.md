@@ -2053,7 +2053,7 @@ export interface ComponentTypes {
             [key: string]: unknown;
         };
         Problem: {
-            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "account_export_only" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
+            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "preference_managed" | "cross_site_request" | "token_scope" | "account_export_only" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
             detail: string;
             errors?: ComponentTypes["schemas"]["ProblemFieldError"][];
             requestId: string;
@@ -19176,6 +19176,9 @@ export const PROBLEM_CATALOG: readonly [{
     readonly code: "registration_refused";
 }, {
     readonly status: 403;
+    readonly code: "preference_managed";
+}, {
+    readonly status: 403;
     readonly code: "cross_site_request";
 }, {
     readonly status: 403;
@@ -19295,6 +19298,7 @@ export const ProblemCodeSchema: z.ZodEnum<{
     reauth_required: "reauth_required";
     forbidden: "forbidden";
     registration_refused: "registration_refused";
+    preference_managed: "preference_managed";
     cross_site_request: "cross_site_request";
     token_scope: "token_scope";
     account_export_only: "account_export_only";
@@ -19366,6 +19370,7 @@ export const ProblemSchema: z.ZodObject<{
         reauth_required: "reauth_required";
         forbidden: "forbidden";
         registration_refused: "registration_refused";
+        preference_managed: "preference_managed";
         cross_site_request: "cross_site_request";
         token_scope: "token_scope";
         account_export_only: "account_export_only";

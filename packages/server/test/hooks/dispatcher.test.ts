@@ -2,11 +2,13 @@ import type { ClientErrorReportPort, SeatEntitlements } from "@slugbase/core";
 import { describe, expect, it } from "vitest";
 import { ProblemError } from "../../src/http/problem.ts";
 import {
+  ANALYTICS_CONSENT_REFUSAL_CODE,
   DELETION_REFUSAL_CODES,
   REGISTRATION_REFUSAL_CODE,
   HookResult,
   createHookDispatcher,
   invalidHookRefusals,
+  type AnalyticsConsentPolicyInput,
   type DeletionGuardInput,
   type HookRegistration,
   type ServerHooks,
@@ -15,6 +17,7 @@ import { adapters, recordingLogger, unlimitedSeats } from "../support.ts";
 
 const seat = { workspaceId: "w1", accountId: "a1", invitationId: "i1" } as const;
 const workspaceDeletion: DeletionGuardInput = { kind: "workspace", workspaceId: "w1", accountId: "a1", requestedBy: "member" };
+const consent: AnalyticsConsentPolicyInput = { accountId: "a1", analyticsConsent: "granted", credential: "session" };
 const registration = { email: "someone@example.com", path: "self-registration", acknowledgements: [] } as const;
 
 const module = (name: string, hooks: ServerHooks, refusals: HookRegistration["refusals"] = { deletionGuard: ["billing_active"] }): HookRegistration => ({
@@ -58,6 +61,7 @@ describe("with no module registered", () => {
   it("allows a deletion and a registration", async () => {
     await expect(hooks.deletionGuard(workspaceDeletion)).resolves.toEqual({ outcome: "allow" });
     await expect(hooks.registrationPolicy(registration)).resolves.toEqual({ outcome: "allow" });
+    await expect(hooks.analyticsConsentPolicy(consent)).resolves.toEqual({ outcome: "allow" });
   });
 
   it("supplies no DSN", async () => {
@@ -280,6 +284,63 @@ describe("the registration policy", () => {
     ];
     for (const hooks of cases) {
       expect((await failure(dispatcher([module("m", hooks)]).hooks.registrationPolicy(registration))).code).toBe("unavailable");
+    }
+  });
+});
+
+describe("the analytics consent policy", () => {
+  it("collapses every refusal reason to preference_managed", async () => {
+    expect(ANALYTICS_CONSENT_REFUSAL_CODE).toBe("preference_managed");
+    for (const reason of ["managed", "recorded_elsewhere", "anything else"]) {
+      const refuse = module("refuse", { analyticsConsentPolicy: () => HookResult.refuse(reason) });
+      await expect(dispatcher([refuse]).hooks.analyticsConsentPolicy(consent)).resolves.toEqual({
+        outcome: "refuse",
+        code: "preference_managed",
+      });
+    }
+  });
+
+  it("refuses when one of two modules refuses, whichever comes first", async () => {
+    const allow = module("allow", { analyticsConsentPolicy: () => HookResult.allow() });
+    const refuse = module("refuse", { analyticsConsentPolicy: () => Promise.resolve(HookResult.refuse("managed")) });
+    for (const modules of [[allow, refuse], [refuse, allow]]) {
+      expect((await dispatcher(modules).hooks.analyticsConsentPolicy(consent)).outcome).toBe("refuse");
+    }
+  });
+
+  it("allows when every module allows, and ignores a module that registers other hooks only", async () => {
+    const allow = module("allow", { analyticsConsentPolicy: () => HookResult.allow() });
+    const other = module("other", { registrationPolicy: () => HookResult.refuse("blocked") });
+    await expect(dispatcher([allow, other]).hooks.analyticsConsentPolicy(consent)).resolves.toEqual({ outcome: "allow" });
+  });
+
+  it("passes each hook a frozen copy of the plain values of the request", async () => {
+    const received: unknown[] = [];
+    const spy = module("spy", {
+      analyticsConsentPolicy: (input) => {
+        received.push(input);
+        return HookResult.allow();
+      },
+    });
+    await dispatcher([spy]).hooks.analyticsConsentPolicy(consent);
+    expect(received[0]).toEqual(consent);
+    expect(received[0]).not.toBe(consent);
+    expect(Object.isFrozen(received[0])).toBe(true);
+  });
+
+  it("fails closed on a throw, a hang and an unusable answer", async () => {
+    const cases: ServerHooks[] = [
+      {
+        analyticsConsentPolicy: () => {
+          throw new Error("x");
+        },
+      },
+      { analyticsConsentPolicy: hanging },
+      { analyticsConsentPolicy: () => HookResult.refuse("") },
+      { analyticsConsentPolicy: () => undefined as never },
+    ];
+    for (const hooks of cases) {
+      expect((await failure(dispatcher([module("m", hooks)]).hooks.analyticsConsentPolicy(consent))).code).toBe("unavailable");
     }
   });
 });

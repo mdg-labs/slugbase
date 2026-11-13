@@ -475,7 +475,7 @@ describe("the hooks of modules", () => {
   });
 
   it("refuses to compose a module whose hooks are not functions or are not declared by CE", () => {
-    const bad: unknown[] = [{ seatCheck: "yes" }, { archive: () => undefined }, "hooks", null];
+    const bad: unknown[] = [{ seatCheck: "yes" }, { analyticsConsentPolicy: "yes" }, { archive: () => undefined }, "hooks", null];
     for (const hooks of bad) {
       const module = { name: "bad", hooks, register: () => ({}) } as unknown as ServerModule;
       const database = fakeDatabase();
@@ -505,6 +505,13 @@ describe("the hooks of modules", () => {
       expect(error.message).toContain("bad");
       expect(database.closed.count).toBe(1);
     }
+  });
+
+  it("composes a module that declares an analytics consent policy", () => {
+    const module: ServerModule = { name: "consent", hooks: { analyticsConsentPolicy: () => HookResult.allow() }, register: () => ({}) };
+    expect(() =>
+      createServer({ config: serverConfig(), adapters: adapters(), modules: [module], migrations: [], logger: recordingLogger(), database: fakeDatabase() }),
+    ).not.toThrow();
   });
 
   it("composes a module whose declared deletion refusals are on the closed list", () => {

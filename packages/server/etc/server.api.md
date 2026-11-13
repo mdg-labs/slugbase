@@ -59,6 +59,24 @@ AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.
 }, object>;
 
 // @public
+export const ANALYTICS_CONSENT_REFUSAL_CODE: "preference_managed";
+
+// @public
+export type AnalyticsConsentCredential = "session" | "apiToken";
+
+// @public (undocumented)
+export interface AnalyticsConsentPolicyInput {
+    // (undocumented)
+    readonly accountId: string;
+    readonly analyticsConsent: "unset" | "granted" | "denied";
+    // (undocumented)
+    readonly credential: AnalyticsConsentCredential;
+}
+
+// @public (undocumented)
+export type AnalyticsConsentRefusalCode = typeof ANALYTICS_CONSENT_REFUSAL_CODE;
+
+// @public
 export interface ApiTokenPrincipal extends Extract<TenantPrincipal, {
     readonly kind: "api-token";
 }> {
@@ -519,11 +537,12 @@ export type EventSubscriber = {
 export const FLUSH_INTERVAL_MS = 10000;
 
 // @public (undocumented)
-export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy"];
+export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy", "analyticsConsentPolicy"];
 
 // @public
 export interface HookDispatcher {
     acceptanceSeatLimit(input: SeatCheckInput, request: object): Promise<number | null>;
+    analyticsConsentPolicy(input: AnalyticsConsentPolicyInput): Promise<HookResult<AnalyticsConsentRefusalCode>>;
     clientErrorReportDsn(request: ClientErrorReportRequest): Promise<string | null>;
     deletionGuard(input: DeletionGuardInput): Promise<HookResult<DeletionRefusalCode>>;
     registrationPolicy(input: RegistrationPolicyInput): Promise<HookResult<RegistrationRefusalCode>>;
@@ -1350,6 +1369,7 @@ AI_ALLOWED_PRIVATE_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.
 
 // @public
 export interface ServerHooks {
+    readonly analyticsConsentPolicy?: (input: AnalyticsConsentPolicyInput) => HookResult | Promise<HookResult>;
     readonly deletionGuard?: (input: DeletionGuardInput) => HookResult<DeletionRefusalCode> | Promise<HookResult<DeletionRefusalCode>>;
     readonly registrationPolicy?: (input: RegistrationPolicyInput) => HookResult | Promise<HookResult>;
     readonly seatCheck?: (input: SeatCheckInput) => SeatCheckAnswer | Promise<SeatCheckAnswer>;

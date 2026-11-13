@@ -11,6 +11,7 @@ export const PROBLEM_CATALOG = [
   { status: 401, code: "reauth_required" },
   { status: 403, code: "forbidden" },
   { status: 403, code: "registration_refused" },
+  { status: 403, code: "preference_managed" },
   { status: 403, code: "cross_site_request" },
   { status: 403, code: "token_scope" },
   { status: 403, code: "account_export_only" },

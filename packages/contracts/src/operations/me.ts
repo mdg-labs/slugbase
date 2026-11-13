@@ -250,7 +250,7 @@ export const updateMe = defineOperation({
     200: jsonResponse("The account after the change; a field the request leaves out keeps its value", AccountSchema),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The request did not come from the application itself"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the deployment manages the analytics consent choice and refused this change (preference_managed, with the field analyticsConsent in errors); nothing is written, none of the other fields of the request included"),
     422: problemResponse("The body did not pass validation: an unknown field or onboarding key, a name that is empty, longer than 100 characters or holds a NUL character, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
