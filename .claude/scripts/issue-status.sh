@@ -8,8 +8,8 @@
 # whole label set in one PATCH instead: non-status labels are preserved,
 # every status:* is dropped, the requested one is added.
 #
-# Reads through gh-rest.sh, scoped to workflow.json's repo: `gh`'s own issue
-# commands infer the repository from the working directory, which in an
+# Every call is scoped to workflow.json's repo (`repos/$REPO/...`): `gh`'s own
+# issue commands infer the repository from the working directory, which in an
 # orchestrate scratch clone (origin is a local path) is wrong or missing.
 set -euo pipefail
 
@@ -17,7 +17,13 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=workflow-config.sh
 source "$HERE/workflow-config.sh"
 REPO=$(wf_repo)
-STATUSES=(new ready in-progress in-review implemented closed cancelled)
+# The status names come from status-labels.txt, the one place the family is
+# defined; it sits next to this script.
+LABELS_FILE="$HERE/status-labels.txt"
+STATUSES=()
+while IFS='|' read -r name _; do
+  [[ -z $name || $name == \#* ]] || STATUSES+=("${name#status:}")
+done <"$LABELS_FILE"
 RETRIES=${ISSUE_STATUS_RETRIES:-4}
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
@@ -27,7 +33,7 @@ die() { printf '%s\n' "$*" >&2; exit 1; }
 # backoff and let the caller see a hard failure only once it is really stuck.
 # stdout is captured and replayed on success; stderr is left to flow so the
 # command's own diagnostics reach the journal. Generic over the command run —
-# used for both the gh-rest.sh label read and the gh api PATCH below.
+# used for both the label read and the PATCH below.
 run_retry() {
   local attempt=1 delay=2 out rc
   while :; do
@@ -59,6 +65,18 @@ status=${2#status:}
 printf '%s\n' "${STATUSES[@]}" | grep -qx -- "$status" \
   || die "unknown status '$status' — want one of: ${STATUSES[*]}"
 
+# GitHub creates a label that is missing on a PATCH, but grey and without a
+# description. Create it from its definition first, so the colour and
+# description are right the first time it is used. Best-effort: the PATCH
+# below still works if this does not, so a failure only warns.
+if ! gh api "repos/$REPO/labels/status%3A$status" >/dev/null 2>&1; then
+  def=$(grep -m1 -- "^status:$status|" "$LABELS_FILE" || true)
+  IFS='|' read -r _ colour description <<<"$def"
+  gh api --method POST "repos/$REPO/labels" -f "name=status:$status" \
+    -f "color=$colour" -f "description=$description" >/dev/null 2>&1 \
+    || printf 'issue-status: could not create the status:%s label, leaving it to GitHub\n' "$status" >&2
+fi
+
 # The read below decides which labels SURVIVE the PATCH, so a failed read is
 # not a missing status — it is silent data loss. Read into a checked
 # assignment rather than `mapfile < <(...)`: a process substitution's exit
@@ -67,7 +85,7 @@ printf '%s\n' "${STATUSES[@]}" | grep -qx -- "$status" \
 # label set with just `status:$status`, dropping the issue's type and area:*
 # labels. Nothing reported an error, because as far as bash was concerned
 # nothing had failed.
-keep_raw=$(run_retry "$HERE/gh-rest.sh" issue-view "$issue" \
+keep_raw=$(run_retry gh api "repos/$REPO/issues/$issue" \
   --jq '.labels[].name | select(startswith("status:") | not)') \
   || die "could not read #$issue's labels ($RETRIES attempts) — refusing to PATCH, because writing now would drop every non-status label on the issue"
 

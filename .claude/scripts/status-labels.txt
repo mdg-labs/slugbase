@@ -1,0 +1,15 @@
+# The status:* label family: one "name|colour|description" line per label.
+#
+# The single source for these definitions. bootstrap-labels.sh creates the
+# labels from it, issue-status.sh reads the status names it accepts from it
+# and creates a missing label from it before first setting it, and setup
+# renders it into .github/workflows/issue-status.yml as {{STATUS_LABELS}}.
+# Edit it here and nowhere else. The colour has no leading '#'.
+status:new|ededed|Filed, not yet triaged
+status:ready|bfd4f2|Triaged and ready to be picked up
+status:blocked|d93f0b|Waiting on an open blocker (a native blocked-by link)
+status:in-progress|fbca04|An executor is implementing this
+status:in-review|d4c5f9|Implementation committed, awaiting verification
+status:implemented|c2e0c6|Verification passed, landed on the integration branch
+status:closed|586069|Closed as completed
+status:cancelled|8b4513|Closed as not planned, or as a duplicate

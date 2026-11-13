@@ -22,13 +22,13 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=workflow-config.sh
 source "$HERE/workflow-config.sh"
-
 die() { printf '%s\n' "$*" >&2; exit 2; }
+REPO=$(wf_repo) || exit 2
 
 [[ $# -eq 1 && $1 =~ ^[0-9]+$ ]] || die "usage: $0 <issue-number>"
 n=$1
 
-json=$("$HERE/gh-rest.sh" issue-view "$n") || die "issue-readiness: could not read #$n"
+json=$(gh api "repos/$REPO/issues/$n") || die "issue-readiness: could not read #$n"
 body=$(jq -r '.body // ""' <<<"$json")
 labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$json")
 

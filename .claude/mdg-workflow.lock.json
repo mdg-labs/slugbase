@@ -1,7 +1,7 @@
 {
   "source": "mdg-labs/skills",
   "ref": "main",
-  "commit": "cc04affb1447f742b9048e8d07ed17f189eead10",
+  "commit": "f74d1d56c2933aa8ff4a97a9860ab1e505966648",
   "profile": "full",
   "exclude": [
     "rules/mdg-github-actions.md"
@@ -9,11 +9,11 @@
   "files": [
     {
       "path": ".claude/agents/ci-investigator.md",
-      "sha256": "7c495b4247088ca50ac14101e1c5906f1ca345b9b80e3c47ba5ceb2b0edf008f"
+      "sha256": "510e06e84ee3c5b69559b02517bb544b59bd78fa7aab7a535562f5deef3b4280"
     },
     {
       "path": ".claude/agents/issue-refiner.md",
-      "sha256": "054041e97089d3e7f9bded058531212b585688bdd16d3a393b82823372f45a5c"
+      "sha256": "4434fedb7630e04b0ec99f3df3623d7529ca4565e04b1c2c5f869cf6b082e3a1"
     },
     {
       "path": ".claude/agents/security-reviewer.md",
@@ -37,43 +37,47 @@
     },
     {
       "path": ".claude/rules/mdg-security.md",
-      "sha256": "14ed821ef5972719df1434ced185cdba249c0ebd0362582a8498b2dea066f4a9"
+      "sha256": "b0a465c9c3a27c3cf25838766f4e6fcc1105e701bb545b994771bda5c6373192"
     },
     {
       "path": ".claude/scripts/act-run.sh",
-      "sha256": "7aa07111c1e7f66fd994438ae2f1633ef856afe126eb837e3c6b502513dbf6b0"
+      "sha256": "914b6ad84081e30654a46b81f9c8653160c7597d75efa078d62df0c44dc385fb"
     },
     {
       "path": ".claude/scripts/audit-report.sh",
-      "sha256": "4f845d07b61fcc37e080cc3a9dd75c06db89bd24de88a2699b053b5919bf2203"
+      "sha256": "3af8fd791be43c0740b0eccd39d39a045bc405760c1e2004db8c57af98d8513d"
     },
     {
       "path": ".claude/scripts/bootstrap-labels.sh",
-      "sha256": "3769a6eb9fa79ffb7085b877a771a84bdd78d16b40f27651ec581702b739f4bd"
+      "sha256": "5d1d1337b144ae7935c534b8e32b67a8fd0f34e9a65cf42264c0dba6a382424e"
     },
     {
-      "path": ".claude/scripts/check-gh-rest.sh",
-      "sha256": "132d04ee9a4b5c0f6387ce171285cb755f6380b98d7f37706846e90da9c75d64"
+      "path": ".claude/scripts/check-gh-repo.sh",
+      "sha256": "4598e73a5d1e77e85b6121b1c035035b25ca53dd7639210db13c4f66aa109ee9"
     },
     {
       "path": ".claude/scripts/epic-status.sh",
-      "sha256": "2e44f32ff5275d2c84a14a3acb71d3750ec1cf54be9bc2f74a088d203ef707e2"
+      "sha256": "e49013236596ab00fcade90c57e780c3d211e6b28c4383ba36bd689278de8bdc"
     },
     {
-      "path": ".claude/scripts/gh-rest-allowlist.txt",
-      "sha256": "a77b25ee82a0da63e55f0205e110c99118052a6dcf41554bfedd95a7b5e831af"
+      "path": ".claude/scripts/gh-helpers.sh",
+      "sha256": "5d36094841d965771b52c36f5d694cd35581100a4a0769ace9b7961b89ce1f7d"
     },
     {
-      "path": ".claude/scripts/gh-rest.sh",
-      "sha256": "0656e366411c812c9ccb22adc2fabb72181b5664e0b506101b33a7870b8d4cb1"
+      "path": ".claude/scripts/gh-repo-allowlist.txt",
+      "sha256": "8bea6d027f2cb43b3935e2f12ade0710cdb5a9062d77d64dbe5d353d1d037b0e"
+    },
+    {
+      "path": ".claude/scripts/guard-maintainer-labels.sh",
+      "sha256": "61454752b773af923c3606e8455b9e4b7e6cd5a809588ccd6cb9c5dc738b207f"
     },
     {
       "path": ".claude/scripts/issue-readiness.sh",
-      "sha256": "a40525ab46deb85cc2440f3821e7e26542b853c653da7e288b6ac7e91978bb82"
+      "sha256": "2c90b2907c8a6ce3a4f78ee57ddb6e972a55620d2a92a7b7ba34ff06b6af242c"
     },
     {
       "path": ".claude/scripts/issue-status.sh",
-      "sha256": "f8bb85433c215eba371a0cf004aba53405542313315526b44297ce48bd408727"
+      "sha256": "a34bbdb2946f6e8e177382faa7a829d2ff1a6a408fc5bbd4e24468b3fbf09a0b"
     },
     {
       "path": ".claude/scripts/notify-discord.sh",
@@ -81,11 +85,15 @@
     },
     {
       "path": ".claude/scripts/security-history.sh",
-      "sha256": "b75d20ac0a10dea59bcf26f7c5b4baeaccd8251bd8a61861744b16bed8edbdba"
+      "sha256": "c223966b8394b1d5124ab4b803ed7e31521cdf283a88f703d89505a33bd8490f"
     },
     {
       "path": ".claude/scripts/security-route.sh",
-      "sha256": "50031b02c696b2a7af68ad3c838d399ca53d41fe1a3d575ff0f1ef18c82fbe95"
+      "sha256": "0838a7049a53cb54fbe17d19002d15f2fc34a88c5eb63fb3d0ab5363e234071d"
+    },
+    {
+      "path": ".claude/scripts/status-labels.txt",
+      "sha256": "2271cd4921b3f94ecd423eb8184808c9738e059c96da00ad5dba1ce58f46dc6e"
     },
     {
       "path": ".claude/scripts/workflow-config.sh",
@@ -121,19 +129,19 @@
     },
     {
       "path": ".claude/skills/dev-diff/dev-diff.sh",
-      "sha256": "596f0341d3ad2a71d251527e51c5eb48d54c52e3734627384fff2aa063d332da"
+      "sha256": "d1a3f94355657d86acf977ac01f0b13eaad26d4689e43e9ba5a40534135a07ce"
     },
     {
       "path": ".claude/skills/open-pr/SKILL.md",
-      "sha256": "e33d864379b43f93866044b371eae4e8e3aad774ce49779fb0f4ef6030a8c348"
+      "sha256": "1393c2a0d2f0a466d259edd21f9f93b891014de7e20207af6242b42b53a206c9"
     },
     {
       "path": ".claude/skills/orchestrate/SKILL.md",
-      "sha256": "f0e86ba307d6e0ea5a5d94e36a96c8719ab9b8ec9b5a1ab92d03eaaebb7c8696"
+      "sha256": "776c53760de34413e7c299100135c2dd35ee5aa4fa2c7e81f9ca4c68e27d1e82"
     },
     {
       "path": ".claude/skills/orchestrate/templates/TOKENS.md",
-      "sha256": "787aea8060402bd717cbf9076b17ca44e98f7914b73fe54ee164f25883ea5361"
+      "sha256": "857bb67befa0a6de7e37db9ad06cedba67161646f9db94ea7e4b5ff67de38a86"
     },
     {
       "path": ".claude/skills/orchestrate/templates/execution-report.md",
@@ -145,7 +153,7 @@
     },
     {
       "path": ".claude/skills/orchestrate/templates/refiner-prompt.md",
-      "sha256": "e5de2d092ea8337cb54e4ebf4b537aa395bd1ea82d510f09062a3b02c83dfe2b"
+      "sha256": "2c65c9bd8bada18d3d97119eb4ef86e46c8b4fef7f1f1c684386e7de8ade1efa"
     },
     {
       "path": ".claude/skills/orchestrate/templates/refiner-verdict.md",
@@ -157,11 +165,11 @@
     },
     {
       "path": ".claude/skills/orchestrate/templates/verifier-prompt.md",
-      "sha256": "73af3f68049008f4e01fdeb8a32ff4d207a9e185300f13664354a12ac77374e8"
+      "sha256": "cb29d4ec6799ec6bc01490ac4cfe9d4917d34c6c0c9b77209faffb36ba4ae4ac"
     },
     {
       "path": ".claude/skills/pr-review/SKILL.md",
-      "sha256": "63f5abcbc7f5db133817125f6d79c78e9fc744bd840ac95c77b110d4fe39c988"
+      "sha256": "8622267e8be7ebed712b32daced25c18bb0e62963e99c9ee22de2e4d0f4b017b"
     },
     {
       "path": ".claude/skills/pr-review/templates/finding-dispatch.md",
@@ -169,7 +177,7 @@
     },
     {
       "path": ".claude/skills/security-audit/SKILL.md",
-      "sha256": "08a14d69da427d66eab6d71a1585cef3db0d4f4a248b445f547650982a731465"
+      "sha256": "7955235f8876fe0faa3da667460bc83b242b78b70f666cb8ad5b14f020b44042"
     },
     {
       "path": ".claude/skills/security-audit/templates/TOKENS.md",
@@ -193,7 +201,7 @@
     },
     {
       "path": ".claude/skills/triage/SKILL.md",
-      "sha256": "5a17127b3de80f706deee4c595baa8222b7becbccf30ea1f213ea66f814c9fc6"
+      "sha256": "921b0e7008669e1fec091c6d342ac5c9cee0cb815ece619c96492f6ecf9716d9"
     },
     {
       "path": ".claude/skills/triage/templates/item-shapes.md",
@@ -205,19 +213,19 @@
     },
     {
       "path": ".claude/trackers/README.md",
-      "sha256": "0aff445ac3fe6e53d541a382b14646958f4bc70688e4d0cb2d5ab1b4079a9eb3"
+      "sha256": "9363bb00e64154e1f789743de2498e61223afe3b4690fbec99586a2f870c507e"
     },
     {
       "path": ".claude/trackers/github.md",
-      "sha256": "928817926aa1d180e61b61043ceefd01f99eeb169af78d967c0add5b6ced7e8c"
+      "sha256": "b0013adbca336f0c7ff85a8623cc31a2b57508495272a211ffa697de631f907a"
     },
     {
       "path": ".claude/trackers/kaneo.md",
-      "sha256": "e3440d0905e16e71ba00e263c6a64afafff13d7dc3daf145b0f4773430768779"
+      "sha256": "17defa550393a6f92126397230a15ed169ced86599b187a255f380735cca4988"
     },
     {
       "path": ".claude/workflow.schema.json",
-      "sha256": "22c4602f052186e6bd74b986954237f0d9b393b75f614e9d0e0a619a1e0fa39b"
+      "sha256": "98f7bc931b40ca64e4ba3593eecbb3e2571b7ce78dd15212a058fc0dd0e74bd1"
     }
   ]
 }

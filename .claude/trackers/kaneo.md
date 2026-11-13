@@ -23,7 +23,7 @@ Status slugs are exactly `backlog`, `ready`, `in-progress`, `in-review`, `implem
 |-----|------|
 | `<KEY>-<n>` | `Kaneo get_task_by_ticket_id { ticketId }`, **without** `projectId`, which can make it 404. The response's `id` is the task CUID. |
 | Task CUID | `Kaneo get_task { taskId }`. This does **not** accept `<KEY>-<n>` and fails with "Workspace ID could not be determined". |
-| `#n` or issue URL | `.claude/scripts/gh-rest.sh issue-view <n>` → title, then `Kaneo search` for that title (see Search) and take the exact-title match. |
+| `#n` or issue URL | `gh issue view <n> -R <repo> --json title` (`<repo>` is `workflow.json` `repo`) → title, then `Kaneo search` for that title (see Search) and take the exact-title match. |
 | Task URL | The last path segment is the CUID. |
 
 Then load the rest:
@@ -37,7 +37,7 @@ Task payloads carry no GitHub link (checked 2026-10-07: no `externalLinks`). Fin
 
 1. If the user gave `#n`, use it.
 2. If the payload has an `externalLinks` issue entry, use its `externalId`.
-3. Otherwise run `.claude/scripts/gh-rest.sh issue-search "<exact task title>" --state all` and take the exact-title match.
+3. Otherwise run `gh issue list -R <repo> --state all --limit 1000 --search "<exact task title> in:title" --json number,title` and take the exact-title match.
 4. No match: ask the user. Never guess.
 
 Resolve the epic's `#n` too, because the commit that completes the epic carries `Fixes #<epic>`.

@@ -56,7 +56,10 @@ memory of another repo:
 The tracker is reached only as `.claude/trackers/README.md` and the mapping
 for `tracker.type` (`github.md` or `kaneo.md`) describe. Read both now. Every
 "resolve", "set status", "comment", "create" below means the operation done the
-way that mapping says. Scripts live in `.claude/scripts/`. Templates live
+way that mapping says. Every `gh` call names its repository (`-R <repo>`, or
+a `repos/<repo>/…` path for `gh api`), where `<repo>` is `workflow.json`
+`repo` of the repository the call is about; agents run from scratch clones,
+where `gh` would infer a local path. Scripts live in `.claude/scripts/`. Templates live
 next to this file in `templates/`: `TEMPLATES_DIR` in a dispatch is that
 directory's absolute path in the **workspace** the agent works in (every
 clone carries the vendored `.claude/`), or in `TOOLS_ROOT` for a cross-repo
@@ -96,7 +99,9 @@ say what is wrong. Never stash, reset or switch the maintainer's work.
 **Machine check.** One Bash call: `command -v` for every tool named in
 `checks[].requires`, plus every command under `### Machine check`, if the repo
 has one. When `act` is set, add `command -v act flock` and
-`timeout 20 docker info --format '{{.ServerVersion}}'`. Also run the
+`timeout 20 docker info --format '{{.ServerVersion}}'`. When
+`review.localCli` is `true`, add `command -v coderabbit` and
+`timeout 30 coderabbit auth status`. Also run the
 `unitEnvironment.leftoverCheck`, if any, to report
 leftovers from an earlier run. Report leftovers to the user; never remove
 them. Keep the output verbatim as `MACHINE_STATE`. A tool missing here is
@@ -128,7 +133,7 @@ epic.
 For each `--advisory <GHSA-id>`:
 
 ```
-.claude/scripts/gh-rest.sh advisory-get <GHSA-id> --jq '{ghsa_id,summary,description,severity,state}'
+.claude/scripts/gh-helpers.sh advisory-get <GHSA-id> --jq '{ghsa_id,summary,description,severity,state}'
 ```
 
 If the call fails, stop and say so; never guess an id. The advisory's
@@ -147,7 +152,7 @@ An advisory unit differs from an item in exactly these ways:
   repo.
 - **The readiness gate is read by hand** from the description. It needs
   acceptance criteria and an out-of-scope section. A description without them
-  is reported and left out of T. The maintainer fixes it with `gh-rest.sh
+  is reported and left out of T. The maintainer fixes it with `gh-helpers.sh
   advisory-update`; a refiner never touches an advisory.
 - **Its file scope** comes from the paths the description names. If it names
   none, the scope is the whole repo.
@@ -353,7 +358,7 @@ at most `limits.lanes` at once (default 3); units within a lane run serially.
 ### Promotion-diff budget — a hard rule
 
 Only when `promotionBudget` is set. **The `INT → PROD` reviewable diff never
-grows past the cap.** CodeRabbit (Essentials plan) reviews at most 150 files
+grows past the cap.** CodeRabbit (Advanced plan) reviews at most 300 files
 per pull request, counted after `.coderabbit.yaml`'s `path_filters`. `INT`
 only reaches `PROD` through one promotion PR (`open-pr`, then `pr-review`). A diff past the cap
 forces a split promotion, and that leaves the two branches with duplicate
@@ -611,6 +616,15 @@ Read `TEMPLATES_DIR/verifier-prompt.md` and fill it.
 **On a fix round,** fill the `FIX_ROUND` block: the rejected SHA, where it can
 be read, and the previous round's **blocking** findings verbatim.
 
+**A local CodeRabbit review, when the repo opts in.** Fill `CODERABBIT_CLI`
+only when `review.localCli` is `true`, the machine check found `coderabbit`
+installed and authenticated, and this is the unit's **first attempt**. A fix
+round never re-runs it: each run draws on the maintainer's CLI allowance (10
+per hour), and lanes run in parallel. `CR_BASE` is the full SHA the unit's
+clone started from (`git -C <clone> rev-parse origin/<base>`, step 5). When
+the repo opts in but the CLI is missing or signed out, fill nothing and say
+so once in the report; never install it or sign it in.
+
 ```
 Agent({
   subagent_type: "task-verifier",
@@ -776,7 +790,8 @@ never squashed.
    `git -C <clone> push <origin URL of REAL> HEAD:refs/heads/<branch>`.
    The clone's own `origin` is a local path.
 5. **Open the PR:**
-   `.claude/scripts/gh-rest.sh pr-create --base <base> --head <branch> --title <title> --body-file <file>`.
+   `gh pr create -R <repo> --base <base> --head <branch> --title <title> --body-file <file>`,
+   from `REAL`, with `<repo>` the landing repository's `workflow.json` `repo`.
    - **Title:** the commit subject for a single item, or a summary naming
      every item for a bundle.
    - **Body:** a summary, each item with its `Fixes #<n>`, the checks run,
@@ -912,7 +927,7 @@ Then the report:
 - **Advisory targets**, each by its GHSA id. Give the landed commit or local
   branch and whether it reached `origin/INT`, or why it did not. For every
   one that landed: once the fix reaches `PROD`, the maintainer publishes the
-  advisory (`gh-rest.sh advisory-publish <id>`). Write "none this run" when
+  advisory (`gh-helpers.sh advisory-publish <id>`). Write "none this run" when
   there were none.
 - **Proves after landing:** every entry the verdicts listed, each as the
   workflow, the job, the branch it runs on once landed, and what to watch

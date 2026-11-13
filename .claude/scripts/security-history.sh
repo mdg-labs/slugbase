@@ -35,8 +35,9 @@ die() { printf 'security-history: %s\n' "$*" >&2; exit 2; }
 
 declare -A title=()
 if [[ $(wf_get .tracker.type) == github ]]; then
-  issues=$("$HERE/gh-rest.sh" issue-list --state all --label security \
-    --jq '.[] | [.number, .title] | @tsv') \
+  # The issues endpoint also lists pull requests; a PR carries "pull_request".
+  issues=$(gh api --paginate "repos/$REPO/issues?state=all&labels=security&per_page=100" \
+    --jq '.[] | select(has("pull_request") | not) | [.number, .title] | @tsv') \
     || die "could not list the issues labelled security"
   while IFS=$'\t' read -r number issue_title; do
     [[ -n $number ]] && title[$number]=$issue_title

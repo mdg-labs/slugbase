@@ -16,7 +16,10 @@ allowed-tools:
   - Bash(git merge --no-ff *)
   - Bash(git merge --abort)
   - Bash(git push origin *)
-  - Bash(.claude/scripts/gh-rest.sh *)
+  - Bash(gh pr list *)
+  - Bash(gh pr create *)
+  - Bash(gh pr edit *)
+  - Bash(gh issue view *)
   - Bash(.claude/skills/dev-diff/dev-diff.sh*)
   - Bash(gh run list *)
   - Bash(gh run view *)
@@ -103,14 +106,14 @@ per unit.
    there is no other review path. Report the count and the cap; the
    maintainer brings `INT` back under it before promoting.
 6. **Look for an existing open promotion PR** with
-   `.claude/scripts/gh-rest.sh pr-list --base PROD --head INT --state open --jq '.[] | {number,title,url}'`.
+   `gh pr list --repo REPO --base PROD --head INT --state open --json number,title,url`.
    If one exists, go through steps 7 and 8 as usual, then in step 9
    **update** it instead of creating a duplicate.
 7. **Gather the promotion's contents:**
    - The commit list: `git log --oneline origin/PROD..origin/INT`.
    - The trailers: `git log origin/PROD..origin/INT --format=%B`, to pull
      every `Fixes #n` trailer. For each one, get the item's title and
-     labels with `.claude/scripts/gh-rest.sh issue-view <n> --jq '{title,labels:[.labels[].name]}'`.
+     labels with `gh issue view <n> --repo REPO --json title,labels --jq '{title,labels:[.labels[].name]}'`.
      On a Kaneo repo these are the GitHub mirrors, read-only.
    - A `Refs: GHSA-…` trailer is listed by id only, never with a
      description: the advisory is not published until the maintainer does so
@@ -151,9 +154,9 @@ per unit.
      - `## CI status`: the run results from step 7, and the reviewable-file
        count from step 5.
 9. **File it:**
-   `.claude/scripts/gh-rest.sh pr-create --base PROD --head INT --title "…" --body-file <tmp>`.
+   `gh pr create --repo REPO --base PROD --head INT --title "…" --body-file <tmp>`.
    To update an existing PR instead:
-   `.claude/scripts/gh-rest.sh pr-edit <n> --title "…" --body-file <tmp>`.
+   `gh pr edit <n> --repo REPO --title "…" --body-file <tmp>`.
 10. **Report** the PR URL, the closed-item list and the CI status, then stop:
     no merge, no review request, no further action. The next step is the
     review round: `/pr-review <PR number>`. A promotion PR gets exactly one

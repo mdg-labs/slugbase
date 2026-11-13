@@ -37,8 +37,9 @@
 #
 # The report is parsed here, deterministically, not by model judgement: a
 # report that does not follow the format exactly is refused before anything
-# is read from or written to GitHub. Every GitHub call goes through
-# gh-rest.sh or issue-status.sh. What differs per repo — the repository, the
+# is read from or written to GitHub. Every GitHub call names workflow.json's
+# repository: plain `gh` with `-R`, gh-helpers.sh for the advisories, and
+# issue-status.sh for the status label. What differs per repo — the repository, the
 # area labels, the risk label, the tracker, the default epic, the threat
 # model's path — comes from .claude/workflow.json.
 #
@@ -52,7 +53,7 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=workflow-config.sh
 source "$HERE/workflow-config.sh"
-GH_REST="$HERE/gh-rest.sh"
+GH_HELPERS="$HERE/gh-helpers.sh"
 ISSUE_STATUS="$HERE/issue-status.sh"
 
 die() { printf 'audit-report: %s\n' "$*" >&2; exit 1; }
@@ -633,15 +634,17 @@ cmd_mark() {
 # never read as "not filed yet".
 find_issue() {
   local id=$1 out
-  out=$("$GH_REST" issue-search "Audit-finding: $id" --state all) || return 1
+  # Every issue, not a search: the search index lags behind a just-created
+  # issue, and a re-run right after an interrupted one must still find it.
+  out=$(gh api --paginate --slurp "repos/$REPO/issues?state=all&per_page=100") || return 1
   jq -r --arg id "$id" '
-    [ .[] | select((.body // "") | split("\n") | map(rtrimstr("\r")) | any(. == "Audit-finding: " + $id)) | .number ]
+    [ add // [] | .[] | select(has("pull_request") | not) | select((.body // "") | split("\n") | map(rtrimstr("\r")) | any(. == "Audit-finding: " + $id)) | .number ]
     | sort | .[0] // empty' <<<"$out"
 }
 
 find_advisory() {
   local id=$1 out
-  out=$("$GH_REST" advisory-list) || return 1
+  out=$("$GH_HELPERS" advisory-list) || return 1
   jq -r --arg id "$id" '
     [ .[] | select((.description // "") | split("\n") | map(rtrimstr("\r")) | any(. == "Audit-finding: " + $id)) | .ghsa_id ]
     | sort | .[0] // empty' <<<"$out"
@@ -653,7 +656,7 @@ find_advisory() {
 # started on.
 finish_issue() {
   local num=$1 epic=$2 info parent state statuses other
-  info=$("$GH_REST" issue-view "$num" --jq '.state, (.labels[].name)') \
+  info=$(gh api "repos/$REPO/issues/$num" --jq '.state, (.labels[].name)') \
     || { say "audit-report: could not read #$num" >&2; return 1; }
   state=$(head -n1 <<<"$info")
   if [[ $state != open ]]; then
@@ -661,10 +664,10 @@ finish_issue() {
     return 0
   fi
   if [[ -n $epic ]]; then
-    parent=$("$GH_REST" parent "$num" --jq '.number') \
+    parent=$(gh issue view "$num" -R "$REPO" --json parent --jq '.parent.number // empty') \
       || { say "audit-report: could not read the parent of #$num" >&2; return 1; }
     if [[ -z $parent ]]; then
-      "$GH_REST" add-sub-issue "$epic" "$num" >/dev/null || return 1
+      gh issue edit "$epic" -R "$REPO" --add-sub-issue "$num" >/dev/null || return 1
       say "  #$num added under epic #$epic"
     elif [[ $parent != "$epic" ]]; then
       say "  #$num is under #$parent, not #$epic; left as it is"
@@ -716,9 +719,10 @@ file_public() {
       local args=(--title "$title" --body-file "$TMP/body.md") label out
       [[ -n $milestone ]] && args+=(--milestone "$milestone")
       for label in "${labels[@]}"; do args+=(--label "$label"); done
-      out=$("$GH_REST" issue-create "${args[@]}") || { say "audit-report: $id: issue-create failed" >&2; return 1; }
-      num=$(jq -r '.number // empty' <<<"$out")
-      [[ $num =~ ^[0-9]+$ ]] || { say "audit-report: $id: issue-create gave no issue number; look for the marker 'Audit-finding: $id' before re-running" >&2; return 1; }
+      # gh prints the new issue's URL, which ends in its number.
+      out=$(gh issue create -R "$REPO" "${args[@]}") || { say "audit-report: $id: creating the issue failed" >&2; return 1; }
+      num=${out##*/issues/}
+      [[ $num =~ ^[0-9]+$ ]] || { say "audit-report: $id: creating the issue gave no issue URL; look for the marker 'Audit-finding: $id' before re-running" >&2; return 1; }
       say "$id: created #$num"
       py record "$REPORT" "$id" "#$num" || return 1
     fi
@@ -752,12 +756,12 @@ file_withheld() {
   py advisory-body "$REPORT" "$id" >"$TMP/advisory.md" || return 1
   args+=(--summary "$summary" --description-file "$TMP/advisory.md")
   if (( dry )); then
-    "$GH_REST" advisory-create "${args[@]}" --dry-run >/dev/null || return 1
+    "$GH_HELPERS" advisory-create "${args[@]}" --dry-run >/dev/null || return 1
     say "$id: would create a draft advisory, severity $sev"
     return 0
   fi
   local out
-  out=$("$GH_REST" advisory-create "${args[@]}") || { say "audit-report: $id: advisory-create failed" >&2; return 1; }
+  out=$("$GH_HELPERS" advisory-create "${args[@]}") || { say "audit-report: $id: advisory-create failed" >&2; return 1; }
   ghsa=$(jq -r '.ghsa_id // empty' <<<"$out")
   [[ $ghsa =~ ^GHSA- ]] || { say "audit-report: $id: advisory-create gave no GHSA id; look for the marker 'Audit-finding: $id' before re-running" >&2; return 1; }
   say "$id: created draft advisory $ghsa"
@@ -776,9 +780,8 @@ cmd_file() {
     esac
   done
   resolve_report "$arg" file
-  local repo
-  repo=$(wf_repo) || exit 1
-  PACKAGE=${repo#*/}
+  REPO=$(wf_repo) || exit 1
+  PACKAGE=${REPO#*/}
   json=$(py parse "$REPORT") || exit 1
 
   printf 'id\tseverity\tkind\tfiled\ttitle\n'
@@ -817,7 +820,7 @@ cmd_file() {
     fi
     if [[ -n $epic ]] && jq -e 'any(.findings[]; .withhold | not)' <<<"$json" >/dev/null; then
       local epic_json
-      epic_json=$("$GH_REST" issue-view "$epic") || die "file: could not read epic #$epic"
+      epic_json=$(gh api "repos/$REPO/issues/$epic") || die "file: could not read epic #$epic"
       jq -e '.state == "open" and any(.labels[]; .name == "epic")' <<<"$epic_json" >/dev/null \
         || die "file: #$epic is not an open issue labelled epic"
       milestone=$(jq -r '.milestone.title // empty' <<<"$epic_json")

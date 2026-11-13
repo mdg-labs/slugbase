@@ -1,0 +1,8 @@
+# check-gh-repo.sh's exemption list for the files vendored with it.
+#
+# Each line is "<file, relative to the consumer repo root>::<substring of the
+# flagged line>". A line here is prose that names a `gh` command without its
+# repository only to explain or forbid it — never a live call. The substring
+# only silences the one line it names, in the one file it names, so a real
+# call anywhere else still fails. A repo's own exemptions go in
+# .claude/gh-repo-allowlist.local.txt, never here.

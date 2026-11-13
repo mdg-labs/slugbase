@@ -13,7 +13,7 @@ description: Dependabot alerts, private advisories and secrets — how this repo
   Where a Critical or High one goes depends on
   `.claude/scripts/security-route.sh`:
   - **`advisories`:** propose a private security advisory
-    (`.claude/scripts/gh-rest.sh advisory-create … --dry-run` first) and fix it
+    (`.claude/scripts/gh-helpers.sh advisory-create … --dry-run` first) and fix it
     with `/orchestrate --advisory <GHSA-id>`.
   - **`issues`:** the repository is private, so its issues are not public,
     and GitHub offers it no advisories. File it as an ordinary item labelled

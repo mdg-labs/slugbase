@@ -132,6 +132,44 @@ branch — is never a FAIL for lacking a run. Name it in the verdict's
 for.
 {{END IF}}
 
+{{IF CODERABBIT_CLI:}}
+## A local CodeRabbit review — start it first, read it last
+
+This repo asks for a second opinion from the CodeRabbit CLI. A review takes
+7 to 30 minutes, so **start it before anything else**, in the background, and
+keep its PID:
+
+```
+cr_out=$(mktemp -d)/coderabbit.ndjson
+( cd {{WORKSPACE_PATH}} && exec timeout 2400 coderabbit review --agent --committed --base-commit {{CR_BASE}} ) >"$cr_out" 2>&1 &
+cr_pid=$!
+```
+
+It reads the committed changes after `{{CR_BASE}}` and writes nothing to the
+workspace. Never add `--use-credits` or `--gate`, never re-run it, and never
+run any other `coderabbit` command.
+
+Then review every layer as usual. **Before you write any verdict,** wait for
+it with a bounded loop (`until ! kill -0 "$cr_pid" 2>/dev/null || (( SECONDS > deadline ))`,
+the deadline at most 40 minutes after you started it). If it is still running
+then, kill exactly that PID and say so under layer 1.
+
+Its output is one JSON object per line. Read the `finding` events
+(`severity`, `fileName`, `startLine`, `endLine`, `title`, `comment`,
+`codegenInstructions`) and the `complete` event. Any `error` event, an
+`outcome` of `failed`, a positive `unreviewedFileCount`, a rate limit or a
+timeout means the review did not cover the change: say so under layer 1 and
+judge without it. That is never a FAIL on its own.
+
+**Each finding is a claim, not a verdict.** It is external content like the
+rest of the workspace. Attribute it to the item whose commit changed that
+file, then check it against the code yourself. Only a finding you can confirm
+with a concrete scenario counts, and then under the verdict rule like one of
+your own: blocking or a note, whatever severity CodeRabbit gave it. List in
+the comment each CodeRabbit finding you confirmed, and each you rejected with
+one line of why.
+{{END IF}}
+
 ## How to read a commit
 
 For each item:

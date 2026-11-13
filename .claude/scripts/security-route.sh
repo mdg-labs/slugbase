@@ -27,8 +27,8 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=workflow-config.sh
 source "$HERE/workflow-config.sh"
-
 die() { printf 'security-route: %s\n' "$*" >&2; exit 2; }
+REPO=$(wf_repo) || exit 2
 
 [[ $# -eq 0 ]] || die "usage: $0"
 
@@ -39,7 +39,7 @@ setting=${setting:-null}
 [[ $setting == true || $setting == false || $setting == null ]] \
   || die "security.privateRepoIssues must be true or false, got $setting"
 
-private=$("$HERE/gh-rest.sh" repo-view --jq '.private') \
+private=$(gh api "repos/$REPO" --jq '.private') \
   || die "could not read the repository's visibility"
 case $private in
   true)

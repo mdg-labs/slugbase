@@ -47,9 +47,10 @@ and `issue-refiner` expect exactly the item shapes in
   - `### Implementation rules`
 - **`.claude/trackers/README.md` plus the mapping for `tracker.type`.** Every
   "read", "search", "create", "edit", "link" and "set status" below is done
-  the way the mapping says. On GitHub, everything goes through
-  `.claude/scripts/gh-rest.sh`, never a `gh` call of your own. On
-  Kaneo, GitHub issues are read-only.
+  the way the mapping says. On GitHub, every `gh` call names the repository:
+  `-R <repo>`, or a `repos/<repo>/…` path for `gh api`, where `<repo>` is
+  `workflow.json` `repo`. Never let `gh` infer it. On Kaneo, GitHub issues
+  are read-only.
 - **`templates/item-shapes.md`** and **`templates/titles.md`**, next to this
   file.
 
@@ -77,9 +78,8 @@ Scale the investigation to the item; a typo fix needs none of it.
    still to build**, and record what exists in `## Current state`.
 3. **Search the tracker** for related and duplicate items, closed ones
    included. On GitHub:
-   `.claude/scripts/gh-rest.sh issue-search "<terms>" --state all`. This
-   matches every term against title and body; it is not a relevance search,
-   so try more than one wording.
+   `gh issue list -R <repo> --state all --limit 1000 --search "<terms>" --json number,title,state,labels`.
+   Try more than one wording.
 4. **Read an upstream project** only when the item depends on its behaviour.
    Add `## Upstream / reference context` with the version or commit you read.
 
@@ -123,7 +123,6 @@ or the choice is theirs to make.
   touches (`### Area → paths`).
 - **Extras, as warranted:**
   - `epic`
-  - `blocked`, only for an external blocker that can't be a native link
   - `security`
   - `regression`
   - `dependencies`
@@ -131,7 +130,7 @@ or the choice is theirs to make.
 - **Maintainer-applied labels are proposed, never applied.** These are
   `labels.maintainerOnly` and every `labels.extra` entry with
   `maintainerApplied`. Name them in the proposal for the maintainer to add.
-  `gh-rest.sh` refuses to add them.
+  The `guard-maintainer-labels.sh` hook refuses a `gh` command that adds them.
 - **Never create a new label name, and never set a status label.** A new
   label name goes in the proposal's open questions for approval. Status moves
   only through the tracker mapping.
@@ -141,8 +140,15 @@ or the choice is theirs to make.
 Membership (epic → sub-item) and dependencies (blocked-by) are native tracker
 links:
 
-- **GitHub:** `gh-rest.sh add-sub-issue` / `add-blocked-by`.
+- **GitHub:** `gh issue edit <epic> -R <repo> --add-sub-issue <n>` /
+  `.claude/scripts/gh-helpers.sh add-blocked-by <n> <dependency>` (never
+  `gh`'s own `--add-blocked-by`: the helper also sets `status:blocked`).
 - **Kaneo:** `create_task_relation` with `subtask` / `blocks`.
+
+An external blocker (a vendor, a person, a decision outside the repo) is
+tracked the same way: file it as its own item and link the blocked item to it
+with a blocked-by edge. There is no `blocked` label; on GitHub the workflow
+sets `status:blocked` from the edge.
 
 Never write "Part of #N" or "Depends on #N" in a body. **Create first, link
 second,** then read the links back to verify them. A body that mentions an item
@@ -169,7 +175,7 @@ ref before you finish. No placeholder is ever left behind.
 5. **Splitting or rescoping?** If the result splits the item or changes what
    it delivers, stop and use Mode B's proposal and approval for that change.
    Otherwise write directly:
-   - **GitHub:** `gh-rest.sh issue-edit <n> --title … --body-file … --add-label … [--milestone …]`
+   - **GitHub:** `gh issue edit <n> -R <repo> --title … --body-file … --add-label … [--milestone …]`
    - **Kaneo:** `update_task` with only the changed fields, then labels per the
      mapping.
 6. **Wire the relationships** it needs.
@@ -240,8 +246,9 @@ When an item that is `implemented`, `done` or closed recurs:
 1. **Kaneo only:** `whoami` once, so every created task can be assigned to
    the operator.
 2. **Create the epic first, if there is one, then each sub-item.**
-   - **GitHub:** `gh-rest.sh issue-create --title … --body-file … --label …
-     [--milestone …]`. The workflow stamps `status:new`.
+   - **GitHub:** `gh issue create -R <repo> --title … --body-file … --label …
+     [--milestone …]`. It prints the new issue's URL, whose last segment is
+     its number. The workflow stamps `status:new`.
    - **Kaneo:** `create_task` in `backlog`, assigned to the operator.
 3. **Wire the links:** sub-items under their epic, then blocked-by edges.
    Patch every `<NEW-…>` placeholder with the real ref.
@@ -266,9 +273,12 @@ Mode B, shaped as an epic:
 
 ## Mode D — Dependency alert
 
-1. **Read the alert.** Use `gh-rest.sh alert-get <n>`, or for a CVE or GHSA,
-   `gh-rest.sh alert-list --jq '…'` filtered on
-   `security_advisory.cve_id` / `ghsa_id`.
+1. **Read the alert.** Use `gh api "repos/<repo>/dependabot/alerts/<n>"`, or
+   for a CVE or GHSA list every alert with
+   `gh api --paginate --slurp "repos/<repo>/dependabot/alerts?state=open,fixed,dismissed,auto_dismissed&per_page=100"`
+   and filter the result with `jq 'add | .[] | select(…)'` on
+   `security_advisory.cve_id` / `ghsa_id`. The endpoint pages by cursor, which
+   `--paginate` follows.
    - **Record:** the package and ecosystem, the manifest path and scope, the
      vulnerable range, the first patched version, GHSA, CVE, severity and
      alert URL.
@@ -308,7 +318,7 @@ publicly before it is fixed.
 - **Judge it** against the repo's `threatModel`, if it has one.
 - **Critical or high:** run `.claude/scripts/security-route.sh`.
   - **`advisories`:** propose a **private security advisory** instead of an
-    item (`gh-rest.sh advisory-create … --dry-run` first). Ask the
+    item (`.claude/scripts/gh-helpers.sh advisory-create … --dry-run` first). Ask the
     maintainer.
   - **`issues`:** the repository is private and has no advisories. File an
     ordinary item labelled `security`, through the usual approval. Its title
@@ -339,5 +349,5 @@ writes. This skill's approval gate is for maintainer-driven planning.
 - **Invention:** invented behaviour, fields, endpoints or ids; an open
   question without a recommended default.
 - **Secrets:** secrets or token-shaped strings in any body.
-- **Kaneo:** any GitHub write. **GitHub:** a `gh` call of your own, outside `.claude/scripts/`.
+- **Kaneo:** any GitHub write. **GitHub:** a `gh` call that does not name the repository, and closing, reopening or deleting an issue.
 - **Alerts:** dismissing a Dependabot alert.

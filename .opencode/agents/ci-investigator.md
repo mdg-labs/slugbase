@@ -35,8 +35,8 @@ You investigate exactly **one** failing CI check. The repo's own rules are in
    - `gh run view <run-id> --repo <repo> --log-failed`
    - or `gh api repos/<repo>/actions/jobs/<job-id>/logs`
 
-   A PR's checks are listed by `.claude/scripts/gh-rest.sh pr-checks <n>`.
-   Never use a GraphQL-backed `gh pr` subcommand.
+   A PR's checks are listed by `.claude/scripts/gh-helpers.sh pr-checks <n>`.
+   Every `gh` call names the repository (`-R <repo>`).
 3. **Reproduce locally** with the `checks` entry or `gate` command that
    matches the failing step, bounded with an explicit timeout.
 4. **Decide what caused it:**

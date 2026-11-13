@@ -42,8 +42,10 @@ describe anything as "to build".
   and the tracker reads below are all you need. Bound every command; never
   scan from `/`.
 - Tracker reads: {{TRACKER_READS — from the tracker mapping: for GitHub the
-  `.claude/scripts/gh-rest.sh` issue-view / issue-comments / parent /
-  sub-issues / blocked-by / blocking / issue-search forms; for Kaneo the
+  `gh issue view` and `gh issue list` forms, each with `-R <repo>` spelled
+  out (view with `--comments`, and with
+  `--json parent,subIssues,blockedBy,blocking`; list with `--search`); for
+  Kaneo the
   get_task / list_task_comments / get_task_relations / search calls with the
   session's tool prefix and the ids from workflow.json}}
 {{IF MODE == draft:}}- **You make no tracker writes at all.** Your output is files in `OUT_DIR`.{{END IF}}
