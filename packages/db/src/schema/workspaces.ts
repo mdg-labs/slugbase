@@ -20,12 +20,6 @@ export const workspaces = pgTable(
     name: text().notNull(),
     createdBy: uuid().references(() => accounts.id, { onDelete: "set null" }),
     /**
-     * True for a workspace an instance admin made from the instance console (sys_instance_create_workspace) for another first owner; false
-     * for one an account made for itself. Written with `selfCreated` and read by nothing since the strip that verifying an address runs
-     * moved to `selfCreated`; it stays until a later release drops it (expand/contract, doc 05 section 5.2).
-     */
-    instanceCreated: boolean().notNull().default(false),
-    /**
      * True for a workspace whose first owner is its creator: the one an account makes for itself (sys_create_workspace, which setup,
      * registration and an account's own workspaces use) and a console workspace whose first owner is the admin who made it. False for a
      * console workspace made for another owner, and for every workspace that predates the column, whose first owner is not known. The strip

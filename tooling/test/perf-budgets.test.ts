@@ -828,8 +828,8 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
     };
   }
 
-  const exposition = (inFlight: number, size: number): string =>
-    `# TYPE slugbase_db_pool_size gauge\nslugbase_db_pool_size ${String(size)}\n# TYPE slugbase_db_tenant_transactions_in_flight gauge\nslugbase_db_tenant_transactions_in_flight ${String(inFlight)}\n`;
+  const exposition = (inFlight: number, size: number, writersWaiting: number = 0): string =>
+    `# TYPE slugbase_db_pool_size gauge\nslugbase_db_pool_size ${String(size)}\n# TYPE slugbase_db_tenant_transactions_in_flight gauge\nslugbase_db_tenant_transactions_in_flight ${String(inFlight)}\n# TYPE slugbase_db_tenant_writers_waiting gauge\nslugbase_db_tenant_writers_waiting ${String(writersWaiting)}\n`;
   const sampleOptions = (metricsPort: number, state: string) => ({ held: { state }, metricsPort, serverUrl: "postgres://sampler:sampler@127.0.0.1:1/postgres", databaseName: "sampled" });
   const wait = (ms: number): Promise<void> =>
     new Promise((done) => {
@@ -851,7 +851,7 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
     const { metricsPort, restore } = await rig({
       metrics: () => {
         scrapes += 1;
-        return { status: 200, body: exposition(scrapes <= 2 ? 4 : 13, 10) };
+        return { status: 200, body: exposition(scrapes <= 2 ? 4 : 13, 10, scrapes <= 2 ? 1 : 5) };
       },
       backends: "7|0",
     });
@@ -867,7 +867,7 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
       const figures = await sampler.stop();
       expect(scrapes).toBe(figures.pool.samples);
       expect(figures.pool.samples).toBeGreaterThanOrEqual(4);
-      expect(figures.pool).toMatchObject({ intervalMs: 250, size: 10, max: 13, p95: 13 });
+      expect(figures.pool).toMatchObject({ intervalMs: 250, size: 10, max: 13, p95: 13, writersWaiting: { max: 5, p95: 5 } });
       expect(figures.pool.samplesAboveSize).toBe(figures.pool.samples - 2);
       expect(figures.lockWaits).toMatchObject({ intervalMs: 250, samples: figures.pool.samples, max: 7, p95: 7 });
     } finally {
@@ -880,6 +880,9 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
       ["a metrics listener that answers an error", { metrics: () => ({ status: 500, body: "" }), backends: "0|0" }, /answered 500/],
       ["a metrics text without the transactions in flight", { metrics: () => ({ status: 200, body: "slugbase_db_pool_size 10\n" }), backends: "0|0" }, /no readable slugbase_db_tenant_transactions_in_flight/],
       ["a metrics text without the pool size", { metrics: () => ({ status: 200, body: "slugbase_db_tenant_transactions_in_flight 3\n" }), backends: "0|0" }, /no readable slugbase_db_pool_size/],
+      ["a metrics text without the writers waiting", { metrics: () => ({ status: 200, body: "slugbase_db_pool_size 10\nslugbase_db_tenant_transactions_in_flight 3\n" }), backends: "0|0" }, /no readable slugbase_db_tenant_writers_waiting/],
+      ["a count of writers waiting that is not a number", { metrics: () => ({ status: 200, body: exposition(3, 10, Number.NaN) }), backends: "0|0" }, /no readable slugbase_db_tenant_writers_waiting/],
+      ["a count of writers waiting that is negative", { metrics: () => ({ status: 200, body: exposition(3, 10, -1) }), backends: "0|0" }, /no readable slugbase_db_tenant_writers_waiting/],
       ["a count that is not a number", { metrics: () => ({ status: 200, body: exposition(Number.NaN, 10) }), backends: "0|0" }, /no readable slugbase_db_tenant_transactions_in_flight/],
       ["backends whose activity the role may not see", { metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "0|3" }, /could not be read/],
       ["an answer of psql that is no count", { metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "ERROR" }, /could not be read/],
@@ -896,7 +899,7 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
     const { metricsPort, restore } = await rig({ metrics: () => ({ status: 200, body: exposition(2, 10) }), backends: "0|0" });
     try {
       const sampler = startSampler(sampleOptions(metricsPort, "before"));
-      await expect(sampler.stop()).rejects.toThrow(/no sample of the pool or of the lock waits was taken while an import was in flight/);
+      await expect(sampler.stop()).rejects.toThrow(/no sample of the pool, of the writers waiting or of the lock waits was taken while an import was in flight/);
     } finally {
       restore();
     }
@@ -944,6 +947,7 @@ describe("the pool and the lock waits sampled while an import is in flight", () 
     expect(runner).toContain("http://127.0.0.1:${String(metricsPort)}/metrics");
     expect(runner).toContain('"slugbase_db_tenant_transactions_in_flight"');
     expect(runner).toContain('"slugbase_db_pool_size"');
+    expect(runner).toContain('"slugbase_db_tenant_writers_waiting"');
     expect(runner).toContain("wait_event_type = 'Lock'");
     expect(runner).toMatch(/const SAMPLE_INTERVAL_MS = 250;/);
     expect(runner).toMatch(/imports, creates: \{.*\}, pool: sampled\.figures\.pool, lockWaits: sampled\.figures\.lockWaits \}/);

@@ -57,13 +57,17 @@ SlugBase records each of these once:
 | Category | Events |
 | -------- | ------ |
 | **Workspace** | **Workspace created**, **Workspace renamed**, **Workspace setting changed** (for example the AI switch, with its old and new value), **Workspace deletion requested**, **Ownership transferred** |
-| **Member** | **Member joined**, **Member role changed**, **Member removed**, **Member left**, **Instance administrator joined** |
+| **Member** | **Member joined**, **Member role changed**, **Member removed**, **Member left**, **Former members' content deleted**, **Former members' content reassigned**, **Instance administrator joined** |
 | **Invitation** | **Invitation sent**, **Invitation resent**, **Invitation link created**, **Invitation revoked** |
 | **Team** | **Team created**, **Team renamed**, **Team members changed**, **Team deleted** |
 | **Sharing** | **Share granted**, **Share revoked**, **Several bookmarks shared** |
-| **Bookmark** | **Bookmarks deleted** when many are deleted at once, and, on SlugBase Cloud, **Bookmarks archived** and **Bookmarks restored** |
+| **Bookmark** | **Bookmarks deleted** when many are deleted at once, **Bookmark removed by the instance operator**, and, on SlugBase Cloud, **Bookmarks archived** and **Bookmarks restored** |
 | **Import** | **Import completed**, with counts only |
 | **Export** | **Export created**, with counts only |
+
+**Former members' content deleted** and **Former members' content reassigned** appear when an admin or an owner deletes the bookmarks and folders that former members left behind, or gives them to a member. They record how many bookmarks and how many folders, and for a reassignment who received them. See [Members](members.mdx).
+
+**Bookmark removed by the instance operator** appears when the instance operator of a self-hosted SlugBase removes a bookmark of your workspace. Its **Details** show the reason the operator gave. See [Remove a Bookmark as the Operator](/docs/self-hosting/remove-bookmark).
 
 A person who accepts an invitation shows as **Member joined**. There is no separate event for the acceptance.
 
@@ -72,7 +76,7 @@ A person who accepts an invitation shows as **Member joined**. There is no separ
 ## What is not recorded
 
 - **Sign-ins and token events.** They are account security events, not workspace events. A person sees their own sessions under [Security](../account/security.mdx).
-- **The content of your bookmarks.** Creating, editing or deleting a single bookmark is not an event. The log records bulk deletes, imports and exports as counts only.
+- **The content of your bookmarks.** Creating, editing or deleting a single bookmark is not an event, apart from the removal by the instance operator. The log records bulk deletes, imports and exports as counts only.
 - **Secrets, email text, addresses and titles.** An event holds names and small facts. It never holds a password, a token, the text of an email, or a bookmark's address or title.
 - **Dry runs.** A preview of an import records nothing.
 

@@ -2214,6 +2214,85 @@
         },
         "loading": "Loading invitations"
       },
+      "former": {
+        "title": "Former members' content",
+        "description": "Bookmarks and folders that belong to no one now, because their owner left the workspace or deleted their account. Only owners and admins see them.",
+        "loading": "Loading former members' content",
+        "empty": {
+          "title": "No content from former members",
+          "description": "When someone leaves the workspace or deletes their account, the bookmarks and folders they leave behind appear here."
+        },
+        "column": {
+          "created": "Created"
+        },
+        "bookmarks": {
+          "title": "Bookmarks",
+          "column": {
+            "title": "Title",
+            "host": "Host",
+            "slug": "Slug"
+          },
+          "noSlug": "No slug",
+          "select": "Select {title}",
+          "selectAll": "Select all loaded bookmarks",
+          "loadFailed": "The bookmarks of former members could not be loaded"
+        },
+        "folders": {
+          "title": "Folders",
+          "column": {
+            "name": "Name",
+            "bookmarks": "Bookmarks"
+          },
+          "select": "Select {name}",
+          "selectAll": "Select all loaded folders",
+          "loadFailed": "The folders of former members could not be loaded"
+        },
+        "selection": {
+          "label": "Selected content of former members",
+          "count": "{count, plural, one {# selected} other {# selected}}"
+        },
+        "delete": {
+          "action": "Delete selected",
+          "title": "Delete former members' content?",
+          "description": "Deleting {summary} is permanent. It also removes their shares, tags and filings in folders. There is no trash and no undo.",
+          "foldersNote": "Deleting a folder does not delete the bookmarks filed in it. Select them too to delete them.",
+          "confirm": "Delete",
+          "cancel": "Cancel",
+          "count": {
+            "bookmarks": "{count, plural, one {# bookmark} other {# bookmarks}}",
+            "folders": "{count, plural, one {# folder} other {# folders}}",
+            "both": "{bookmarks} and {folders}"
+          },
+          "done": "{summary} deleted.",
+          "nothing": "Nothing was deleted. The content was already gone, or it has an owner again.",
+          "partial": "Only {done, number} of {total, number} were deleted before an error. The rest is still selected; try again in a moment."
+        },
+        "reassign": {
+          "action": "Reassign to…",
+          "close": "Close",
+          "cancel": "Cancel",
+          "continue": "Continue",
+          "dialog": {
+            "title": "Reassign former members' content",
+            "description": "Choose the member who becomes the owner of {summary}."
+          },
+          "recipient": {
+            "label": "New owner",
+            "placeholder": "Search members",
+            "empty": "No member matches"
+          },
+          "recipientGone": "{name} is no longer a member of this workspace. Choose another member; your selection is kept.",
+          "title": "Reassign former members' content?",
+          "description": "{recipient} becomes the owner of {summary}. A bookmark whose slug {recipient} already uses loses its slug and stops forwarding. A folder whose name {recipient} already has gets a number added, as in “Reading (2)”. A filing that would link a folder and a bookmark with different owners is removed. Shares stay in force.",
+          "confirm": "Reassign",
+          "done": "{summary} reassigned to {recipient}.",
+          "nothing": "Nothing was reassigned. The content was already gone, or it has an owner again.",
+          "tooMany": "One reassignment takes at most {max, number} bookmarks and {max, number} folders. Reassign in smaller selections, and select each folder together with its bookmarks so that they stay filed together.",
+          "slugsCleared": "{count, plural, one {# slug was removed because the member already uses it.} other {# slugs were removed because the member already uses them.}}",
+          "foldersRenamed": "{count, plural, one {# folder was renamed because the member has a folder with that name.} other {# folders were renamed because the member has folders with those names.}}",
+          "filingsRemoved": "{count, plural, one {# filing was removed because its folder and bookmark have different owners.} other {# filings were removed because their folders and bookmarks have different owners.}}"
+        }
+      },
       "invite": {
         "title": "Invite people",
         "description": "Invite people to this workspace by email.",
@@ -3156,6 +3235,8 @@
         "removed": "Member removed",
         "left": "Member left",
         "joined": "Member joined",
+        "former_content_deleted": "Former members' content deleted",
+        "former_content_reassigned": "Former members' content reassigned",
         "instance_admin_joined": "Instance administrator joined"
       },
       "invitation": {
@@ -3173,7 +3254,8 @@
       "bookmark": {
         "archived": "Bookmarks archived",
         "restored": "Bookmarks restored",
-        "bulk_deleted": "Bookmarks deleted"
+        "bulk_deleted": "Bookmarks deleted",
+        "operator_deleted": "Bookmark removed by the instance operator"
       },
       "share": {
         "granted": "Share granted",
@@ -3223,7 +3305,8 @@
       "failed": "Failed",
       "slugsDropped": "Slugs dropped",
       "foldersCreated": "Folders created",
-      "tagsCreated": "Tags created"
+      "tagsCreated": "Tags created",
+      "reason": "Reason"
     }
   },
   "sharing": {

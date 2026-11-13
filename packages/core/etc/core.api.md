@@ -591,6 +591,31 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "member.former_content_deleted": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly bookmarks: {
+                readonly type: "count";
+            };
+            readonly folders: {
+                readonly type: "count";
+            };
+        };
+    };
+    readonly "member.former_content_reassigned": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly transferTo: {
+                readonly type: "uuid";
+            };
+            readonly bookmarks: {
+                readonly type: "count";
+            };
+            readonly folders: {
+                readonly type: "count";
+            };
+        };
+    };
     readonly "member.instance_admin_joined": {
         readonly category: "member";
         readonly metadata: {
@@ -707,6 +732,16 @@ export const AUDIT_ACTIONS: {
         readonly metadata: {
             readonly count: {
                 readonly type: "count";
+            };
+        };
+    };
+    readonly "bookmark.operator_deleted": {
+        readonly category: "bookmark";
+        readonly metadata: {
+            readonly reason: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
             };
         };
     };

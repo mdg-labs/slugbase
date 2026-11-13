@@ -5,6 +5,7 @@ import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../src/auth/tenant-resolver.ts";
 import { createServer } from "../src/create-server.ts";
+import { WORKSPACE_WRITERS } from "../src/read-reserve.ts";
 import { createUsageBuffer } from "../src/usage/buffer.ts";
 import { storeFor } from "./auth/support.ts";
 import { appUrl } from "./contract/support.ts";
@@ -12,21 +13,21 @@ import { adapters, recordingLogger, serverConfig } from "./support.ts";
 import { HOOK_TIMEOUT_MS, send, workspaceHarness, type World } from "./workspaces/support.ts";
 
 // The read reserve of the server's tenant pool (doc 01 section 9.2). An import holds its workspace's row from the moment it takes its places until it
-// commits, and every bookmark create of that workspace waits on that row inside a tenant transaction, holding one connection of the pool for it. The pool
-// has ten connections, so ten creates that wait take all of them, and then the reads of every other workspace (`GET /api/v1/bookmarks`, `GET /go/<slug>`)
-// wait for a connection until the import commits. The failure scenario: more creates than the pool has connections wait on one workspace's row, and a
-// member of another workspace still reads, while the row is held, within the bound below; after the row is released every create answers 201 and each
-// of them stored one bookmark.
+// commits, and every bookmark create of that workspace waits on that row inside a tenant transaction, holding one connection of the pool for it. Without a
+// bound the pool's ten connections fill with such waiters and the reads of every other workspace (`GET /api/v1/bookmarks`, `GET /go/<slug>`) wait for a connection
+// until the import commits; with the reserve alone seven of them idle, and with the cap per workspace two. The failure scenario: more creates than the pool has
+// connections wait on one workspace's row, and while the row is held at most `WORKSPACE_WRITERS` of the server's backends wait for a lock, a create of another
+// workspace and the reads of it (a list, a navigation) answer within the bound below; after the row is released every create answers 201 and each of them stored one bookmark.
 
 const TEST_TIMEOUT_MS = 120_000;
 const BOOKMARKS = "/api/v1/bookmarks";
 const POOL_SIZE = 10;
-// More creates than the pool has connections, half of them under an Idempotency-Key (the stage of that name opens the transaction of a keyed create, the handler's own call joins it).
-const CREATES = POOL_SIZE + 4;
-// The most a read may take while the row is held. A read that has to wait for a connection waits for the release, which this test does not make until the reads have answered or this bound has passed.
+// As many creates as the pool has connections, half of them under an Idempotency-Key (the stage of that name opens the transaction of a keyed create, the handler's own call joins it).
+const CREATES = POOL_SIZE;
+// The most a read, or a create of another workspace, may take while the row is held. A request that has to wait for a connection or for a place waits for the release, which this test does not make until the requests have answered or this bound has passed.
 const READ_BOUND_MS = 4_000;
 const WAIT_MS = 30_000;
-// The writers that wait on the row hold their connections, so the pool is as full as it gets once this many backends wait and the number stays put.
+// The writers that wait on the row hold their connections, so the number of backends that wait is as high as it gets once it stays put for this many samples.
 const SETTLED_SAMPLES = 8;
 
 const database = useTestDatabase();
@@ -88,13 +89,14 @@ async function bookmarkCount(workspaceId: string): Promise<number> {
   return rows[0]?.bookmark_count ?? -1;
 }
 
-describe("a read while creates wait on a workspace's row", { timeout: TEST_TIMEOUT_MS }, () => {
-  it("is answered while the row is held, and every create completes once it is released", async () => {
+describe("a request of another workspace while creates wait on a workspace's row", { timeout: TEST_TIMEOUT_MS }, () => {
+  it("is answered while the row is held, with at most the writers of a workspace waiting on it, and every create completes once it is released", async () => {
     const setup = harness.serve();
     const writer = await harness.person(setup);
     const reader = await harness.person(setup);
     const busy = await harness.workspaceOf([{ person: writer, role: "owner" }]);
     const quiet = await harness.workspaceOf([{ person: reader, role: "owner" }]);
+    const otherCreate = "https://example.com/other-workspace";
     const made = await send(setup, "POST", BOOKMARKS, { cookie: reader.cookie }, { url: "https://example.com/mail", title: "Mail", slug: "mail", forwarding: true });
     expect(made.status).toBe(201);
 
@@ -147,22 +149,26 @@ describe("a read while creates wait on a workspace's row", { timeout: TEST_TIMEO
       const creates = urls.map((url, index) =>
         send(loaded, "POST", BOOKMARKS, { cookie: writer.cookie, ...(index % 2 === 0 ? { "idempotency-key": randomUUID() } : {}) }, { url, title: `Queued ${String(index)}` }),
       );
-      // The creates may hold seven connections at most (the pool less the reserve of three); without the reserve they take all ten.
-      const waiting = await lockWaitersSettled(await holderXid.promise, POOL_SIZE - 3);
+      // The creates of one workspace may hold WORKSPACE_WRITERS connections; with the reserve alone they take seven, and without it all ten.
+      const waiting = await lockWaitersSettled(await holderXid.promise, WORKSPACE_WRITERS);
+      expect(waiting, `${String(waiting)} backends wait for a lock with ${String(CREATES)} creates of one workspace waiting on its row`).toBeLessThanOrEqual(WORKSPACE_WRITERS);
 
       const started = Date.now();
       const bound = async <T>(request: Promise<T>): Promise<T | "late"> => Promise.race([request, sleep(READ_BOUND_MS).then(() => "late" as const)]);
-      const [list, go] = await Promise.all([
+      const [create, list, go] = await Promise.all([
+        bound(send(loaded, "POST", BOOKMARKS, { cookie: reader.cookie }, { url: otherCreate, title: "Other workspace" })),
         bound(send(loaded, "GET", BOOKMARKS, { cookie: reader.cookie })),
         bound(loaded.server.fetch(new Request(new URL("/go/mail", loaded.origin), { method: "GET", headers: { accept: "text/html", cookie: reader.cookie } }))),
       ]);
       const elapsed = Date.now() - started;
 
+      expect(create, `the create of another workspace waited more than ${String(READ_BOUND_MS)} ms with ${String(waiting)} creates waiting on the row`).not.toBe("late");
       expect(list, `the list waited more than ${String(READ_BOUND_MS)} ms with ${String(waiting)} creates waiting on the row`).not.toBe("late");
       expect(go, `the navigation waited more than ${String(READ_BOUND_MS)} ms with ${String(waiting)} creates waiting on the row`).not.toBe("late");
-      if (list === "late" || go === "late") {
+      if (create === "late" || list === "late" || go === "late") {
         return;
       }
+      expect(create.status).toBe(201);
       expect(list.status).toBe(200);
       expect(go.status).toBe(302);
       expect(go.headers.get("location")).toBe("https://example.com/mail");
@@ -174,7 +180,8 @@ describe("a read while creates wait on a workspace's row", { timeout: TEST_TIMEO
       expect(answers.map((response) => response.status)).toEqual(creates.map(() => 201));
       expect(await storedUrls(busy.workspaceId)).toEqual([...urls].sort());
       expect(await bookmarkCount(busy.workspaceId)).toBe(CREATES);
-      expect(await storedUrls(quiet.workspaceId)).toEqual(["https://example.com/mail"]);
+      expect(await bookmarkCount(quiet.workspaceId)).toBe(2);
+      expect(await storedUrls(quiet.workspaceId)).toEqual(["https://example.com/mail", otherCreate]);
     } finally {
       release();
       await holding.catch(() => undefined);

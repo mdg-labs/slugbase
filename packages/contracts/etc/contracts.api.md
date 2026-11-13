@@ -345,7 +345,7 @@ export const AUDIT_ACTION_FILTER_MAX = 20;
 export const AUDIT_ACTOR_TYPES: readonly ["account", "api_token", "system"];
 
 // @public
-export const AUDIT_EVENT_ACTIONS: readonly ["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created", "import.completed"];
+export const AUDIT_EVENT_ACTIONS: readonly ["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.former_content_deleted", "member.former_content_reassigned", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted", "bookmark.operator_deleted", "share.granted", "share.revoked", "share.bulk_granted", "export.created", "import.completed"];
 
 // @public
 export const AUDIT_EVENT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark", "share", "export", "import"];
@@ -1549,6 +1549,14 @@ export interface ComponentTypes {
         DeleteAccountRequest: {
             email: string;
         };
+        DeleteFormerContentRequest: {
+            bookmarkIds?: string[];
+            folderIds?: string[];
+        };
+        DeleteFormerContentResult: {
+            bookmarksDeleted: number;
+            foldersDeleted: number;
+        };
         DisableMfaRequest: {
             code: string;
             password?: string;
@@ -1670,6 +1678,32 @@ export interface ComponentTypes {
         };
         ForgotPasswordRequest: {
             email: string;
+        };
+        FormerBookmark: {
+            createdAt: string;
+            forwarding: boolean;
+            host: string;
+            id: string;
+            slug: string | null;
+            title: string;
+            updatedAt: string;
+            url: string;
+        };
+        FormerBookmarkList: {
+            items: ComponentTypes["schemas"]["FormerBookmark"][];
+            nextCursor: string | null;
+        };
+        FormerFolder: {
+            bookmarkCount: number;
+            color: number;
+            createdAt: string;
+            icon: string;
+            id: string;
+            name: string;
+        };
+        FormerFolderList: {
+            items: ComponentTypes["schemas"]["FormerFolder"][];
+            nextCursor: string | null;
         };
         GoCandidate: {
             host: string;
@@ -2039,6 +2073,18 @@ export interface ComponentTypes {
                 applied: number | null;
                 expected: number;
             };
+        };
+        ReassignFormerContentRequest: {
+            bookmarkIds?: string[];
+            folderIds?: string[];
+            transferTo: string;
+        };
+        ReassignFormerContentResult: {
+            bookmarksMoved: number;
+            filingsRemoved: number;
+            foldersMoved: number;
+            foldersRenamed: number;
+            slugsCleared: number;
         };
         ReauthRequest: {
             password: string;
@@ -3335,6 +3381,48 @@ export const deleteFolderShare: {
 };
 
 // @public (undocumented)
+export const deleteFormerContent: {
+    readonly method: "post";
+    readonly path: "/api/v1/workspace/former-content/delete";
+    readonly operationId: "deleteFormerContent";
+    readonly tag: "members";
+    readonly summary: "Delete the bookmarks and folders of former members";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            bookmarkIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        bookmarksDeleted: z.ZodNumber;
+        foldersDeleted: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const DeleteFormerContentRequestSchema: z.ZodObject<{
+    bookmarkIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const DeleteFormerContentResultSchema: z.ZodObject<{
+    bookmarksDeleted: z.ZodNumber;
+    foldersDeleted: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const deleteGoPreference: {
     readonly method: "delete";
     readonly path: "/api/v1/me/go-preferences/{slug}";
@@ -4140,6 +4228,65 @@ export const forgotPassword: {
 // @public (undocumented)
 export const ForgotPasswordRequestSchema: z.ZodObject<{
     email: z.ZodEmail;
+}, z.core.$strict>;
+
+// @public
+export const FORMER_CONTENT_DELETE_MAX = 1000;
+
+// @public (undocumented)
+export const FormerBookmarkListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FormerBookmarkSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    title: z.ZodString;
+    url: z.ZodString;
+    host: z.ZodString;
+    slug: z.ZodNullable<z.ZodString>;
+    forwarding: z.ZodBoolean;
+    createdAt: z.ZodISODateTime;
+    updatedAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FormerContentListQuerySchema: z.ZodObject<{
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FormerFolderListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+        bookmarkCount: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FormerFolderSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    icon: z.ZodString;
+    color: z.ZodNumber;
+    bookmarkCount: z.ZodNumber;
+    createdAt: z.ZodISODateTime;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -6484,6 +6631,82 @@ export const ListFoldersQuerySchema: z.ZodObject<{
     limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
     cursor: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const listFormerBookmarks: {
+    readonly method: "get";
+    readonly path: "/api/v1/workspace/former-content/bookmarks";
+    readonly operationId: "listFormerBookmarks";
+    readonly tag: "members";
+    readonly summary: "List the bookmarks of former members";
+    readonly auth: "admin";
+    readonly rate: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listFormerFolders: {
+    readonly method: "get";
+    readonly path: "/api/v1/workspace/former-content/folders";
+    readonly operationId: "listFormerFolders";
+    readonly tag: "members";
+    readonly summary: "List the folders of former members";
+    readonly auth: "admin";
+    readonly rate: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+        bookmarkCount: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const listGoPreferences: {
@@ -9553,6 +9776,87 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    deleteFormerContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["DeleteFormerContentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["DeleteFormerContentResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     deleteGoPreference: {
         parameters: {
             query?: never;
@@ -12555,6 +12859,166 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listFormerBookmarks: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["FormerBookmarkList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listFormerFolders: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["FormerFolderList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listGoPreferences: {
         parameters: {
             query?: {
@@ -13629,6 +14093,87 @@ export interface OperationTypes {
                 };
                 content: {
                     "application/json": ComponentTypes["schemas"]["BulkBookmarksPreview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    reassignFormerContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ReassignFormerContentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ReassignFormerContentResult"];
                 };
             };
             400: {
@@ -18346,6 +18891,74 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/workspace/former-content/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listFormerBookmarks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/workspace/former-content/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["deleteFormerContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/workspace/former-content/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listFormerFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/workspace/former-content/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["reassignFormerContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/workspace/leave": {
         parameters: {
             query?: never;
@@ -18827,6 +19440,56 @@ export const ReadyStatusSchema: z.ZodObject<{
         expected: z.ZodNumber;
         applied: z.ZodNullable<z.ZodNumber>;
     }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const reassignFormerContent: {
+    readonly method: "post";
+    readonly path: "/api/v1/workspace/former-content/reassign";
+    readonly operationId: "reassignFormerContent";
+    readonly tag: "members";
+    readonly summary: "Give the bookmarks and folders of former members to a member";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            bookmarkIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            transferTo: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        bookmarksMoved: z.ZodNumber;
+        foldersMoved: z.ZodNumber;
+        slugsCleared: z.ZodNumber;
+        foldersRenamed: z.ZodNumber;
+        filingsRemoved: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ReassignFormerContentRequestSchema: z.ZodObject<{
+    bookmarkIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    transferTo: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ReassignFormerContentResultSchema: z.ZodObject<{
+    bookmarksMoved: z.ZodNumber;
+    foldersMoved: z.ZodNumber;
+    slugsCleared: z.ZodNumber;
+    foldersRenamed: z.ZodNumber;
+    filingsRemoved: z.ZodNumber;
 }, z.core.$strict>;
 
 // @public (undocumented)

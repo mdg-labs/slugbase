@@ -52,6 +52,7 @@ import { faviconRoutes } from "./routes/favicons.ts";
 import { auditRoutes } from "./routes/audit/index.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
+import { formerContentRoutes } from "./routes/former-content/index.ts";
 import { teamRoutes } from "./routes/teams/index.ts";
 import { sharingRoutes } from "./routes/sharing/index.ts";
 import { goRoutes } from "./routes/go/index.ts";
@@ -606,6 +607,7 @@ export function createServer(options: CreateServerOptions): Server {
     metrics.setPoolSize(DEFAULT_SERVER_POOL_SIZE);
   }
   const readReserve = createReadReserve({ poolSize: DEFAULT_SERVER_POOL_SIZE });
+  metrics.observeWritersWaiting(() => readReserve.waiting());
   const context: ModuleContext = Object.freeze({
     config,
     logger,
@@ -674,6 +676,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationDefault: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail, ownedWorkspaces: ownedWorkspaceEntitlements }));
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN), ...(options.now === undefined ? {} : { now: options.now }) }));
+  // So is the former members' content of the active workspace: an admin or owner lists the bookmarks and folders that have no owner, each list paged by a keyset cursor.
+  builtInRoutes.push(...formerContentRoutes({ cursorSecret: config.SESSION_SECRET }));
   // So is the audit log of the active workspace: an admin or owner of a workspace that holds `audit.log` reads its events, filtered and paged by a keyset cursor.
   builtInRoutes.push(...auditRoutes({ cursorSecret: config.SESSION_SECRET }));
   // So are the teams of the active workspace: every member lists them and reads their members, and an admin or owner holding `teams.manage` creates, renames, deletes them and replaces their members.

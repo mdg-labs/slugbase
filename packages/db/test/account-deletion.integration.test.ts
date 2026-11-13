@@ -277,6 +277,33 @@ describe("deleting an account", () => {
     expect((await queued(EVENT_QUEUE)).map((data) => data["accountId"])).toEqual([ada.id]);
   });
 
+  it("removes the recipient's identifier from the event of a reassignment of former members' content, and keeps the counts and the other recipient's events", async () => {
+    const admin = await person();
+    const recipient = await person();
+    const other = await person();
+    const shared = await workspaceOf("Shared", [admin, "owner"], [recipient, "member"], [other, "member"]);
+    const event = async (transferTo: string): Promise<string> => {
+      const id = freshId();
+      await asSystem(
+        db,
+        (tx) => tx`
+          INSERT INTO audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, metadata)
+          VALUES (${id}, ${shared}, 'account', ${admin.id}, 'Admin', 'member.former_content_reassigned', ${JSON.stringify({ transferTo, bookmarks: "2", folders: "1" })}::text::jsonb)`,
+      );
+      return id;
+    };
+    const toRecipient = await event(recipient.id);
+    const toOther = await event(other.id);
+
+    expect((await deleteAccount(recipient)).deleted).toBe(true);
+
+    const rows = await asSystem(db, (tx) => tx<{ id: string; metadata: Record<string, string> }[]>`SELECT id, metadata FROM audit_events WHERE id IN (${toRecipient}, ${toOther})`);
+    const metadata = Object.fromEntries(rows.map((row) => [row.id, row.metadata]));
+    expect(metadata[toRecipient]).toEqual({ bookmarks: "2", folders: "1" });
+    expect(metadata[toOther]).toEqual({ transferTo: other.id, bookmarks: "2", folders: "1" });
+    expect(await tablesHolding(recipient.id)).toEqual([]);
+  });
+
   it("changes nothing of another account or of a workspace the account did not belong to", async () => {
     const ada = await person();
     const grace = await person();

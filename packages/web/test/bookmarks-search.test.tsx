@@ -43,7 +43,6 @@ interface Call {
   readonly method: string;
   readonly path: string;
   readonly params: URLSearchParams;
-  readonly at: number;
 }
 
 interface Server {
@@ -63,7 +62,7 @@ function stubServer(all: readonly Bookmark[]): Server {
     vi.fn<Transport>((request) =>
       signedIn(request, async (other) => {
         const url = new URL(other.url);
-        const call: Call = { method: other.method, path: url.pathname, params: url.searchParams, at: performance.now() };
+        const call: Call = { method: other.method, path: url.pathname, params: url.searchParams };
         if (url.pathname === "/api/v1/folders" || url.pathname === "/api/v1/tags") {
           return json({ items: [], nextCursor: null, total: 0 });
         }
@@ -139,12 +138,11 @@ async function press(element: HTMLElement): Promise<void> {
   });
 }
 
-async function type(field: HTMLElement, text: string): Promise<number> {
+async function type(field: HTMLElement, text: string): Promise<void> {
   await act(async () => {
     fireEvent.change(field, { target: { value: text } });
     await Promise.resolve();
   });
-  return performance.now();
 }
 
 const WORLD = [
@@ -162,8 +160,23 @@ describe("the search field of the bookmark list", { timeout: HEAVY_TEST_TIMEOUT_
     const field = screen.getByRole("searchbox", { name: "Search" });
     const before = server.lists().length;
 
-    await type(field, "w");
-    const typedAt = await type(field, "widg");
+    // Only the timers are faked, and only while the member types, so the debounce is measured on the timer and not on how long the
+    // router, the query and the render take to follow it, which depends on the load of the host.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await type(field, "w");
+      await type(field, "widg");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(IDLE_MS - 1);
+      });
+      expect(server.lists().length).toBe(before);
+      expect(window.location.search).toBe("");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     await waitFor(() => {
       expect(screen.queryByRole("link", { name: "Cooking" })).toBeNull();
@@ -171,7 +184,6 @@ describe("the search field of the bookmark list", { timeout: HEAVY_TEST_TIMEOUT_
     await screen.findByRole("link", { name: "Widget notes" });
     const asked = server.lists().slice(before);
     expect(asked.map((call) => call.params.get("q"))).toEqual(["widg"]);
-    expect(asked[0]?.at ?? 0).toBeGreaterThanOrEqual(typedAt + IDLE_MS - 20);
     expect(window.location.search).toBe("?q=widg");
     const chips = screen.getByRole("list", { name: "Active filters" });
     expect(within(chips).getByText("Search: widg")).toBeDefined();

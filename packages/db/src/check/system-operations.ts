@@ -1,4 +1,4 @@
-import { internalSystemOperations, systemOperations } from "../system/registry.ts";
+import { internalSystemOperations, operatorSystemOperations, systemOperations } from "../system/registry.ts";
 import { requireDatabase, type CheckRule, type Finding } from "./types.ts";
 
 // Doc 05 section 3.3 and doc 10 T1: a function that runs with the privileges
@@ -9,7 +9,10 @@ import { requireDatabase, type CheckRule, type Finding } from "./types.ts";
 // to slugbase_app. An internal operation (src/system/registry.ts), one that only
 // other system operations call, follows the same rules except the last: neither
 // slugbase_app nor PUBLIC may execute it, so a limit or a guard its callers
-// apply cannot be got round by calling it directly.
+// apply cannot be got round by calling it directly. An operator operation
+// (src/system/registry.ts), one that only the holder of the database calls after
+// SET ROLE slugbase_system, is held to the same: neither slugbase_app nor PUBLIC
+// may execute it, so no request, job or console action reaches it.
 //
 // The pinned search_path is exactly `pg_catalog, public, pg_temp`. PostgreSQL
 // searches the session's temporary schema first, for table and type names,
@@ -58,17 +61,18 @@ function qualified(entry: string): string {
 }
 
 /**
- * The rule over a given registry and the internal operations among its entries;
- * `systemOperationsRule` is the one over the shipped registry.
+ * The rule over a given registry and the internal and the operator operations
+ * among its entries; `systemOperationsRule` is the one over the shipped registry.
  */
-export function createSystemOperationsRule(registry: readonly string[], internal: readonly string[] = []): CheckRule {
+export function createSystemOperationsRule(registry: readonly string[], internal: readonly string[] = [], operator: readonly string[] = []): CheckRule {
   return {
     id: ID,
-    description: `every SECURITY DEFINER function is registered, and every registered function is owned by ${SYSTEM_ROLE} with search_path ${SEARCH_PATH_VALUE}, no dynamic SQL, EXECUTE revoked from PUBLIC and EXECUTE granted to ${APP_ROLE}, except an internal operation, which ${APP_ROLE} cannot execute`,
+    description: `every SECURITY DEFINER function is registered, and every registered function is owned by ${SYSTEM_ROLE} with search_path ${SEARCH_PATH_VALUE}, no dynamic SQL, EXECUTE revoked from PUBLIC and EXECUTE granted to ${APP_ROLE}, except an internal or an operator operation, which ${APP_ROLE} cannot execute`,
     async run(context) {
       const sql = requireDatabase(context);
       const registered = new Set(registry.map(qualified));
       const internalEntries = new Set(internal.map(qualified));
+      const operatorEntries = new Set(operator.map(qualified));
       const functions = await sql<FunctionRow[]>`
         SELECT n.nspname AS schema,
                p.proname AS name,
@@ -130,6 +134,10 @@ export function createSystemOperationsRule(registry: readonly string[], internal
           if (fn.appExecute && !fn.publicExecute) {
             findings.push({ rule: ID, object, message: `is an internal system operation but ${APP_ROLE} can execute it` });
           }
+        } else if (operatorEntries.has(key)) {
+          if (fn.appExecute && !fn.publicExecute) {
+            findings.push({ rule: ID, object, message: `is an operator system operation but ${APP_ROLE} can execute it` });
+          }
         } else if (!fn.appExecute) {
           findings.push({ rule: ID, object, message: `does not grant EXECUTE to ${APP_ROLE}` });
         }
@@ -144,9 +152,14 @@ export function createSystemOperationsRule(registry: readonly string[], internal
           findings.push({ rule: ID, object: `function ${entry}`, message: "is marked internal but is not in the system operation registry" });
         }
       }
+      for (const entry of operatorEntries) {
+        if (!registered.has(entry)) {
+          findings.push({ rule: ID, object: `function ${entry}`, message: "is marked operator but is not in the system operation registry" });
+        }
+      }
       return findings;
     },
   };
 }
 
-export const systemOperationsRule: CheckRule = createSystemOperationsRule(systemOperations, internalSystemOperations);
+export const systemOperationsRule: CheckRule = createSystemOperationsRule(systemOperations, internalSystemOperations, operatorSystemOperations);

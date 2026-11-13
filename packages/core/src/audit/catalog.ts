@@ -46,6 +46,9 @@ const FLAG: AuditMetadataField = { type: "text", minLength: 4, maxLength: 5 };
 /** What happens to a departing member's content: `transfer` or `delete`. */
 const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLength: 8 };
 
+/** Why the instance operator removed a bookmark: a plain text of 1 to 100 characters, read by the workspace's admins, so never personal data. */
+const OPERATOR_REASON: AuditMetadataField = { type: "text", minLength: 1, maxLength: 100 };
+
 /** How many rows a bulk change touched; the one thing such an event says about them, never a title or a URL. */
 const COUNT: AuditMetadataField = { type: "count" };
 
@@ -61,6 +64,13 @@ export const AUDIT_ACTIONS = {
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.joined": { category: "member", metadata: { role: MEMBER_ROLE } },
+  // An owner or an admin deleted former members' bookmarks and folders, those that have no owner, in one request (doc 02 section 2.10): how many bookmarks and how many folders
+  // were deleted, and nothing about them. A request that deletes none records nothing.
+  "member.former_content_deleted": { category: "member", metadata: { bookmarks: COUNT, folders: COUNT } },
+  // An owner or an admin gave former members' bookmarks and folders, those that have no owner, to a member in one request (doc 02 section 2.10): the receiving account and how many bookmarks
+  // and how many folders moved, and nothing about them. `transferTo` is the key that names an account in a member's departure too, so deleting the account removes it from this event
+  // (doc 05 section 7.1). A request that moves none records nothing.
+  "member.former_content_reassigned": { category: "member", metadata: { transferTo: { type: "uuid" }, bookmarks: COUNT, folders: COUNT } },
   // An instance admin made themselves a member of the workspace (doc 02 section 11.1). It is its own action, not a `member.joined`, so the
   // owners who read the log can tell an operator's privilege from an invitation accepted; the instance stream holds the matching event.
   "member.instance_admin_joined": { category: "member", metadata: { role: MEMBER_ROLE } },
@@ -79,6 +89,9 @@ export const AUDIT_ACTIONS = {
   "bookmark.restored": { category: "bookmark", metadata: { count: COUNT } },
   // A member deleted several of their bookmarks in one request (doc 02 section 5.8): the number deleted, and nothing about them.
   "bookmark.bulk_deleted": { category: "bookmark", metadata: { count: COUNT } },
+  // Whoever holds the database removed one bookmark of the workspace, whatever its owner, with the system operation sys_bookmark_operator_delete (doc 10 section 2.10).
+  // The actor is the system, labelled with the database login; the entity is the bookmark and the reason, given by the operator, is the one thing the event says about the removal.
+  "bookmark.operator_deleted": { category: "bookmark", metadata: { reason: OPERATOR_REASON } },
   // A bookmark or a folder was shared with a member or a team, or a share was revoked (doc 02 section 8). The event is about the bookmark or the folder (its
   // entity type says which) and says nothing of it but its identifier: the log is read by administrators, who have no implicit access to a member's content.
   // The target is named by kind, identifier and the name it had; the deletion of a member's account removes `targetId` from the events that name it (doc 05 section 7.1).

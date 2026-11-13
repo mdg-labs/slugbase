@@ -2336,6 +2336,56 @@
         ],
         "type": "object"
       },
+      "DeleteFormerContentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkIds": {
+            "description": "The bookmarks to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "folderIds": {
+            "description": "The folders to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteFormerContentResult": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarksDeleted": {
+            "description": "How many of the named bookmarks were deleted",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "foldersDeleted": {
+            "description": "How many of the named folders were deleted",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bookmarksDeleted",
+          "foldersDeleted"
+        ],
+        "type": "object"
+      },
       "DisableMfaRequest": {
         "anyOf": [
           {
@@ -3158,6 +3208,157 @@
         },
         "required": [
           "email"
+        ],
+        "type": "object"
+      },
+      "FormerBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the bookmark was created, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "forwarding": {
+            "description": "Whether /go forwards to the bookmark by its slug",
+            "type": "boolean"
+          },
+          "host": {
+            "description": "The host name of the URL, lower case and in punycode",
+            "type": "string"
+          },
+          "id": {
+            "description": "The bookmark's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The bookmark's slug, null when it has none",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "When the bookmark last changed, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL as stored: normalised, and always http or https",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url",
+          "host",
+          "slug",
+          "forwarding",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "FormerBookmarkList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the workspace's bookmarks that have no owner, in the order of their identifiers, which is the order they were created in",
+            "items": {
+              "$ref": "#/components/schemas/FormerBookmark"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "FormerFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkCount": {
+            "description": "How many of the bookmarks that this list of bookmarks holds are filed in the folder: the ones that have no owner, are not waiting for the content choice of a member who left and are not plan-archived",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "color": {
+            "description": "The folder's colour, 1 to 8: the number of the --folder-N theme token",
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "createdAt": {
+            "description": "When the folder was created, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "icon": {
+            "description": "The folder's icon, a lucide icon name",
+            "type": "string"
+          },
+          "id": {
+            "description": "The folder's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "name": {
+            "description": "The folder's name, in the case it was entered in",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "color",
+          "bookmarkCount",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "FormerFolderList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the workspace's folders that have no owner, in the order of their identifiers, which is the order they were created in",
+            "items": {
+              "$ref": "#/components/schemas/FormerFolder"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
         ],
         "type": "object"
       },
@@ -5388,6 +5589,86 @@
         "required": [
           "database",
           "migrations"
+        ],
+        "type": "object"
+      },
+      "ReassignFormerContentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkIds": {
+            "description": "The bookmarks to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "folderIds": {
+            "description": "The folders to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "transferTo": {
+            "description": "The account that receives the content: a current member of the workspace, with any role, the caller included",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transferTo"
+        ],
+        "type": "object"
+      },
+      "ReassignFormerContentResult": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarksMoved": {
+            "description": "How many of the named bookmarks now belong to the member",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "filingsRemoved": {
+            "description": "How many filings of a moved folder or bookmark were removed because they would have linked a folder and a bookmark of different owners",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "foldersMoved": {
+            "description": "How many of the named folders now belong to the member",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "foldersRenamed": {
+            "description": "How many of the moved folders arrived under the name `<name> (<n>)`, because the member already had a folder of that name",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "slugsCleared": {
+            "description": "How many of the moved bookmarks arrived without their slug and with forwarding off, because the member already owned that slug",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bookmarksMoved",
+          "foldersMoved",
+          "slugsCleared",
+          "foldersRenamed",
+          "filingsRemoved"
         ],
         "type": "object"
       },
@@ -21002,6 +21283,492 @@
         "summary": "Rename the active workspace",
         "tags": [
           "workspaces"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/workspace/former-content/bookmarks": {
+      "get": {
+        "operationId": "listFormerBookmarks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "The most rows to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page; valid only for the workspace and the list that issued it",
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormerBookmarkList"
+                }
+              }
+            },
+            "description": "One page of the active workspace's bookmarks that have no owner: those of a member who left or whose account was deleted. A bookmark that has an owner, one that still waits for the content choice of a member who left and one the plan archived are not listed, and no bookmark of another workspace is"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this workspace issued for this list"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the bookmarks of former members",
+        "tags": [
+          "members"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "read"
+      }
+    },
+    "/api/v1/workspace/former-content/delete": {
+      "post": {
+        "operationId": "deleteFormerContent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteFormerContentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteFormerContentResult"
+                }
+              }
+            },
+            "description": "What the request deleted, as counts only. It deletes the named bookmarks and folders of the active workspace that have no owner, with their shares, filings, tag links and remembered go choices, for good: there is no trash and no undo. The whole request is one transaction: the rows, the workspace's bookmark count (which falls by the bookmarks deleted) and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never deleted, and the answer does not say whether they exist, so a request that deletes nothing is an ordinary 200 with zero counts. A request that deletes something records one member.former_content_deleted audit event with the number of bookmarks and of folders, never a title, a URL or an identifier; one that deletes nothing records none"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is deleted"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and its deletion; nothing is deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, a field the operation does not declare)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Delete the bookmarks and folders of former members",
+        "tags": [
+          "members"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/workspace/former-content/folders": {
+      "get": {
+        "operationId": "listFormerFolders",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "The most rows to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page; valid only for the workspace and the list that issued it",
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormerFolderList"
+                }
+              }
+            },
+            "description": "One page of the active workspace's folders that have no owner: those of a member who left or whose account was deleted, each with how many of the bookmarks listed by listFormerBookmarks are filed in it. A folder that has an owner and one that still waits for the content choice of a member who left are not listed, and no folder of another workspace is"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this workspace issued for this list"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the folders of former members",
+        "tags": [
+          "members"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "read"
+      }
+    },
+    "/api/v1/workspace/former-content/reassign": {
+      "post": {
+        "operationId": "reassignFormerContent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignFormerContentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReassignFormerContentResult"
+                }
+              }
+            },
+            "description": "What the request did, as counts only. It makes `transferTo` the owner of the named bookmarks and folders of the active workspace that have no owner; their other fields, shares and tag links stay, and the workspace's bookmark count does not change. A bookmark whose slug the member already owns arrives without a slug and with forwarding off (`slugsCleared`); a folder whose name the member already has, without regard to case, arrives as `<name> (<n>)` with the lowest free n from 2 (`foldersRenamed`); a filing of a moved folder or bookmark that would link a folder and a bookmark of different owners is removed (`filingsRemoved`). The whole request is one transaction: the moves, the removed filings and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never moved, and the answer does not say whether they exist, so a request that moves nothing is an ordinary 200 with zero counts. A request that moves something records one member.former_content_reassigned audit event with the recipient and the number of bookmarks and of folders, never a title, a URL or an identifier of a row; one that moves nothing records none"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is moved"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and the move (nothing is moved), or `transferTo` is no member of the workspace, a member of another workspace included (the problem names `transferTo`); nothing is moved"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, no `transferTo`, a field the operation does not declare)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Give the bookmarks and folders of former members to a member",
+        "tags": [
+          "members"
         ],
         "x-slugbase-auth": "admin",
         "x-slugbase-rate": "write"

@@ -7,8 +7,9 @@
 // Netscape file and the largest SlugBase JSON file into the large workspace, as many times back to back as budgets.js IMPORT_PHASE says (a file of its own for each), while /go and the list are requested and another member
 // creates bookmarks: the p95 of /go and of the list while an import is in flight are budgets (ratios to the same run's steady /go and list, judged here, budgets.js), and each import's duration and counts and the p95 of the creates with and without an import are reported (doc 02 section 13.1).
 // While an import is in flight the run also samples, every SAMPLE_INTERVAL_MS, the tenant transactions the server has open or waiting (`slugbase_db_tenant_transactions_in_flight`, against `slugbase_db_pool_size`, from the
-// server's METRICS_PORT on the loopback address) and the backends of the run's database that wait for a lock (`pg_stat_activity`), and reports the maximum and the p95 of each (`importPhase.pool`, `importPhase.lockWaits`): they say
-// whether the creates that wait for the import's workspace lock hold the pool's connections. A sample that cannot be read fails the run; it is never taken as 0.
+// server's METRICS_PORT on the loopback address), the writers the read reserve holds in memory (`slugbase_db_tenant_writers_waiting`) and the backends of the run's database that wait for a lock (`pg_stat_activity`), and reports the
+// maximum and the p95 of each (`importPhase.pool`, `importPhase.pool.writersWaiting`, `importPhase.lockWaits`): they say whether the creates that wait for the import's workspace lock hold the pool's connections, and what is queued
+// for a connection beside them. A sample that cannot be read fails the run; it is never taken as 0.
 // Everything this run starts, the server or its container, the k6 containers, the state of the import and the database, is removed however it ends.
 //
 //   node scripts/perf/run.mjs [--image <ref>] [--commit <sha>] [--out <dir>] [--bookmarks <n>] [--workspaces <n>] [--rate <per second>] [--duration <seconds>] [--import-window <seconds>] [--import-repeats <most pairs>] [--import-rate <per second>] [--create-rate <per second>]
@@ -493,6 +494,7 @@ async function main() {
             `  creates dropped (every VU busy): ${String(importRun.phase.creates.dropped)}`,
           ]),
       `  pool while an import was in flight (${String(importRun.phase.pool.samples)} samples, one every ${String(importRun.phase.pool.intervalMs)} ms): tenant transactions in flight at most ${String(importRun.phase.pool.max)}, p95 ${String(importRun.phase.pool.p95)}, against a pool of ${String(importRun.phase.pool.size)} (${String(importRun.phase.pool.samplesAboveSize)} samples above it)`,
+      `  writers waiting in memory for a place of the read reserve while an import was in flight: at most ${String(importRun.phase.pool.writersWaiting.max)}, p95 ${String(importRun.phase.pool.writersWaiting.p95)}`,
       `  lock waits while an import was in flight (${String(importRun.phase.lockWaits.samples)} samples, one every ${String(importRun.phase.lockWaits.intervalMs)} ms): backends waiting for a lock at most ${String(importRun.phase.lockWaits.max)}, p95 ${String(importRun.phase.lockWaits.p95)}`,
     ].join("\n"),
   );
@@ -577,14 +579,19 @@ function metricValue(text, name) {
 }
 
 // What the server has open in its tenant pool and how big the pool is, from the metrics listener: `slugbase_db_tenant_transactions_in_flight` counts the transactions that hold a connection and those that wait for one (or
-// for a place of the read reserve), so a value above `slugbase_db_pool_size` is transactions queueing (doc 01 section 12).
+// for a place of the read reserve), so a value above `slugbase_db_pool_size` is transactions queueing, and `slugbase_db_tenant_writers_waiting` is how many of them wait in memory for a place and hold no connection: what is above
+// the pool size beyond them is the reads queued for a connection (doc 01 section 12).
 async function poolSample(metricsPort) {
   const response = await fetch(`http://127.0.0.1:${String(metricsPort)}/metrics`, { signal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) });
   if (!response.ok) {
     throw new Error(`the metrics of the server answered ${String(response.status)}, so the pool was not sampled`);
   }
   const text = await response.text();
-  return { inFlight: metricValue(text, "slugbase_db_tenant_transactions_in_flight"), size: metricValue(text, "slugbase_db_pool_size") };
+  return {
+    inFlight: metricValue(text, "slugbase_db_tenant_transactions_in_flight"),
+    size: metricValue(text, "slugbase_db_pool_size"),
+    writersWaiting: metricValue(text, "slugbase_db_tenant_writers_waiting"),
+  };
 }
 
 // The backends of the run's database that wait for a lock (`wait_event_type = 'Lock'`), as the owner of the database. A role that may not see the other backends' activity gets `<insufficient privilege>` for them and no
@@ -621,6 +628,7 @@ function summarizeSamples(values) {
 // read ends the sampling and fails the run when it is stopped, as does a phase that was never sampled: neither is taken for a quiet one.
 function startSampler({ held, metricsPort, serverUrl, databaseName, lockWaitTimeoutMs = SAMPLE_TIMEOUT_MS }) {
   const inFlight = [];
+  const writers = [];
   const waits = [];
   let size;
   let failure;
@@ -636,6 +644,7 @@ function startSampler({ held, metricsPort, serverUrl, databaseName, lockWaitTime
           }
           size = pool.size;
           inFlight.push(pool.inFlight);
+          writers.push(pool.writersWaiting);
           waits.push(waiting);
         } catch (error) {
           failure = error;
@@ -653,10 +662,10 @@ function startSampler({ held, metricsPort, serverUrl, databaseName, lockWaitTime
         throw failure;
       }
       if (size === undefined || inFlight.length === 0) {
-        throw new Error("no sample of the pool or of the lock waits was taken while an import was in flight");
+        throw new Error("no sample of the pool, of the writers waiting or of the lock waits was taken while an import was in flight");
       }
       return {
-        pool: { intervalMs: SAMPLE_INTERVAL_MS, samples: inFlight.length, size, ...summarizeSamples(inFlight), samplesAboveSize: inFlight.filter((value) => value > size).length },
+        pool: { intervalMs: SAMPLE_INTERVAL_MS, samples: inFlight.length, size, ...summarizeSamples(inFlight), samplesAboveSize: inFlight.filter((value) => value > size).length, writersWaiting: summarizeSamples(writers) },
         lockWaits: { intervalMs: SAMPLE_INTERVAL_MS, samples: waits.length, ...summarizeSamples(waits) },
       };
     },

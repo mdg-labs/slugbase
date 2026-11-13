@@ -1590,6 +1590,74 @@ export interface paths {
         patch: operations["renameWorkspace"];
         trace?: never;
     };
+    "/api/v1/workspace/former-content/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the bookmarks of former members */
+        get: operations["listFormerBookmarks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspace/former-content/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete the bookmarks and folders of former members */
+        post: operations["deleteFormerContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspace/former-content/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the folders of former members */
+        get: operations["listFormerFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspace/former-content/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give the bookmarks and folders of former members to a member */
+        post: operations["reassignFormerContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspace/leave": {
         parameters: {
             query?: never;
@@ -2488,6 +2556,18 @@ export interface components {
             /** @description The account's own email address, typed to confirm the deletion; case and surrounding space do not matter */
             email: string;
         };
+        DeleteFormerContentRequest: {
+            /** @description The bookmarks to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both */
+            bookmarkIds?: string[];
+            /** @description The folders to delete, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both */
+            folderIds?: string[];
+        };
+        DeleteFormerContentResult: {
+            /** @description How many of the named bookmarks were deleted */
+            bookmarksDeleted: number;
+            /** @description How many of the named folders were deleted */
+            foldersDeleted: number;
+        };
         DisableMfaRequest: {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
             code: string;
@@ -2740,6 +2820,65 @@ export interface components {
              * @description The email address of the account whose password is to be reset; case does not matter
              */
             email: string;
+        };
+        FormerBookmark: {
+            /**
+             * Format: date-time
+             * @description When the bookmark was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description Whether /go forwards to the bookmark by its slug */
+            forwarding: boolean;
+            /** @description The host name of the URL, lower case and in punycode */
+            host: string;
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            id: string;
+            /** @description The bookmark's slug, null when it has none */
+            slug: string | null;
+            /** @description The bookmark's title */
+            title: string;
+            /**
+             * Format: date-time
+             * @description When the bookmark last changed, RFC 3339 UTC
+             */
+            updatedAt: string;
+            /** @description The URL as stored: normalised, and always http or https */
+            url: string;
+        };
+        FormerBookmarkList: {
+            /** @description One page of the workspace's bookmarks that have no owner, in the order of their identifiers, which is the order they were created in */
+            items: components["schemas"]["FormerBookmark"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+        };
+        FormerFolder: {
+            /** @description How many of the bookmarks that this list of bookmarks holds are filed in the folder: the ones that have no owner, are not waiting for the content choice of a member who left and are not plan-archived */
+            bookmarkCount: number;
+            /** @description The folder's colour, 1 to 8: the number of the --folder-N theme token */
+            color: number;
+            /**
+             * Format: date-time
+             * @description When the folder was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The folder's icon, a lucide icon name */
+            icon: string;
+            /**
+             * Format: uuid
+             * @description The folder's identifier
+             */
+            id: string;
+            /** @description The folder's name, in the case it was entered in */
+            name: string;
+        };
+        FormerFolderList: {
+            /** @description One page of the workspace's folders that have no owner, in the order of their identifiers, which is the order they were created in */
+            items: components["schemas"]["FormerFolder"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
         };
         GoCandidate: {
             /** @description The host of the bookmark's destination, never the whole address */
@@ -3511,6 +3650,29 @@ export interface components {
                 /** @description Migrations the build ships */
                 expected: number;
             };
+        };
+        ReassignFormerContentRequest: {
+            /** @description The bookmarks to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, folderIds or both */
+            bookmarkIds?: string[];
+            /** @description The folders to give to the member, 1 to 1 000 identifiers; one named twice counts once. Give this, bookmarkIds or both */
+            folderIds?: string[];
+            /**
+             * Format: uuid
+             * @description The account that receives the content: a current member of the workspace, with any role, the caller included
+             */
+            transferTo: string;
+        };
+        ReassignFormerContentResult: {
+            /** @description How many of the named bookmarks now belong to the member */
+            bookmarksMoved: number;
+            /** @description How many filings of a moved folder or bookmark were removed because they would have linked a folder and a bookmark of different owners */
+            filingsRemoved: number;
+            /** @description How many of the named folders now belong to the member */
+            foldersMoved: number;
+            /** @description How many of the moved folders arrived under the name `<name> (<n>)`, because the member already had a folder of that name */
+            foldersRenamed: number;
+            /** @description How many of the moved bookmarks arrived without their slug and with forwarding off, because the member already owned that slug */
+            slugsCleared: number;
         };
         ReauthRequest: {
             /** @description The account's current password */
@@ -13853,6 +14015,360 @@ export interface operations {
                 };
             };
             /** @description The body did not pass validation (a name that is blank, outside 1 to 64 characters or holds a NUL character, or a field the operation does not declare) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listFormerBookmarks: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the active workspace's bookmarks that have no owner: those of a member who left or whose account was deleted. A bookmark that has an owner, one that still waits for the content choice of a member who left and one the plan archived are not listed, and no bookmark of another workspace is */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormerBookmarkList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this workspace issued for this list */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteFormerContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteFormerContentRequest"];
+            };
+        };
+        responses: {
+            /** @description What the request deleted, as counts only. It deletes the named bookmarks and folders of the active workspace that have no owner, with their shares, filings, tag links and remembered go choices, for good: there is no trash and no undo. The whole request is one transaction: the rows, the workspace's bookmark count (which falls by the bookmarks deleted) and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never deleted, and the answer does not say whether they exist, so a request that deletes nothing is an ordinary 200 with zero counts. A request that deletes something records one member.former_content_deleted audit event with the number of bookmarks and of folders, never a title, a URL or an identifier; one that deletes nothing records none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteFormerContentResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is deleted */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and its deletion; nothing is deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, a field the operation does not declare) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listFormerFolders: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the active workspace's folders that have no owner: those of a member who left or whose account was deleted, each with how many of the bookmarks listed by listFormerBookmarks are filed in it. A folder that has an owner and one that still waits for the content choice of a member who left are not listed, and no folder of another workspace is */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormerFolderList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this workspace issued for this list */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reassignFormerContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignFormerContentRequest"];
+            };
+        };
+        responses: {
+            /** @description What the request did, as counts only. It makes `transferTo` the owner of the named bookmarks and folders of the active workspace that have no owner; their other fields, shares and tag links stay, and the workspace's bookmark count does not change. A bookmark whose slug the member already owns arrives without a slug and with forwarding off (`slugsCleared`); a folder whose name the member already has, without regard to case, arrives as `<name> (<n>)` with the lowest free n from 2 (`foldersRenamed`); a filing of a moved folder or bookmark that would link a folder and a bookmark of different owners is removed (`filingsRemoved`). The whole request is one transaction: the moves, the removed filings and the audit event commit or roll back together. An identifier that names no such row is skipped and not told apart from another: a bookmark or folder that has an owner, one that still waits for the content choice of a member who left, a plan-archived bookmark, one of another workspace and an unknown one are never moved, and the answer does not say whether they exist, so a request that moves nothing is an ordinary 200 with zero counts. A request that moves something records one member.former_content_reassigned audit event with the recipient and the number of bookmarks and of folders, never a title, a URL or an identifier of a row; one that moves nothing records none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignFormerContentResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the account is in the export-only period (account_export_only); nothing is moved */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace, or the workspace is being deleted, or the caller stopped being an owner or admin of the workspace between the authorization of the request and the move (nothing is moved), or `transferTo` is no member of the workspace, a member of another workspace included (the problem names `transferTo`); nothing is moved */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (neither list given, a list that is empty or holds more than 1 000 identifiers, a malformed identifier, no `transferTo`, a field the operation does not declare) */
             422: {
                 headers: {
                     [name: string]: unknown;

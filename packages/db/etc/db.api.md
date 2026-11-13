@@ -738,6 +738,87 @@ export type FolderShareRepository = FolderShareStore;
 // @public (undocumented)
 export function folderShareRepository(tx: TenantTx): FolderShareRepository;
 
+// @public
+export interface FormerBookmark {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly updatedAt: Date;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export interface FormerContentDeleted {
+    // (undocumented)
+    readonly bookmarksDeleted: number;
+    // (undocumented)
+    readonly foldersDeleted: number;
+}
+
+// @public
+export interface FormerContentReassigned {
+    // (undocumented)
+    readonly bookmarksMoved: number;
+    readonly filingsRemoved: number;
+    // (undocumented)
+    readonly foldersMoved: number;
+    readonly foldersRenamed: number;
+    readonly slugsCleared: number;
+}
+
+// @public
+export type FormerContentReassignment = ({
+    readonly kind: "reassigned";
+} & FormerContentReassigned) | {
+    readonly kind: "recipient_not_member";
+} | {
+    readonly kind: "refused";
+};
+
+// @public (undocumented)
+export interface FormerContentRepository {
+    delete(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly folderIds: readonly string[];
+    }): Promise<FormerContentDeleted | undefined>;
+    listBookmarks(afterId: string | null, limit: number): Promise<readonly FormerBookmark[]>;
+    listFolders(afterId: string | null, limit: number): Promise<readonly FormerFolder[]>;
+    reassign(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly folderIds: readonly string[];
+        readonly recipientId: string;
+    }): Promise<FormerContentReassignment>;
+}
+
+// @public (undocumented)
+export function formerContentRepository(tx: TenantTx): FormerContentRepository;
+
+// @public
+export interface FormerFolder {
+    readonly bookmarkCount: number;
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
 // @public (undocumented)
 export type GoRepository = GoStore & GoPreferenceStore & GoSuggestStore;
 

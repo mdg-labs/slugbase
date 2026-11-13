@@ -55,6 +55,28 @@ export interface TestInvitation {
 
 export const INVITE_LINK_ORIGIN = "http://localhost:3000/invite/";
 
+export const FORMER_CONTENT_PATH = "/api/v1/workspace/former-content";
+
+export interface TestFormerBookmark {
+  readonly id: string;
+  readonly title: string;
+  readonly url: string;
+  readonly host: string;
+  readonly slug: string | null;
+  readonly forwarding: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface TestFormerFolder {
+  readonly id: string;
+  readonly name: string;
+  readonly icon: string;
+  readonly color: number;
+  readonly bookmarkCount: number;
+  readonly createdAt: string;
+}
+
 export interface WorkspaceSettingsServerOptions {
   /** Whether the server reports that it can send mail in `/api/config`; by default it cannot, as in the other fixtures. */
   readonly mail?: boolean;
@@ -70,6 +92,22 @@ export interface WorkspaceSettingsServerOptions {
   readonly invitationLink?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers `DELETE /invitations/{id}` instead of revoking; `call` counts from 1. */
   readonly invitationDelete?: (call: number, request: Request) => Response | Promise<Response>;
+  /** The ownerless bookmarks and folders of the workspace that `GET /workspace/former-content/{bookmarks,folders}` list, in pages of `formerPageSize` or all at once; none by default. */
+  readonly formerBookmarks?: readonly TestFormerBookmark[];
+  readonly formerFolders?: readonly TestFormerFolder[];
+  readonly formerPageSize?: number;
+  /** Answers `GET /workspace/former-content/{bookmarks,folders}` instead of the list, or leaves it to the server with undefined; `call` counts from 1 for each list. */
+  readonly formerGet?: (list: "bookmarks" | "folders", call: number, request: Request) => Response | Promise<Response> | undefined;
+  /**
+   * Answers `POST /workspace/former-content/delete` instead of deleting the rows it names from the lists above, or leaves it to the server with undefined; `call` counts from 1.
+   * The server answers `{ bookmarksDeleted, foldersDeleted }` for the named rows it held.
+   */
+  readonly formerDelete?: (call: number, request: Request) => Response | Promise<Response> | undefined;
+  /**
+   * Answers `POST /workspace/former-content/reassign` instead of moving the rows it names out of the lists above, or leaves it to the server with undefined; `call` counts from 1.
+   * The server answers the five counts for the named rows it held, with nothing cleared, renamed or removed, and `404` naming `transferTo` for an account that is no member of the list of members.
+   */
+  readonly formerReassign?: (call: number, request: Request) => Response | Promise<Response> | undefined;
   /** The server has an AI port, and `/api/config` names the operator's display name for its provider. */
   readonly ai?: { readonly provider: string };
   /** The workspace's AI toggle as stored; on by default. */
@@ -147,6 +185,8 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   let issued = 0;
   let left = false;
   const received: Received[] = [];
+  let formerBookmarkRows: readonly TestFormerBookmark[] = options.formerBookmarks ?? [];
+  let formerFolderRows: readonly TestFormerFolder[] = options.formerFolders ?? [];
   const counts = new Map<string, number>();
 
   const workspace = () => ({
@@ -303,6 +343,55 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       if (answer !== undefined) {
         return answer;
       }
+    }
+    if (pathname === `${FORMER_CONTENT_PATH}/delete` && request.method === "POST") {
+      const answer = options.formerDelete?.(call, request);
+      if (answer !== undefined) {
+        return answer;
+      }
+      const wanted = JSON.parse(text) as { bookmarkIds?: string[]; folderIds?: string[] };
+      const bookmarksBefore = formerBookmarkRows.length;
+      const foldersBefore = formerFolderRows.length;
+      formerBookmarkRows = formerBookmarkRows.filter((row) => !(wanted.bookmarkIds ?? []).includes(row.id));
+      formerFolderRows = formerFolderRows.filter((row) => !(wanted.folderIds ?? []).includes(row.id));
+      return json({ bookmarksDeleted: bookmarksBefore - formerBookmarkRows.length, foldersDeleted: foldersBefore - formerFolderRows.length });
+    }
+    if (pathname === `${FORMER_CONTENT_PATH}/reassign` && request.method === "POST") {
+      const answer = options.formerReassign?.(call, request);
+      if (answer !== undefined) {
+        return answer;
+      }
+      const wanted = JSON.parse(text) as { bookmarkIds?: string[]; folderIds?: string[]; transferTo: string };
+      if (!members.some((member) => member.accountId === wanted.transferTo)) {
+        return json(
+          { type: "x", title: "x", status: 404, code: "not_found", detail: "x", requestId: "req-404", errors: [{ path: "transferTo", code: "not_found" }] },
+          { status: 404, contentType: "application/problem+json" },
+        );
+      }
+      const bookmarksBefore = formerBookmarkRows.length;
+      const foldersBefore = formerFolderRows.length;
+      formerBookmarkRows = formerBookmarkRows.filter((row) => !(wanted.bookmarkIds ?? []).includes(row.id));
+      formerFolderRows = formerFolderRows.filter((row) => !(wanted.folderIds ?? []).includes(row.id));
+      return json({
+        bookmarksMoved: bookmarksBefore - formerBookmarkRows.length,
+        foldersMoved: foldersBefore - formerFolderRows.length,
+        slugsCleared: 0,
+        foldersRenamed: 0,
+        filingsRemoved: 0,
+      });
+    }
+    const former = /^\/api\/v1\/workspace\/former-content\/(bookmarks|folders)$/.exec(pathname);
+    if (former !== null && request.method === "GET") {
+      const list = former[1] === "bookmarks" ? "bookmarks" : "folders";
+      const answer = options.formerGet?.(list, call, request);
+      if (answer !== undefined) {
+        return answer;
+      }
+      const rows = list === "bookmarks" ? formerBookmarkRows : formerFolderRows;
+      const size = options.formerPageSize ?? Math.max(rows.length, 1);
+      const start = Number(new URL(request.url).searchParams.get("cursor") ?? 0);
+      const next = start + size;
+      return json({ items: rows.slice(start, next), nextCursor: next < rows.length ? String(next) : null });
     }
     if (pathname === ME_PATH && request.method === "GET") {
       return options.meGet?.(call) ?? json(me());

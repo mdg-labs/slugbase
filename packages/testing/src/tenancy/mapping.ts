@@ -98,6 +98,16 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   calls it once for every principal of A, as a dry run that writes nothing, with the one-link file of the fixtures of the contract test; the import that writes goes through the same service and the same scoped repository as `importJson`, and
  *   is held to the workspace of the request by `packages/server/test/routes/import-netscape.integration.test.ts`.
  *
+ * - Former members' content: `listFormerBookmarks` and `listFormerFolders` take `limit` and a signed `cursor` and no identifier, so they take no entry. They read the ownerless bookmarks and folders of the workspace of the request
+ *   (`packages/db/src/repositories/former-content.ts`, whose statements name the workspace and the missing owner, since the policies of both tables name the workspace only), which the `describe("the former members' content across workspaces")` block of
+ *   `test/tenancy-matrix.integration.test.ts` holds to the workspace of the transaction: a caller of A reads no ownerless row of B, through the repository and with the workspace predicate left out.
+ *   `deleteFormerContent` takes `bookmarkIds[]` and `folderIds[]`, a bookmark and a folder identifier. It acts on the ownerless rows of the workspace of the request through `formerContentRepository.delete` and `sys_former_content_delete`, which name the workspace
+ *   in every statement, so an identifier of workspace B names no row of A: the answer is an empty `200` with zero counts and not `404`, which `runApiMatrix` is told by its `emptyAnswers` option, and B is as it was. The same block of the matrix
+ *   runs the function and the repository method against B's ownerless rows directly.
+ *   `reassignFormerContent` takes `bookmarkIds[]` and `folderIds[]` as that deletion does and `transferTo`, the account that receives the rows, a member identifier: through `formerContentRepository.reassign` and `sys_former_content_reassign`, which name the
+ *   workspace in every statement and require the recipient to be a member of it, a `transferTo` of workspace B (a member of B, or any account that is no member of A) is `404` naming `transferTo` and moves nothing, and an identifier of B in a list names no
+ *   row of A. The same block of the matrix runs the function and the repository method against B's ownerless rows and B's members directly.
+ *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
  * `bookmark` rows, so a caller that runs these operations adds `team` and `invitation` identifiers to workspace B, or the matrix reports
@@ -161,6 +171,11 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "previewBulkBookmarks.tagIds[]": "tag",
   "previewBulkBookmarks.accountId": "member",
   "previewBulkBookmarks.teamId": "team",
+  "deleteFormerContent.bookmarkIds[]": "bookmark",
+  "deleteFormerContent.folderIds[]": "folder",
+  "reassignFormerContent.bookmarkIds[]": "bookmark",
+  "reassignFormerContent.folderIds[]": "folder",
+  "reassignFormerContent.transferTo": "member",
   "createInvitation.teamIds[]": "team",
   "getTeam.id": "team",
   "updateTeam.id": "team",

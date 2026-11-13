@@ -2214,6 +2214,85 @@
         },
         "loading": "Einladungen werden geladen"
       },
+      "former": {
+        "title": "Inhalte ehemaliger Mitglieder",
+        "description": "Lesezeichen und Ordner, die niemandem mehr gehören, weil die Person, der sie gehörten, den Workspace verlassen oder ihr Konto gelöscht hat. Nur Eigentümer und Admins sehen sie.",
+        "loading": "Inhalte ehemaliger Mitglieder werden geladen",
+        "empty": {
+          "title": "Keine Inhalte ehemaliger Mitglieder",
+          "description": "Wenn jemand den Workspace verlässt oder das Konto löscht, erscheinen hier die Lesezeichen und Ordner, die zurückbleiben."
+        },
+        "column": {
+          "created": "Erstellt"
+        },
+        "bookmarks": {
+          "title": "Lesezeichen",
+          "column": {
+            "title": "Titel",
+            "host": "Host",
+            "slug": "Slug"
+          },
+          "noSlug": "Kein Slug",
+          "select": "{title} auswählen",
+          "selectAll": "Alle geladenen Lesezeichen auswählen",
+          "loadFailed": "Die Lesezeichen ehemaliger Mitglieder konnten nicht geladen werden"
+        },
+        "folders": {
+          "title": "Ordner",
+          "column": {
+            "name": "Name",
+            "bookmarks": "Lesezeichen"
+          },
+          "select": "{name} auswählen",
+          "selectAll": "Alle geladenen Ordner auswählen",
+          "loadFailed": "Die Ordner ehemaliger Mitglieder konnten nicht geladen werden"
+        },
+        "selection": {
+          "label": "Ausgewählte Inhalte ehemaliger Mitglieder",
+          "count": "{count, plural, one {# ausgewählt} other {# ausgewählt}}"
+        },
+        "delete": {
+          "action": "Auswahl löschen",
+          "title": "Inhalte ehemaliger Mitglieder löschen?",
+          "description": "Das Löschen von {summary} ist endgültig. Es entfernt auch ihre Freigaben, Tags und Einordnungen in Ordnern. Es gibt keinen Papierkorb und kein Rückgängigmachen.",
+          "foldersNote": "Beim Löschen eines Ordners werden die darin eingeordneten Lesezeichen nicht gelöscht. Wähle sie ebenfalls aus, um sie zu löschen.",
+          "confirm": "Löschen",
+          "cancel": "Abbrechen",
+          "count": {
+            "bookmarks": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}}",
+            "folders": "{count, plural, one {# Ordner} other {# Ordner}}",
+            "both": "{bookmarks} und {folders}"
+          },
+          "done": "{summary} gelöscht.",
+          "nothing": "Es wurde nichts gelöscht. Die Inhalte waren schon weg oder gehören wieder jemandem.",
+          "partial": "Nur {done, number} von {total, number} wurden vor einem Fehler gelöscht. Der Rest bleibt ausgewählt; versuche es gleich noch einmal."
+        },
+        "reassign": {
+          "action": "Zuweisen an…",
+          "close": "Schließen",
+          "cancel": "Abbrechen",
+          "continue": "Weiter",
+          "dialog": {
+            "title": "Inhalte ehemaliger Mitglieder zuweisen",
+            "description": "Wähle das Mitglied, dem {summary} künftig gehören."
+          },
+          "recipient": {
+            "label": "Neuer Eigentümer",
+            "placeholder": "Mitglieder suchen",
+            "empty": "Kein Mitglied passt"
+          },
+          "recipientGone": "{name} ist kein Mitglied dieses Workspace mehr. Wähle ein anderes Mitglied; deine Auswahl bleibt erhalten.",
+          "title": "Inhalte ehemaliger Mitglieder zuweisen?",
+          "description": "{summary} gehören danach {recipient}. Ein Lesezeichen, dessen Slug {recipient} schon verwendet, verliert seinen Slug und leitet nicht mehr weiter. Ein Ordner, dessen Namen {recipient} schon hat, bekommt eine Nummer angehängt, etwa „Lesen (2)“. Eine Einordnung, die einen Ordner und ein Lesezeichen mit verschiedenen Eigentümern verbinden würde, wird entfernt. Freigaben bleiben bestehen.",
+          "confirm": "Zuweisen",
+          "done": "{summary} an {recipient} zugewiesen.",
+          "nothing": "Es wurde nichts zugewiesen. Die Inhalte waren schon weg oder gehören wieder jemandem.",
+          "tooMany": "Eine Zuweisung umfasst höchstens {max, number} Lesezeichen und {max, number} Ordner. Weise in kleineren Auswahlen zu und wähle jeden Ordner zusammen mit seinen Lesezeichen aus, damit sie zusammen abgelegt bleiben.",
+          "slugsCleared": "{count, plural, one {# Slug wurde entfernt, weil das Mitglied ihn schon verwendet.} other {# Slugs wurden entfernt, weil das Mitglied sie schon verwendet.}}",
+          "foldersRenamed": "{count, plural, one {# Ordner wurde umbenannt, weil das Mitglied einen Ordner mit diesem Namen hat.} other {# Ordner wurden umbenannt, weil das Mitglied Ordner mit diesen Namen hat.}}",
+          "filingsRemoved": "{count, plural, one {# Einordnung wurde entfernt, weil Ordner und Lesezeichen verschiedene Eigentümer haben.} other {# Einordnungen wurden entfernt, weil ihre Ordner und Lesezeichen verschiedene Eigentümer haben.}}"
+        }
+      },
       "invite": {
         "title": "Personen einladen",
         "description": "Lade Personen per E-Mail in diesen Workspace ein.",
@@ -3156,6 +3235,8 @@
         "removed": "Mitglied entfernt",
         "left": "Mitglied ausgetreten",
         "joined": "Mitglied beigetreten",
+        "former_content_deleted": "Inhalte ehemaliger Mitglieder gelöscht",
+        "former_content_reassigned": "Inhalte ehemaliger Mitglieder zugewiesen",
         "instance_admin_joined": "Instanzadministrator beigetreten"
       },
       "invitation": {
@@ -3173,7 +3254,8 @@
       "bookmark": {
         "archived": "Lesezeichen archiviert",
         "restored": "Lesezeichen wiederhergestellt",
-        "bulk_deleted": "Lesezeichen gelöscht"
+        "bulk_deleted": "Lesezeichen gelöscht",
+        "operator_deleted": "Lesezeichen vom Instanzbetreiber entfernt"
       },
       "share": {
         "granted": "Freigabe erteilt",
@@ -3223,7 +3305,8 @@
       "failed": "Fehlgeschlagen",
       "slugsDropped": "Verworfene Slugs",
       "foldersCreated": "Erstellte Ordner",
-      "tagsCreated": "Erstellte Tags"
+      "tagsCreated": "Erstellte Tags",
+      "reason": "Grund"
     }
   },
   "sharing": {

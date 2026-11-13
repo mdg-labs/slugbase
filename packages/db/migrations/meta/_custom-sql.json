@@ -1,4 +1,4 @@
 {
-  "sha256": "7170ee4a36ee04087141f8641751a21bbfc86680685770c8a0e5be06fde30c71",
-  "migration": "20261110144218_add_mfa_reseal_sweep"
+  "sha256": "19de621beb393560aa7139f71daf07a89b060c472e83401f03bd80f363cbbe91",
+  "migration": "20261112180937_add_former_content_reassign"
 }

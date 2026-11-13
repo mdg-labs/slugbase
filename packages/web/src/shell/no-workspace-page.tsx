@@ -7,13 +7,22 @@ import { useTranslation } from "react-i18next";
 import { AccountPreferences } from "../account/account-preferences.tsx";
 import { meQuery } from "../account/me.ts";
 import { useSignOut } from "../auth/sign-out.ts";
+import { Slot, useSlotFilled } from "../extensions/index.ts";
 import { CreateWorkspaceDialog } from "./create-workspace-dialog.tsx";
 import { useSwitchFailureMessage, useWorkspaceSwitch, workspacesQuery } from "./workspaces.ts";
 
 function Frame({ children }: { children: ReactNode }): ReactElement {
+  const hasFooter = useSlotFilled("noWorkspace.footer");
   return (
     <AccountPreferences>
-      <main className="mx-auto flex min-h-svh max-w-lg flex-col justify-center p-6">{children}</main>
+      <main className="mx-auto flex min-h-svh max-w-lg flex-col justify-center p-6">
+        {children}
+        {hasFooter ? (
+          <footer className="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-2 text-muted-foreground text-sm" data-slot="no-workspace-footer">
+            <Slot name="noWorkspace.footer" />
+          </footer>
+        ) : null}
+      </main>
     </AccountPreferences>
   );
 }

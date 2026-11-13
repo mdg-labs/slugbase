@@ -577,6 +577,93 @@ describe("the audit log of a workspace", () => {
       await run({ label: "archiveBookmarks", actor: { accountId: "system" }, call: asJob((tx) => archiveBookmarks(tx, request)), events: [event("bookmark.archived", null, { count: "2" })] });
       await run({ label: "restoreBookmarks", actor: { accountId: "system" }, call: asJob((tx) => restoreBookmarks(tx, request)), events: [event("bookmark.restored", null, { count: "2" })] });
 
+      // The instance operator removes an ownerless bookmark with the database login, which no operation reaches: the system is the actor, labelled with the login, and the
+      // event holds the bookmark's identifier and the operator's reason, never its title or address.
+      const orphan = await bookmarkOf(`${TITLE} orphaned`, "private-address/orphaned");
+      const operatorEventId = uuidv7();
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE bookmarks SET owner_id = NULL WHERE id = ${orphan}`;
+      });
+      await run({
+        label: "sys_bookmark_operator_delete",
+        actor: { accountId: "system", label: "slugbase_migrator" },
+        call: async () => {
+          const removed = await database().owner.begin(async (tx) => {
+            await tx`SET LOCAL ROLE slugbase_system`;
+            return tx<{ removed: boolean }[]>`SELECT sys_bookmark_operator_delete(${workspaceId}::uuid, ${orphan}::uuid, ${operatorEventId}::uuid, 'Court order, ref. 2026-123') AS removed`;
+          });
+          expect(removed[0]?.removed).toBe(true);
+          return undefined;
+        },
+        events: [event("bookmark.operator_deleted", { type: "bookmark", id: orphan }, { reason: "Court order, ref. 2026-123" })],
+        check: noContent,
+      });
+
+      // An owner deletes former members' content (a bookmark and a folder that have no owner): one event with the two counts and no title, address or identifier; a request
+      // that names no such row deletes nothing and records none.
+      const former = await bookmarkOf(`${TITLE} former`, "private-address/former");
+      const formerFolder = await post(owner, FOLDERS, { name: "Former folder" });
+      expect(formerFolder.status).toBe(201);
+      const formerFolderId = await idOf(formerFolder);
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE bookmarks SET owner_id = NULL WHERE id = ${former}`;
+        await tx`UPDATE folders SET owner_id = NULL WHERE id = ${formerFolderId}`;
+      });
+      await run({
+        operationId: "deleteFormerContent",
+        label: "deleteFormerContent that deletes nothing",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/delete", { bookmarkIds: [single, uuidv7()] }),
+        events: [],
+      });
+      await run({
+        operationId: "deleteFormerContent",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/delete", { bookmarkIds: [former], folderIds: [formerFolderId] }),
+        events: [event("member.former_content_deleted", null, { bookmarks: "1", folders: "1" })],
+        check: noContent,
+      });
+
+      // An owner reassigns former members' content to a member (a bookmark and a folder that have no owner): one event with the recipient and the two counts and no title, address or
+      // identifier of a row; a request that names no such row moves nothing and records none, and a recipient that is no member is refused with nothing recorded.
+      const handedOver = await bookmarkOf(`${TITLE} handed over`, "private-address/handed-over");
+      const handedOverFolder = await post(owner, FOLDERS, { name: "Handed over folder" });
+      expect(handedOverFolder.status).toBe(201);
+      const handedOverFolderId = await idOf(handedOverFolder);
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE bookmarks SET owner_id = NULL WHERE id = ${handedOver}`;
+        await tx`UPDATE folders SET owner_id = NULL WHERE id = ${handedOverFolderId}`;
+      });
+      await run({
+        operationId: "reassignFormerContent",
+        label: "reassignFormerContent that moves nothing",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/reassign", { bookmarkIds: [single, uuidv7()], transferTo: member.account.id }),
+        events: [],
+      });
+      await run({
+        operationId: "reassignFormerContent",
+        label: "reassignFormerContent to an account that is no member",
+        actor: as(owner),
+        status: 404,
+        call: () => post(owner, "/api/v1/workspace/former-content/reassign", { bookmarkIds: [handedOver], folderIds: [handedOverFolderId], transferTo: removed.account.id }),
+        events: [],
+      });
+      await run({
+        operationId: "reassignFormerContent",
+        actor: as(owner),
+        status: 200,
+        call: () => post(owner, "/api/v1/workspace/former-content/reassign", { bookmarkIds: [handedOver], folderIds: [handedOverFolderId], transferTo: member.account.id }),
+        events: [event("member.former_content_reassigned", null, { transferTo: member.account.id, bookmarks: "1", folders: "1" })],
+        check: noContent,
+      });
+
       // An export and an import: counts only, one event for an export and one for an import that writes, none for a dry run.
       await run({
         operationId: "exportJson",
