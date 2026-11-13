@@ -33,8 +33,11 @@ describe("the large instance", () => {
   });
 
   it("is the same on every run and differs with the seed", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
-    expect(digest(buildLargeInstance())).toBe(digest(instance));
-    expect(digest(buildLargeInstance({ seed: 1 }))).not.toBe(digest(instance));
+    // The same code path at a size that keeps the three digests cheap: the full instance is built and digested once per test file.
+    const size = { bookmarks: 6_000, workspaces: 100 };
+    const first = digest(buildLargeInstance(size));
+    expect(digest(buildLargeInstance(size))).toBe(first);
+    expect(digest(buildLargeInstance({ ...size, seed: 1 }))).not.toBe(first);
   });
 
   it("gives a realistic share of the rows a slug and others tags and folders", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
