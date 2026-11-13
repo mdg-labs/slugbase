@@ -37,24 +37,42 @@ export async function withUncommittedWrite<T>(
     }
   });
   await Promise.race([writtenSignal, holder]);
-  const outcome = call().then(
-    (value) => ({ value }) as const,
-    (error: unknown) => ({ error }) as const,
-  );
-  const deadline = Date.now() + BLOCKED_DEADLINE_MS;
-  const state = { settled: false };
-  void outcome.then(() => {
-    state.settled = true;
-  });
-  while (!state.settled && Date.now() < deadline && !(await waiting(database))) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  let outcome: Promise<{ readonly value: T } | { readonly error: unknown }> | undefined;
+  let failure: { readonly error: unknown } | undefined;
+  let blocked = false;
+  try {
+    outcome = call().then(
+      (value) => ({ value }) as const,
+      (error: unknown) => ({ error }) as const,
+    );
+    const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+    const state = { settled: false };
+    void outcome.then(() => {
+      state.settled = true;
+    });
+    while (!state.settled && Date.now() < deadline && !(await waiting(database))) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
+    blocked = !state.settled;
+  } catch (error) {
+    failure = { error };
   }
-  const blocked = !state.settled;
+  // The holder is released on every exit, so its write and its connection never outlive the call; an error already seen is the one reported.
   held();
-  await holder;
-  const result = await outcome;
+  try {
+    await holder;
+  } catch (error) {
+    failure ??= { error };
+  }
+  const result = outcome === undefined ? undefined : await outcome;
+  if (failure !== undefined) {
+    throw failure.error;
+  }
   if (!blocked) {
     throw new Error("the call finished without waiting on the held write, so the test did not exercise the race");
+  }
+  if (result === undefined) {
+    throw new Error("the call was never started");
   }
   if ("error" in result) {
     throw result.error;
