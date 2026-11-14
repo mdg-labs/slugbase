@@ -45,7 +45,11 @@ describe("defineJob", () => {
     expect(() => defineJob({ name: "mail.send", payload, handle })).toThrow(JobDefinitionError);
   });
 
-  it.each(["send", "Mail.send", "mail.", "mail send", "mail.Send"])("refuses the job name %s", (name) => {
+  it.each(["mail.send", "event.account.email_changed", "mail.sendNow"])("accepts the job name %s", (name) => {
+    expect(defineJob({ name, payload: z.object({}), handle }).name).toBe(name);
+  });
+
+  it.each(["send", "Mail.send", "mail.", "mail send", "mail.Send", "_mail.send", "mail._send", "mail.send-now", "mail..send"])("refuses the job name %s", (name) => {
     expect(() => defineJob({ name, payload: z.object({}), handle })).toThrow(JobDefinitionError);
   });
 

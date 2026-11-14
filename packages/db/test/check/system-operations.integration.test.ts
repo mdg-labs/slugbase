@@ -158,6 +158,7 @@ describe("the shipped chain", () => {
       "sys_email_change_token_issue",
       "sys_email_change_confirm",
       "sys_email_change_cancel",
+      "sys_email_change_cancel_outcome",
       "sys_workspace_mark_deleting",
       "sys_workspace_purge_batch",
       "sys_workspace_delete_finish",

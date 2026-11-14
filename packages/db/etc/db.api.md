@@ -640,11 +640,11 @@ export interface EmailChangeRequest {
 
 // @public (undocumented)
 export interface EmailChangeStore {
-    cancelEmailChange(tokenHash: Buffer): Promise<{
+    cancelEmailChange(tokenHash: Buffer, onChanged?: (accountId: string) => readonly QueuedJob[]): Promise<{
         readonly accountId: string;
     } | undefined>;
     cancelPendingEmailChange(accountId: string): Promise<boolean>;
-    confirmEmailChange(tokenHash: Buffer): Promise<{
+    confirmEmailChange(tokenHash: Buffer, onChanged?: (accountId: string) => readonly QueuedJob[]): Promise<{
         readonly accountId: string;
     } | undefined>;
     requestEmailChange(request: EmailChangeRequest): Promise<boolean>;

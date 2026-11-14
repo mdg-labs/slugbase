@@ -2999,6 +2999,11 @@ export const DOMAIN_EVENTS: {
             readonly type: "uuid";
         };
     };
+    readonly "account.email_changed": {
+        readonly accountId: {
+            readonly type: "uuid";
+        };
+    };
     readonly "workspace.created": {
         readonly workspaceId: {
             readonly type: "uuid";

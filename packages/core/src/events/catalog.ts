@@ -57,6 +57,14 @@ export const DOMAIN_EVENTS = {
   "account.deleted": {
     accountId: { type: "uuid" },
   },
+  /**
+   * An account's email address changed, by the redemption of the confirmation token of a change or of the "this wasn't
+   * me" token that puts the old address back: queued in the transaction that updates the address, so it is announced
+   * exactly when the account holds the new one. The payload holds no address; a subscriber reads it by `accountId`.
+   */
+  "account.email_changed": {
+    accountId: { type: "uuid" },
+  },
   "workspace.created": {
     workspaceId: { type: "uuid" },
     /** The account the workspace was created for, which is its owner. */

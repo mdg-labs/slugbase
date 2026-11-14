@@ -237,7 +237,7 @@ BEGIN
 END
 $$;
 
--- sys_email_change_cancel(token_hash): redeems the "this wasn't me" token mailed to the
+-- sys_email_change_cancel_outcome(token_hash): redeems the "this wasn't me" token mailed to the
 -- old address. The row of the account is locked first and the token consumed after
 -- that (purpose email_change_cancel). The pending change is cancelled, the unused
 -- email-change tokens are deleted and every session of the account ends, partial and
@@ -255,7 +255,11 @@ $$;
 -- commits while it runs) is not taken over: the account keeps its current address and
 -- the rest happens all the same. NULL comes back, which a caller does not tell apart,
 -- for an unknown, used, expired, replaced or foreign token and for a disabled account.
-CREATE OR REPLACE FUNCTION public.sys_email_change_cancel(p_token_hash bytea) RETURNS uuid
+-- It answers the account and whether its email was put back: true only when the UPDATE
+-- of accounts.email ran, so the caller announces an address change in the transaction
+-- that made it and never for a cancellation before the confirmation or a restore that
+-- was skipped. No row comes back for the cases that answer NULL above.
+CREATE OR REPLACE FUNCTION public.sys_email_change_cancel_outcome(p_token_hash bytea) RETURNS TABLE (o_account_id uuid, o_restored boolean)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
   AS $$
@@ -264,9 +268,10 @@ DECLARE
   v_target public.citext;
   v_email public.citext;
   v_issued timestamptz;
+  v_restored boolean := false;
 BEGIN
   IF octet_length(p_token_hash) IS DISTINCT FROM 32 THEN
-    RAISE EXCEPTION 'sys_email_change_cancel needs a 32-byte token hash' USING ERRCODE = 'invalid_parameter_value';
+    RAISE EXCEPTION 'sys_email_change_cancel_outcome needs a 32-byte token hash' USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
   PERFORM 1 FROM public.accounts a
@@ -276,12 +281,12 @@ BEGIN
   SELECT t.account_id, t.target_email INTO v_account, v_target
   FROM public.sys_credential_token_consume('email_change_cancel', p_token_hash) t;
   IF v_account IS NULL THEN
-    RETURN NULL;
+    RETURN;
   END IF;
 
   SELECT a.email INTO v_email FROM public.accounts a WHERE a.id = v_account AND a.disabled_at IS NULL FOR UPDATE;
   IF NOT FOUND THEN
-    RETURN NULL;
+    RETURN;
   END IF;
 
   UPDATE public.accounts SET pending_email = NULL WHERE id = v_account AND pending_email IS NOT NULL;
@@ -289,6 +294,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.accounts o WHERE o.email = v_target AND o.id <> v_account) THEN
       BEGIN
         UPDATE public.accounts SET email = v_target WHERE id = v_account;
+        v_restored := true;
       EXCEPTION WHEN unique_violation THEN
         NULL;
       END;
@@ -302,14 +308,25 @@ BEGIN
     DELETE FROM public.credential_tokens WHERE account_id = v_account AND purpose = 'email_change' AND used_at IS NULL;
   END IF;
   PERFORM public.sys_session_revoke_all(v_account, NULL);
-  RETURN v_account;
+  RETURN QUERY SELECT v_account, v_restored;
 END
+$$;
+
+-- sys_email_change_cancel(token_hash): the account of sys_email_change_cancel_outcome, or
+-- NULL when it answers no row. The application calls the outcome; this one stays for the
+-- release that still calls it during a rolling deploy.
+CREATE OR REPLACE FUNCTION public.sys_email_change_cancel(p_token_hash bytea) RETURNS uuid
+  LANGUAGE sql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+  SELECT o.o_account_id FROM public.sys_email_change_cancel_outcome(p_token_hash) o
 $$;
 
 ALTER FUNCTION public.sys_email_change_request(uuid, text) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_email_change_clear(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_email_change_token_issue(uuid, text, uuid, bytea, integer) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_email_change_confirm(bytea) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_email_change_cancel_outcome(bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_email_change_cancel(bytea) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
@@ -317,9 +334,11 @@ REVOKE ALL ON FUNCTION public.sys_email_change_request(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_email_change_clear(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_email_change_token_issue(uuid, text, uuid, bytea, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_email_change_confirm(bytea) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_email_change_cancel_outcome(bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_email_change_cancel(bytea) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_email_change_request(uuid, text) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_email_change_clear(uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_email_change_token_issue(uuid, text, uuid, bytea, integer) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_email_change_confirm(bytea) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_email_change_cancel_outcome(bytea) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_email_change_cancel(bytea) TO slugbase_app;
