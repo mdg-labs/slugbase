@@ -162,6 +162,8 @@ existing line by adding its PR number.
 - **guard tested on some call sites** — a guard applied at several call sites (an https-to-http refusal on discovery, key sets and the token exchange) has tests for only some of them, so dropping it from another still passes — PR 775
 - **release only on success** — a test helper that holds a resource for the call under test (an uncommitted transaction) releases it only on its success path, so a throw from the call or from its own poll leaves the resource held and every later step hangs behind it — PR 894
 - **deadline read as the event** — a race helper treats its own deadline passing as proof that the awaited event happened (the call waiting on a held lock), so a call that was only slow passes without exercising the race — PR 894
+- **example contradicts the contract** — a port test's mock and assertion document a behaviour the port's own doc comment rules out (a replay with changed data under one idempotency key returning the first result where the contract says `idempotency_conflict`), so an adapter author copies the wrong rule — PR 908
+- **limit never asserted** — a pagination test checks only the total, the order and that each row is seen once, never the size of a page, so a page that returns more rows than the requested limit (limit+1 without truncation) passes — PR 908
 
 ## Web UI
 
