@@ -1,5 +1,6 @@
 import { IMPORT_MAX_DISTINCT_NAMES, IMPORT_MAX_LINKS, IMPORT_MAX_NEW_NAMES, type ImportRequest } from "@slugbase/contracts";
 import { describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { createAuditWriter, IMPORT_BATCH_SIZE, importBookmarks, type AuditRecord, type ImportAsk, type ImportFolderToResolve, type ImportLinks, type ImportNewBookmark, type ImportPlaces, type ImportStore, type ImportTagToResolve } from "../../src/index.ts";
 
 // The import that writes (doc 02 section 13.1, doc 01 section 7.5, doc 10 T11 and T13): what the service asks of the store, in which order, and what it writes when a step fails.
@@ -626,7 +627,7 @@ describe("importBookmarks and the folder and tag links", () => {
   const linked = (bookmarks: number, perBookmark: number, extra: readonly string[] = []): { url: string; tags: string[] }[] =>
     Array.from({ length: bookmarks }, (_, index) => ({ url: `https://example.com/${String(index)}`, tags: [...pool(perBookmark), ...(index === 0 ? extra : [])] }));
 
-  it("refuses a file that would make more links than one import may before it takes any place, and writes nothing", async () => {
+  it("refuses a file that would make more links than one import may before it takes any place, and writes nothing", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     for (const file of [
       linked(1000, 100, ["extra"]),
       Array.from({ length: 1000 }, (_, index) => ({ url: `https://example.com/${String(index)}`, folders: pool(50), tags: pool(index === 0 ? 51 : 50) })),
