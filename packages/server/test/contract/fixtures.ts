@@ -275,6 +275,8 @@ export const FIXTURES: ContractFixtures = {
   // The select-all takes the list's filters and names no identifier either; the matrix picks `hasSlug` by its name here as well, and the identifier it puts in
   // that boolean is refused as a malformed query (422) before any bookmark is looked at.
   listBookmarkIds: { foreign: { query: { hasSlug: UNKNOWN_BOOKMARK_ID } } },
+  // The list of the plan-archived bookmarks has no filter and names no identifier: it reads the caller's own archived bookmarks of the workspace of the request, so the walker's valid request is the declared 200 with an empty page.
+  listArchivedBookmarks: {},
   // The bulk request names bookmarks by identifier, and acts on the caller's own only: one that no workspace holds, one of workspace B and one that never
   // existed are skipped alike, which is a 200 with the identifier counted as not found and nothing written, never a 404 (doc 02 section 5.8). The valid
   // request and the request naming a bookmark of workspace B are therefore the same 200. The matrix picks `ids[]` and, by its name, `filter.hasSlug`; the

@@ -11,6 +11,8 @@ import { AccessModeOutcome } from '@slugbase/core';
 import type { AccessModeRequest } from '@slugbase/core';
 import type { AccountAccessModeTransaction } from '@slugbase/core';
 import type { AccountDeletionScope } from '@slugbase/core';
+import { ArchivedBookmarkListRequest } from '@slugbase/core';
+import { ArchivedBookmarkRow } from '@slugbase/core';
 import type { AuditEventReader } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import { BookmarkArchiveTransaction } from '@slugbase/core';
@@ -423,6 +425,7 @@ export type BookmarkCreationResult = {
 // @public (undocumented)
 export interface BookmarkRepository {
     count(filter: BookmarkListFilter, limit: number): Promise<number>;
+    countArchived(limit: number): Promise<number>;
     create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
     fileIn(request: {
         readonly bookmarkIds: readonly string[];
@@ -433,6 +436,7 @@ export interface BookmarkRepository {
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
     ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+    listArchived(request: ArchivedBookmarkListRequest): Promise<readonly ArchivedBookmarkRow[]>;
     listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
     previewTags(request: {
         readonly bookmarkIds: readonly string[];

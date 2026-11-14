@@ -240,6 +240,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bookmarks/archived": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the caller's plan-archived bookmarks */
+        get: operations["listArchivedBookmarks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/bookmarks/bulk": {
         parameters: {
             query?: never;
@@ -1969,6 +1986,79 @@ export interface components {
             items: components["schemas"]["ApiToken"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
+        };
+        ArchivedBookmark: {
+            /**
+             * Format: date-time
+             * @description When the bookmark was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The bookmark's description, null when it has none */
+            description: string | null;
+            /** @description The caller's folders the bookmark is filed in, in the order of their names; empty when it is filed in none, and always for a bookmark that is shared with the caller */
+            folders: components["schemas"]["BookmarkFolder"][];
+            /** @description Whether /go forwards to the bookmark by its slug */
+            forwarding: boolean;
+            /** @description The host name of the URL, lower case and in punycode */
+            host: string;
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            id: string;
+            /** @description When the bookmark was last opened, RFC 3339 UTC, null when it never was */
+            lastOpenedAt: string | null;
+            /** @description How many times the bookmark was opened, by everyone it is shared with included */
+            openCount: number;
+            /** @description Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null */
+            owner?: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
+            /** @description The account of the member who owns the bookmark; null once that member has left the workspace */
+            ownerId: string | null;
+            /** @description Whether the caller pinned the bookmark; always false for a bookmark that is shared with the caller, since a pin is the owner's */
+            pinned: boolean;
+            /**
+             * Format: date-time
+             * @description When the bookmark was plan-archived, RFC 3339 UTC
+             */
+            planArchivedAt: string;
+            /** @description How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark. The server always sends it; a client reads an absent value as null */
+            sharedVia?: ("direct" | "team" | "folder") | null;
+            /** @description The bookmark's slug, null when it has none */
+            slug: string | null;
+            /** @description The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, the owner's among them, and empty when the caller put none on it */
+            tags: components["schemas"]["BookmarkTag"][];
+            /** @description The bookmark's title */
+            title: string;
+            /**
+             * Format: date-time
+             * @description When the bookmark last changed, RFC 3339 UTC
+             */
+            updatedAt: string;
+            /** @description The URL as stored: normalised, and always http or https */
+            url: string;
+            /** @description Moves by one with every change; the ETag header carries it and If-Match takes it back */
+            version: number;
+        };
+        ArchivedBookmarkList: {
+            /** @description One page of the caller's own plan-archived bookmarks, the most recently archived first and the identifier as the tiebreak, each with the instant it was archived */
+            items: components["schemas"]["ArchivedBookmark"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+            /** @description How many plan-archived bookmarks the caller owns in the workspace, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so */
+            total: number | null;
+            /**
+             * @description Present, and 10 000, when total is null: the caller owns more than 10 000 plan-archived bookmarks in the workspace
+             * @constant
+             */
+            totalAtLeast?: 10000;
         };
         AuditEvent: {
             /** @description The dotted name of the recorded action, such as member.removed */
@@ -5369,6 +5459,85 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listArchivedBookmarks: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the caller's own plan-archived bookmarks in the workspace the request acts in, the most recently archived first, each with the instant it was archived, with the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast). The page is empty, with a total of 0, when none is archived. A bookmark that is not plan-archived, another member's bookmark and another workspace's bookmark are never listed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchivedBookmarkList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this account was issued for this workspace and this list (bad_request) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter, a limit outside 1 to 100) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

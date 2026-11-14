@@ -328,6 +328,87 @@ export const ApiTokenSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const ArchivedBookmarkListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        ownerId: z.ZodNullable<z.ZodUUID>;
+        url: z.ZodString;
+        host: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+            direct: "direct";
+            team: "team";
+            folder: "folder";
+        }>>>;
+        folders: z.ZodArray<z.ZodObject<{
+            id: z.ZodUUID;
+            name: z.ZodString;
+            icon: z.ZodString;
+            color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+            id: z.ZodUUID;
+            name: z.ZodString;
+        }, z.core.$strict>>;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        planArchivedAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+    total: z.ZodNullable<z.ZodNumber>;
+    totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ArchivedBookmarkSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    ownerId: z.ZodNullable<z.ZodUUID>;
+    url: z.ZodString;
+    host: z.ZodString;
+    title: z.ZodString;
+    description: z.ZodNullable<z.ZodString>;
+    slug: z.ZodNullable<z.ZodString>;
+    forwarding: z.ZodBoolean;
+    pinned: z.ZodBoolean;
+    openCount: z.ZodNumber;
+    lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+    owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>>;
+    sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+    }>>>;
+    folders: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+    }, z.core.$strict>>;
+    tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
+    version: z.ZodNumber;
+    createdAt: z.ZodISODateTime;
+    updatedAt: z.ZodISODateTime;
+    planArchivedAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export type AtLeastOne<T> = {
     [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>>;
 }[keyof T];
@@ -1273,6 +1354,36 @@ export interface ComponentTypes {
         ApiTokenList: {
             items: ComponentTypes["schemas"]["ApiToken"][];
             nextCursor: string | null;
+        };
+        ArchivedBookmark: {
+            createdAt: string;
+            description: string | null;
+            folders: ComponentTypes["schemas"]["BookmarkFolder"][];
+            forwarding: boolean;
+            host: string;
+            id: string;
+            lastOpenedAt: string | null;
+            openCount: number;
+            owner?: {
+                accountId: string;
+                displayName: string;
+            } | null;
+            ownerId: string | null;
+            pinned: boolean;
+            planArchivedAt: string;
+            sharedVia?: ("direct" | "team" | "folder") | null;
+            slug: string | null;
+            tags: ComponentTypes["schemas"]["BookmarkTag"][];
+            title: string;
+            updatedAt: string;
+            url: string;
+            version: number;
+        };
+        ArchivedBookmarkList: {
+            items: ComponentTypes["schemas"]["ArchivedBookmark"][];
+            nextCursor: string | null;
+            total: number | null;
+            totalAtLeast?: 10000;
         };
         AuditEvent: {
             action: string;
@@ -6204,6 +6315,79 @@ export const listApiTokens: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const listArchivedBookmarks: {
+    readonly method: "get";
+    readonly path: "/api/v1/bookmarks/archived";
+    readonly operationId: "listArchivedBookmarks";
+    readonly tag: "bookmarks";
+    readonly summary: "List the caller's plan-archived bookmarks";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        ownerId: z.ZodNullable<z.ZodUUID>;
+        url: z.ZodString;
+        host: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        sharedVia: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>>;
+        folders: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        planArchivedAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        total: z.ZodNullable<z.ZodNumber>;
+        totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ListArchivedBookmarksQuerySchema: z.ZodObject<{
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const listAuditEvents: {
@@ -12380,6 +12564,78 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listArchivedBookmarks: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ArchivedBookmarkList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listAuditEvents: {
         parameters: {
             query?: {
@@ -17558,6 +17814,23 @@ export interface paths {
         get: OperationTypes["listBookmarks"];
         put?: never;
         post: OperationTypes["createBookmark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/bookmarks/archived": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listArchivedBookmarks"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

@@ -477,6 +477,66 @@ export function archiveBookmarks(tx: BookmarkArchiveTransaction, request: Bookma
 }>;
 
 // @public (undocumented)
+export interface ArchivedBookmarkListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface ArchivedBookmarkListDependencies {
+    // (undocumented)
+    readonly cursors: BookmarkCursors;
+    // (undocumented)
+    readonly store: ArchivedBookmarkStore;
+}
+
+// @public (undocumented)
+export type ArchivedBookmarkListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly ArchivedBookmarkRow[];
+    readonly nextCursor: string | null;
+    readonly total: number | null;
+}
+/** The cursor was not issued by this server for this account and workspace and this list; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
+
+// @public (undocumented)
+export interface ArchivedBookmarkListRequest {
+    readonly after: ArchivedBookmarkPosition | undefined;
+    // (undocumented)
+    readonly limit: number;
+}
+
+// @public
+export interface ArchivedBookmarkPosition {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
+export interface ArchivedBookmarkRow {
+    // (undocumented)
+    readonly archivedAt: Date;
+    // (undocumented)
+    readonly bookmark: BookmarkRecord;
+    readonly key: string;
+}
+
+// @public (undocumented)
+export interface ArchivedBookmarkStore {
+    countArchived(limit: number): Promise<number>;
+    listArchived(request: ArchivedBookmarkListRequest): Promise<readonly ArchivedBookmarkRow[]>;
+}
+
+// @public (undocumented)
 export const AUDIT_ACTION_NAMES: readonly AuditAction[];
 
 // @public (undocumented)
@@ -5897,6 +5957,9 @@ export interface JoiningEntitlements {
     // (undocumented)
     readonly values: WorkspaceEntitlementValues;
 }
+
+// @public
+export function listArchivedBookmarks(input: ArchivedBookmarkListDependencies, ask: ArchivedBookmarkListAsk): Promise<ArchivedBookmarkListOutcome>;
 
 // @public
 export function listAuditEvents(input: AuditListDependencies, ask: AuditListAsk): Promise<AuditListOutcome>;

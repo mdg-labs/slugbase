@@ -299,7 +299,7 @@ Loading: skeleton cards/rows matching the view. Below the list, the count line r
 
 ### 3.6 `/bookmarks/archived`
 
-Only reachable when archived bookmarks exist (Cloud downgrade, doc 02 §5.6). An `inline-note` explains why they are archived and how they come back (slot `entitlement.upgradeAction`); a read-only `data-table` with Delete and Export actions.
+Only reachable when archived bookmarks exist (Cloud downgrade, doc 02 §5.6). An `inline-note` explains why they are archived and how they come back (slot `entitlement.upgradeAction`); a read-only `data-table` with Delete and Export actions. Its data is `GET /api/v1/bookmarks/archived` (doc 04 §10.6): the caller's own archived bookmarks of the active workspace, newest archived first, each with the instant it was archived, paged by `cursor` with a `total` for the notice; Delete is `DELETE /api/v1/bookmarks/{id}` or the bulk delete, and Export is the export with the bookmarks selected by identifier.
 
 **Components:** `inline-note`, `data-table` (`p-table-7`), `confirm`.
 

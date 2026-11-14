@@ -1,5 +1,5 @@
-import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, fetchBookmarkMetadata as fetchBookmarkMetadataOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
-import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, lookupPageMetadata, normalizeSlug, openBookmark, previewBulkShare, previewBulkTags, readBookmark, SHARE_ENTITLEMENTS, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage, type EgressPort, type EntitlementCheck, type EntitlementUpgradeCheck, type PageMetadataCache, type ShareTarget } from "@slugbase/core";
+import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, fetchBookmarkMetadata as fetchBookmarkMetadataOperation, getBookmark, listArchivedBookmarks as listArchivedBookmarksOperation, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
+import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listArchivedBookmarks, listBookmarkIds, listBookmarks, lookupPageMetadata, normalizeSlug, openBookmark, previewBulkShare, previewBulkTags, readBookmark, SHARE_ENTITLEMENTS, updateBookmark, type ArchivedBookmarkStore, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage, type EgressPort, type EntitlementCheck, type EntitlementUpgradeCheck, type PageMetadataCache, type ShareTarget } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, bookmarkRepository, bookmarkShareRepository, isBookmarkSlugTaken, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
@@ -56,6 +56,11 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // from the session secret for this list, over the account, the workspace, the filters and the sort it was issued for: a forged, altered or
 // mismatched cursor is `400 bad_request`. `total` counts the filter's matches up to 10 000 and is null above, with `totalAtLeast`. A
 // plan-archived bookmark is never listed. A `url` that cannot be a bookmark's URL is `422 validation_failed` on `url`.
+//
+// GET /api/v1/bookmarks/archived lists the caller's own plan-archived bookmarks of the workspace (doc 04 section 10.6, doc 02 section 5.6), the ones no other read returns, the most recently
+// archived first with the identifier as the tiebreak, each with `planArchivedAt`, a page of at most 100 and the capped `total`. It has no filters: an archived bookmark is its owner's
+// alone, so a bookmark that is not archived, another member's and another workspace's are never in it. Its cursor is signed over the account, the workspace and this list, so the cursor of
+// `GET /bookmarks` and one issued to another account or for another workspace are `400 bad_request`.
 //
 // `folderIds` on a creation and on a change file the bookmark in the caller's own folders in the same transaction (a change replaces the folders
 // it is in); a folder that is another member's, another workspace's or unknown is `404 not_found` and nothing is created or changed, and
@@ -233,6 +238,12 @@ function bulkStoreOf(tx: TenantTx): BookmarkBulkStore {
 function listStoreOf(tx: TenantTx): BookmarkListStore {
   const repository = bookmarkRepository(tx);
   return { list: (request) => repository.list(request), count: (filter, limit) => repository.count(filter, limit), listWithCount: (request, limit) => repository.listWithCount(request, limit) };
+}
+
+/** The archived store over the repository of the open transaction. */
+function archivedStoreOf(tx: TenantTx): ArchivedBookmarkStore {
+  const repository = bookmarkRepository(tx);
+  return { listArchived: (request) => repository.listArchived(request), countArchived: (limit) => repository.countArchived(limit) };
 }
 
 function bookmarkCursors(secret: string): BookmarkCursors {
@@ -455,6 +466,25 @@ export function bookmarkRoutes({ entitlements, sharingEntitlements, upgradeAvail
         throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "url", code: outcome.reason === "not_http" ? "url_not_allowed" : URL_FIELD_CODES[outcome.reason] }] });
       }
       return { status: 200, body: { ids: [...outcome.ids], truncated: outcome.truncated } };
+    }),
+
+    route(listArchivedBookmarksOperation).handle(async ({ query }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant((tx) =>
+        listArchivedBookmarks({ store: archivedStoreOf(tx), cursors }, { workspaceId: tenant.workspaceId, accountId: tenant.accountId, limit: query.limit, cursor: query.cursor }),
+      );
+      if (outcome.kind === "bad_cursor") {
+        throw new ProblemError("bad_request", BAD_CURSOR);
+      }
+      return {
+        status: 200,
+        body: {
+          items: outcome.items.map((row) => ({ ...bookmarkBody(row.bookmark), planArchivedAt: row.archivedAt.toISOString() })),
+          nextCursor: outcome.nextCursor,
+          total: outcome.total,
+          ...(outcome.total === null ? { totalAtLeast: BOOKMARK_LIST_TOTAL_CAP } : {}),
+        },
+      };
     }),
 
     route(bulkBookmarksOperation).handle(async ({ body }, context) => {
