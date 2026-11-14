@@ -1909,6 +1909,8 @@ export interface components {
                 ai: boolean;
                 /** @description The operator's display name of the AI provider (AI_PROVIDER_NAME), present only where an AI port is configured; the interface names it wherever it tells a member who processes a request. Never the endpoint, the model or a credential */
                 aiProvider?: string;
+                /** @description Whether a billing adapter is composed (a non-no-op billing port), never an entitlement. This server always sends it */
+                billing?: boolean;
                 /** @description Whether a mail port is configured */
                 mail: boolean;
             };
@@ -1918,6 +1920,24 @@ export interface components {
                 displayName: string;
                 /** @description The plain-text notice the instance admin set for the sign-in page; null while there is none. It is text, never HTML, and the sign-in page renders it as text only */
                 signInNotice: string | null;
+            };
+            /** @description The addresses of the imprint, the privacy policy and the terms, present only where the deployment's composition supplies them; they are public configuration */
+            legal?: {
+                /**
+                 * Format: uri
+                 * @description The address of the imprint, an absolute https or http URL
+                 */
+                imprintUrl: string;
+                /**
+                 * Format: uri
+                 * @description The address of the privacy policy, an absolute https or http URL
+                 */
+                privacyUrl: string;
+                /**
+                 * Format: uri
+                 * @description The address of the terms of service, an absolute https or http URL
+                 */
+                termsUrl: string;
             };
             /** @description Locales the interface is available in */
             locales: string[];

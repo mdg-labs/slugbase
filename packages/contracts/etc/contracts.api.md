@@ -264,6 +264,7 @@ export const ApiConfigSchema: z.ZodObject<{
     features: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
+        billing: z.ZodOptional<z.ZodBoolean>;
         aiProvider: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>;
     signIn: z.ZodOptional<z.ZodObject<{
@@ -276,6 +277,11 @@ export const ApiConfigSchema: z.ZodObject<{
     instance: z.ZodOptional<z.ZodObject<{
         displayName: z.ZodString;
         signInNotice: z.ZodNullable<z.ZodString>;
+    }, z.core.$strict>>;
+    legal: z.ZodOptional<z.ZodObject<{
+        imprintUrl: z.ZodURL;
+        privacyUrl: z.ZodURL;
+        termsUrl: z.ZodURL;
     }, z.core.$strict>>;
     setupRequired: z.ZodOptional<z.ZodBoolean>;
     setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
@@ -1318,11 +1324,17 @@ export interface ComponentTypes {
             features: {
                 ai: boolean;
                 aiProvider?: string;
+                billing?: boolean;
                 mail: boolean;
             };
             instance?: {
                 displayName: string;
                 signInNotice: string | null;
+            };
+            legal?: {
+                imprintUrl: string;
+                privacyUrl: string;
+                termsUrl: string;
             };
             locales: string[];
             origin: string;
@@ -4423,6 +4435,7 @@ export const getApiConfig: {
         features: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
+        billing: z.ZodOptional<z.ZodBoolean>;
         aiProvider: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>;
         signIn: z.ZodOptional<z.ZodObject<{
@@ -4435,6 +4448,11 @@ export const getApiConfig: {
         instance: z.ZodOptional<z.ZodObject<{
         displayName: z.ZodString;
         signInNotice: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>>;
+        legal: z.ZodOptional<z.ZodObject<{
+        imprintUrl: z.ZodURL;
+        privacyUrl: z.ZodURL;
+        termsUrl: z.ZodURL;
         }, z.core.$strict>>;
         setupRequired: z.ZodOptional<z.ZodBoolean>;
         setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
@@ -6273,6 +6291,13 @@ export const leaveWorkspace: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public
+export const LegalLinksSchema: z.ZodObject<{
+    imprintUrl: z.ZodURL;
+    privacyUrl: z.ZodURL;
+    termsUrl: z.ZodURL;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const listApiTokens: {

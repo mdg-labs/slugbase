@@ -298,6 +298,10 @@
                 "description": "The operator's display name of the AI provider (AI_PROVIDER_NAME), present only where an AI port is configured; the interface names it wherever it tells a member who processes a request. Never the endpoint, the model or a credential",
                 "type": "string"
               },
+              "billing": {
+                "description": "Whether a billing adapter is composed (a non-no-op billing port), never an entitlement. This server always sends it",
+                "type": "boolean"
+              },
               "mail": {
                 "description": "Whether a mail port is configured",
                 "type": "boolean"
@@ -328,6 +332,33 @@
             "required": [
               "displayName",
               "signInNotice"
+            ],
+            "type": "object"
+          },
+          "legal": {
+            "additionalProperties": false,
+            "description": "The addresses of the imprint, the privacy policy and the terms, present only where the deployment's composition supplies them; they are public configuration",
+            "properties": {
+              "imprintUrl": {
+                "description": "The address of the imprint, an absolute https or http URL",
+                "format": "uri",
+                "type": "string"
+              },
+              "privacyUrl": {
+                "description": "The address of the privacy policy, an absolute https or http URL",
+                "format": "uri",
+                "type": "string"
+              },
+              "termsUrl": {
+                "description": "The address of the terms of service, an absolute https or http URL",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "imprintUrl",
+              "privacyUrl",
+              "termsUrl"
             ],
             "type": "object"
           },

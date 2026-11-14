@@ -8,6 +8,7 @@ import {
   type ModuleContext,
   type ServerModule,
 } from "../src/create-server.ts";
+import type { LegalLinks } from "../src/index.ts";
 import { HookResult } from "../src/hooks/index.ts";
 import type { ContentSecurityOptions } from "../src/http/headers.ts";
 import { defineJob, defineSchedule } from "../src/worker/index.ts";
@@ -563,5 +564,57 @@ describe("the hooks of modules", () => {
     expect(() =>
       createServer({ config: serverConfig(), adapters: adapters(), modules: [module], migrations: [], logger: recordingLogger(), database: fakeDatabase() }),
     ).not.toThrow();
+  });
+});
+
+describe("createServer legal links", () => {
+  const GOOD = { imprintUrl: "https://example.com/imprint", privacyUrl: "https://example.com/privacy", termsUrl: "https://example.com/terms" };
+
+  const composeWith = (legal: unknown, database = fakeDatabase()) =>
+    createServer({
+      config: serverConfig(),
+      adapters: adapters(),
+      modules: [],
+      openApiDocument: documentOf([]),
+      migrations: [],
+      logger: recordingLogger(),
+      database,
+      legal: legal as LegalLinks,
+    });
+
+  it.each([
+    ["a scheme that is not http or https", { ...GOOD, termsUrl: "ftp://example.com/terms" }],
+    ["a script address", { ...GOOD, privacyUrl: "javascript:alert(1)" }],
+    ["a data address", { ...GOOD, privacyUrl: "data:text/html,x" }],
+    ["a relative address", { ...GOOD, imprintUrl: "/imprint" }],
+    ["a scheme-relative address", { ...GOOD, imprintUrl: "//example.com/imprint" }],
+    ["text that is not an address", { ...GOOD, imprintUrl: "imprint" }],
+    ["an empty address", { ...GOOD, termsUrl: "" }],
+    ["an address with a password", { ...GOOD, termsUrl: "https://user:secret@example.com/terms" }],
+    ["an address with a user name", { ...GOOD, termsUrl: "https://user@example.com/terms" }],
+    ["an address with surrounding whitespace", { ...GOOD, imprintUrl: " https://example.com/imprint" }],
+    ["an address with a line break inside", { ...GOOD, imprintUrl: "https://example.com/imp\nrint" }],
+    ["a missing address", { imprintUrl: GOOD.imprintUrl, privacyUrl: GOOD.privacyUrl }],
+    ["an address that is not a string", { ...GOOD, termsUrl: 42 }],
+    ["an unknown member", { ...GOOD, cookiesUrl: "https://example.com/cookies" }],
+    ["no addresses at all", {}],
+    ["a value that is not an object", "https://example.com/legal"],
+    ["null", null],
+  ])("refuses %s with invalid_legal_links before anything is composed", (_name, legal) => {
+    const database = fakeDatabase();
+    const error = failure(() => composeWith(legal, database));
+    expect(error.code).toBe("invalid_legal_links");
+    expect(error.message).toContain("legal");
+    expect(database.closed.count).toBe(0);
+  });
+
+  it("names the member that is wrong and never repeats an address, whose userinfo could be a secret", () => {
+    const error = failure(() => composeWith({ ...GOOD, termsUrl: "https://user:hunter2@example.com/terms" }));
+    expect(error.message).toContain("termsUrl");
+    expect(error.message).not.toContain("hunter2");
+  });
+
+  it("composes with three valid addresses", () => {
+    expect(() => composeWith(GOOD)).not.toThrow();
   });
 });
