@@ -2,7 +2,7 @@ import { Button, Input } from "@slugbase/ui";
 import { Banner, FormField } from "@slugbase/ui/patterns";
 import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useAcknowledgementChecks, type AcknowledgementEntries } from "./acknowledgement-checks.tsx";
+import type { AcknowledgementChecks, AcknowledgementEntries } from "./acknowledgement-checks.tsx";
 import type { AcceptOutcome, AcceptRefusal } from "./accept-invitation.ts";
 import { NewPasswordField, type PasswordProblem } from "./new-password-field.tsx";
 
@@ -19,12 +19,13 @@ export interface InvitationSignUpFormProps {
   accept: (displayName: string, password: string, signal: AbortSignal, acknowledgements?: AcknowledgementEntries) => Promise<AcceptOutcome>;
   /** Called with the outcome when it is not something the form itself explains: the account exists, or the link is dead. */
   onSettled: (outcome: SignUpSettled) => void;
+  /** The page's acknowledgement checks: the form renders their checkboxes and the page may gate other buttons on the same ones. */
+  acknowledgements: AcknowledgementChecks;
 }
 
 /** The short sign-up an invitation to an address without an account leads to: a name and a password, with the address fixed and the declared acknowledgements as required checkboxes (doc 03 section 1.5). */
-export function InvitationSignUpForm({ email, accept, onSettled }: InvitationSignUpFormProps): ReactElement {
+export function InvitationSignUpForm({ email, accept, onSettled, acknowledgements }: InvitationSignUpFormProps): ReactElement {
   const { t } = useTranslation();
-  const acknowledgements = useAcknowledgementChecks();
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [nameMissing, setNameMissing] = useState(false);

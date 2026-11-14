@@ -117,7 +117,7 @@ export class JobDefinitionError extends Error {
   }
 }
 
-const JOB_NAME = /^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/;
+const JOB_NAME = /^[a-z][a-zA-Z0-9_]*(?:\.[a-z][a-zA-Z0-9_]*)+$/;
 const SCHEDULE_NAME = /^[a-z][a-zA-Z0-9]*(?:[.-][a-z][a-zA-Z0-9]*)*$/;
 const MAX_RETRY_LIMIT = 100;
 
@@ -177,7 +177,7 @@ function resolveRetry(name: string, retry: RetryPolicy | undefined): ResolvedRet
 export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobOptions<Shape>): JobDefinition<z.infer<z.ZodObject<Shape>> & JobPayload> {
   const { name } = options;
   if (!JOB_NAME.test(name)) {
-    throw new JobDefinitionError(`job name "${name}" must be dotted lower camel case such as mail.send`);
+    throw new JobDefinitionError(`job name "${name}" must be dotted lower-case-initial words such as mail.send, each of letters, digits and underscores`);
   }
   for (const [field, schema] of Object.entries(options.payload.shape)) {
     if (!isScalar(schema)) {

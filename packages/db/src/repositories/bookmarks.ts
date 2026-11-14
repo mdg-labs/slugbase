@@ -1,6 +1,8 @@
 import {
   createAuditWriter,
   type BookmarkArchiveTransaction,
+  type ArchivedBookmarkListRequest,
+  type ArchivedBookmarkRow,
   type BookmarkFilingMode,
   type BookmarkFolderRef,
   type BookmarkLinkingResult,
@@ -22,7 +24,7 @@ import {
   type NewBookmark,
   type SlugUse,
 } from "@slugbase/core";
-import { and, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
@@ -257,6 +259,14 @@ export interface BookmarkRepository {
    * `list` and `count` as they are. Needs a transaction opened with a workspace.
    */
   listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
+  /**
+   * The plan-archived bookmarks that the account of the transaction owns in the workspace of the transaction, the most recently archived first with the identifier as the tiebreak,
+   * starting after `request.after` and at most `request.limit` of them; each comes with the instant it was archived, as a date and as the text the database prints, which a later call passes back in
+   * `after`. Nobody else's bookmark is in it, and neither is one that is not archived. Needs a transaction opened with a workspace.
+   */
+  listArchived(request: ArchivedBookmarkListRequest): Promise<readonly ArchivedBookmarkRow[]>;
+  /** How many bookmarks `listArchived` covers, counting no further than `limit`. Needs a transaction opened with a workspace. */
+  countArchived(limit: number): Promise<number>;
 }
 
 /**
@@ -903,6 +913,47 @@ async function listWithCountOf(tx: TenantTx, request: BookmarkListRequest, limit
   return { rows, count: Math.min(matched, limit) };
 }
 
+/**
+ * The predicate of the plan-archived bookmarks of the account of the transaction: this workspace, this owner and an archive instant. The owner is the transaction's account and never a
+ * parameter, so no caller names whose archived bookmarks are read. `bookmarks_owner_archived_idx` holds exactly these rows, so the page sorts the account's archived bookmarks and does not walk the table.
+ */
+function archivedPredicate(tx: TenantTx, after?: { readonly key: string; readonly id: string }): SQL {
+  const predicate = and(
+    eq(bookmarks.workspaceId, requireListWorkspace(tx, "listing archived bookmarks")),
+    eq(bookmarks.ownerId, tx.accountId),
+    isNotNull(bookmarks.planArchivedAt),
+    after === undefined ? undefined : sql`((${bookmarks.planArchivedAt}, ${bookmarks.id}) < (${after.key}::timestamptz, ${after.id}::uuid))`,
+  );
+  if (predicate === undefined) {
+    throw new Error("an archive predicate is never empty");
+  }
+  return predicate;
+}
+
+async function listArchivedOf(tx: TenantTx, { after, limit }: ArchivedBookmarkListRequest): Promise<readonly ArchivedBookmarkRow[]> {
+  const found = await tenantHandle(tx)
+    .select({ ...RECORD_COLUMNS, archivedAt: bookmarks.planArchivedAt, key: sql<string>`${bookmarks.planArchivedAt}::text` })
+    .from(bookmarks)
+    .where(archivedPredicate(tx, after))
+    .orderBy(desc(bookmarks.planArchivedAt), desc(bookmarks.id))
+    .limit(limit);
+  const records = new Map((await recordsOf(tx, tx.accountId, found)).map((record) => [record.id, record]));
+  return found.flatMap(({ id, archivedAt, key }) => {
+    const bookmark = records.get(id);
+    return bookmark === undefined || archivedAt === null ? [] : [{ bookmark, archivedAt, key }];
+  });
+}
+
+async function countArchivedOf(tx: TenantTx, limit: number): Promise<number> {
+  const handle = tenantHandle(tx);
+  const capped = handle.select({ one: sql<number>`1`.as("one") }).from(bookmarks).where(archivedPredicate(tx)).limit(limit).as("capped");
+  const [row] = await handle.select({ total: sql<number>`count(*)::int` }).from(capped);
+  if (row === undefined) {
+    throw new Error("counting archived bookmarks returned no row");
+  }
+  return row.total;
+}
+
 function requireListWorkspace(tx: TenantTx, action: string): string {
   if (tx.workspaceId === undefined) {
     throw new TenantContextError("workspace_required", `${action} needs a tenant transaction opened with a workspace`);
@@ -1366,6 +1417,10 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
     count: (filter, limit) => countOf(tx, filter, limit),
 
     listWithCount: (request, limit) => listWithCountOf(tx, request, limit),
+
+    listArchived: (request) => listArchivedOf(tx, request),
+
+    countArchived: (limit) => countArchivedOf(tx, limit),
   };
 }
 

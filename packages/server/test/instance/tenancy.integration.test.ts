@@ -1,6 +1,7 @@
 import { classifyOperations, loadOpenApiDocument } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { sessionRows, setActiveWorkspace } from "../auth/support.ts";
 import type { RequestParts } from "../contract/walker.ts";
 import { HOOK_TIMEOUT_MS, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
@@ -34,7 +35,7 @@ describe("an instance admin with a second factor who belongs to no workspace and
     expect(tenantScoped.length).toBeGreaterThanOrEqual(16);
   });
 
-  it("is answered 404 not_found by each of them, whatever its policy, for the example ids that no workspace holds", async () => {
+  it("is answered 404 not_found by each of them, whatever its policy, for the example ids that no workspace holds", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     for (const operation of tenantScoped) {
       for (const foreign of [false, true]) {
         const response = await callOperation(world, operation, admin.cookie, {}, foreign);

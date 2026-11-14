@@ -142,9 +142,9 @@ describe("the AI port in the composition root", () => {
   });
 
   it("reports features.ai from /api/config only when the adapter is composed", async () => {
-    expect(await features(serverWith({}))).toEqual({ mail: false, ai: false });
-    expect(await features(serverWith(ai))).toEqual({ mail: false, ai: true, aiProvider: "Example AI" });
-    expect(await features(serverWith({ ...ai, AI_API_KEY: "" }))).toEqual({ mail: false, ai: true, aiProvider: "Example AI" });
+    expect(await features(serverWith({}))).toEqual({ mail: false, ai: false, billing: false });
+    expect(await features(serverWith(ai))).toEqual({ mail: false, ai: true, billing: false, aiProvider: "Example AI" });
+    expect(await features(serverWith({ ...ai, AI_API_KEY: "" }))).toEqual({ mail: false, ai: true, billing: false, aiProvider: "Example AI" });
   });
 
   it("hands the port to the modules of the server", () => {

@@ -212,7 +212,7 @@ Only when the deployment has no accounts (doc 02 §2.2). Steps: **(1) setup toke
 
 ### 1.2 `/login` and `/login/mfa`
 
-Email, password, "Remember me", "Forgot password?", OIDC provider buttons (when configured) separated by "or", "Create an account" (only when registration is open). Errors are one generic message. MFA step: 6-digit `totp`, "Use a backup code instead" (switches to a text input), "Back to sign in". A disabled account sees the same generic error (no account-state leakage). Unverified accounts see "Verify your email" with resend.
+Email, password, "Remember me", "Forgot password?", OIDC provider buttons (when configured) separated by "or", "Create an account" (only when registration is open). Errors are one generic message. MFA step: 6-digit `totp`, "Use a backup code instead" (switches to a text input), "Back to sign in". A disabled account sees the same generic error (no account-state leakage). Unverified accounts see "Verify your email" with resend. When the composition declares acknowledgements (§1.3), the provider buttons, which may create an account, sit under the same required checkboxes: no start is sent while a box is unticked, each unticked box is marked and the first is focused, and the ticked entries travel with the OIDC start as `acknowledgements`; with none declared the buttons are unchanged.
 
 **Components:** authentication card (`p-card-2`, `p-card-3` with separators); `form`, `secret-input`; provider buttons (`p-button-16` with provider icon); `totp` (`p-otp-field-6`); backup code `form` (`p-input-6`); Checkbox for remember me (`p-checkbox-1`).
 
@@ -230,7 +230,7 @@ Request: email → always "If an account exists for that address, we sent a link
 
 ### 1.5 `/invite/$token` — Accept invitation
 
-Shows workspace name, inviter, role. Branches per doc 02 §3.4: signed in as the invitee → "Join <workspace>"; signed in as someone else → explanation and "Sign out and continue"; no account → short sign-up (email fixed, with the same required acknowledgement checkboxes as `/register`) or OIDC buttons (which send no acknowledgements); existing account signed out → sign-in form. Expired or revoked → explanation, no detail about why.
+Shows workspace name, inviter, role. Branches per doc 02 §3.4: signed in as the invitee → "Join <workspace>"; signed in as someone else → explanation and "Sign out and continue"; no account → short sign-up (email fixed, with the same required acknowledgement checkboxes as `/register`) or OIDC buttons (under the same required checkboxes when acknowledgements are declared: no start is sent while a box is unticked, each unticked box is marked and the first is focused, and the ticked entries travel with the OIDC start; with none declared the buttons are unchanged); existing account signed out → sign-in form. Expired or revoked → explanation, no detail about why.
 
 **Components:** authentication card; `form`; `status-badge` for role; `banner` for expired.
 
@@ -299,7 +299,7 @@ Loading: skeleton cards/rows matching the view. Below the list, the count line r
 
 ### 3.6 `/bookmarks/archived`
 
-Only reachable when archived bookmarks exist (Cloud downgrade, doc 02 §5.6). An `inline-note` explains why they are archived and how they come back (slot `entitlement.upgradeAction`); a read-only `data-table` with Delete and Export actions.
+Only reachable when archived bookmarks exist (Cloud downgrade, doc 02 §5.6). An `inline-note` explains why they are archived and how they come back (slot `entitlement.upgradeAction`); a read-only `data-table` with Delete and Export actions. Its data is `GET /api/v1/bookmarks/archived` (doc 04 §10.6): the caller's own archived bookmarks of the active workspace, newest archived first, each with the instant it was archived, paged by `cursor` with a `total` for the notice; Delete is `DELETE /api/v1/bookmarks/{id}` or the bulk delete, and Export is the export with the bookmarks selected by identifier.
 
 **Components:** `inline-note`, `data-table` (`p-table-7`), `confirm`.
 

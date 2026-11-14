@@ -325,7 +325,7 @@ describe("the matrix over the committed contract and the repository registry", (
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
     // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder, and the read, the change, the deletion and the replacement of the members of a team name a team (the replacement also the members of B in `accountIds`), and the list, the grant and the revocation of the shares of a bookmark name a bookmark of B in the path (the grant also a member and a team of B, the revocation also a share of B), and the list, the grant and the revocation of the shares of a folder name a folder of B in the path (with the same members, team and share); the search for share targets and the invitation list take no identifier.
     // The audit log's list names an account in `actorAccountId` and an entity in `entityId`, and answers an empty 200 for those of B.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(71);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(72);
     // Three sessions and six tokens of A, once on each of the twenty operations (the AI suggestion among them, which names no row of any workspace and reads and writes only the caller's own cache) that name no member other than the creation of a bookmark and twice on the creation of a bookmark (once for each of the two bookmarks of B put in its `slug`, which is mapped to a bookmark and judged with the folder and the tag of B in the same call), once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
@@ -336,9 +336,10 @@ describe("the matrix over the committed contract and the repository registry", (
     // The two exports name a bookmark, a folder and a tag of B in their selection (`id`, `folderId`, `tag` and the `hasSlug` filter, picked by its name): seven calls for each principal on each of them, the last term but one of the sum, answered an empty 200 since a selection names nothing of B to a caller of A.
     // The deletion of former members' content names each of the two bookmarks of B in `bookmarkIds` with the folder of B in `folderIds` for each principal that reaches its handler (the last term but one of the sum, `2`): the rows are no ownerless rows of A, so the answer is an empty 200 with zero counts and B is as it was.
     // The reassignment names each pair of those two with each of the three members of B in `transferTo` (the last term, `2 * 3`): every call names a `transferTo` that is no member of A, which is the declared 404 naming `transferTo`, and B is as it was.
+    // The list of the plan-archived bookmarks names none either, and is counted in the first term: it reads the caller's own archived bookmarks of the workspace of the request, and its cursor is no identifier of any workspace.
     // Without a selection the exports name none, and are counted in the first term: they read the caller's own bookmarks, folders and tags of the workspace of the request, section by section.
     // The Netscape import names none either, and is counted in the first term: its one file part is a stream of bytes and no identifier, and what the file lists is text matched among the caller's own rows.
-    expect(report.attempts).toBe(9 * 29 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2 * 2 + 2 * 7 + 2 + 2 * 3));
+    expect(report.attempts).toBe(9 * 30 + 9 * (1 + 3 + 2 + 3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2) + 2 * 2 * 2 * 2 + 2 * 7 + 2 + 2 * 3));
     assertMatrixPassed(report);
   });
 
@@ -1676,6 +1677,77 @@ describe("the page by title across workspaces", () => {
     expect(inB.listedAll).toEqual([...OWN_IN_B]);
     expect(inA.listedAll).not.toContain(OTHER_IN_A);
     expect((await page(PROBE_WORKSPACE_A, "title_desc")).listedAll).toEqual([]);
+  });
+});
+
+// The list of the plan-archived bookmarks is read by the repository's `listArchived` and `countArchived` as the account of the transaction, in the workspace of the transaction, on the policy of `bookmarks`
+// (doc 05 section 2.2, doc 10 T1 and T2). The account below belongs to both workspaces and has archived and live bookmarks in both, and another member of A has archived bookmarks in A. From a transaction acting in
+// A, the page and the count hold the account's own archived bookmarks of A and nothing of B, of the other member or a live one, and in B the same call holds B's, so the rows of B are real and the refusal in A
+// is the workspace's. A place after which the page resumes that names a bookmark of B or of the other member moves the page by its instant and reads nothing of theirs.
+describe("the list of archived bookmarks across workspaces", () => {
+  // Workspaces of their own: the archived rows would otherwise stand in the counts of the workspaces the other cases compare with their rows.
+  const WORKSPACE_A = "0192f3a0-6666-7000-8000-00000000a0f1";
+  const WORKSPACE_B = "0192f3a0-6666-7000-8000-00000000b0f1";
+  const MEMBER_OF_BOTH = "0192f3a0-5555-7000-8000-00000000a0f1";
+  const OTHER_OF_A = "0192f3a0-5555-7000-8000-00000000a0f2";
+  const BOOKMARK_OF_A = "0192f3a0-4444-7000-8000-00000000a0f3";
+  const BOOKMARK_OF_B = "0192f3a0-4444-7000-8000-00000000b0f3";
+  const ARCHIVED_IN_A = ["0192f3a0-4444-7000-8000-00000000a0f4", "0192f3a0-4444-7000-8000-00000000a0f5"] as const;
+  const ARCHIVED_IN_B = ["0192f3a0-4444-7000-8000-00000000b0f4", "0192f3a0-4444-7000-8000-00000000b0f5"] as const;
+  const LIVE_IN_A = "0192f3a0-4444-7000-8000-00000000a0f6";
+  const ARCHIVED_OF_OTHER_IN_A = "0192f3a0-4444-7000-8000-00000000a0f7";
+
+  it("holds the account's own archived bookmarks of the workspace of the transaction, in the page and in the count, and nothing of the other workspace, of another member or live", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    for (const [accountId, email] of [
+      [MEMBER_OF_BOTH, "archived-list-both@example.test"],
+      [OTHER_OF_A, "archived-list-other@example.test"],
+    ] as const) {
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+        await tx`INSERT INTO accounts (id, email, display_name) VALUES (${accountId}, ${email}, 'Matrix member') ON CONFLICT DO NOTHING`;
+      });
+    }
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        VALUES (${WORKSPACE_A}, ${MEMBER_OF_BOTH}, 'owner'), (${WORKSPACE_A}, ${OTHER_OF_A}, 'member'), (${WORKSPACE_B}, ${MEMBER_OF_BOTH}, 'owner') ON CONFLICT DO NOTHING`;
+      const rows = [
+        ...ARCHIVED_IN_A.map((id, n) => ({ id, workspace: WORKSPACE_A, owner: MEMBER_OF_BOTH, archivedAt: `2026-03-0${String(n + 1)}T10:00:00Z` })),
+        ...ARCHIVED_IN_B.map((id, n) => ({ id, workspace: WORKSPACE_B, owner: MEMBER_OF_BOTH, archivedAt: `2026-03-0${String(n + 1)}T10:00:00Z` })),
+        { id: LIVE_IN_A, workspace: WORKSPACE_A, owner: MEMBER_OF_BOTH, archivedAt: null },
+        { id: ARCHIVED_OF_OTHER_IN_A, workspace: WORKSPACE_A, owner: OTHER_OF_A, archivedAt: "2026-03-09T10:00:00Z" },
+      ];
+      for (const row of rows) {
+        await tx`
+          INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, plan_archived_at)
+          VALUES (${row.id}, ${row.workspace}, ${row.owner}, 'https://example.com/archived-list', 'https://example.com/archived-list', 'example.com', 'Archived list', ${row.archivedAt}::text::timestamptz) ON CONFLICT DO NOTHING`;
+      }
+    });
+
+    const read = (accountId: string, workspaceId: string, after?: { readonly key: string; readonly id: string }) =>
+      database().tenant.withTenant({ accountId, workspaceId, requestId: "matrix-archived-list" }, async (tx) => {
+        const repository = bookmarkRepository(tx);
+        return { page: (await repository.listArchived({ after, limit: 10 })).map((row) => row.bookmark.id), count: await repository.countArchived(100) };
+      });
+
+    // Newest archived first: the second of each workspace was archived after the first.
+    expect(await read(MEMBER_OF_BOTH, WORKSPACE_A)).toEqual({ page: [ARCHIVED_IN_A[1], ARCHIVED_IN_A[0]], count: 2 });
+    expect(await read(MEMBER_OF_BOTH, WORKSPACE_B)).toEqual({ page: [ARCHIVED_IN_B[1], ARCHIVED_IN_B[0]], count: 2 });
+    expect(await read(OTHER_OF_A, WORKSPACE_A)).toEqual({ page: [ARCHIVED_OF_OTHER_IN_A], count: 1 });
+    // The other member of A is no member of B, and a transaction acting in B for them reads nothing.
+    expect(await read(OTHER_OF_A, WORKSPACE_B)).toEqual({ page: [], count: 0 });
+    // A place that names a bookmark of B, or of the other member, only moves the page by its instant and identifier: it still reads the account's own of A and nothing of theirs.
+    const afterB = await read(MEMBER_OF_BOTH, WORKSPACE_A, { key: "2026-03-02 10:00:00+00", id: BOOKMARK_OF_B });
+    const afterOther = await read(MEMBER_OF_BOTH, WORKSPACE_A, { key: "2026-03-09 10:00:00+00", id: ARCHIVED_OF_OTHER_IN_A });
+    expect(afterB.page).toEqual([ARCHIVED_IN_A[1], ARCHIVED_IN_A[0]]);
+    expect(afterOther.page).toEqual([ARCHIVED_IN_A[1], ARCHIVED_IN_A[0]]);
+    expect([...afterB.page, ...afterOther.page]).not.toContain(ARCHIVED_OF_OTHER_IN_A);
+    expect([...afterB.page, ...afterOther.page].filter((id) => (ARCHIVED_IN_B as readonly string[]).includes(id) || id === LIVE_IN_A)).toEqual([]);
   });
 });
 

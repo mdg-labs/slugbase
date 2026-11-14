@@ -29,6 +29,7 @@ export const EXPORT_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   "getWorkspace",
   "setActiveWorkspace",
   "listBookmarks",
+  "listArchivedBookmarks",
   "listBookmarkIds",
   "getBookmark",
   "listFolders",

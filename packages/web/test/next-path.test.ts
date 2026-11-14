@@ -106,6 +106,32 @@ describe("oidcInvitationStartPath", () => {
   });
 });
 
+describe("the acknowledgements of a start address", () => {
+  const LIST = [
+    { id: "terms", version: "2026-03" },
+    { id: "privacy", version: "v4 & more" },
+  ];
+
+  it("travel as the JSON text of the list, encoded, with a login and with an invitation", () => {
+    for (const path of [oidcStartPath("acme", "login", "/go/docs", LIST), oidcInvitationStartPath("acme", "abc_DEF-123", LIST)]) {
+      const url = new URL(path, "http://x.invalid");
+      expect(url.searchParams.getAll("acknowledgements")).toEqual([JSON.stringify(LIST)]);
+    }
+  });
+
+  it("are left out when none is declared, so the address is the one of a start without them", () => {
+    expect(oidcStartPath("acme", "login", "/go/docs", undefined)).toBe("/api/v1/auth/oidc/acme/start?returnTo=%2Fgo%2Fdocs");
+    expect(oidcStartPath("acme", "login", "/go/docs", [])).toBe("/api/v1/auth/oidc/acme/start?returnTo=%2Fgo%2Fdocs");
+    expect(oidcInvitationStartPath("acme", "abc_DEF-123", [])).toBe("/api/v1/auth/oidc/acme/start?intent=invite&invitation=abc_DEF-123");
+  });
+
+  it("are never put on a link or a re-authentication, which the server refuses them for", () => {
+    for (const intent of ["link", "reauth"] as const) {
+      expect(new URL(oidcStartPath("acme", intent, "/", LIST), "http://x.invalid").searchParams.has("acknowledgements")).toBe(false);
+    }
+  });
+});
+
 describe("oidcStartPath", () => {
   it("keeps an ordinary page as the page to come back to", () => {
     expect(oidcStartPath("acme", "reauth", "/settings/account/security?tab=a")).toBe(

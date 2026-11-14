@@ -121,7 +121,7 @@ Canonical product terms, used identically in UI copy, API names, database names 
 - AI field suggestions (title, slug, tags) behind a vendor-neutral port, operator-configured, opt-out per member.
 - English and German throughout.
 - The Cloud marketing site at slugbase.app (Cloud-only, doc 11).
-- The Cloud operator console for **product data**, read-only, as its own service (doc 07 §6) — after launch (Phase 7, doc 12); not needed for launch. Billing operations live in the billing service, not here.
+- The Cloud operator console for **product data**, read-only, as its own service (doc 07 §6). It is Cloud-only and planned in the Cloud roadmap. Billing operations live in the billing service, not here.
 
 ### v1 explicitly out of scope
 

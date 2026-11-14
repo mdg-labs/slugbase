@@ -6,7 +6,8 @@ import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 // any tenant transaction: the redemptions have the emailed token as their only credential, and the two calls of
 // the signed-in account take the account from the session's principal. The request records the address and
 // queues the mail job in one transaction; it issues no token itself, the job does
-// (`emailChangeRepository`).
+// (`emailChangeRepository`). The two redemptions that change the address queue the jobs their caller names
+// (the event that announces it) in the transaction that updates it.
 
 export interface EmailChangeRequest {
   readonly accountId: string;
@@ -37,17 +38,22 @@ export interface EmailChangeStore {
    * account id, or undefined, with nothing changed but the token's use, for an unknown, used, expired,
    * replaced or foreign token, an account that is disabled or whose address was never verified, a change
    * that is no longer pending and an address another account holds, which a caller does not tell apart.
+   * `onChanged` makes the jobs that announce the change, from the account; they are queued in the transaction
+   * that updates the address, so they exist exactly when the account holds the new address. A failure to queue
+   * one undoes the update and the use of the token, and rejects.
    */
-  confirmEmailChange(tokenHash: Buffer): Promise<{ readonly accountId: string } | undefined>;
+  confirmEmailChange(tokenHash: Buffer, onChanged?: (accountId: string) => readonly QueuedJob[]): Promise<{ readonly accountId: string } | undefined>;
   /**
    * Redeems the "this wasn't me" token mailed to the old address once: cancels the pending change and
    * deletes every session of the account, in one transaction. When the change was confirmed since, the
    * address it replaced becomes the account's email again (unless another account holds it by now, in which
    * case the account keeps its address) and the account's unused reset, email-change and cancel tokens are
    * deleted. The account id, or undefined for an unknown, used, expired, replaced or foreign token and for
-   * a disabled account, which a caller does not tell apart.
+   * a disabled account, which a caller does not tell apart. `onChanged` makes the jobs queued in the same
+   * transaction when, and only when, the address was put back; a failure to queue one undoes the whole
+   * redemption and rejects.
    */
-  cancelEmailChange(tokenHash: Buffer): Promise<{ readonly accountId: string } | undefined>;
+  cancelEmailChange(tokenHash: Buffer, onChanged?: (accountId: string) => readonly QueuedJob[]): Promise<{ readonly accountId: string } | undefined>;
 }
 
 interface FlagRow {
@@ -56,6 +62,11 @@ interface FlagRow {
 
 interface AccountRow {
   account_id: string | null;
+}
+
+interface CancelRow {
+  account_id: string;
+  restored: boolean;
 }
 
 const TOKEN_HASH_BYTES = 32;
@@ -97,22 +108,38 @@ export function bindEmailChangeStore(client: postgres.Sql): EmailChangeStore {
       return single(await client<FlagRow[]>`SELECT sys_email_change_clear(${accountId}::uuid) AS done`, "sys_email_change_clear").done;
     },
 
-    async confirmEmailChange(tokenHash) {
+    async confirmEmailChange(tokenHash, onChanged) {
       assertHash(tokenHash, "tokenHash");
-      const { account_id } = single(
-        await client<AccountRow[]>`SELECT sys_email_change_confirm(${tokenHash}::bytea) AS account_id`,
-        "sys_email_change_confirm",
-      );
-      return account_id === null ? undefined : { accountId: account_id };
+      return client.begin(async (tx) => {
+        const { account_id } = single(
+          await tx<AccountRow[]>`SELECT sys_email_change_confirm(${tokenHash}::bytea) AS account_id`,
+          "sys_email_change_confirm",
+        );
+        if (account_id === null) {
+          return undefined;
+        }
+        for (const job of onChanged?.(account_id) ?? []) {
+          await enqueueInTransaction(tx, job);
+        }
+        return { accountId: account_id };
+      });
     },
 
-    async cancelEmailChange(tokenHash) {
+    async cancelEmailChange(tokenHash, onChanged) {
       assertHash(tokenHash, "tokenHash");
-      const { account_id } = single(
-        await client<AccountRow[]>`SELECT sys_email_change_cancel(${tokenHash}::bytea) AS account_id`,
-        "sys_email_change_cancel",
-      );
-      return account_id === null ? undefined : { accountId: account_id };
+      return client.begin(async (tx) => {
+        const rows = await tx<CancelRow[]>`SELECT o_account_id AS account_id, o_restored AS restored FROM sys_email_change_cancel_outcome(${tokenHash}::bytea)`;
+        if (rows.length === 0) {
+          return undefined;
+        }
+        const { account_id, restored } = single(rows, "sys_email_change_cancel_outcome");
+        if (restored) {
+          for (const job of onChanged?.(account_id) ?? []) {
+            await enqueueInTransaction(tx, job);
+          }
+        }
+        return { accountId: account_id };
+      });
     },
   };
 }

@@ -298,6 +298,10 @@
                 "description": "The operator's display name of the AI provider (AI_PROVIDER_NAME), present only where an AI port is configured; the interface names it wherever it tells a member who processes a request. Never the endpoint, the model or a credential",
                 "type": "string"
               },
+              "billing": {
+                "description": "Whether a billing adapter is composed (a non-no-op billing port), never an entitlement. This server always sends it",
+                "type": "boolean"
+              },
               "mail": {
                 "description": "Whether a mail port is configured",
                 "type": "boolean"
@@ -328,6 +332,33 @@
             "required": [
               "displayName",
               "signInNotice"
+            ],
+            "type": "object"
+          },
+          "legal": {
+            "additionalProperties": false,
+            "description": "The addresses of the imprint, the privacy policy and the terms, present only where the deployment's composition supplies them; they are public configuration",
+            "properties": {
+              "imprintUrl": {
+                "description": "The address of the imprint, an absolute https or http URL",
+                "format": "uri",
+                "type": "string"
+              },
+              "privacyUrl": {
+                "description": "The address of the privacy policy, an absolute https or http URL",
+                "format": "uri",
+                "type": "string"
+              },
+              "termsUrl": {
+                "description": "The address of the terms of service, an absolute https or http URL",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "imprintUrl",
+              "privacyUrl",
+              "termsUrl"
             ],
             "type": "object"
           },
@@ -521,6 +552,228 @@
         "required": [
           "items",
           "nextCursor"
+        ],
+        "type": "object"
+      },
+      "ArchivedBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the bookmark was created, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "description": {
+            "description": "The bookmark's description, null when it has none",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folders": {
+            "description": "The caller's folders the bookmark is filed in, in the order of their names; empty when it is filed in none, and always for a bookmark that is shared with the caller",
+            "items": {
+              "$ref": "#/components/schemas/BookmarkFolder"
+            },
+            "type": "array"
+          },
+          "forwarding": {
+            "description": "Whether /go forwards to the bookmark by its slug",
+            "type": "boolean"
+          },
+          "host": {
+            "description": "The host name of the URL, lower case and in punycode",
+            "type": "string"
+          },
+          "id": {
+            "description": "The bookmark's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "lastOpenedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the bookmark was last opened, RFC 3339 UTC, null when it never was"
+          },
+          "openCount": {
+            "description": "How many times the bookmark was opened, by everyone it is shared with included",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "description": "The owner's account",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "description": "The owner's display name, as a member of the workspace sees it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null"
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account of the member who owns the bookmark; null once that member has left the workspace"
+          },
+          "pinned": {
+            "description": "Whether the caller pinned the bookmark; always false for a bookmark that is shared with the caller, since a pin is the owner's",
+            "type": "boolean"
+          },
+          "planArchivedAt": {
+            "description": "When the bookmark was plan-archived, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "sharedVia": {
+            "anyOf": [
+              {
+                "enum": [
+                  "direct",
+                  "team",
+                  "folder"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark. The server always sends it; a client reads an absent value as null"
+          },
+          "slug": {
+            "description": "The bookmark's slug, null when it has none",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "description": "The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, the owner's among them, and empty when the caller put none on it",
+            "items": {
+              "$ref": "#/components/schemas/BookmarkTag"
+            },
+            "type": "array"
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "When the bookmark last changed, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL as stored: normalised, and always http or https",
+            "type": "string"
+          },
+          "version": {
+            "description": "Moves by one with every change; the ETag header carries it and If-Match takes it back",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ownerId",
+          "url",
+          "host",
+          "title",
+          "description",
+          "slug",
+          "forwarding",
+          "pinned",
+          "openCount",
+          "lastOpenedAt",
+          "folders",
+          "tags",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "planArchivedAt"
+        ],
+        "type": "object"
+      },
+      "ArchivedBookmarkList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the caller's own plan-archived bookmarks, the most recently archived first and the identifier as the tiebreak, each with the instant it was archived",
+            "items": {
+              "$ref": "#/components/schemas/ArchivedBookmark"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many plan-archived bookmarks the caller owns in the workspace, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so"
+          },
+          "totalAtLeast": {
+            "const": 10000,
+            "description": "Present, and 10 000, when total is null: the caller owns more than 10 000 plan-archived bookmarks in the workspace",
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "total"
         ],
         "type": "object"
       },
@@ -8089,6 +8342,16 @@
               "minLength": 1,
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "acknowledgements",
+            "required": false,
+            "schema": {
+              "description": "What the person acknowledged before the handshake, for the `login` and `invite` intents, which may create an account: the JSON text of the list a registration request carries as `acknowledgements`, such as `[{\"id\":\"terms\",\"version\":\"2026-03\"}]`, at most 8 entries and 2048 characters, each an identifier and a version label, an identifier at most once. The server keeps the list with the handshake and, when the callback creates an account, gives it to the registration policy and the `account.created` event; the callback never reads it from its own query, which is the provider's. A list that breaks these limits, or a start with the `link` or `reauth` intent, which create no account, is refused with 422 and nothing is stored; absent means none",
+              "maxLength": 2048,
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -9052,6 +9315,126 @@
         "x-slugbase-idempotency": true,
         "x-slugbase-rate": "write",
         "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/bookmarks/archived": {
+      "get": {
+        "operationId": "listArchivedBookmarks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 48,
+              "description": "The most bookmarks to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page. It is valid only for the account and workspace that received it and only for this list; any other cursor, the cursor of `GET /bookmarks` among them, is refused with 400",
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchivedBookmarkList"
+                }
+              }
+            },
+            "description": "One page of the caller's own plan-archived bookmarks in the workspace the request acts in, the most recently archived first, each with the instant it was archived, with the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast). The page is empty, with a total of 0, when none is archived. A bookmark that is not plan-archived, another member's bookmark and another workspace's bookmark are never listed"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this account was issued for this workspace and this list (bad_request)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (an unknown parameter, a limit outside 1 to 100)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the caller's plan-archived bookmarks",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
       }
     },
     "/api/v1/bookmarks/bulk": {

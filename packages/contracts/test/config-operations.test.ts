@@ -53,7 +53,7 @@ describe("getApiConfig", () => {
   it("carries exactly the fields a server without accounts can answer, and the instance and setup answers besides", () => {
     const api = schemas["ApiConfig"] as { properties: Obj; required: string[] };
     const names = ["apiVersion", "defaultLocale", "docsBaseUrl", "features", "locales", "origin", "product"];
-    expect(Object.keys(api.properties).sort()).toEqual([...names, "instance", "setupRequired", "setupTokenRequired", "signIn"].sort());
+    expect(Object.keys(api.properties).sort()).toEqual([...names, "instance", "legal", "setupRequired", "setupTokenRequired", "signIn"].sort());
     expect([...api.required].sort()).toEqual(names);
     expect(api.properties["setupRequired"]).toMatchObject({ type: "boolean" });
     expect(api.properties["setupTokenRequired"]).toMatchObject({ type: "boolean" });
@@ -73,9 +73,14 @@ describe("getApiConfig", () => {
     expect([...instance.required].sort()).toEqual(["displayName", "signInNotice"]);
     expect(instance.properties["displayName"]).toMatchObject({ type: "string" });
     const features = api.properties["features"] as { properties: Obj; required: string[] };
-    expect(Object.keys(features.properties).sort()).toEqual(["ai", "aiProvider", "mail"]);
+    expect(Object.keys(features.properties).sort()).toEqual(["ai", "aiProvider", "billing", "mail"]);
     expect([...features.required].sort()).toEqual(["ai", "mail"]);
     expect(features.properties["aiProvider"]).toMatchObject({ type: "string" });
+    expect(features.properties["billing"]).toMatchObject({ type: "boolean" });
+    const legal = api.properties["legal"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(legal.additionalProperties).toBe(false);
+    expect(Object.keys(legal.properties).sort()).toEqual(["imprintUrl", "privacyUrl", "termsUrl"]);
+    expect([...legal.required].sort()).toEqual(["imprintUrl", "privacyUrl", "termsUrl"]);
   });
 });
 
@@ -86,7 +91,7 @@ describe("ApiConfigSchema", () => {
 
   it("rejects fields that need accounts or an entitlement", () => {
     expect(ApiConfigSchema.safeParse({ ...config, signIn: { password: true } }).success).toBe(false);
-    expect(ApiConfigSchema.safeParse({ ...config, features: { ...config.features, billing: true } }).success).toBe(false);
+    expect(ApiConfigSchema.safeParse({ ...config, features: { ...config.features, analyticsConsentRequired: true } }).success).toBe(false);
     expect(ApiConfigSchema.safeParse({ ...config, product: { ...config.product, commit: "abc" } }).success).toBe(false);
   });
 
@@ -110,6 +115,33 @@ describe("ApiConfigSchema", () => {
     expect(ApiConfigSchema.safeParse({ ...config, setupRequired: "yes" }).success).toBe(false);
     expect(ApiConfigSchema.parse({ ...config, setupTokenRequired: true })).toEqual({ ...config, setupTokenRequired: true });
     expect(ApiConfigSchema.safeParse({ ...config, setupTokenRequired: "token" }).success).toBe(false);
+  });
+
+  it("accepts features.billing as a boolean, and leaves it out of a document that does not state it", () => {
+    expect(ApiConfigSchema.parse({ ...config, features: { ...config.features, billing: true } }).features.billing).toBe(true);
+    expect(ApiConfigSchema.parse({ ...config, features: { ...config.features, billing: false } }).features.billing).toBe(false);
+    expect(ApiConfigSchema.parse(config).features).not.toHaveProperty("billing");
+    expect(ApiConfigSchema.safeParse({ ...config, features: { ...config.features, billing: "yes" } }).success).toBe(false);
+  });
+
+  describe("legal", () => {
+    const legal = { imprintUrl: "https://example.com/imprint", privacyUrl: "https://example.com/privacy", termsUrl: "http://example.org/terms" };
+
+    it("accepts the three addresses, and leaves it out of a document that does not state it", () => {
+      expect(ApiConfigSchema.parse({ ...config, legal })).toEqual({ ...config, legal });
+      expect(ApiConfigSchema.parse(config)).not.toHaveProperty("legal");
+    });
+
+    it.each([
+      ["an address that is not an absolute URL", { ...legal, imprintUrl: "/imprint" }],
+      ["a script address", { ...legal, privacyUrl: "javascript:alert(1)" }],
+      ["a data address", { ...legal, privacyUrl: "data:text/html,x" }],
+      ["an ftp address", { ...legal, termsUrl: "ftp://example.com/terms" }],
+      ["a missing address", { imprintUrl: legal.imprintUrl, privacyUrl: legal.privacyUrl }],
+      ["an unknown member", { ...legal, cookiesUrl: "https://example.com/cookies" }],
+    ])("rejects %s", (_name, value) => {
+      expect(ApiConfigSchema.safeParse({ ...config, legal: value }).success).toBe(false);
+    });
   });
 
   it("rejects an API version other than v1 and non-boolean features", () => {

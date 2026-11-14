@@ -148,7 +148,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "invalid_subscriber" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "invalid_content_security" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "invalid_subscriber" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "invalid_content_security" | "invalid_legal_links" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -229,6 +229,7 @@ export interface CreateServerOptions {
     readonly entitlements?: EntitlementCheck;
     readonly hookTimeoutMs?: number;
     readonly instanceAdminGrant?: InstanceAdminGrantCheck;
+    readonly legal?: LegalLinks;
     // (undocumented)
     readonly logger: Logger;
     readonly metadataBudgetMs?: number;
@@ -626,6 +627,13 @@ export type JobPayload = Readonly<Record<string, JobScalar>>;
 export type JobScalar = string | number | boolean | null | undefined;
 
 // @public
+export interface LegalLinks {
+    readonly imprintUrl: string;
+    readonly privacyUrl: string;
+    readonly termsUrl: string;
+}
+
+// @public
 export function limitName(bucket: string, scope: RateScope): string;
 
 // @public
@@ -669,6 +677,7 @@ export interface Logger {
 export interface LoggerOptions {
     readonly destination?: LogDestination;
     readonly level: string;
+    readonly redactFields?: readonly string[];
 }
 
 // @public (undocumented)
