@@ -165,6 +165,8 @@ describe("listArchivedBookmarks", () => {
     for (let pages = 0; pages < 20; pages += 1) {
       const page: Listed = await listed(world, owner, `limit=2${cursor === null ? "" : `&cursor=${encodeURIComponent(cursor)}`}`);
       expect(page.total).toBe(9);
+      // Nine bookmarks at two a page: four full pages, then the last one alone.
+      expect(page.items).toHaveLength(page.nextCursor === null ? 1 : 2);
       seen.push(...page.items.map((item) => item.id));
       cursor = page.nextCursor;
       if (cursor === null) {
