@@ -172,20 +172,26 @@ describe("BillingPort", () => {
     expect(CHECKOUT_STATES.map((state) => state.status)).toEqual(["completed", "expired", "open"]);
   });
 
-  it("withdraws with a structured declaration, a language, the client address hash and an idempotency key, and returns the first result for a repeated key", async () => {
-    const results = new Map<string, BillingContract>();
+  it("withdraws with a structured declaration, a language, the client address hash and an idempotency key, returns the first result for a repeated withdrawal and refuses another withdrawal under the same key with idempotency_conflict", async () => {
+    const results = new Map<string, { readonly withdrawal: string; readonly contract: BillingContract }>();
     const billing = adapter();
     billing.withdraw = (_scope, withdrawal) => {
       const first = results.get(withdrawal.idempotencyKey);
-      if (first !== undefined) return Promise.resolve(first);
+      if (first !== undefined) {
+        return first.withdrawal === JSON.stringify(withdrawal) ? Promise.resolve(first.contract) : Promise.reject(new BillingError("idempotency_conflict"));
+      }
       const contract = { ...CONTRACT, withdrawnAt: withdrawal.declaration.declaredAt };
-      results.set(withdrawal.idempotencyKey, contract);
+      results.set(withdrawal.idempotencyKey, { withdrawal: JSON.stringify(withdrawal), contract });
       return Promise.resolve(contract);
     };
     const first = await billing.withdraw(SCOPE, WITHDRAWAL);
-    const second = await billing.withdraw(SCOPE, { ...WITHDRAWAL, declaration: { ...WITHDRAWAL.declaration, declaredAt: "2026-02-01T00:00:00.000Z" } });
+    const second = await billing.withdraw(SCOPE, { ...WITHDRAWAL });
     expect(second).toBe(first);
     expect(first.withdrawnAt).toBe(NOW);
+    await expect(billing.withdraw(SCOPE, { ...WITHDRAWAL, declaration: { ...WITHDRAWAL.declaration, declaredAt: "2026-02-01T00:00:00.000Z" } })).rejects.toMatchObject({
+      name: "BillingError",
+      code: "idempotency_conflict",
+    });
   });
 
   it("reports the agreement to a later price change on the subscription and records it idempotently", async () => {
