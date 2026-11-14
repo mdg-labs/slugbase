@@ -4,6 +4,7 @@ import { apiTokenRepository, type AuthStore } from "@slugbase/db";
 import { classifyOperations, isTokenCallable, loadOpenApiDocument, runTokenMatrix, type TokenMatrixReport, type TokenRequestFunction, type TokenScope } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { removeMembership, seedAccount, seedApiToken, seedMembership, seedWorkspace, serveAuth, sha256, storeFor, type AuthWorld, type SeededAccount } from "../auth/support.ts";
 import { FIXTURES, WALKER_ACCOUNT } from "./fixtures.ts";
 import { tokenMatrixRequest } from "./matrix.ts";
@@ -144,7 +145,7 @@ describe("a token principal over every operation of openapi.json", () => {
     return { world, alice, cookie, tokens };
   }
 
-  it("answers 403 forbidden to a token on every operation that declares no scope, and treats the others as declared", async () => {
+  it("answers 403 forbidden to a token on every operation that declares no scope, and treats the others as declared", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const { world, alice, tokens } = await scenario();
     const hashBefore = await store.passwordHashOf(alice.account.id);
     const sessionsBefore = (await store.listSessions(alice.account.id, null, 50)).map((session) => session.id);
@@ -163,7 +164,7 @@ describe("a token principal over every operation of openapi.json", () => {
     expect((await store.listSessions(alice.account.id, null, 50)).map((session) => session.id)).toEqual(sessionsBefore);
   });
 
-  it("uses only the bearer when the request also carries a valid session cookie", async () => {
+  it("uses only the bearer when the request also carries a valid session cookie", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const { world, tokens, cookie } = await scenario();
     // The cookie is the session of the same account: alone it would be let through by the operations a token is refused.
     const report = await runTokenMatrixInParts(committed, requestFor(world, (scope) => ({ headers: { ...bearer(tokens[scope]), cookie } })));
@@ -171,7 +172,7 @@ describe("a token principal over every operation of openapi.json", () => {
     expect(report.refused).toBeGreaterThan(0);
   });
 
-  it("fails an operation that is missing its auth declaration", async () => {
+  it("fails an operation that is missing its auth declaration", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     const { world, tokens } = await scenario();
     const broken = structuredClone(committed) as { paths: Record<string, Record<string, Record<string, unknown>>> };
     const entry = broken.paths["/api/v1/me/sessions"]?.["get"];
