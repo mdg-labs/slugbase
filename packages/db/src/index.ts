@@ -129,7 +129,7 @@ export type { EmailVerification, EmailVerificationStore, VerificationResend, Ver
 export type { EmailChangeRequest, EmailChangeStore } from "./system/email-change.ts";
 export type { PasswordReset, PasswordResetRequest, PasswordResetStore, ResetPasswordOutcome } from "./system/password-reset.ts";
 export type { NewPersonalWorkspace, PersonalWorkspaceResult, PersonalWorkspaceWriter } from "./system/personal-workspace.ts";
-export type { IdentityLink, IdentityLinkOutcome, IdentityReauthentication, IdentitySignIn, IdentityUnlinkOutcome, NewOidcLoginState, OidcLoginState, OidcStore, SealedVerifier } from "./system/oidc.ts";
+export type { IdentityLink, IdentityLinkOutcome, IdentityReauthentication, IdentitySignIn, IdentityUnlinkOutcome, NewOidcLoginState, OidcAcknowledgement, OidcLoginState, OidcStore, SealedVerifier } from "./system/oidc.ts";
 export type {
   BackupCodeRecord,
   BackupCodesRegeneration,

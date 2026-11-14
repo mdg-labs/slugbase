@@ -1,4 +1,5 @@
 import type { ApiConfig } from "../config/config-context.tsx";
+import type { AcknowledgementEntries } from "./acknowledgement-checks.tsx";
 import { HOME_PATH, safeNextPath } from "./next-path.ts";
 
 /** What an OIDC handshake is for (doc 04 section 4.5). */
@@ -30,12 +31,27 @@ function returnPathOf(value: string): string {
 }
 
 /**
- * The address that starts a handshake with a provider. `returnTo` is a path of this origin, which the server checks
- * again; the slug is the one the configuration lists and is encoded into the path.
+ * What the person ticked, as the `acknowledgements` parameter of a start: the JSON text of the list a registration
+ * request carries (doc 04 section 4.5). Nothing is added for no entries.
  */
-export function oidcStartPath(provider: string, intent: OidcIntent, returnTo: string): string {
+function addAcknowledgements(query: URLSearchParams, acknowledgements: AcknowledgementEntries | undefined): void {
+  if (acknowledgements !== undefined && acknowledgements.length > 0) {
+    query.set("acknowledgements", JSON.stringify(acknowledgements));
+  }
+}
+
+/**
+ * The address that starts a handshake with a provider. `returnTo` is a path of this origin, which the server checks
+ * again; the slug is the one the configuration lists and is encoded into the path. The acknowledgements the
+ * app's extensions declare travel with a `login`, which may create an account, and with no other intent: the server
+ * refuses them for a link or a re-authentication.
+ */
+export function oidcStartPath(provider: string, intent: OidcIntent, returnTo: string, acknowledgements?: AcknowledgementEntries): string {
   const query = new URLSearchParams(intent === "login" ? {} : { intent });
   query.set("returnTo", returnPathOf(returnTo));
+  if (intent === "login") {
+    addAcknowledgements(query, acknowledgements);
+  }
   return `/api/v1/auth/oidc/${encodeURIComponent(provider)}/start?${query.toString()}`;
 }
 
@@ -45,8 +61,9 @@ export function oidcStartPath(provider: string, intent: OidcIntent, returnTo: st
  * in the page's address once the browser has left it, since the invitation page sends no referrer. The handshake ends
  * on Home, where the workspace joined is the active one.
  */
-export function oidcInvitationStartPath(provider: string, token: string): string {
+export function oidcInvitationStartPath(provider: string, token: string, acknowledgements?: AcknowledgementEntries): string {
   const query = new URLSearchParams({ intent: "invite", invitation: token });
+  addAcknowledgements(query, acknowledgements);
   return `/api/v1/auth/oidc/${encodeURIComponent(provider)}/start?${query.toString()}`;
 }
 

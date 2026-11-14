@@ -302,6 +302,7 @@ describe("the OIDC sign-in redirects", () => {
       ["query", "returnTo", false],
       ["query", "intent", false],
       ["query", "invitation", false],
+      ["query", "acknowledgements", false],
     ]);
     expect(parameters(callback).map((parameter) => [parameter["in"], parameter["name"]])).toEqual([["path", "provider"]]);
     expect(OidcProviderParamsSchema.safeParse({ provider: "my-idp2" }).success).toBe(true);
@@ -323,6 +324,43 @@ describe("the OIDC sign-in redirects", () => {
     }
     expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", unknown: "x" }).success).toBe(false);
     expect(OidcStartQuerySchema.safeParse({ returnTo: "x".repeat(2049) }).success).toBe(false);
+  });
+
+  describe("carry the acknowledgements of a start as the JSON text of the registration list", () => {
+    const TERMS = { id: "terms", version: "2026-03" };
+    const asText = (list: unknown): string => JSON.stringify(list);
+
+    it("describes them as a string parameter, and takes the list the registration requests take", () => {
+      const parameter = (start?.["parameters"] as Obj[]).find((candidate) => candidate["name"] === "acknowledgements");
+      expect(parameter?.["schema"]).toMatchObject({ type: "string", maxLength: 2048 });
+      expect(OidcStartQuerySchema.parse({ acknowledgements: asText([TERMS, { id: "privacy", version: "v4" }]) }).acknowledgements).toEqual([TERMS, { id: "privacy", version: "v4" }]);
+      expect(OidcStartQuerySchema.parse({ acknowledgements: "[]" }).acknowledgements).toEqual([]);
+      expect(OidcStartQuerySchema.parse({}).acknowledgements).toBeUndefined();
+    });
+
+    it("are valid with the login and invite intents", () => {
+      expect(OidcStartQuerySchema.safeParse({ intent: "login", acknowledgements: asText([TERMS]) }).success).toBe(true);
+      expect(OidcStartQuerySchema.safeParse({ intent: "invite", invitation: "a-token", acknowledgements: asText([TERMS]) }).success).toBe(true);
+    });
+
+    it.each(["link", "reauth"])("are refused with the %s intent, which creates no account", (intent) => {
+      expect(OidcStartQuerySchema.safeParse({ intent, acknowledgements: asText([TERMS]) }).success).toBe(false);
+      expect(OidcStartQuerySchema.safeParse({ intent, acknowledgements: "[]" }).success).toBe(false);
+    });
+
+    it.each([
+      ["more than 8 entries", asText(Array.from({ length: 9 }, (_unused, index) => ({ id: `doc${String(index)}`, version: "1" })))],
+      ["an identifier named twice", asText([TERMS, { id: "terms", version: "2027-01" }])],
+      ["an identifier outside the grammar", asText([{ id: "Terms", version: "1" }])],
+      ["a version of 33 characters", asText([{ id: "terms", version: "v".repeat(33) }])],
+      ["a version with a control character", asText([{ id: "terms", version: "v\u0007" }])],
+      ["an entry with another member", asText([{ ...TERMS, extra: true }])],
+      ["a text that is not JSON", "terms:2026-03"],
+      ["JSON that is not a list", asText(TERMS)],
+      ["a text of more than 2048 characters", asText([{ id: "terms", version: "x" }]).padEnd(2049, " ")],
+    ])("are refused with %s", (_name, text) => {
+      expect(OidcStartQuerySchema.safeParse({ acknowledgements: text }).success).toBe(false);
+    });
   });
 
   it("answer 302 with a Location and a Set-Cookie header and no body, and problem+json for every client error", () => {

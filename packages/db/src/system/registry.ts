@@ -88,6 +88,7 @@ export const systemOperations: readonly string[] = [
   "sys_invitation_accept",
   "sys_invitation_accept_new_account",
   "sys_oidc_state_take",
+  "sys_oidc_state_take_with_acknowledgements",
   "sys_invitation_accept_with_identity",
   "sys_workspace_bump_entitlement_version",
   "sys_instance_status",

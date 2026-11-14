@@ -28,7 +28,7 @@ import {
   type SecretBoxPort,
   type SessionCookieSpec,
 } from "@slugbase/core";
-import type { AuthStore, PersonalWorkspaceWriter } from "@slugbase/db";
+import type { AuthStore, OidcAcknowledgement, PersonalWorkspaceWriter } from "@slugbase/db";
 import { hkdfSync } from "node:crypto";
 import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
 import { provisionWorkspaceIn, type OwnedWorkspaceLimit } from "../../auth/personal-workspace.ts";
@@ -86,6 +86,11 @@ import { route } from "../register.ts";
 // invitation of an instance admin, which is exempt; asks the seat-check hooks; and only
 // then runs the acceptance that writes. A workspace without `members.invite` or without a free seat, a hook that fails
 // to answer, or an account other than the one asked about ends with nothing written and the invitation pending.
+// A `login` or `invite` start may carry the acknowledgements the person gave before leaving for the provider (doc 04 section
+// 4.5), the list a registration request carries, which the contract validates before the handler runs. The record keeps them,
+// and the callback gives the record's list, never anything of its own query, which is the provider's, to the registration
+// policy and to the `account.created` event of the account it creates; a handshake that stored none asks and announces with an
+// empty list. The `link` and `reauth` intents create no account and the contract refuses the list with them.
 // The PKCE verifier is sealed together with the instant the handshake began. A callback that cannot open it (its
 // secret-box key was removed meanwhile) ends like any other failure. A `reauth` callback hands that instant to
 // the identity port, which refuses an ID token that was authenticated before it (doc 04 section 4.5).
@@ -220,10 +225,13 @@ class AcceptingAccountChanged extends Error {
   }
 }
 
-/** The job of a domain event the acceptance queues. */
-function eventJob(event: InvitationSignupEvent) {
+/**
+ * The job of a domain event the acceptance queues. The `account.created` an acceptance makes carries what the start of the
+ * handshake stored, which the acceptance itself does not know.
+ */
+function eventJob(event: InvitationSignupEvent, acknowledgements: readonly OidcAcknowledgement[]) {
   return event.name === "account.created"
-    ? queueDomainEvent(event.eventId, event.name, event.payload)
+    ? queueDomainEvent(event.eventId, event.name, { ...event.payload, acknowledgements })
     : queueDomainEvent(event.eventId, event.name, event.payload);
 }
 
@@ -254,12 +262,18 @@ export function oidcRoutes({
   // The account to create for a first login whose address is verified, or undefined when the provider does not create
   // accounts, the address is outside its domains, or the registration policy refuses it. The policy is asked only here,
   // when creating is the one thing left to do, so linking an account that exists is never a registration.
-  const accountFor = async (context: ChainContext, provider: string, claims: IdentityClaims, email: string): Promise<NewFederatedAccount | undefined> => {
+  const accountFor = async (
+    context: ChainContext,
+    provider: string,
+    claims: IdentityClaims,
+    email: string,
+    acknowledgements: readonly OidcAcknowledgement[],
+  ): Promise<NewFederatedAccount | undefined> => {
     const policy = providers.find((candidate) => candidate.slug === provider);
     if (policy?.autoCreate !== true || !autoCreateAllowed(email, policy.allowedDomains)) {
       return undefined;
     }
-    if (!(await registrationAllowed(context, provider, email, "oidc"))) {
+    if (!(await registrationAllowed(context, provider, email, "oidc", acknowledgements))) {
       return undefined;
     }
     const accountId = uuidv7();
@@ -268,19 +282,26 @@ export function oidcRoutes({
       accountId,
       displayName: federatedDisplayName(claims.displayName, email),
       locale: registrationLocale(context.req.raw.headers.get("accept-language")),
-      onCreated: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "oidc", acknowledgements: [] })],
+      onCreated: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "oidc", acknowledgements })],
       ...(ownedMax === undefined ? {} : { afterCreated: (id: string, writer: PersonalWorkspaceWriter) => provisionWorkspaceIn(id, writer, ownedMax) }),
     };
   };
 
-  // Whether the registration policy of the composed modules lets an account be created for the address by the path.
-  const registrationAllowed = async (context: ChainContext, provider: string, email: string, path: "oidc" | "invitation"): Promise<boolean> => {
+  // Whether the registration policy of the composed modules lets an account be created for the address by the path, given what the
+  // person acknowledged at the start: the list the handshake record holds, which the provider's callback cannot change.
+  const registrationAllowed = async (
+    context: ChainContext,
+    provider: string,
+    email: string,
+    path: "oidc" | "invitation",
+    acknowledgements: readonly OidcAcknowledgement[],
+  ): Promise<boolean> => {
     const hooks = context.get("hooks");
     if (hooks === undefined) {
       throw new Error("the OIDC callback was reached without the hook dispatcher");
     }
     try {
-      await assertRegistrationAllowed(hooks, { email, path, acknowledgements: [] });
+      await assertRegistrationAllowed(hooks, { email, path, acknowledgements });
     } catch (error) {
       if (error instanceof ProblemError && error.code === "registration_refused") {
         refused(context, provider, "registration_refused");
@@ -298,7 +319,7 @@ export function oidcRoutes({
   const acceptInvitationThrough = async (
     context: ChainContext,
     provider: string,
-    record: { readonly invitationTokenHash: Buffer | null; readonly returnTo: string },
+    record: { readonly invitationTokenHash: Buffer | null; readonly returnTo: string; readonly acknowledgements: readonly OidcAcknowledgement[] },
     claims: IdentityClaims,
     cookieHeader: string | null,
   ) => {
@@ -313,7 +334,7 @@ export function oidcRoutes({
       refused(context, provider, "invitation_gone");
       return failure;
     }
-    const mayCreate = !invitation.accountExists && (await registrationAllowed(context, provider, normalizeEmail(invitation.email), "invitation"));
+    const mayCreate = !invitation.accountExists && (await registrationAllowed(context, provider, normalizeEmail(invitation.email), "invitation", record.acknowledgements));
     const token = newSessionToken();
     const carried = cookieHeader === null ? undefined : readCookie(cookieHeader, sessionCookie.name);
     const ask = {
@@ -347,7 +368,7 @@ export function oidcRoutes({
                     throw new AcceptingAccountChanged();
                   }
                   const { audit, events } = acceptance.onAccepted(accepted);
-                  return { audit, jobs: events.map(eventJob) };
+                  return { audit, jobs: events.map((event) => eventJob(event, record.acknowledgements)) };
                 },
               }),
           },
@@ -473,6 +494,8 @@ export function oidcRoutes({
       returnTo: intent === "invite" ? "/" : safeReturnTo(query.returnTo),
       linkAccountId,
       ...(invitationTokenHash === undefined ? {} : { invitationTokenHash }),
+      // Only the `login` and `invite` intents can create an account, and the contract refuses the list for the others.
+      acknowledgements: query.acknowledgements ?? [],
     });
     return {
       status: 302,
@@ -615,7 +638,7 @@ export function oidcRoutes({
       }
       outcome = await store.signInWithIdentity({ ...signIn, firstLogin: { identityId: uuidv7(), email } });
       if (outcome === "refused") {
-        const create = await accountFor(context, params.provider, claims, email);
+        const create = await accountFor(context, params.provider, claims, email, record.acknowledgements);
         if (create !== undefined) {
           outcome = await store.signInWithIdentity({ ...signIn, firstLogin: { identityId: uuidv7(), email, create } });
         }

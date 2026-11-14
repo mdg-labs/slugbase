@@ -18,6 +18,12 @@ export interface SealedVerifier {
   readonly keyId: string;
 }
 
+/** What a person acknowledged before the handshake: an identifier and the version label they saw, nothing else (doc 10 T7). */
+export interface OidcAcknowledgement {
+  readonly id: string;
+  readonly version: string;
+}
+
 /** The handshake that is starting. */
 export interface NewOidcLoginState {
   /** SHA-256 of the `state` value the provider will echo back. */
@@ -33,6 +39,8 @@ export interface NewOidcLoginState {
   readonly linkAccountId: string | null;
   /** SHA-256 of the token of the invitation the `invite` intent accepts, never the token; absent for every other intent. */
   readonly invitationTokenHash?: Buffer;
+  /** The acknowledgements the person gave, for the `login` and `invite` intents only; none when absent. */
+  readonly acknowledgements?: readonly OidcAcknowledgement[];
 }
 
 /** The record of a handshake that is ending. */
@@ -44,6 +52,8 @@ export interface OidcLoginState {
   readonly linkAccountId: string | null;
   /** SHA-256 of the token of the invitation the `invite` intent accepts; null for every other intent. */
   readonly invitationTokenHash: Buffer | null;
+  /** What the start stored: the acknowledgements of a `login` or `invite` handshake, empty for any other. */
+  readonly acknowledgements: readonly OidcAcknowledgement[];
 }
 
 /** A sign-in with an identity. */
@@ -180,6 +190,7 @@ interface LoginStateRow {
   return_to: string;
   link_account_id: string | null;
   invitation_token_hash: Buffer | null;
+  acknowledgements: unknown;
 }
 
 interface SignedInRow {
@@ -208,6 +219,18 @@ function assertEmail(email: string): void {
   if (email === "" || email !== email.trim()) {
     throw new RangeError("email must be a non-empty, trimmed address");
   }
+}
+
+function acknowledgementsOf(value: unknown): readonly OidcAcknowledgement[] {
+  if (!Array.isArray(value)) {
+    throw new Error("sys_oidc_state_take_with_acknowledgements returned acknowledgements that are not a list");
+  }
+  return value.map((entry: unknown) => {
+    if (typeof entry !== "object" || entry === null || !("id" in entry) || !("version" in entry) || typeof entry.id !== "string" || typeof entry.version !== "string") {
+      throw new Error("sys_oidc_state_take_with_acknowledgements returned an acknowledgement that is not an identifier and a version");
+    }
+    return { id: entry.id, version: entry.version };
+  });
 }
 
 function isIntent(value: string): value is OidcLoginState["intent"] {
@@ -329,23 +352,24 @@ export function bindOidcStore(client: postgres.Sql): OidcStore {
           ${state.codeVerifier.keyId}::text,
           ${state.returnTo}::text,
           ${state.linkAccountId}::uuid,
-          ${state.invitationTokenHash ?? null}::bytea)`;
+          ${state.invitationTokenHash ?? null}::bytea,
+          ${JSON.stringify(state.acknowledgements ?? [])}::text::jsonb)`;
     },
 
     async consumeOidcLoginState(stateHash, provider) {
       assertHash(stateHash, STATE_HASH_BYTES, "stateHash");
       const rows = await client<LoginStateRow[]>`
-        SELECT intent, nonce, code_verifier, code_verifier_key_id, return_to, link_account_id, invitation_token_hash
-        FROM sys_oidc_state_take(${stateHash}::bytea, ${provider}::text)`;
+        SELECT intent, nonce, code_verifier, code_verifier_key_id, return_to, link_account_id, invitation_token_hash, acknowledgements
+        FROM sys_oidc_state_take_with_acknowledgements(${stateHash}::bytea, ${provider}::text)`;
       if (rows.length > 1) {
-        throw new Error("sys_oidc_state_take returned more than one state");
+        throw new Error("sys_oidc_state_take_with_acknowledgements returned more than one state");
       }
       const row = rows[0];
       if (row === undefined) {
         return undefined;
       }
       if (!isIntent(row.intent)) {
-        throw new Error("sys_oidc_state_take returned an intent outside login, link, reauth and invite");
+        throw new Error("sys_oidc_state_take_with_acknowledgements returned an intent outside login, link, reauth and invite");
       }
       return {
         intent: row.intent,
@@ -354,6 +378,7 @@ export function bindOidcStore(client: postgres.Sql): OidcStore {
         returnTo: row.return_to,
         linkAccountId: row.link_account_id,
         invitationTokenHash: row.invitation_token_hash,
+        acknowledgements: acknowledgementsOf(row.acknowledgements),
       };
     },
 

@@ -8342,6 +8342,16 @@
               "minLength": 1,
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "acknowledgements",
+            "required": false,
+            "schema": {
+              "description": "What the person acknowledged before the handshake, for the `login` and `invite` intents, which may create an account: the JSON text of the list a registration request carries as `acknowledgements`, such as `[{\"id\":\"terms\",\"version\":\"2026-03\"}]`, at most 8 entries and 2048 characters, each an identifier and a version label, an identifier at most once. The server keeps the list with the handshake and, when the callback creates an account, gives it to the registration policy and the `account.created` event; the callback never reads it from its own query, which is the provider's. A list that breaks these limits, or a start with the `link` or `reauth` intent, which create no account, is refused with 422 and nothing is stored; absent means none",
+              "maxLength": 2048,
+              "type": "string"
+            }
           }
         ],
         "responses": {

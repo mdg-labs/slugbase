@@ -1379,6 +1379,7 @@ export interface NewInvitationIdentity {
 
 // @public
 export interface NewOidcLoginState {
+    readonly acknowledgements?: readonly OidcAcknowledgement[];
     // (undocumented)
     readonly codeVerifier: SealedVerifier;
     // (undocumented)
@@ -1443,7 +1444,16 @@ export interface NewWorkspace {
 }
 
 // @public
+export interface OidcAcknowledgement {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly version: string;
+}
+
+// @public
 export interface OidcLoginState {
+    readonly acknowledgements: readonly OidcAcknowledgement[];
     // (undocumented)
     readonly codeVerifier: SealedVerifier;
     // (undocumented)

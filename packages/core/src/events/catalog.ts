@@ -45,7 +45,7 @@ export const DOMAIN_EVENTS = {
   "account.created": {
     accountId: { type: "uuid" },
     path: { type: "enum", values: ACCOUNT_CREATION_PATHS },
-    /** What the request that created the account carried: empty for first-run setup and for the paths with no form. */
+    /** What the request that created the account carried: empty for first-run setup and when the request or the OIDC handshake carried none. */
     acknowledgements: { type: "acknowledgements" },
   },
   /**

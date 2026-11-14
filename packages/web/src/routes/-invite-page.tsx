@@ -17,9 +17,9 @@ import {
   type InvitationPreview,
   type Viewer,
 } from "../auth/accept-invitation.ts";
-import type { AcknowledgementEntries } from "../auth/acknowledgement-checks.tsx";
+import { useAcknowledgementChecks, type AcknowledgementChecks, type AcknowledgementEntries } from "../auth/acknowledgement-checks.tsx";
 import { AuthPage } from "../auth/auth-page.tsx";
-import { InvitationSignUpForm, type SignUpSettled } from "../auth/invitation-sign-up-form.tsx";
+import { InvitationSignUpForm, type InvitationSignUpFormProps, type SignUpSettled } from "../auth/invitation-sign-up-form.tsx";
 import { LoginForm } from "../auth/login-form.tsx";
 import { mfaPath } from "../auth/mfa.ts";
 import { HOME_PATH } from "../auth/next-path.ts";
@@ -106,7 +106,18 @@ function Summary({ preview }: { preview: InvitationPreview }): ReactElement {
 }
 
 /** The way in through a provider: it has to confirm the invited address, which the invitation page says before the buttons. */
-function ProviderChoice({ providers, email, token }: { providers: readonly OidcProvider[]; email: string; token: string }): ReactElement | null {
+function ProviderChoice({
+  providers,
+  email,
+  token,
+  acknowledgements,
+}: {
+  providers: readonly OidcProvider[];
+  email: string;
+  token: string;
+  /** The checks of the sign-up form above, when there is one: the buttons share its checkboxes instead of adding a second set. */
+  acknowledgements?: AcknowledgementChecks;
+}): ReactElement | null {
   const { t } = useTranslation();
   if (providers.length === 0) {
     return null;
@@ -120,8 +131,33 @@ function ProviderChoice({ providers, email, token }: { providers: readonly OidcP
       </div>
       <p className="text-muted-foreground text-sm">{t("invite.provider.description", { email })}</p>
       {/* The token goes to the start of the handshake in its own parameter and is kept there only as a hash. */}
-      <ProviderButtons invitation={token} label={(name) => t("login.provider", { name })} providers={providers} />
+      <ProviderButtons acknowledgements={acknowledgements} invitation={token} label={(name) => t("login.provider", { name })} providers={providers} />
     </>
+  );
+}
+
+/** The sign-up for an address without an account, and the provider way in: one set of acknowledgement checkboxes, in the form, gates both. */
+function SignUpChoice({
+  invitation,
+  providers,
+  token,
+  accept,
+  onSettled,
+}: {
+  invitation: InvitationPreview;
+  providers: readonly OidcProvider[];
+  token: string;
+  accept: InvitationSignUpFormProps["accept"];
+  onSettled: (outcome: SignUpSettled) => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  const acknowledgements = useAcknowledgementChecks();
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-muted-foreground text-sm">{t("invite.signUp.description")}</p>
+      <InvitationSignUpForm accept={accept} acknowledgements={acknowledgements} email={invitation.email} onSettled={onSettled} />
+      <ProviderChoice acknowledgements={acknowledgements} email={invitation.email} providers={providers} token={token} />
+    </div>
   );
 }
 
@@ -417,17 +453,15 @@ export function InvitePage({ token }: { token: string }): ReactElement {
     );
   } else {
     branch = (
-      <div className="flex flex-col gap-4">
-        <p className="text-muted-foreground text-sm">{t("invite.signUp.description")}</p>
-        <InvitationSignUpForm
-          accept={signUp}
-          email={invitation.email}
-          onSettled={(outcome) => {
-            settleSignUp(outcome, invitation);
-          }}
-        />
-        <ProviderChoice email={invitation.email} providers={providers} token={token} />
-      </div>
+      <SignUpChoice
+        accept={signUp}
+        invitation={invitation}
+        onSettled={(outcome) => {
+          settleSignUp(outcome, invitation);
+        }}
+        providers={providers}
+        token={token}
+      />
     );
   }
 

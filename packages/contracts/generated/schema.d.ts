@@ -4860,6 +4860,7 @@ export interface operations {
                 returnTo?: string;
                 intent?: "login" | "link" | "reauth" | "invite";
                 invitation?: string;
+                acknowledgements?: string;
             };
             header?: never;
             path: {

@@ -7650,6 +7650,10 @@ export const OidcStartQuerySchema: z.ZodObject<{
         invite: "invite";
     }>>;
     invitation: z.ZodOptional<z.ZodString>;
+    acknowledgements: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<unknown, string>>, z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        version: z.ZodString;
+    }, z.core.$strict>>>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -16361,6 +16365,7 @@ export interface OperationTypes {
                 returnTo?: string;
                 intent?: "login" | "link" | "reauth" | "invite";
                 invitation?: string;
+                acknowledgements?: string;
             };
             header?: never;
             path: {
@@ -20972,6 +20977,10 @@ export const startOidcSignIn: {
                 invite: "invite";
             }>>;
             invitation: z.ZodOptional<z.ZodString>;
+            acknowledgements: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<unknown, string>>, z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                version: z.ZodString;
+            }, z.core.$strict>>>>;
         }, z.core.$strict>;
     };
     readonly responses: {
