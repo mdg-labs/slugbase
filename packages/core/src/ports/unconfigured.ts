@@ -44,6 +44,7 @@ export function unconfigured(): Adapters {
       customerDetails: unavailable("billing", "billing_unavailable"),
       listContracts: unavailable("billing", "billing_unavailable"),
       withdraw: unavailable("billing", "billing_unavailable"),
+      recordPriceChangeAgreement: unavailable("billing", "billing_unavailable"),
       listDocuments: unavailable("billing", "billing_unavailable"),
       documentPdf: unavailable("billing", "billing_unavailable"),
       receiveEvent: unavailable("billing", "billing_unavailable"),

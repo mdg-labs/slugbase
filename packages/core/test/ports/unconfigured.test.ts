@@ -14,7 +14,7 @@ const PORTS: Record<
   identity: { methods: ["begin", "complete", "listProviders"], behaviour: "rejects", code: "unavailable" },
   billing: {
     methods: [
-      "cancel", "changePlan", "changeQuantity", "checkoutState", "customerDetails", "documentPdf", "legal", "listContracts", "listDocuments", "planState", "plans", "previewChange", "quote", "receiveEvent", "resume", "startCheckout", "subscriptionDetails", "updateBillingDetails", "updatePaymentMethod", "withdraw",
+      "cancel", "changePlan", "changeQuantity", "checkoutState", "customerDetails", "documentPdf", "legal", "listContracts", "listDocuments", "planState", "plans", "previewChange", "quote", "receiveEvent", "recordPriceChangeAgreement", "resume", "startCheckout", "subscriptionDetails", "updateBillingDetails", "updatePaymentMethod", "withdraw",
     ],
     behaviour: "rejects",
     code: "billing_unavailable",

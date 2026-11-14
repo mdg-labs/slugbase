@@ -1073,7 +1073,19 @@ export function base32Encode(bytes: Uint8Array): string;
 export function bearerApiToken(authorization: string): string | undefined;
 
 // @public
-export const BILLING_ERROR_CODES: readonly ["billing_unavailable", "already_subscribed", "subscription_not_changeable", "renewal_pending", "charge_changed", "plan_not_available", "quantity_below_minimum", "quantity_below_members", "mandate_required", "checkout_expired", "idempotency_conflict", "rate_limited", "checkout_paused", "plan_checkout_paused"];
+export const BILLING_CHECKOUT_FAILURE_REASONS: readonly ["payment_failed", "authentication_failed", "abandoned", "refused"];
+
+// @public
+export const BILLING_ERROR_CODES: readonly ["billing_unavailable", "already_subscribed", "subscription_not_changeable", "renewal_pending", "charge_changed", "plan_not_available", "quantity_below_minimum", "quantity_below_members", "mandate_required", "checkout_expired", "idempotency_conflict", "rate_limited", "checkout_paused", "plan_checkout_paused", "legal_version_stale", "consent_required", "withdrawal_not_available", "withdrawal_period_expired", "contract_terminated", "customer_erased", "eu_consumer_sales_paused", "sales_paused_tax_limit", "billing_details_incomplete", "return_url_not_allowed", "vat_consent_not_applicable"];
+
+// @public
+export const BILLING_PRICE_CHANGE_UNAVAILABLE_REASONS: readonly ["no_subscription", "not_required", "not_a_consumer"];
+
+// @public
+export const BILLING_STATEMENT_KINDS: readonly ["legal_acceptance", "immediate_performance", "withdrawal_right_loss", "price_change_agreement", "statement"];
+
+// @public
+export const BILLING_WITHDRAWAL_UNAVAILABLE_REASONS: readonly ["not_a_consumer", "digital_content_delivered", "service_fully_performed", "not_offered"];
 
 // @public
 export type BillingAccountScope = Pick<BillingScope, "accountId">;
@@ -1094,7 +1106,7 @@ export interface BillingAddress {
 }
 
 // @public (undocumented)
-export type BillingChangeIneligibleReason = Extract<BillingErrorCode, "subscription_not_changeable" | "renewal_pending" | "plan_not_available" | "quantity_below_minimum" | "quantity_below_members">;
+export type BillingChangeIneligibleReason = Extract<BillingErrorCode, "subscription_not_changeable" | "renewal_pending" | "plan_not_available" | "quantity_below_minimum" | "quantity_below_members" | "mandate_required" | "eu_consumer_sales_paused" | "sales_paused_tax_limit">;
 
 // @public
 export type BillingChangeOptions = {
@@ -1102,7 +1114,7 @@ export type BillingChangeOptions = {
 } | {
     readonly timing: "immediate";
     readonly consent: BillingConsent;
-    readonly expectedCharge: BillingMoney;
+    readonly expectedCharge: BillingExpectedCharge;
 };
 
 // @public
@@ -1118,6 +1130,7 @@ export interface BillingChangePreview {
     readonly ineligibleReason: BillingChangeIneligibleReason | null;
     readonly newPeriod: BillingPeriod | null;
     readonly nextChargeDate: string;
+    readonly paymentMethodLabel: string | null;
     // (undocumented)
     readonly tax: BillingTaxBreakdown;
 }
@@ -1139,32 +1152,61 @@ export interface BillingCheckout {
 }
 
 // @public (undocumented)
-export type BillingCheckoutRefusal = Extract<BillingErrorCode, "already_subscribed" | "plan_not_available" | "quantity_below_minimum" | "mandate_required" | "checkout_paused" | "plan_checkout_paused">;
+export type BillingCheckoutFailureReason = (typeof BILLING_CHECKOUT_FAILURE_REASONS)[number];
+
+// @public (undocumented)
+export type BillingCheckoutRefusal = Extract<BillingErrorCode, "already_subscribed" | "plan_not_available" | "quantity_below_minimum" | "mandate_required" | "checkout_paused" | "plan_checkout_paused" | "eu_consumer_sales_paused" | "sales_paused_tax_limit">;
 
 // @public (undocumented)
 export interface BillingCheckoutRequest {
     // (undocumented)
     readonly consent: BillingConsent;
+    readonly locale: string;
     // (undocumented)
     readonly planCode: string;
     // (undocumented)
     readonly quantity?: number;
+    readonly returnUrl: string;
 }
 
-// @public (undocumented)
-export interface BillingCheckoutState {
-    // (undocumented)
+// @public
+export type BillingCheckoutState = {
     readonly id: string;
-    // (undocumented)
-    readonly status: "open" | "completed" | "expired";
-}
+    readonly status: "completed";
+    readonly failureReason: null;
+} | {
+    readonly id: string;
+    readonly status: "open" | "expired";
+    readonly failureReason: BillingCheckoutFailureReason | null;
+};
 
 // @public
 export interface BillingConsent {
     readonly acceptedAt: string;
     // (undocumented)
+    readonly clientAddressHash: string;
+    // (undocumented)
     readonly legal: readonly BillingLegalAcceptance[];
+    // (undocumented)
+    readonly orderButton: BillingOrderButton;
+    // (undocumented)
+    readonly statements: readonly BillingConsentStatement[];
+    // (undocumented)
+    readonly userAgentHash: string;
 }
+
+// @public
+export type BillingConsentStatement = {
+    readonly kind: Exclude<BillingStatementKind, "statement">;
+    readonly key?: string;
+    readonly version: string;
+    readonly text: string;
+} | {
+    readonly kind: "statement";
+    readonly key: string;
+    readonly version: string;
+    readonly text: string;
+};
 
 // @public (undocumented)
 export interface BillingContract {
@@ -1186,17 +1228,24 @@ export interface BillingCustomerDetails {
     readonly details: BillingDetails | null;
 }
 
-// @public (undocumented)
-export interface BillingDetails {
-    // (undocumented)
-    readonly address: BillingAddress;
-    // (undocumented)
-    readonly email: string;
-    // (undocumented)
+// @public
+export type BillingDetails = {
+    readonly kind: "person";
+    readonly companyName?: never;
     readonly name: string;
-    // (undocumented)
+    readonly email: string;
+    readonly address: BillingAddress;
     readonly taxId?: string;
-}
+    readonly locale: string;
+} | {
+    readonly kind: "company";
+    readonly companyName: string;
+    readonly name: string;
+    readonly email: string;
+    readonly address: BillingAddress;
+    readonly taxId?: string;
+    readonly locale: string;
+};
 
 // @public (undocumented)
 export interface BillingDocument {
@@ -1224,13 +1273,33 @@ export interface BillingDocumentPdf {
 
 // @public
 export class BillingError extends Error {
-    constructor(code: string);
+    constructor(code: string, detail?: unknown);
     // (undocumented)
     readonly code: BillingErrorCode;
+    // (undocumented)
+    readonly detail: BillingErrorDetail | null;
 }
 
 // @public (undocumented)
 export type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
+
+// @public
+export type BillingErrorDetail = {
+    readonly code: "legal_version_stale";
+    readonly current: readonly BillingLegalAcceptance[];
+} | {
+    readonly code: "consent_required";
+    readonly missing: readonly BillingStatementKind[];
+} | {
+    readonly code: "withdrawal_not_available";
+    readonly reason: BillingWithdrawalUnavailableReason;
+} | {
+    readonly code: "vat_consent_not_applicable";
+    readonly reason: BillingPriceChangeUnavailableReason;
+} | {
+    readonly code: "rate_limited";
+    readonly retryAfterSeconds: number;
+};
 
 // @public
 export interface BillingEventDelivery {
@@ -1246,6 +1315,13 @@ export interface BillingEventOutcome {
     readonly duplicate: boolean;
     // (undocumented)
     readonly eventId: string;
+}
+
+// @public
+export interface BillingExpectedCharge {
+    // (undocumented)
+    readonly amount: BillingMoney;
+    readonly asOf: string;
 }
 
 // @public (undocumented)
@@ -1286,6 +1362,14 @@ export interface BillingMoney {
 }
 
 // @public
+export interface BillingOrderButton {
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly version: string;
+}
+
+// @public
 export interface BillingPage<T> {
     // (undocumented)
     readonly items: readonly T[];
@@ -1302,14 +1386,19 @@ export interface BillingPeriod {
 
 // @public (undocumented)
 export interface BillingPlan {
+    readonly availableNow: boolean;
+    readonly availableUntil: string | null;
     readonly checkoutOpen: boolean;
     // (undocumented)
     readonly code: string;
+    readonly displayNote: string | null;
     readonly maxQuantity: number | null;
     // (undocumented)
     readonly minQuantity: number;
     // (undocumented)
     readonly prices: readonly BillingPlanPrice[];
+    readonly remainingSales: number | null;
+    readonly withdrawalModel: BillingWithdrawalModel;
 }
 
 // @public
@@ -1351,6 +1440,7 @@ export interface BillingPort extends Port {
     quote(scope: BillingAccountScope, request: BillingQuoteRequest): Promise<BillingQuote>;
     // (undocumented)
     receiveEvent(delivery: BillingEventDelivery): Promise<BillingEventOutcome>;
+    recordPriceChangeAgreement(scope: BillingScope, agreement: BillingPriceChangeAgreementRecord): Promise<BillingSubscriptionDetails>;
     // (undocumented)
     resume(scope: BillingScope): Promise<BillingSubscription>;
     // (undocumented)
@@ -1364,11 +1454,41 @@ export interface BillingPort extends Port {
     withdraw(scope: BillingScope, withdrawal: BillingWithdrawal): Promise<BillingContract>;
 }
 
+// @public
+export type BillingPriceChangeAgreement = {
+    readonly state: "not_applicable";
+    readonly givenAt: null;
+    readonly renewalAmount: null;
+} | {
+    readonly state: "required";
+    readonly givenAt: null;
+    readonly renewalAmount: BillingMoney;
+} | {
+    readonly state: "given";
+    readonly givenAt: string;
+    readonly renewalAmount: BillingMoney;
+};
+
+// @public
+export interface BillingPriceChangeAgreementRecord {
+    readonly acceptedAt: string;
+    // (undocumented)
+    readonly clientAddressHash: string;
+    readonly text: string;
+    // (undocumented)
+    readonly userAgentHash: string;
+    readonly version: string;
+}
+
+// @public (undocumented)
+export type BillingPriceChangeUnavailableReason = (typeof BILLING_PRICE_CHANGE_UNAVAILABLE_REASONS)[number];
+
 // @public (undocumented)
 export interface BillingQuote {
     readonly refusal: BillingCheckoutRefusal | null;
     // (undocumented)
     readonly tax: BillingTaxBreakdown;
+    readonly taxNote: string | null;
 }
 
 // @public
@@ -1398,6 +1518,9 @@ export interface BillingScope {
     readonly workspaceId: string;
 }
 
+// @public (undocumented)
+export type BillingStatementKind = (typeof BILLING_STATEMENT_KINDS)[number];
+
 // @public
 export interface BillingSubscription {
     readonly cancelAt: string | null;
@@ -1417,6 +1540,8 @@ export interface BillingSubscription {
 // @public
 export interface BillingSubscriptionDetails extends BillingSubscription {
     readonly nextChargeDate: string | null;
+    // (undocumented)
+    readonly priceChangeAgreement: BillingPriceChangeAgreement;
     // (undocumented)
     readonly unitAmount: BillingMoney;
 }
@@ -1445,10 +1570,30 @@ export interface BillingTaxLine {
 
 // @public (undocumented)
 export interface BillingWithdrawal {
+    readonly clientAddressHash: string;
     // (undocumented)
     readonly contractId: string;
-    readonly declaration: string;
+    // (undocumented)
+    readonly declaration: BillingWithdrawalDeclaration;
+    readonly idempotencyKey: string;
+    readonly locale: string;
 }
+
+// @public
+export interface BillingWithdrawalDeclaration {
+    readonly declaredAt: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly name: string;
+    readonly text: string;
+}
+
+// @public
+export type BillingWithdrawalModel = "service" | "digital_content";
+
+// @public (undocumented)
+export type BillingWithdrawalUnavailableReason = (typeof BILLING_WITHDRAWAL_UNAVAILABLE_REASONS)[number];
 
 // @public
 export function bindOidcState(key: Uint8Array, state: string): string;
@@ -7472,6 +7617,9 @@ export interface TenantResolveRequest {
 
 // @public
 export function toBillingErrorCode(code: string): BillingErrorCode;
+
+// @public
+export function toBillingErrorDetail(code: BillingErrorCode, detail: unknown): BillingErrorDetail | null;
 
 // @public (undocumented)
 export const TOTP_DIGITS = 6;
