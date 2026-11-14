@@ -669,6 +669,7 @@ export interface Logger {
 export interface LoggerOptions {
     readonly destination?: LogDestination;
     readonly level: string;
+    readonly redactFields?: readonly string[];
 }
 
 // @public (undocumented)
