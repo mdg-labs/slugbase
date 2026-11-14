@@ -59,7 +59,7 @@ export type RegistrationPath = "self-registration" | "invitation" | "oidc";
 export interface RegistrationPolicyInput {
   readonly email: string;
   readonly path: RegistrationPath;
-  /** What the request acknowledged; empty on `oidc`, on `invitation` when the account comes from the provider's `invite` intent (neither has a form) and when a form request named none, so the path alone does not tell whether a form was sent. */
+  /** What the request acknowledged: the form's list on `self-registration` and `invitation`, and on `oidc` (and on `invitation` when the account comes from the provider's `invite` intent) the list the sign-in's start stored; empty when the request or the start named none, so the path alone does not tell whether a list was sent. */
   readonly acknowledgements: readonly RegistrationAcknowledgement[];
 }
 

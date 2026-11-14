@@ -312,6 +312,24 @@ export const OidcProviderParamsSchema = z.strictObject({
 
 export const OIDC_START_INTENTS = ["login", "link", "reauth", "invite"] as const;
 
+/** The longest `acknowledgements` text of a start: eight entries at their longest, JSON-escaped, with room to spare. */
+const OIDC_START_ACKNOWLEDGEMENTS_MAX_LENGTH = 2048;
+
+// The `acknowledgements` of a start is the JSON text of the same list the registration requests carry, so one schema
+// holds the limits for both. A text that is not JSON is a validation issue, never an exception.
+const OidcStartAcknowledgementsSchema = z
+  .string()
+  .max(OIDC_START_ACKNOWLEDGEMENTS_MAX_LENGTH)
+  .transform((text, context) => {
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      context.addIssue({ code: "custom", message: "must be the JSON text of a list of acknowledgements" });
+      return z.NEVER;
+    }
+  })
+  .pipe(RegistrationAcknowledgementsSchema);
+
 export const OidcStartQuerySchema = z
   .strictObject({
     returnTo: z
@@ -331,10 +349,17 @@ export const OidcStartQuerySchema = z
       .max(256)
       .optional()
       .describe("The token of the invitation link, from the path of /invite/<token>. Sent with the `invite` intent and with no other; the server keeps only its hash with the handshake"),
+    acknowledgements: OidcStartAcknowledgementsSchema.optional().describe(
+      "What the person acknowledged before the handshake, for the `login` and `invite` intents, which may create an account: the JSON text of the list a registration request carries as `acknowledgements`, such as `[{\"id\":\"terms\",\"version\":\"2026-03\"}]`, at most 8 entries and 2048 characters, each an identifier and a version label, an identifier at most once. The server keeps the list with the handshake and, when the callback creates an account, gives it to the registration policy and the `account.created` event; the callback never reads it from its own query, which is the provider's. A list that breaks these limits, or a start with the `link` or `reauth` intent, which create no account, is refused with 422 and nothing is stored; absent means none",
+    ),
   })
   .refine((query) => (query.intent === "invite") === (query.invitation !== undefined), {
     path: ["invitation"],
     message: "The invitation token is sent with the invite intent and with no other",
+  })
+  .refine((query) => query.acknowledgements === undefined || query.intent === "login" || query.intent === "invite", {
+    path: ["acknowledgements"],
+    message: "Acknowledgements are sent with the login and invite intents only",
   });
 
 const OIDC_REDIRECT_HEADERS = {

@@ -90,20 +90,22 @@ function signIn(overrides: Partial<Parameters<AuthStore["signInWithIdentity"]>[0
 describe("the OIDC system operations", () => {
   it("are registered", () => {
     expect(systemOperations).toEqual(
-      expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_take", "sys_identity_sign_in", "sys_identity_link", "sys_identity_link_by_email", "sys_identity_unlink", "sys_identity_reauth", "sys_password_set_initial"]),
+      expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_take", "sys_oidc_state_take_with_acknowledgements", "sys_identity_sign_in", "sys_identity_link", "sys_identity_link_by_email", "sys_identity_unlink", "sys_identity_reauth", "sys_password_set_initial"]),
     );
     expect(systemOperations).not.toContain("sys_oidc_state_consume");
   });
 
-  it("leave one sys_oidc_state_create, with the invitation token hash, and no sys_oidc_state_consume", async () => {
+  it("keep the functions of the release before the acknowledgements beside the ones that carry them, and no sys_oidc_state_consume", async () => {
     const functions = await db.owner<{ name: string; arguments: string }[]>`
       SELECT p.proname AS name, pg_get_function_identity_arguments(p.oid) AS arguments
       FROM pg_proc p
-      WHERE p.pronamespace = 'public'::regnamespace AND p.proname IN ('sys_oidc_state_create', 'sys_oidc_state_consume', 'sys_oidc_state_take')
+      WHERE p.pronamespace = 'public'::regnamespace AND p.proname LIKE 'sys_oidc_state_%'
       ORDER BY p.proname, p.pronargs`;
     expect(functions.map(({ name, arguments: args }) => `${name}(${args})`)).toEqual([
       "sys_oidc_state_create(p_state_hash bytea, p_provider text, p_intent text, p_nonce text, p_code_verifier bytea, p_code_verifier_key_id text, p_return_to text, p_link_account_id uuid, p_invitation_token_hash bytea)",
+      "sys_oidc_state_create(p_state_hash bytea, p_provider text, p_intent text, p_nonce text, p_code_verifier bytea, p_code_verifier_key_id text, p_return_to text, p_link_account_id uuid, p_invitation_token_hash bytea, p_acknowledgements jsonb)",
       "sys_oidc_state_take(p_state_hash bytea, p_provider text)",
+      "sys_oidc_state_take_with_acknowledgements(p_state_hash bytea, p_provider text)",
     ]);
   });
 });
@@ -121,6 +123,7 @@ describe("the login state", () => {
       returnTo: "/go/docs",
       linkAccountId: null,
       invitationTokenHash: null,
+      acknowledgements: [],
     });
     expect(await store.consumeOidcLoginState(state.stateHash, "idp")).toBeUndefined();
   });
@@ -179,6 +182,68 @@ describe("the login state", () => {
       SELECT c.relforcerowsecurity AS forced, (SELECT count(*)::int FROM pg_policy p WHERE p.polrelid = c.oid) AS policies
       FROM pg_class c WHERE c.oid = 'public.oidc_login_states'::regclass`;
     expect([...rows]).toEqual([{ forced: true, policies: 0 }]);
+  });
+});
+
+describe("the acknowledgements of the login state", () => {
+  const TERMS = { id: "terms", version: "2026-03" };
+  const PRIVACY = { id: "privacy", version: "v4" };
+
+  async function rowsLeft(stateHash: Buffer): Promise<number> {
+    const rows = await asSystem(db, (tx) => tx<{ n: string }[]>`SELECT count(*) AS n FROM oidc_login_states WHERE state_hash = ${stateHash}`);
+    return Number(rows[0]?.n);
+  }
+
+  it("are stored with the state and handed back, in order, to the one callback that consumes it", async () => {
+    const state = newState({ acknowledgements: [TERMS, PRIVACY] });
+    await store.createOidcLoginState(state);
+
+    expect(await store.consumeOidcLoginState(state.stateHash, "idp")).toMatchObject({ intent: "login", acknowledgements: [TERMS, PRIVACY] });
+    expect(await store.consumeOidcLoginState(state.stateHash, "idp")).toBeUndefined();
+    expect(await rowsLeft(state.stateHash)).toBe(0);
+  });
+
+  it("are stored for the invite intent too, and are none when the start gave none", async () => {
+    const invited = newState({ intent: "invite", invitationTokenHash: freshToken().hash, returnTo: "/", acknowledgements: [TERMS] });
+    await store.createOidcLoginState(invited);
+    expect(await store.consumeOidcLoginState(invited.stateHash, "idp")).toMatchObject({ intent: "invite", acknowledgements: [TERMS] });
+
+    const plain = newState();
+    await store.createOidcLoginState(plain);
+    expect(await store.consumeOidcLoginState(plain.stateHash, "idp")).toMatchObject({ acknowledgements: [] });
+  });
+
+  it("are refused for the link and reauth intents, which create no account", async () => {
+    const holder = await account();
+    for (const intent of ["link", "reauth"] as const) {
+      const state = newState({ intent, linkAccountId: holder, acknowledgements: [TERMS] });
+      await expect(store.createOidcLoginState(state)).rejects.toMatchObject({ code: "22023" });
+      expect(await rowsLeft(state.stateHash)).toBe(0);
+    }
+  });
+
+  it.each([
+    ["more than 8 entries", Array.from({ length: 9 }, (_unused, index) => ({ id: `doc${String(index)}`, version: "1" }))],
+    ["an identifier named twice", [TERMS, { id: "terms", version: "2027-01" }]],
+    ["an identifier outside the grammar", [{ id: "Terms", version: "1" }]],
+    ["an identifier of 33 characters", [{ id: "a".repeat(33), version: "1" }]],
+    ["an empty version", [{ id: "terms", version: "" }]],
+    ["a version of 33 characters", [{ id: "terms", version: "v".repeat(33) }]],
+    ["a version with a control character", [{ id: "terms", version: "v\u0007" }]],
+    ["an entry with another member", [{ id: "terms", version: "1", extra: "x" }]],
+    ["an entry that is not an object", ["terms"]],
+  ])("are refused with %s, and nothing is stored", async (_name, acknowledgements) => {
+    const state = newState();
+    await expect(store.createOidcLoginState({ ...state, acknowledgements } as NewOidcLoginState)).rejects.toMatchObject({ code: "22023" });
+    expect(await rowsLeft(state.stateHash)).toBe(0);
+  });
+
+  it("are not stored by the function of the release before them, whose states read as acknowledging nothing", async () => {
+    const state = newState();
+    await db.app`
+      SELECT sys_oidc_state_create(${state.stateHash}::bytea, 'idp'::text, 'login'::text, 'nonce-1'::text, ${Buffer.alloc(8, 1)}::bytea, 'k1'::text, '/'::text, NULL::uuid, NULL::bytea)`;
+
+    expect(await store.consumeOidcLoginState(state.stateHash, "idp")).toMatchObject({ intent: "login", acknowledgements: [] });
   });
 });
 

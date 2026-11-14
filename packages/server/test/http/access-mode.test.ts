@@ -35,6 +35,7 @@ function operationOf(method: "get" | "post" | "patch" | "delete", path: string, 
 const OPERATIONS = {
   getMe: operationOf("get", "/api/v1/me", "getMe", "account"),
   listBookmarks: operationOf("get", "/api/v1/bookmarks", "listBookmarks", "member"),
+  listArchivedBookmarks: operationOf("get", "/api/v1/bookmarks/archived", "listArchivedBookmarks", "member"),
   createBookmark: operationOf("post", "/api/v1/bookmarks", "createBookmark", "member"),
   updateMe: operationOf("patch", "/api/v1/me", "updateMe", "account"),
   acceptInvitation: operationOf("post", "/api/v1/invitations/accept", "acceptInvitation", "anonymous"),
@@ -137,6 +138,17 @@ describe("an export-only account", () => {
     expect((await call("POST", "/api/v1/auth/logout", "session")).status).toBe(200);
     expect(reached).toEqual(["getMe", "listBookmarks", "logout"]);
     expect(lookups).toEqual([]);
+  });
+
+  it("lists the plan-archived bookmarks with its session, without asking the database for the mode, and is refused the same list with an API token", async () => {
+    const { call, reached, lookups } = build(EXPORT_ONLY);
+    expect((await call("GET", "/api/v1/bookmarks/archived", "session")).status).toBe(200);
+    expect(reached).toEqual(["listArchivedBookmarks"]);
+    expect(lookups).toEqual([]);
+    const refused = await call("GET", "/api/v1/bookmarks/archived", "token");
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "account_export_only" });
+    expect(reached).toEqual(["listArchivedBookmarks"]);
   });
 
   it("reads the configuration the web app loads at boot with its session cookie, which is anonymous by policy, without asking the database for the mode", async () => {

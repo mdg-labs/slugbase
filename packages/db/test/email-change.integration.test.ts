@@ -14,6 +14,7 @@ const HOOK_TIMEOUT_MS = 300_000;
 const PARALLEL_CALLS = 8;
 const HOUR_SECONDS = 3_600;
 const MAIL_QUEUE = "mail.send";
+const EVENT_QUEUE = "event.account.email_changed";
 const WAIT_DEADLINE_MS = 10_000;
 const WAIT_POLL_MS = 25;
 const RACE_TEST_TIMEOUT_MS = 30_000;
@@ -45,7 +46,8 @@ beforeAll(async () => {
       id uuid PRIMARY KEY, name text NOT NULL, data jsonb, keep_until timestamptz NOT NULL, expire_seconds int NOT NULL,
       deletion_seconds int NOT NULL, retry_limit int NOT NULL, retry_delay int NOT NULL, retry_backoff boolean NOT NULL,
       retry_delay_max int, policy text NOT NULL, dead_letter text, heartbeat_seconds int);
-    INSERT INTO pgboss.queue VALUES ('${MAIL_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
+    INSERT INTO pgboss.queue VALUES ('${MAIL_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);
+    INSERT INTO pgboss.queue VALUES ('${EVENT_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
@@ -976,5 +978,190 @@ describe("the address a live undo link restores", () => {
     expect(await store.registerAccount(registration(OLD))).toBe(false);
     expect(await store.cancelPendingEmailChange(owner)).toBe(true);
     expect(await store.registerAccount(registration(OLD))).toBe(false);
+  });
+});
+
+describe("the account.email_changed event", () => {
+  const announce = (accountId: string): readonly QueuedJob[] => {
+    const id = freshId();
+    return [{ id, queue: EVENT_QUEUE, data: { eventId: id, accountId } }];
+  };
+
+  async function events(): Promise<{ id: string; data: Record<string, unknown> }[]> {
+    return [...(await db.app<{ id: string; data: Record<string, unknown> }[]>`SELECT id, data FROM pgboss.job WHERE name = ${EVENT_QUEUE} ORDER BY id`)];
+  }
+
+  it("is queued with the confirmation that moves the account, holding the account and no address", async () => {
+    const owner = await account({ email: "event.old@example.test" });
+    await request(owner, "event.new@example.test");
+
+    expect(await store.confirmEmailChange(await confirmation(owner), announce)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "event.new@example.test" });
+    const [job, ...rest] = await events();
+    expect(rest).toEqual([]);
+    expect(job?.data).toEqual({ eventId: job?.id, accountId: owner });
+    expect(JSON.stringify(job)).not.toContain("example.test");
+  });
+
+  it("is queued with the redemption of the cancel token that puts the old address back, holding the account and no address", async () => {
+    const { owner, cancel } = await confirmed("undo.old@example.test", "undo.new@example.test");
+
+    expect(await store.cancelEmailChange(cancel, announce)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "undo.old@example.test" });
+    const [job, ...rest] = await events();
+    expect(rest).toEqual([]);
+    expect(job?.data).toEqual({ eventId: job?.id, accountId: owner });
+    expect(JSON.stringify(job)).not.toContain("example.test");
+  });
+
+  it("is queued once for each address change of a chain, and never for a redemption that is repeated", async () => {
+    const { owner, cancel: oldest } = await confirmed("chain.event.a@example.test", "chain.event.b@example.test");
+    const newest = await movedOn(owner, "chain.event.c@example.test");
+    await db.owner`TRUNCATE pgboss.job`;
+
+    expect(await store.cancelEmailChange(newest, announce)).toEqual({ accountId: owner });
+    expect(await store.cancelEmailChange(newest, announce)).toBeUndefined();
+    expect(await store.cancelEmailChange(oldest, announce)).toEqual({ accountId: owner });
+    expect(await store.cancelEmailChange(oldest, announce)).toBeUndefined();
+
+    expect(await events()).toHaveLength(2);
+  });
+
+  it("is not queued for a request, a clear, the issue of the tokens or a pending change", async () => {
+    const owner = await account({ email: "quiet.old@example.test" });
+
+    await request(owner, "quiet.new@example.test");
+    await confirmation(owner);
+    await notice(owner);
+    expect(await store.cancelPendingEmailChange(owner)).toBe(true);
+    await request(owner, "quiet.next@example.test");
+
+    expect(await events()).toEqual([]);
+    expect(await accountRow(owner)).toMatchObject({ email: "quiet.old@example.test" });
+  });
+
+  it("is not queued for an unknown, a used or an expired confirmation token, and the callback is not asked for one", async () => {
+    const owner = await account({ email: "refused.old@example.test" });
+    await request(owner, "refused.new@example.test");
+    const used = await confirmation(owner);
+    expect(await store.confirmEmailChange(used)).toEqual({ accountId: owner });
+    await request(owner, "refused.next@example.test");
+    const expired = await confirmation(owner);
+    await asSystem(db, (tx) => tx`UPDATE credential_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = ${expired}`);
+    let asked = 0;
+    const counting = (accountId: string): readonly QueuedJob[] => {
+      asked += 1;
+      return announce(accountId);
+    };
+
+    expect(await store.confirmEmailChange(freshToken().hash, counting)).toBeUndefined();
+    expect(await store.confirmEmailChange(used, counting)).toBeUndefined();
+    expect(await store.confirmEmailChange(expired, counting)).toBeUndefined();
+
+    expect(asked).toBe(0);
+    expect(await events()).toEqual([]);
+  });
+
+  it("is not queued for a confirmation that is refused because another account holds the address", async () => {
+    const owner = await account({ email: "held.old@example.test" });
+    await request(owner, "held.new@example.test");
+    const token = await confirmation(owner);
+    await account({ email: "held.new@example.test" });
+
+    expect(await store.confirmEmailChange(token, announce)).toBeUndefined();
+
+    expect(await events()).toEqual([]);
+    expect((await accountRow(owner))?.email).toBe("held.old@example.test");
+  });
+
+  it("is not queued when the cancel token is redeemed before the change was confirmed, though every session ends", async () => {
+    const owner = await account({ email: "early.old@example.test" });
+    await request(owner, "early.new@example.test");
+    const cancel = await notice(owner);
+    await session(owner);
+
+    expect(await store.cancelEmailChange(cancel, announce)).toEqual({ accountId: owner });
+
+    expect(await sessionRows(db, owner)).toEqual([]);
+    expect(await accountRow(owner)).toMatchObject({ email: "early.old@example.test", pending_email: null });
+    expect(await events()).toEqual([]);
+  });
+
+  it("is not queued for a cancel token that records no address", async () => {
+    const owner = await account({ email: "legacy.event@example.test" });
+    const legacy = await legacyNotice(owner);
+
+    expect(await store.cancelEmailChange(legacy, announce)).toEqual({ accountId: owner });
+
+    expect(await events()).toEqual([]);
+  });
+
+  it("is not queued when the restore is skipped because another account holds the old address by now", async () => {
+    const { owner, cancel } = await confirmed("skipped.old@example.test", "skipped.new@example.test");
+    await account({ email: "Skipped.Old@example.test" });
+
+    expect(await store.cancelEmailChange(cancel, announce)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "skipped.new@example.test" });
+    expect(await events()).toEqual([]);
+  });
+
+  it("is not queued when a registration commits the old address while the restore runs", async () => {
+    const { owner, cancel } = await confirmed("raced.old@example.test", "raced.new@example.test");
+    const registering = freshId();
+    let redeeming: ReturnType<typeof store.cancelEmailChange> | undefined;
+
+    await db.owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${registering}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${registering}, 'raced.old@example.test', 'Registering')`;
+      redeeming = store.cancelEmailChange(cancel, announce);
+      const deadline = Date.now() + WAIT_DEADLINE_MS;
+      for (;;) {
+        const waiting = await db.owner<{ waiting: string }[]>`
+          SELECT count(*)::text AS waiting FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
+          WHERE NOT l.granted AND s.datname = current_database()`;
+        if (Number(waiting[0]?.waiting ?? 0) > 0) {
+          break;
+        }
+        if (Date.now() > deadline) {
+          throw new Error("the restore never waited for the registration");
+        }
+        await new Promise((resolve) => setTimeout(resolve, WAIT_POLL_MS));
+      }
+    });
+
+    expect(await redeeming).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: "raced.new@example.test" });
+    expect(await events()).toEqual([]);
+  }, RACE_TEST_TIMEOUT_MS);
+
+  it("leaves the account on its old address and the token unused when the event cannot be queued, so the redemption can be made again", async () => {
+    const owner = await account({ email: "atomic.old@example.test" });
+    await request(owner, "atomic.new@example.test");
+    const token = await confirmation(owner);
+    const missing = (accountId: string): readonly QueuedJob[] => [{ id: freshId(), queue: "event.missing.queue", data: { accountId } }];
+
+    await expect(store.confirmEmailChange(token, missing)).rejects.toMatchObject({ name: "QueueMissingError" });
+
+    expect(await accountRow(owner)).toEqual({ email: "atomic.old@example.test", pending_email: "atomic.new@example.test", verified: true });
+    expect(await events()).toEqual([]);
+    expect(await store.confirmEmailChange(token, announce)).toEqual({ accountId: owner });
+    expect(await events()).toHaveLength(1);
+  });
+
+  it("leaves the account on its current address, the sessions and the token as they were when the event of a restore cannot be queued", async () => {
+    const { owner, cancel } = await confirmed("atomic.undo.old@example.test", "atomic.undo.new@example.test");
+    const kept = await session(owner);
+    const missing = (accountId: string): readonly QueuedJob[] => [{ id: freshId(), queue: "event.missing.queue", data: { accountId } }];
+
+    await expect(store.cancelEmailChange(cancel, missing)).rejects.toMatchObject({ name: "QueueMissingError" });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "atomic.undo.new@example.test" });
+    expect((await sessionRows(db, owner)).map((row) => row.id)).toEqual([kept]);
+    expect(await store.cancelEmailChange(cancel, announce)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: "atomic.undo.old@example.test" });
+    expect(await events()).toHaveLength(1);
   });
 });

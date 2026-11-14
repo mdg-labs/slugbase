@@ -298,6 +298,67 @@ async function verifiedAccount(email: string, options: { verified?: boolean; dis
   return seedAccount(database(), { email, emailVerified: options.verified ?? true, disabled: options.disabled ?? false, ...(options.password === undefined ? {} : { password: options.password }) });
 }
 
+describe("the acknowledgements of a start with the invite intent", () => {
+  const ACKNOWLEDGED = [
+    { id: "terms", version: "2026-03" },
+    { id: "privacy", version: "v4" },
+  ];
+  const acknowledging = (token: string, list: unknown): string => startUrl(token, `&acknowledgements=${encodeURIComponent(JSON.stringify(list))}`);
+
+  it("reach the registration policy and the account.created event of the account created for the invited address", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider(), [recording(seen, "allow")]);
+    const target = await invitation("ack.person@example.test");
+
+    const { callbackUrl, preAuth } = await approved(world, acknowledging(target.token, ACKNOWLEDGED), { subject: "ack-subject", email: "ack.person@example.test", emailVerified: true });
+    const response = await callbackWith(world, callbackUrl, preAuth);
+
+    expect(response.headers.get("location")).toBe("/");
+    expect(seen).toEqual([{ email: "ack.person@example.test", path: "invitation", acknowledgements: ACKNOWLEDGED }]);
+    const created = (await accountRows()).find((row) => row.email === "ack.person@example.test");
+    expect((await jobData("event.account.created")).map((data) => ({ accountId: data["accountId"], path: data["path"], acknowledgements: data["acknowledgements"] }))).toEqual([
+      { accountId: created?.id, path: "invitation", acknowledgements: JSON.stringify(ACKNOWLEDGED) },
+    ]);
+  });
+
+  it("are read from the state the start stored: an acknowledgements member on the callback's own query is ignored", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider(), [recording(seen, "allow")]);
+    const target = await invitation("forged.person@example.test");
+
+    const { callbackUrl, preAuth } = await approved(world, startUrl(target.token), { subject: "forged-subject", email: "forged.person@example.test", emailVerified: true });
+    const response = await callbackWith(world, `${callbackUrl}&acknowledgements=${encodeURIComponent(JSON.stringify(ACKNOWLEDGED))}`, preAuth);
+
+    expect(response.headers.get("location")).toBe("/");
+    expect(seen).toEqual([{ email: "forged.person@example.test", path: "invitation", acknowledgements: [] }]);
+    expect((await jobData("event.account.created")).map((data) => data["acknowledgements"])).toEqual(["[]"]);
+  });
+
+  it("are not announced for an account that already existed: nothing is created, so no account.created", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider(), [recording(seen, "refuse")]);
+    const holder = await verifiedAccount("existing.ack@example.test");
+    const target = await invitation(holder.email);
+
+    const { callbackUrl, preAuth } = await approved(world, acknowledging(target.token, ACKNOWLEDGED), { subject: "existing-subject", email: holder.email, emailVerified: true });
+    const response = await callbackWith(world, callbackUrl, preAuth);
+
+    expect(response.headers.get("location")).toBe("/");
+    expect(seen).toEqual([]);
+    expect(await jobData("event.account.created")).toEqual([]);
+  });
+
+  it("are refused with the invalid list before the redemption is stored", async () => {
+    const world = serve(provider());
+    const target = await invitation("refused.list@example.test");
+
+    const response = await world.server.fetch(new Request(new URL(acknowledging(target.token, [{ id: "terms" }]), world.origin), { headers: FROM_THE_APPLICATION }));
+
+    expect(response.status).toBe(422);
+    expect(cookieValue(response, PREAUTH_COOKIE)).toBeUndefined();
+  });
+});
+
 describe("accepting an invitation through a provider", () => {
   it("creates the verified account of the invited address even where the provider does not create accounts, links the identity, joins the workspace with the invited role and signs in with the workspace active", async () => {
     const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];

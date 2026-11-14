@@ -110,8 +110,8 @@ function cookieValue(response: Response, name: string): string | undefined {
 }
 
 /** Starts a handshake and plays the person approving it: the address the provider sends the browser back to, and the pre-auth cookie of the browser that started it. */
-async function approved(world: World, grant: FakeIdentityGrant): Promise<{ readonly callbackUrl: string; readonly preAuth: string; readonly state: string }> {
-  const started = await world.server.fetch(new Request(new URL(`${START}?returnTo=/go/docs`, world.origin)));
+async function approved(world: World, grant: FakeIdentityGrant, startQuery = "returnTo=/go/docs"): Promise<{ readonly callbackUrl: string; readonly preAuth: string; readonly state: string }> {
+  const started = await world.server.fetch(new Request(new URL(`${START}?${startQuery}`, world.origin)));
   const authorizationUrl = started.headers.get("location") ?? "";
   const preAuth = cookieValue(started, PREAUTH_COOKIE);
   if (started.status !== 302 || preAuth === undefined) {
@@ -125,8 +125,8 @@ function callbackWith(world: World, callbackUrl: string, preAuth: string | undef
 }
 
 /** Runs a first login to its callback: starts the handshake, plays the person approving it, and follows the redirect. */
-async function login(world: World, grant: FakeIdentityGrant, headers: Record<string, string> = {}): Promise<Response> {
-  const { callbackUrl, preAuth } = await approved(world, grant);
+async function login(world: World, grant: FakeIdentityGrant, headers: Record<string, string> = {}, startQuery?: string): Promise<Response> {
+  const { callbackUrl, preAuth } = await approved(world, grant, startQuery);
   const request = new Headers(headers);
   request.set("cookie", `${PREAUTH_COOKIE}=${preAuth}`);
   return world.server.fetch(new Request(callbackUrl, { headers: request }));
@@ -599,5 +599,158 @@ describe("a first login that creates an account", () => {
     expect(await identityRows()).toHaveLength(1);
     expect(await eventsQueued()).toHaveLength(1);
     expect(responses.filter((response) => response.headers.get("location") === "/go/docs").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+const ACKNOWLEDGED = [
+  { id: "terms", version: "2026-03" },
+  { id: "privacy", version: "v4" },
+];
+
+/** The start query of a login that carries the acknowledgements as the contract encodes them. */
+function acknowledging(list: unknown): string {
+  return `returnTo=/go/docs&acknowledgements=${encodeURIComponent(JSON.stringify(list))}`;
+}
+
+async function statesStored(): Promise<number> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ n: string }[]>`SELECT count(*)::text AS n FROM oidc_login_states`;
+  });
+  return Number(rows[0]?.n);
+}
+
+describe("the acknowledgements of a start", () => {
+  function allowing(seen: { email: string; path: string; acknowledgements: readonly unknown[] }[]): ServerModule {
+    return {
+      name: "policy",
+      hooks: {
+        registrationPolicy: (input) => {
+          seen.push({ email: input.email, path: input.path, acknowledgements: input.acknowledgements });
+          return HookResult.allow();
+        },
+      },
+      register: () => ({}),
+    };
+  }
+
+  it("reach the registration policy and the account.created event of the account the callback creates", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [allowing(seen)]);
+
+    const response = await login(world, { subject: "acknowledged", email: "ack@example.test", emailVerified: true }, {}, acknowledging(ACKNOWLEDGED));
+
+    expect(response.headers.get("location")).toBe("/go/docs");
+    expect(seen).toEqual([{ email: "ack@example.test", path: "oidc", acknowledgements: ACKNOWLEDGED }]);
+    const accountId = (await accountRows())[0]?.id;
+    expect(await eventsQueued()).toEqual([{ accountId, path: "oidc", acknowledgements: JSON.stringify(ACKNOWLEDGED) }]);
+  });
+
+  it("are an empty list for the policy and the event when the start carried none", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [allowing(seen)]);
+
+    await login(world, { subject: "unacknowledged", email: "none@example.test", emailVerified: true });
+
+    expect(seen).toEqual([{ email: "none@example.test", path: "oidc", acknowledgements: [] }]);
+    expect(await eventsQueued()).toEqual([{ accountId: (await accountRows())[0]?.id, path: "oidc", acknowledgements: "[]" }]);
+  });
+
+  it("are read from the state the start stored: an acknowledgements member on the callback's own query is ignored", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [allowing(seen)]);
+    const forged = [{ id: "forged", version: "9" }];
+
+    const { callbackUrl, preAuth } = await approved(world, { subject: "forged", email: "forged@example.test", emailVerified: true });
+    const response = await callbackWith(world, `${callbackUrl}&acknowledgements=${encodeURIComponent(JSON.stringify(forged))}`, preAuth);
+
+    expect(response.headers.get("location")).toBe("/go/docs");
+    expect(seen).toEqual([{ email: "forged@example.test", path: "oidc", acknowledgements: [] }]);
+    expect(await eventsQueued()).toEqual([{ accountId: (await accountRows())[0]?.id, path: "oidc", acknowledgements: "[]" }]);
+  });
+
+  it("keep the stored list when the callback's own query names another", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [allowing(seen)]);
+
+    const { callbackUrl, preAuth } = await approved(world, { subject: "stored-wins", email: "stored@example.test", emailVerified: true }, acknowledging([ACKNOWLEDGED[0]]));
+    await callbackWith(world, `${callbackUrl}&acknowledgements=${encodeURIComponent(JSON.stringify(ACKNOWLEDGED))}`, preAuth);
+
+    expect(seen).toEqual([{ email: "stored@example.test", path: "oidc", acknowledgements: [ACKNOWLEDGED[0]] }]);
+  });
+
+  it("are used by one callback: a second callback for the same state finds nothing and creates nothing", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [allowing(seen)]);
+    const { callbackUrl, preAuth } = await approved(world, { subject: "once", email: "once@example.test", emailVerified: true }, acknowledging(ACKNOWLEDGED));
+
+    expect((await callbackWith(world, callbackUrl, preAuth)).headers.get("location")).toBe("/go/docs");
+    expectFailed(await callbackWith(world, callbackUrl, preAuth));
+
+    expect(seen).toHaveLength(1);
+    expect(await accountRows()).toHaveLength(1);
+    expect(await statesStored()).toBe(0);
+  });
+
+  it("do not make a refusing policy allow: a policy that refuses these acknowledgements still ends in the generic failure with nothing created", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [refusing(seen)]);
+
+    expectFailed(await login(world, { subject: "refused-with", email: "refused@example.test", emailVerified: true }, {}, acknowledging(ACKNOWLEDGED)));
+
+    expect(seen).toEqual([{ email: "refused@example.test", path: "oidc", acknowledgements: ACKNOWLEDGED }]);
+    expect(await accountRows()).toEqual([]);
+    expect(await eventsQueued()).toEqual([]);
+  });
+
+  it("are not asked about when the callback links an account that exists, and sign it in as before", async () => {
+    const seen: { email: string; path: string; acknowledgements: readonly unknown[] }[] = [];
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }), [allowing(seen)]);
+    const holder = await verifiedAccount("linked-with-acks@example.test");
+
+    const response = await login(world, { subject: "linked-with", email: holder.email, emailVerified: true }, {}, acknowledging(ACKNOWLEDGED));
+
+    expect(response.headers.get("location")).toBe("/go/docs");
+    expect(seen).toEqual([]);
+    expect(await accountRows()).toHaveLength(1);
+  });
+
+  describe("are refused before anything is stored", () => {
+    it.each(["link", "reauth"])("with the %s intent, which creates no account", async (intent) => {
+      const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }));
+
+      const response = await world.server.fetch(new Request(new URL(`${START}?intent=${intent}&${acknowledging(ACKNOWLEDGED)}`, world.origin), { headers: { "sec-fetch-site": "same-origin" } }));
+
+      expect(response.status).toBe(422);
+      expect(response.headers.get("location")).toBeNull();
+      expect(await statesStored()).toBe(0);
+    });
+
+    it.each<[string, unknown]>([
+      ["more than 8 entries", Array.from({ length: 9 }, (_unused, index) => ({ id: `doc${String(index)}`, version: "1" }))],
+      ["an identifier named twice", [ACKNOWLEDGED[0], { id: "terms", version: "2" }]],
+      ["an identifier outside the grammar", [{ id: "Not Valid", version: "1" }]],
+      ["a version of 33 characters", [{ id: "terms", version: "v".repeat(33) }]],
+      ["an entry that is not an identifier and a version", [{ id: "terms" }]],
+      ["something that is not a list", { id: "terms", version: "1" }],
+    ])("with %s", async (_name, list) => {
+      const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }));
+
+      const response = await world.server.fetch(new Request(new URL(`${START}?${acknowledging(list)}`, world.origin)));
+
+      expect(response.status).toBe(422);
+      expect(response.headers.get("location")).toBeNull();
+      expect(cookieValue(response, PREAUTH_COOKIE)).toBeUndefined();
+      expect(await statesStored()).toBe(0);
+    });
+
+    it("with a text that is not JSON", async () => {
+      const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }));
+
+      const response = await world.server.fetch(new Request(new URL(`${START}?acknowledgements=terms:2026-03`, world.origin)));
+
+      expect(response.status).toBe(422);
+      expect(await statesStored()).toBe(0);
+    });
   });
 });

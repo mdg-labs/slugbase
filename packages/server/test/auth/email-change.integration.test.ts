@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
-import { CREDENTIAL_TOKEN_TTL_SECONDS, generateCredentialToken, type MailPort } from "@slugbase/core";
+import { CREDENTIAL_TOKEN_TTL_SECONDS, generateCredentialToken, type AnyDomainEvent, type MailPort } from "@slugbase/core";
 import { type AuthStore } from "@slugbase/db";
 import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
@@ -9,7 +9,7 @@ import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import { createRateLimitRegistry, loadConfig } from "../../src/config/index.ts";
-import { createServer, type Server } from "../../src/create-server.ts";
+import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { createWorker, type RunningWorker } from "../../src/worker/index.ts";
 import { productionEnv } from "../config/support.ts";
@@ -57,7 +57,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await database().owner`TRUNCATE accounts CASCADE`;
   await database().owner`TRUNCATE workspaces CASCADE`;
-  await database().owner`DELETE FROM pgboss.job WHERE name IN ('mail.send', 'event.account.created', 'event.workspace.created')`;
+  await database().owner`DELETE FROM pgboss.job WHERE name IN ('mail.send', 'event.account.created', 'event.workspace.created', 'event.account.email_changed')`;
 });
 
 interface World {
@@ -365,12 +365,12 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     worker = undefined;
   });
 
-  async function startWorker(port: MailPort = mail): Promise<void> {
+  async function startWorker(port: MailPort = mail, modules: ServerModule[] = []): Promise<void> {
     const config = loadConfig("worker", { ...productionEnv(), NODE_ENV: "test", DATABASE_URL: appUrl(database()) }).config;
     worker = await createWorker({
       config,
       adapters: { ...adapters(), mail: port },
-      modules: [],
+      modules,
       logger: recordingLogger(),
       database: tenantDatabase(database()),
       pollingIntervalSeconds: POLL_SECONDS,
@@ -444,6 +444,111 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     expect((await redeem(world, CONFIRM, confirmation)).status).toBe(410);
     expect((await world.server.fetch(postJson(world.origin, LOGIN, { email: "new.address@example.test", password: PASSWORD, remember: false }))).status).toBe(200);
     expect((await world.server.fetch(postJson(world.origin, LOGIN, { email: "old.address@example.test", password: PASSWORD, remember: false }))).status).toBe(401);
+  });
+
+  interface EmailChangedJob {
+    readonly id: string;
+    readonly state: string;
+    readonly data: Record<string, unknown>;
+  }
+
+  async function emailChangedJobs(): Promise<EmailChangedJob[]> {
+    return [...(await database().app<EmailChangedJob[]>`SELECT id, state, data FROM pgboss.job WHERE name = 'event.account.email_changed' ORDER BY created_on, id`)];
+  }
+
+  async function until(check: () => Promise<boolean> | boolean, what: string): Promise<void> {
+    const deadline = Date.now() + WAIT_MS;
+    while (!(await check())) {
+      if (Date.now() > deadline) {
+        throw new Error(`timed out waiting for ${what}`);
+      }
+      await sleep(50);
+    }
+  }
+
+  function listener(received: AnyDomainEvent[]): ServerModule {
+    return {
+      name: "listener",
+      register: () => ({
+        subscribers: [
+          {
+            event: "account.email_changed",
+            handle: (event) => {
+              received.push(event);
+            },
+          },
+        ],
+      }),
+    };
+  }
+
+  it("announces account.email_changed once after the confirmation, to the subscriber of a module, with the identifier of the queued job and no address", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "announce.old@example.test" });
+    const received: AnyDomainEvent[] = [];
+    await startWorker(mail, [listener(received)]);
+    await requested(world, account, "announce.new@example.test");
+    expect(await emailChangedJobs()).toEqual([]);
+
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "announce.new@example.test"))).status).toBe(204);
+
+    await until(() => received.length > 0, "the subscriber to receive the event");
+    const [job, ...rest] = await emailChangedJobs();
+    expect(rest).toEqual([]);
+    expect(job?.data).toEqual({ eventId: job?.id, accountId: account.id });
+    expect(received).toEqual([{ eventId: job?.id, name: "account.email_changed", payload: { accountId: account.id } }]);
+    expect(JSON.stringify([job, received])).not.toContain("example.test");
+    await until(async () => (await emailChangedJobs())[0]?.state === "completed", "the job to complete");
+    expect(received).toHaveLength(1);
+  });
+
+  it("announces account.email_changed when the \"this wasn't me\" link puts the old address back, and not for the cancel link of a change that was never confirmed", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "undone.old@example.test" });
+    const bystander = await owner({ email: "undone.bystander@example.test" });
+    const received: AnyDomainEvent[] = [];
+    await startWorker(mail, [listener(received)]);
+    await requested(world, bystander, "undone.elsewhere@example.test");
+    expect((await redeem(world, CANCEL, tokenOf("emailChangeNotice", "undone.bystander@example.test"))).status).toBe(204);
+    await requested(world, account, "undone.new@example.test", 2);
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "undone.new@example.test"))).status).toBe(204);
+    await until(() => received.length > 0, "the confirmation's event");
+    await until(async () => (await emailChangedJobs())[0]?.state === "completed", "the confirmation's job to complete");
+
+    expect((await redeem(world, CANCEL, tokenOf("emailChangeNotice", "undone.old@example.test"))).status).toBe(204);
+
+    await until(() => received.length > 1, "the event of the restore");
+    expect(await pendingEmail(account.id)).toEqual({ email: "undone.old@example.test", pending: null });
+    const jobs = await emailChangedJobs();
+    expect(jobs.map((job) => job.data)).toEqual(jobs.map((job) => ({ eventId: job.id, accountId: account.id })));
+    expect(received.map((event) => event.eventId).sort()).toEqual(jobs.map((job) => job.id).sort());
+    expect(received).toHaveLength(2);
+  });
+
+  it("queues no account.email_changed for a request, a refused or repeated redemption, a restore another account's address skips, or a confirmation that is refused", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "silent.old@example.test" });
+    await startWorker();
+    const cookie = await requested(world, account, "silent.new@example.test");
+    const confirmation = tokenOf("emailChange", "silent.new@example.test");
+    const notice = tokenOf("emailChangeNotice", "silent.old@example.test");
+    expect(await emailChangedJobs()).toEqual([]);
+
+    expect((await redeem(world, CONFIRM, "A".repeat(43))).status).toBe(410);
+    expect((await redeem(world, CANCEL, "A".repeat(43))).status).toBe(410);
+    expect((await redeem(world, CANCEL, confirmation)).status).toBe(410);
+    expect(await emailChangedJobs()).toEqual([]);
+
+    expect((await redeem(world, CONFIRM, confirmation)).status).toBe(204);
+    expect((await redeem(world, CONFIRM, confirmation)).status).toBe(410);
+    expect(await emailChangedJobs()).toHaveLength(1);
+    await owner({ email: "silent.old@example.test" });
+    expect((await redeem(world, CANCEL, notice)).status).toBe(204);
+    expect((await redeem(world, CANCEL, notice)).status).toBe(410);
+
+    expect(await pendingEmail(account.id)).toEqual({ email: "silent.new@example.test", pending: null });
+    expect(await emailChangedJobs()).toHaveLength(1);
+    expect((await probe(world, cookie)).status).toBe(401);
   });
 
   it("mails no confirmation link while the notice to the old address cannot be sent, so a change cannot be confirmed before the owner is told", async () => {

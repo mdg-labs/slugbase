@@ -791,26 +791,30 @@ describe("reassigning the former members' content", () => {
     const stub = server({ members: [SELF, GRACE], formerBookmarks: many, formerFolders: [RESEARCH] });
     await openMembers();
 
-    // The page holds 1 001 rows, and a query by role walks every one of them (about 1.5 s each on a busy host), so the checkboxes are found by their label, and the
-    // check that no dialog opened ignores accessibility filtering: only the two selections below re-render the rows, and the rest of the test stays cheap.
+    // The page holds 1 001 rows, and a query that walks the whole document (by role, or by text) visits every one of them, about 0.2 to 1.5 s a call depending on the load of the host. Only the
+    // two selections below must re-render the rows, so the checkboxes are found by their label, and every other query is scoped to the group that holds the actions and the messages
+    // (the dialogs are portalled out of it, and a plain selector finds those without walking the rows).
     await screen.findByLabelText("Select Research");
     await press(screen.getByLabelText("Select Research"));
-    expect(screen.getByRole("button", { name: "Reassign to…" }).hasAttribute("disabled")).toBe(false);
-    expect(screen.queryByText(/One reassignment takes at most/)).toBeNull();
+    const selection = within(screen.getByLabelText("Selected content of former members"));
+    const reassign = (): HTMLElement => selection.getByRole("button", { name: "Reassign to…" });
+    const openDialogs = (): Element[] => Array.from(document.body.querySelectorAll('[role="dialog"], [role="alertdialog"]'));
+    expect(reassign().hasAttribute("disabled")).toBe(false);
+    expect(selection.queryByText(/One reassignment takes at most/)).toBeNull();
     await press(screen.getByLabelText("Select all loaded bookmarks"));
 
-    expect(screen.getByText("1,002 selected")).toBeTruthy();
+    expect(selection.getByText("1,002 selected")).toBeTruthy();
     expect(
-      screen.getByText(
+      selection.getByText(
         "One reassignment takes at most 1,000 bookmarks and 1,000 folders. Reassign in smaller selections, and select each folder together with its bookmarks so that they stay filed together.",
       ),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Reassign to…" }).hasAttribute("disabled")).toBe(true);
-    await press(screen.getByRole("button", { name: "Reassign to…" }));
-    expect(screen.queryByRole("dialog", { name: "Reassign former members' content", hidden: true })).toBeNull();
+    expect(reassign().hasAttribute("disabled")).toBe(true);
+    await press(reassign());
+    expect(openDialogs()).toHaveLength(0);
     expect(stub.received("POST", REASSIGN_PATH)).toHaveLength(0);
     // The deletion has no such limit on the screen: it splits its own requests.
-    expect(screen.getByRole("button", { name: "Delete selected" }).hasAttribute("disabled")).toBe(false);
+    expect(selection.getByRole("button", { name: "Delete selected" }).hasAttribute("disabled")).toBe(false);
   }, SLOW_TEST_TIMEOUT_MS);
 
   it("has no axe violations with the picker dialog and with the confirmation open", async () => {

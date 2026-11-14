@@ -124,6 +124,8 @@ Exactly the contracts listed in doc 01 §7.4, each exported from a named entry p
 
 The generic extension points a composition can use beyond these contracts (hooks with default no-op behaviour) are listed in one place in doc 01, under "Extension points for composed deployments".
 
+One seam is an option of the exported `createLogger()` rather than a hook: `redactFields` adds a composition's own credential field names (the key of a service its modules call, a webhook signing secret) to the logger's redaction list (doc 10 T7). Each name is censored at the same depths as the built-in list, and the built-in list cannot be shortened. A name that is empty or holds a quote, backslash, bracket, asterisk, control character, or U+2028 or U+2029 (the line and paragraph separators) makes `createLogger()` throw: a quote or a bracket makes pino throw, a name that is exactly `*` would censor `msg` and every field the line carries (only pino's own `level` and `time` survive), line feed, carriage return, U+2028 and U+2029 are not matched by pino's top-level path so the name would go uncensored there, and a log key has no use for a backslash, an asterisk within a name or the other control characters.
+
 Every exported entry point has an **API Extractor report** (`packages/*/etc/*.api.md`) committed in CE. CI regenerates the reports and fails when they differ from the committed ones, so **a contract change is always visible in the diff** — the author has to commit the new report on purpose. Deep imports (`@slugbase/server/src/...`) are blocked by each package's `exports` map and by a lint rule in Cloud.
 
 ### 3.2 Pinning and bumping

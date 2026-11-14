@@ -27,6 +27,7 @@ import { withoutNul } from "./text.ts";
 // not is answered 404 with nothing changed (doc 02 section 5.8). The preview of adding tags answers the tag set the bookmarks would carry, without writing. The
 // select-all operation returns the identifiers a filter matches so a client can name them. The metadata operation reads the title and description of a page for the modal that is open, from the workspace's cache or from a fetch through the egress adapter within three seconds; an address the server refuses to connect to is 422 url_not_allowed, a page that cannot be read is 502 upstream_failed, and it takes from the fetch bucket and needs the write scope because it writes the cache (doc 04 sections 3.2, 7 and 10.6). The text query `q` narrows the list, the select-all and a bulk request by filter to the bookmarks the
 // search of doc 02 section 9.1 finds by their title, host, slug and description (never the path of the URL), in the order the list is asked for and not by relevance; it is plain text.
+// The list of the plan-archived bookmarks reads the caller's own bookmarks that a composition's plan limit archived (doc 02 section 5.6), the ones no other read returns, most recently archived first, so a page can show them and offer to delete or export them; it has no filters and no scope, since an archived bookmark is its owner's alone.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
@@ -275,6 +276,29 @@ export const BookmarkListSchema = z
     totalAtLeast: z.literal(BOOKMARK_LIST_TOTAL_CAP).optional().describe("Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks"),
   })
   .meta({ id: "BookmarkList" });
+
+export const ListArchivedBookmarksQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(BOOKMARK_LIST_MAX_LIMIT).default(BOOKMARK_LIST_DEFAULT_LIMIT).describe("The most bookmarks to return, at most 100"),
+  cursor: z
+    .string()
+    .min(1)
+    .max(BOOKMARK_CURSOR_MAX_LENGTH)
+    .optional()
+    .describe("The `nextCursor` of the previous page. It is valid only for the account and workspace that received it and only for this list; any other cursor, the cursor of `GET /bookmarks` among them, is refused with 400"),
+});
+
+export const ArchivedBookmarkSchema = BookmarkSchema.extend({
+  planArchivedAt: z.iso.datetime().describe("When the bookmark was plan-archived, RFC 3339 UTC"),
+}).meta({ id: "ArchivedBookmark" });
+
+export const ArchivedBookmarkListSchema = z
+  .strictObject({
+    items: z.array(ArchivedBookmarkSchema).describe("One page of the caller's own plan-archived bookmarks, the most recently archived first and the identifier as the tiebreak, each with the instant it was archived"),
+    nextCursor: z.string().nullable().describe("Passed as `cursor` to get the next page; null on the last page"),
+    total: z.number().int().min(0).nullable().describe("How many plan-archived bookmarks the caller owns in the workspace, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so"),
+    totalAtLeast: z.literal(BOOKMARK_LIST_TOTAL_CAP).optional().describe("Present, and 10 000, when total is null: the caller owns more than 10 000 plan-archived bookmarks in the workspace"),
+  })
+  .meta({ id: "ArchivedBookmarkList" });
 
 /** The most identifiers a bulk request names (doc 04 section 6.2). */
 export const BOOKMARK_BULK_IDS_MAX = 1000;
@@ -608,6 +632,30 @@ export const listBookmarks = defineOperation({
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
     422: problemResponse("The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a q that is empty or over 100 characters, a limit outside 1 to 100), or the url is not a URL a bookmark can have"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const listArchivedBookmarks = defineOperation({
+  method: "get",
+  path: "/api/v1/bookmarks/archived",
+  operationId: "listArchivedBookmarks",
+  tag: "bookmarks",
+  summary: "List the caller's plan-archived bookmarks",
+  auth: "member",
+  rate: "read",
+  scope: "read",
+  request: { query: ListArchivedBookmarksQuerySchema },
+  responses: {
+    200: jsonResponse(
+      "One page of the caller's own plan-archived bookmarks in the workspace the request acts in, the most recently archived first, each with the instant it was archived, with the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast). The page is empty, with a total of 0, when none is archived. A bookmark that is not plan-archived, another member's bookmark and another workspace's bookmark are never listed",
+      ArchivedBookmarkListSchema,
+    ),
+    400: problemResponse("The request was malformed, or the cursor is not one this account was issued for this workspace and this list (bad_request)"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    422: problemResponse("The query did not pass validation (an unknown parameter, a limit outside 1 to 100)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

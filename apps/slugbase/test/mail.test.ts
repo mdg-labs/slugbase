@@ -157,9 +157,9 @@ describe("mail in the composition root", () => {
   });
 
   it("reports features.mail from /api/config only when the SMTP adapter is configured, with or without credentials", async () => {
-    expect(await features(serverWith({}))).toEqual({ mail: false, ai: false });
-    expect(await features(serverWith(smtp))).toEqual({ mail: true, ai: false });
-    expect(await features(serverWith(authless))).toEqual({ mail: true, ai: false });
+    expect(await features(serverWith({}))).toEqual({ mail: false, ai: false, billing: false });
+    expect(await features(serverWith(smtp))).toEqual({ mail: true, ai: false, billing: false });
+    expect(await features(serverWith(authless))).toEqual({ mail: true, ai: false, billing: false });
   });
 
   it("refuses to start with one credential, or with credentials and no relay", () => {

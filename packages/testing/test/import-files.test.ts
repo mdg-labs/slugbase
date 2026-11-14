@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { IMPORT_FILE_MAX_BOOKMARKS, IMPORT_FILE_MAX_BYTES, buildImportFiles, buildJsonFile, buildNetscapeFile } from "../src/seed/import-files.ts";
 
 // The files of the import phase of the performance suite (scripts/perf): what they must be for the phase to measure the largest import the API takes, and for an import that fails to be one to be seen.
@@ -69,7 +70,7 @@ describe("the SlugBase JSON import file", () => {
     expect(document.tags).toHaveLength(120);
   });
 
-  it("gives every bookmark an address and a ref of its own, a folder and tags", () => {
+  it("gives every bookmark an address and a ref of its own, a folder and tags", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(new Set(document.bookmarks.map((bookmark) => bookmark.url)).size).toBe(5000);
     expect(new Set(document.bookmarks.map((bookmark) => bookmark.ref)).size).toBe(5000);
     for (const bookmark of document.bookmarks) {

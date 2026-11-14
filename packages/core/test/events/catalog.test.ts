@@ -16,7 +16,16 @@ const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
 
 describe("the domain event catalog", () => {
   it("announces account.created with the account and how it came to exist", () => {
-    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "account.deleted", "workspace.created", "workspace.deleted", "member.left", "member.joined", "bookmark.created"]);
+    expect(DOMAIN_EVENT_NAMES).toEqual([
+      "account.created",
+      "account.deleted",
+      "account.email_changed",
+      "workspace.created",
+      "workspace.deleted",
+      "member.left",
+      "member.joined",
+      "bookmark.created",
+    ]);
     expect(Object.keys(DOMAIN_EVENTS["account.created"])).toEqual(["accountId", "path", "acknowledgements"]);
     expect(ACCOUNT_CREATION_PATHS).toEqual(["self-registration", "invitation", "oidc", "setup"]);
   });
@@ -26,6 +35,14 @@ describe("the domain event catalog", () => {
     expect(parseDomainEventPayload("account.deleted", { accountId: ACCOUNT })).toEqual({ accountId: ACCOUNT });
     for (const bad of [{}, { accountId: ACCOUNT, email: "ada@example.test" }, { accountId: "someone" }]) {
       expect(() => parseDomainEventPayload("account.deleted", bad)).toThrow(DomainEventPayloadError);
+    }
+  });
+
+  it("announces account.email_changed with the account and nothing else, so no address travels in it", () => {
+    expect(Object.keys(DOMAIN_EVENTS["account.email_changed"])).toEqual(["accountId"]);
+    expect(parseDomainEventPayload("account.email_changed", { accountId: ACCOUNT })).toEqual({ accountId: ACCOUNT });
+    for (const bad of [{}, { accountId: ACCOUNT, email: "ada@example.test" }, { accountId: ACCOUNT, previousEmail: "ada@example.test" }, { accountId: "someone" }]) {
+      expect(() => parseDomainEventPayload("account.email_changed", bad)).toThrow(DomainEventPayloadError);
     }
   });
 

@@ -2,10 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { hashCredentialToken, type MailPort } from "@slugbase/core";
+import { archiveBookmarks, hashCredentialToken, type MailPort } from "@slugbase/core";
+import { bookmarkArchiveTransaction } from "@slugbase/db";
 import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import { loadConfig } from "../../src/config/index.ts";
 import type { EntitlementCheck } from "../../src/http/authorize.ts";
 import { createWorker, type RunningWorker, type Worker } from "../../src/worker/index.ts";
@@ -215,6 +217,25 @@ describe("PUT /instance/accounts/{id}/access-mode", () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  it("lets a session list the account's plan-archived bookmarks, which the accounts whose plan ended hold, and still refuses a token of the account", async () => {
+    const world = serve();
+    const root = await admin(world);
+    const { person, workspaceId, token } = await member(world);
+    const archived = ((await (await send(world, "GET", BOOKMARKS, { cookie: person.cookie })).json()) as { items: { id: string }[] }).items.map((item) => item.id);
+    expect(archived).toHaveLength(1);
+    await tenantDatabase(database()).withTenant({ accountId: person.account.id, workspaceId, requestId: "export-only-archive" }, async (tx) => {
+      await archiveBookmarks(bookmarkArchiveTransaction(tx, uuidv7), { workspaceId, bookmarkIds: archived });
+    });
+    expect((await setMode(world, root, person.account.id, exportOnly(3))).status).toBe(200);
+
+    const listed = await send(world, "GET", `${BOOKMARKS}/archived`, { cookie: person.cookie });
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ items: [{ id: archived[0], title: "Docs" }], total: 1 });
+    const byToken = await send(world, "GET", `${BOOKMARKS}/archived`, bearer(token));
+    expect(byToken.status).toBe(403);
+    expect(await problemOf(byToken)).toMatchObject({ code: "account_export_only", status: 403 });
+  }, TEST_TIMEOUT_MS);
 
   it("lets the account delete itself and sign out, which the period leaves to it, and does not refuse them as export-only", async () => {
     const world = serve();

@@ -42,7 +42,7 @@ import { goPreferenceRoutes } from "./routes/me/go-preferences.ts";
 import { identityRoutes } from "./routes/me/identities.ts";
 import { mfaRoutes } from "./routes/me/mfa.ts";
 import { profileRoutes } from "./routes/me/profile.ts";
-import { apiConfigRoute } from "./routes/meta/config.ts";
+import { apiConfigRoute, legalLinksProblem, type LegalLinks } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
@@ -242,6 +242,13 @@ export interface CreateServerOptions {
    * default port); anything else, and a repeated entry, refuses the start with `invalid_content_security`.
    */
   readonly contentSecurity?: ContentSecurityOptions;
+  /**
+   * The addresses of the imprint, the privacy policy and the terms, published as `legal` in `GET /api/config` (doc 04 section 9.1): the
+   * composition root's choice, never an edition flag (D4). The Community Edition supplies none and its answer has no `legal` member.
+   * All three are required and each is an absolute `https` or `http` address with no user name or password; anything else refuses
+   * the start with `invalid_legal_links`.
+   */
+  readonly legal?: LegalLinks;
 }
 
 /** The operations that stay answered while the server migrates: the process probes. */
@@ -304,6 +311,7 @@ export type CompositionErrorCode =
   | "invalid_route"
   | "invalid_web_root"
   | "invalid_content_security"
+  | "invalid_legal_links"
   | "missing_policy"
   | "undocumented_operation"
   | "policy_mismatch"
@@ -554,6 +562,17 @@ export function createServer(options: CreateServerOptions): Server {
     }
   }
 
+  let legal: LegalLinks | undefined;
+  if (options.legal !== undefined) {
+    const problem = legalLinksProblem(options.legal);
+    if (problem !== undefined) {
+      throw new CompositionError("invalid_legal_links", problem);
+    }
+    // A copy of what was checked, so the composition's own object cannot change the answer afterwards.
+    const { imprintUrl, privacyUrl, termsUrl } = options.legal;
+    legal = Object.freeze({ imprintUrl, privacyUrl, termsUrl });
+  }
+
   const committedDocument = loadCommittedDocument();
   const openApiDocument = options.openApiDocument ?? committedDocument;
 
@@ -572,7 +591,7 @@ export function createServer(options: CreateServerOptions): Server {
   const registration = registrationSettings(config, options.registrationDefaults ?? DEFAULT_REGISTRATION);
   const builtInRoutes: RouteBinding[] = [
     ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
-    apiConfigRoute({ config, store: authStore, buildInfo, adapters, registration, logger }),
+    apiConfigRoute({ config, store: authStore, buildInfo, adapters, registration, logger, ...(legal === undefined ? {} : { legal }) }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
   const metrics = createMetrics();

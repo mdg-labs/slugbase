@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { check, index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts.ts";
 import { bytea, citext } from "./types.ts";
 
@@ -57,6 +57,8 @@ export const oidcLoginStates = pgTable(
     linkAccountId: uuid().references(() => accounts.id, { onDelete: "cascade" }),
     /** The invitation the `invite` intent accepts. */
     invitationTokenHash: bytea(),
+    /** What the person acknowledged before the handshake: identifiers and version labels, for the `login` and `invite` intents only. The shape and the limits are checked by sys_oidc_state_create, the only writer. */
+    acknowledgements: jsonb().$type<readonly { readonly id: string; readonly version: string }[]>().notNull().default([]),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
   },
   (table) => [

@@ -22,6 +22,15 @@ export const VersionInfoSchema = z
   })
   .meta({ id: "VersionInfo" });
 
+const LEGAL_URL = z.url({ protocol: /^https?$/ });
+
+/** The addresses of a deployment's legal documents; each is an absolute `https` or `http` URL. */
+export const LegalLinksSchema = z.strictObject({
+  imprintUrl: LEGAL_URL.describe("The address of the imprint, an absolute https or http URL"),
+  privacyUrl: LEGAL_URL.describe("The address of the privacy policy, an absolute https or http URL"),
+  termsUrl: LEGAL_URL.describe("The address of the terms of service, an absolute https or http URL"),
+});
+
 export const ApiConfigSchema = z
   .strictObject({
     apiVersion: z.literal("v1").describe("The API version the server speaks"),
@@ -36,6 +45,10 @@ export const ApiConfigSchema = z
     features: z.strictObject({
       mail: z.boolean().describe("Whether a mail port is configured"),
       ai: z.boolean().describe("Whether an AI port is configured"),
+      billing: z
+        .boolean()
+        .optional()
+        .describe("Whether a billing adapter is composed (a non-no-op billing port), never an entitlement. This server always sends it"),
       aiProvider: z
         .string()
         .optional()
@@ -71,6 +84,9 @@ export const ApiConfigSchema = z
       })
       .optional()
       .describe("The instance settings the sign-in page shows. This server always sends it"),
+    legal: LegalLinksSchema.optional().describe(
+      "The addresses of the imprint, the privacy policy and the terms, present only where the deployment's composition supplies them; they are public configuration",
+    ),
     setupRequired: z
       .boolean()
       .optional()

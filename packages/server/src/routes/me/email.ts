@@ -3,6 +3,7 @@ import { hashCredentialToken, normalizeEmail, type MailPort } from "@slugbase/co
 import type { AuthStore } from "@slugbase/db";
 import { emailLimitKey } from "../../auth/email-limit.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
+import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import { queueMailSend } from "../../worker/jobs/mail-send.ts";
@@ -22,7 +23,8 @@ import { route } from "../register.ts";
 // Both redemptions are anonymous: the emailed token is the credential. The confirmation moves the account to
 // the address, and the "this wasn't me" link cancels the change and deletes every session of the account; used
 // after the confirmation it also puts the old address back, and that link outlives a later request or cancellation of the account. An unknown, used, expired, replaced or foreign token, and an address that another account holds by the time
-// of the confirmation, are one answer.
+// of the confirmation, are one answer. Both queue `account.email_changed` in the transaction that updates the
+// address, the confirmation always and the cancellation only when it put the old address back.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const REFUSED = "The link is invalid or has expired.";
@@ -39,6 +41,10 @@ function accountOf(context: ChainContext): string {
     throw new ProblemError("unauthenticated", UNAUTHENTICATED);
   }
   return principal.accountId;
+}
+
+function announceEmailChanged(accountId: string) {
+  return [queueDomainEvent(uuidv7(), "account.email_changed", { accountId })];
 }
 
 export function emailChangeRoutes({ store, mail }: EmailChangeRoutesOptions): RouteBinding[] {
@@ -60,7 +66,7 @@ export function emailChangeRoutes({ store, mail }: EmailChangeRoutesOptions): Ro
 
     route(confirmEmailChange).handle(async ({ body }) => {
       const tokenHash = hashCredentialToken(body.token);
-      if (tokenHash === undefined || (await store.confirmEmailChange(tokenHash)) === undefined) {
+      if (tokenHash === undefined || (await store.confirmEmailChange(tokenHash, announceEmailChanged)) === undefined) {
         throw new ProblemError("token_expired", REFUSED);
       }
       return { status: 204 };
@@ -68,7 +74,7 @@ export function emailChangeRoutes({ store, mail }: EmailChangeRoutesOptions): Ro
 
     route(cancelEmailChange).handle(async ({ body }) => {
       const tokenHash = hashCredentialToken(body.token);
-      if (tokenHash === undefined || (await store.cancelEmailChange(tokenHash)) === undefined) {
+      if (tokenHash === undefined || (await store.cancelEmailChange(tokenHash, announceEmailChanged)) === undefined) {
         throw new ProblemError("token_expired", REFUSED);
       }
       return { status: 204 };

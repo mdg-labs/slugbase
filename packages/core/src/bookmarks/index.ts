@@ -66,6 +66,16 @@ export type {
   BookmarkScope,
   BookmarkSort,
 } from "./list.ts";
+export { listArchivedBookmarks } from "./list-archived.ts";
+export type {
+  ArchivedBookmarkListAsk,
+  ArchivedBookmarkListDependencies,
+  ArchivedBookmarkListOutcome,
+  ArchivedBookmarkListRequest,
+  ArchivedBookmarkPosition,
+  ArchivedBookmarkRow,
+  ArchivedBookmarkStore,
+} from "./list-archived.ts";
 export { openBookmark } from "./open.ts";
 export type { BookmarkOpenAsk, BookmarkOpenDependencies, BookmarkOpenOutcome, BookmarkUsage } from "./open.ts";
 export { BOOKMARK_BULK_ACTIONS, BOOKMARK_BULK_FOLDER_ACTIONS, BOOKMARK_BULK_IDS_MAX, BOOKMARK_BULK_TAG_ACTIONS, BOOKMARK_SELECT_ALL_CAP, bulkBookmarks, listBookmarkIds, previewBulkShare, previewBulkTags } from "./bulk.ts";

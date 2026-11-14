@@ -8,6 +8,7 @@ import {
   type ModuleContext,
   type ServerModule,
 } from "../src/create-server.ts";
+import type { LegalLinks } from "../src/index.ts";
 import { HookResult } from "../src/hooks/index.ts";
 import type { ContentSecurityOptions } from "../src/http/headers.ts";
 import { defineJob, defineSchedule } from "../src/worker/index.ts";
@@ -203,17 +204,25 @@ describe("createServer", () => {
       };
     }
 
-    const CONSENT = { legal: [{ code: "terms", version: "1" }], acceptedAt: "2026-01-01T00:00:00.000Z" };
+    const NOW = "2026-01-01T00:00:00.000Z";
+    const CONSENT = {
+      legal: [{ code: "terms", version: "1" }],
+      orderButton: { label: "Order with obligation to pay", version: "1" },
+      statements: [{ kind: "legal_acceptance" as const, version: "1", text: "I accept the terms." }],
+      acceptedAt: NOW,
+      clientAddressHash: "h-addr",
+      userAgentHash: "h-agent",
+    };
     const MONEY = { amountMinor: 100, currency: "EUR" };
-    const DETAILS = { name: "n", email: "a@example.com", address: { line1: "l", postalCode: "p", city: "c", country: "DE" } };
+    const DETAILS = { kind: "person" as const, name: "n", email: "a@example.com", address: { line1: "l", postalCode: "p", city: "c", country: "DE" }, locale: "en" };
     const OPERATIONS: Record<string, (billing: Adapters["billing"]) => Promise<unknown>> = {
       plans: (billing) => billing.plans(SCOPE),
       legal: (billing) => billing.legal(SCOPE),
       quote: (billing) => billing.quote(SCOPE, { planCode: "p", interval: "month", country: "DE" }),
-      startCheckout: (billing) => billing.startCheckout(SCOPE, { planCode: "p", consent: CONSENT }),
+      startCheckout: (billing) => billing.startCheckout(SCOPE, { planCode: "p", consent: CONSENT, returnUrl: "https://example.com/back", locale: "en" }),
       checkoutState: (billing) => billing.checkoutState(SCOPE, "c"),
       previewChange: (billing) => billing.previewChange(SCOPE, { quantity: 2 }),
-      changeQuantity: (billing) => billing.changeQuantity(SCOPE, 2, { timing: "immediate", consent: CONSENT, expectedCharge: MONEY }),
+      changeQuantity: (billing) => billing.changeQuantity(SCOPE, 2, { timing: "immediate", consent: CONSENT, expectedCharge: { amount: MONEY, asOf: NOW } }),
       changePlan: (billing) => billing.changePlan(SCOPE, "p"),
       cancel: (billing) => billing.cancel(SCOPE),
       resume: (billing) => billing.resume(SCOPE),
@@ -222,7 +231,16 @@ describe("createServer", () => {
       subscriptionDetails: (billing) => billing.subscriptionDetails(SCOPE),
       customerDetails: (billing) => billing.customerDetails(SCOPE),
       listContracts: (billing) => billing.listContracts(SCOPE),
-      withdraw: (billing) => billing.withdraw(SCOPE, { contractId: "k", declaration: "d" }),
+      withdraw: (billing) =>
+        billing.withdraw(SCOPE, {
+          contractId: "k",
+          declaration: { name: "n", email: "a@example.com", text: "d", declaredAt: NOW },
+          locale: "en",
+          clientAddressHash: "h-addr",
+          idempotencyKey: "key-1",
+        }),
+      recordPriceChangeAgreement: (billing) =>
+        billing.recordPriceChangeAgreement(SCOPE, { text: "t", version: "1", acceptedAt: NOW, clientAddressHash: "h-addr", userAgentHash: "h-agent" }),
       listDocuments: (billing) => billing.listDocuments(SCOPE),
       documentPdf: (billing) => billing.documentPdf(SCOPE, "d"),
       receiveEvent: (billing) => billing.receiveEvent({ body: "{}", signature: "s", timestamp: "0" }),
@@ -546,5 +564,57 @@ describe("the hooks of modules", () => {
     expect(() =>
       createServer({ config: serverConfig(), adapters: adapters(), modules: [module], migrations: [], logger: recordingLogger(), database: fakeDatabase() }),
     ).not.toThrow();
+  });
+});
+
+describe("createServer legal links", () => {
+  const GOOD = { imprintUrl: "https://example.com/imprint", privacyUrl: "https://example.com/privacy", termsUrl: "https://example.com/terms" };
+
+  const composeWith = (legal: unknown, database = fakeDatabase()) =>
+    createServer({
+      config: serverConfig(),
+      adapters: adapters(),
+      modules: [],
+      openApiDocument: documentOf([]),
+      migrations: [],
+      logger: recordingLogger(),
+      database,
+      legal: legal as LegalLinks,
+    });
+
+  it.each([
+    ["a scheme that is not http or https", { ...GOOD, termsUrl: "ftp://example.com/terms" }],
+    ["a script address", { ...GOOD, privacyUrl: "javascript:alert(1)" }],
+    ["a data address", { ...GOOD, privacyUrl: "data:text/html,x" }],
+    ["a relative address", { ...GOOD, imprintUrl: "/imprint" }],
+    ["a scheme-relative address", { ...GOOD, imprintUrl: "//example.com/imprint" }],
+    ["text that is not an address", { ...GOOD, imprintUrl: "imprint" }],
+    ["an empty address", { ...GOOD, termsUrl: "" }],
+    ["an address with a password", { ...GOOD, termsUrl: "https://user:secret@example.com/terms" }],
+    ["an address with a user name", { ...GOOD, termsUrl: "https://user@example.com/terms" }],
+    ["an address with surrounding whitespace", { ...GOOD, imprintUrl: " https://example.com/imprint" }],
+    ["an address with a line break inside", { ...GOOD, imprintUrl: "https://example.com/imp\nrint" }],
+    ["a missing address", { imprintUrl: GOOD.imprintUrl, privacyUrl: GOOD.privacyUrl }],
+    ["an address that is not a string", { ...GOOD, termsUrl: 42 }],
+    ["an unknown member", { ...GOOD, cookiesUrl: "https://example.com/cookies" }],
+    ["no addresses at all", {}],
+    ["a value that is not an object", "https://example.com/legal"],
+    ["null", null],
+  ])("refuses %s with invalid_legal_links before anything is composed", (_name, legal) => {
+    const database = fakeDatabase();
+    const error = failure(() => composeWith(legal, database));
+    expect(error.code).toBe("invalid_legal_links");
+    expect(error.message).toContain("legal");
+    expect(database.closed.count).toBe(0);
+  });
+
+  it("names the member that is wrong and never repeats an address, whose userinfo could be a secret", () => {
+    const error = failure(() => composeWith({ ...GOOD, termsUrl: "https://user:hunter2@example.com/terms" }));
+    expect(error.message).toContain("termsUrl");
+    expect(error.message).not.toContain("hunter2");
+  });
+
+  it("composes with three valid addresses", () => {
+    expect(() => composeWith(GOOD)).not.toThrow();
   });
 });

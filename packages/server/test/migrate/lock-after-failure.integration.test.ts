@@ -1,4 +1,5 @@
 import { createServer, connect, type Server, type Socket } from "node:net";
+import { setTimeout as sleep } from "node:timers/promises";
 import { getConstructionPlans } from "pg-boss";
 import { describe, expect, it } from "vitest";
 import { installPgBoss, PGBOSS_SCHEMA } from "../../src/migrate/pgboss.ts";
@@ -40,6 +41,24 @@ async function holdsMigrateLock(pid: number): Promise<boolean> {
          AND objid = (hashtext('slugbase.migrate')::bigint & 4294967295)::oid
     ) AS held`;
   return rows[0]?.held === true;
+}
+
+// Destroying a client socket does not end the backend behind it at once: the
+// server notices the disconnect when it next reads or writes, and until then
+// the backend still holds its session-level advisory lock. So the count of
+// locks is taken until it reaches zero, within a bound, and a lock that stays
+// held is the count the caller sees.
+async function advisoryLocksInDatabase(settleWithinMs: number): Promise<{ n: number }[]> {
+  const deadline = Date.now() + settleWithinMs;
+  for (;;) {
+    const rows = await database().owner<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_locks
+       WHERE locktype = 'advisory' AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
+    if (rows[0]?.n === 0 || Date.now() >= deadline) {
+      return rows;
+    }
+    await sleep(25);
+  }
 }
 
 const BACKEND_KEY_DATA = 0x4b;
@@ -166,9 +185,7 @@ describe("the pg-boss step of migrate after its construction plan finds the sche
     const onSchema = relay.after.filter((statement) => statement.text.includes("pgboss"));
     expect(onSchema.some((statement) => statement.text.includes("pgboss.version"))).toBe(true);
     expect(onSchema.filter((statement) => !statement.locked)).toEqual([]);
-    expect(
-      await database().owner`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`,
-    ).toEqual([{ n: 0 }]);
+    expect(await advisoryLocksInDatabase(10_000)).toEqual([{ n: 0 }]);
   }, 60_000);
 
   it("carries on and retakes the lock when the ROLLBACK after the failed plan cannot run", async () => {

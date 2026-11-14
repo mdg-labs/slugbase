@@ -4,6 +4,7 @@ import type { Adapters } from "@slugbase/core";
 import { describe, expect, it } from "vitest";
 import type { BuildInfo } from "../../src/build-info.ts";
 import { createServer } from "../../src/create-server.ts";
+import type { LegalLinks } from "../../src/index.ts";
 import type { AuthStore } from "@slugbase/db";
 import { adapters, documentFor, fakeAuthStore, fakeDatabase, operation, recordingLogger, serverConfig } from "../support.ts";
 import { directivesOf, expectSecurityHeaders } from "../http/headers-support.ts";
@@ -15,7 +16,13 @@ const COMMITTED = new URL("../../../contracts/generated/openapi.json", import.me
 
 function start(
   env: Record<string, string | undefined> = {},
-  overrides: { adapters?: Adapters; openApiDocument?: ReturnType<typeof documentFor>; authStore?: AuthStore; logger?: ReturnType<typeof recordingLogger> } = {},
+  overrides: {
+    adapters?: Adapters;
+    openApiDocument?: ReturnType<typeof documentFor>;
+    authStore?: AuthStore;
+    logger?: ReturnType<typeof recordingLogger>;
+    legal?: LegalLinks;
+  } = {},
 ) {
   return createServer({
     config: serverConfig(env),
@@ -27,6 +34,7 @@ function start(
     database: fakeDatabase(),
     authStore: overrides.authStore ?? fakeAuthStore(),
     buildInfo: BUILD,
+    ...(overrides.legal === undefined ? {} : { legal: overrides.legal }),
   });
 }
 
@@ -46,7 +54,7 @@ describe("GET /api/config", () => {
       locales: ["en", "de"],
       defaultLocale: "en",
       docsBaseUrl: "https://docs.example.org/help",
-      features: { mail: false, ai: false },
+      features: { mail: false, ai: false, billing: false },
       signIn: { registration: false, oidc: [] },
       instance: { displayName: "SlugBase", signInNotice: null },
       setupRequired: false,
@@ -64,11 +72,11 @@ describe("GET /api/config", () => {
       ((await (await get(start(env, { adapters: given }), "/api/config")).json()) as { features: Record<string, unknown> }).features;
 
     it("carries the operator's display name where an AI port is configured, so any member can be told who receives the request", async () => {
-      expect(await features(AI_ENV, withAi())).toEqual({ mail: false, ai: true, aiProvider: "Example AI" });
+      expect(await features(AI_ENV, withAi())).toEqual({ mail: false, ai: true, billing: false, aiProvider: "Example AI" });
     });
 
     it("is left out where no AI port is configured, and never carries the endpoint, the model or a key", async () => {
-      expect(await features({}, adapters())).toEqual({ mail: false, ai: false });
+      expect(await features({}, adapters())).toEqual({ mail: false, ai: false, billing: false });
       const body = JSON.stringify(await features({ ...AI_ENV, AI_API_KEY: "key-for-the-test" }, withAi()));
       expect(body).not.toContain("ai.example.org");
       expect(body).not.toContain("model-a");
@@ -177,16 +185,64 @@ describe("GET /api/config", () => {
     const ai = { ...ports, ai: { ...ports.ai, available: true } };
     const features = async (given: Adapters) =>
       ((await (await get(start({}, { adapters: given }), "/api/config")).json()) as { features: object }).features;
-    expect(await features(mail)).toEqual({ mail: true, ai: false });
-    expect(await features(ai)).toEqual({ mail: false, ai: true });
+    expect(await features(mail)).toEqual({ mail: true, ai: false, billing: false });
+    expect(await features(ai)).toEqual({ mail: false, ai: true, billing: false });
   });
 
-  it("reports no billing feature, whether or not a billing adapter is configured", async () => {
-    const ports = adapters();
-    const billing = { ...ports, billing: { ...ports.billing, available: true } };
+  describe("features.billing", () => {
     const features = async (given: Adapters) =>
-      ((await (await get(start({}, { adapters: given }), "/api/config")).json()) as { features: object }).features;
-    expect(await features(billing)).toEqual({ mail: false, ai: false });
+      ((await (await get(start({}, { adapters: given }), "/api/config")).json()) as { features: Record<string, unknown> }).features;
+
+    it("is true when a billing adapter is composed", async () => {
+      const ports = adapters();
+      expect(await features({ ...ports, billing: { ...ports.billing, available: true } })).toEqual({ mail: false, ai: false, billing: true });
+    });
+
+    it("is false, and still sent, when the billing port is unconfigured", async () => {
+      const ports = adapters();
+      expect(ports.billing.available).toBe(false);
+      expect(await features(ports)).toHaveProperty("billing", false);
+    });
+
+    it("follows the billing port only: another configured port does not turn it on", async () => {
+      const ports = adapters();
+      expect(await features({ ...ports, mail: { ...ports.mail, available: true }, ai: { ...ports.ai, available: true } })).toHaveProperty("billing", false);
+    });
+  });
+
+  describe("legal", () => {
+    const LEGAL: LegalLinks = {
+      imprintUrl: "https://example.com/imprint",
+      privacyUrl: "https://example.com/privacy",
+      termsUrl: "http://example.org/terms",
+    };
+
+    it("is absent while the composition supplies none", async () => {
+      const response = await get(start(), "/api/config");
+      expect(Object.keys((await response.json()) as object)).not.toContain("legal");
+    });
+
+    it("carries the three addresses the composition supplies, beside billing", async () => {
+      const ports = adapters();
+      const server = start({}, { legal: LEGAL, adapters: { ...ports, billing: { ...ports.billing, available: true } } });
+      const body = (await (await get(server, "/api/config")).json()) as { legal: unknown; features: { billing: boolean } };
+      expect(body.legal).toEqual(LEGAL);
+      expect(body.features.billing).toBe(true);
+    });
+
+    it("is cached for sixty seconds with the rest of the document", async () => {
+      const response = await get(start({}, { legal: LEGAL }), "/api/config");
+      expect(response.headers.get("cache-control")).toBe("public, max-age=60");
+      expect(response.status).toBe(200);
+    });
+
+    it("answers the same from the supplied addresses after the composition changes its own object", async () => {
+      const mutable = { ...LEGAL };
+      const server = start({}, { legal: mutable });
+      mutable.imprintUrl = "https://example.net/changed";
+      const body = (await (await get(server, "/api/config")).json()) as { legal: LegalLinks };
+      expect(body.legal.imprintUrl).toBe(LEGAL.imprintUrl);
+    });
   });
 
   describe("signIn.oidc", () => {

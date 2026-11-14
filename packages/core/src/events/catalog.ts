@@ -45,7 +45,7 @@ export const DOMAIN_EVENTS = {
   "account.created": {
     accountId: { type: "uuid" },
     path: { type: "enum", values: ACCOUNT_CREATION_PATHS },
-    /** What the request that created the account carried: empty for first-run setup and for the paths with no form. */
+    /** What the request that created the account carried: empty for first-run setup and when the request or the OIDC handshake carried none. */
     acknowledgements: { type: "acknowledgements" },
   },
   /**
@@ -55,6 +55,14 @@ export const DOMAIN_EVENTS = {
    * whatever personal data of its own it holds, identified by `accountId`.
    */
   "account.deleted": {
+    accountId: { type: "uuid" },
+  },
+  /**
+   * An account's email address changed, by the redemption of the confirmation token of a change or of the "this wasn't
+   * me" token that puts the old address back: queued in the transaction that updates the address, so it is announced
+   * exactly when the account holds the new one. The payload holds no address; a subscriber reads it by `accountId`.
+   */
+  "account.email_changed": {
     accountId: { type: "uuid" },
   },
   "workspace.created": {
