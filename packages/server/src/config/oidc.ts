@@ -11,7 +11,7 @@ import { envFragment, type EnvironmentVariables, type RefineContext } from "./fr
 // refuses the start, naming the key. Messages name keys only, never a value (T7).
 
 export const OIDC_REQUIRED_FIELDS = ["CLIENT_ID", "CLIENT_SECRET", "ISSUER_URL"] as const;
-export const OIDC_OPTIONAL_FIELDS = ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS", "ALLOWED_PRIVATE_HOST"] as const;
+export const OIDC_OPTIONAL_FIELDS = ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS", "ALLOWED_PRIVATE_HOST", "ENTRA_MULTI_TENANT", "ENTRA_TENANTS", "ENTRA_VERIFIED_DOMAIN"] as const;
 const FIELDS: readonly string[] = [...OIDC_REQUIRED_FIELDS, ...OIDC_OPTIONAL_FIELDS];
 
 // <SLUG> is upper-case letters and digits in groups separated by single underscores.
@@ -92,6 +92,48 @@ const domains = z
   .transform((value) => value.split(",").map((domain) => domain.trim().toLowerCase()))
   .refine((list) => list.every((domain) => DOMAIN.test(domain)), { error: "must be comma-separated email domains such as example.com" });
 
+// The multi-tenant endpoints of Microsoft Entra ID (Q121), on any host so that a national cloud works. The OIDC adapter
+// reads the same shape (`packages/adapters/src/identity/oidc.ts`) and leaves a provider out whose issuer does not match it.
+const ENTRA_MULTI_TENANT_ISSUER = /^https?:\/\/[^/?#]+\/(?:common|organizations)\/v2\.0$/;
+const TENANT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+const tenants = z
+  .string()
+  .transform((value) => [...new Set(value.split(",").map((tenant) => tenant.trim().toLowerCase()))])
+  .refine((list) => list.every((tenant) => TENANT_ID.test(tenant)), { error: "must be comma-separated tenant ids, each a GUID" });
+
+/** The Entra opt-ins of a provider, set only where they differ from the default, so a provider that sets none is unchanged. */
+type EntraSettings = Pick<IdentityProviderConfig, "entraMultiTenant" | "entraTenants" | "entraVerifiedDomain">;
+
+// `undefined` when a key was refused, which is already reported. The tenant list is valid only with the multi-tenant rule, and that
+// rule only with an issuer that is one of Entra's multi-tenant endpoints.
+function entraSettings(key: (field: string) => string, raw: RawProvider, issuer: string | undefined, context: RefineContext): EntraSettings | undefined {
+  const multiTenant = check(key("ENTRA_MULTI_TENANT"), envBoolean().default(false), raw.get("ENTRA_MULTI_TENANT"), context);
+  const verifiedDomain = check(key("ENTRA_VERIFIED_DOMAIN"), envBoolean().default(false), raw.get("ENTRA_VERIFIED_DOMAIN"), context);
+  let tenantList: readonly string[] | undefined;
+  if (multiTenant === true) {
+    if (issuer !== undefined && !ENTRA_MULTI_TENANT_ISSUER.test(issuer)) {
+      context.issue(key("ISSUER_URL"), `must be a Microsoft Entra ID common or organizations v2.0 endpoint when ${key("ENTRA_MULTI_TENANT")} is on`);
+      return undefined;
+    }
+    tenantList = check(key("ENTRA_TENANTS"), tenants.optional(), raw.get("ENTRA_TENANTS"), context);
+    if (raw.has("ENTRA_TENANTS") && tenantList === undefined) {
+      return undefined;
+    }
+  } else if (multiTenant === false && raw.has("ENTRA_TENANTS")) {
+    context.issue(key("ENTRA_TENANTS"), `is valid only with ${key("ENTRA_MULTI_TENANT")} on`);
+    return undefined;
+  }
+  if (multiTenant === undefined || verifiedDomain === undefined) {
+    return undefined;
+  }
+  return {
+    ...(multiTenant ? { entraMultiTenant: true } : {}),
+    ...(tenantList === undefined ? {} : { entraTenants: tenantList }),
+    ...(verifiedDomain ? { entraVerifiedDomain: true } : {}),
+  };
+}
+
 /** An enabled provider and, when the operator named its issuer host as allowed on a private address, the origin of its issuer (Q120). */
 interface ParsedProvider {
   readonly config: IdentityProviderConfig;
@@ -133,6 +175,7 @@ function provider(slug: string, raw: RawProvider, context: RefineContext): Parse
   const allowedDomains = check(key("ALLOWED_DOMAINS"), domains.default([]), raw.get("ALLOWED_DOMAINS"), context);
   const allowedOrigin = privateOrigin(key("ALLOWED_PRIVATE_HOST"), raw, issuer, context);
   const hostRefused = raw.has("ALLOWED_PRIVATE_HOST") && allowedOrigin === undefined;
+  const entra = entraSettings(key, raw, issuer, context);
   if (
     missing.length > 0 ||
     clientId === undefined ||
@@ -141,6 +184,7 @@ function provider(slug: string, raw: RawProvider, context: RefineContext): Parse
     scopeList === undefined ||
     autoCreate === undefined ||
     allowedDomains === undefined ||
+    entra === undefined ||
     hostRefused
   ) {
     return undefined;
@@ -156,6 +200,7 @@ function provider(slug: string, raw: RawProvider, context: RefineContext): Parse
       scopes: scopeList,
       autoCreate,
       allowedDomains,
+      ...entra,
     },
     ...(allowedOrigin === undefined ? {} : { privateOrigin: allowedOrigin }),
   };

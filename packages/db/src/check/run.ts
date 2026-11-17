@@ -1,10 +1,10 @@
-import type { CheckContext, CheckRule, Finding, RuleResult } from "./types.ts";
+import type { Finding, Rule, RuleResult } from "./types.ts";
 
 /**
  * Runs every rule. A rule that throws did not check anything, so it yields a
  * finding of its own: an error in a check means "not safe", never "fine".
  */
-export async function runChecks(rules: readonly CheckRule[], context: CheckContext): Promise<RuleResult[]> {
+export async function runChecks<Context>(rules: readonly Rule<Context>[], context: Context): Promise<RuleResult[]> {
   const results: RuleResult[] = [];
   for (const rule of rules) {
     let findings: readonly Finding[];

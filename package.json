@@ -72,6 +72,13 @@
     "zod": "^4.6.7"
   },
   "pnpm": {
+    "ignoredBuiltDependencies": [
+      "@scarf/scarf",
+      "@swc/core",
+      "esbuild",
+      "msw",
+      "vue-demi"
+    ],
     "overrides": {
       "@esbuild-kit/core-utils>esbuild": "^0.25.0",
       "@ai-sdk/provider-utils": "^4.0.33",

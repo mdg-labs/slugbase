@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { createServer, type Server, type Socket } from "node:net";
 import { AiSuggestError, EgressBlocked, EgressError, IdentityError } from "@slugbase/core";
 import { loadConfig, type Logger } from "@slugbase/server";
@@ -31,7 +31,9 @@ interface Provider {
   close(): Promise<void>;
 }
 
-async function startProvider(): Promise<Provider> {
+type Respond = (target: string, origin: string) => { readonly status: number; readonly text: string } | undefined;
+
+async function startProvider(respond?: Respond): Promise<Provider> {
   const requests: { method: string; target: string; body: string }[] = [];
   const sockets = new Set<Socket>();
   let origin = "";
@@ -58,7 +60,10 @@ async function startProvider(): Promise<Provider> {
       pending = Buffer.alloc(0);
       let status = 400;
       let text = JSON.stringify({ error: "invalid_grant" });
-      if (target === "/.well-known/openid-configuration") {
+      const scripted = respond?.(target, origin);
+      if (scripted !== undefined) {
+        ({ status, text } = scripted);
+      } else if (target === "/.well-known/openid-configuration") {
         status = 200;
         text = JSON.stringify({
           issuer: origin,
@@ -240,5 +245,113 @@ describe("a provider on a private address", () => {
       onLoopback,
     );
     expect((await identity.listProviders()).map((info) => info.id)).toEqual(["lan"]);
+  });
+});
+
+// Q121: Microsoft Entra ID's multi-tenant endpoint. The provider's discovery document names the issuer with `{tenantid}` in it and
+// the token names the issuer of its own tenant and no `email_verified`. The keys go through `loadConfig` and the composition, so a
+// provider that configures neither opt-in is the same provider left out of the list.
+describe("a Microsoft Entra ID provider", () => {
+  const TENANT = "8aa3c2b1-4d5e-4f60-9a7b-0c1d2e3f4a5b";
+  const CLIENT_ID = "client-id-qx98";
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const onLoopback = {
+    resolve: (hostname: string): Promise<readonly string[]> =>
+      hostname.endsWith(".example.test") ? Promise.resolve(["127.0.0.1"]) : new Promise<readonly string[]>(() => undefined),
+    testOnly: { allowAddresses: ["127.0.0.1"] },
+  };
+
+  const segment = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString("base64url");
+  function idToken(origin: string, overrides: Record<string, unknown> = {}): string {
+    const now = Math.floor(Date.now() / 1000);
+    const input = `${segment({ alg: "RS256", typ: "JWT", kid: "entra-1" })}.${segment({
+      iss: `${origin}/${TENANT}/v2.0`,
+      aud: CLIENT_ID,
+      sub: "subject-entra",
+      tid: TENANT,
+      nonce: "nonce-1",
+      iat: now,
+      exp: now + 300,
+      email: "person@example.test",
+      xms_edov: true,
+      name: "Person Example",
+      ...overrides,
+    })}`;
+    return `${input}.${sign("sha256", Buffer.from(input), privateKey).toString("base64url")}`;
+  }
+
+  function entraProvider(claims: Record<string, unknown> = {}): Promise<Provider> {
+    return startProvider((target, origin) => {
+      const json = (value: unknown) => ({ status: 200, text: JSON.stringify(value) });
+      if (target === "/common/v2.0/.well-known/openid-configuration") {
+        return json({
+          issuer: `${origin}/{tenantid}/v2.0`,
+          authorization_endpoint: `${origin}/common/oauth2/v2.0/authorize`,
+          token_endpoint: `${origin}/common/oauth2/v2.0/token`,
+          jwks_uri: `${origin}/common/discovery/v2.0/keys`,
+        });
+      }
+      if (target === "/common/discovery/v2.0/keys") {
+        return json({ keys: [{ ...publicKey.export({ format: "jwk" }), kid: "entra-1", use: "sig" }] });
+      }
+      if (target === "/common/oauth2/v2.0/token") {
+        return json({ id_token: idToken(origin, claims), token_type: "Bearer" });
+      }
+      return undefined;
+    });
+  }
+
+  function configure(provider: Provider, entra: Record<string, string>) {
+    return loadConfig("server", {
+      ...environment,
+      OIDC_ENTRA_CLIENT_ID: CLIENT_ID,
+      OIDC_ENTRA_CLIENT_SECRET: "client-secret-qx99",
+      OIDC_ENTRA_ISSUER_URL: `http://idp.example.test:${String(provider.port)}/common/v2.0`,
+      ...entra,
+    }).config;
+  }
+
+  const complete = { providerId: "entra", redirectUri: REDIRECT.replace("/idp/", "/entra/"), code: "code-1", nonce: "nonce-1", codeVerifier: "verifier-1" };
+
+  it("is listed and signs in with verified claims once the operator turns both opt-ins on", async () => {
+    const provider = await entraProvider();
+    providers.push(provider);
+    const config = configure(provider, { OIDC_ENTRA_ENTRA_MULTI_TENANT: "true", OIDC_ENTRA_ENTRA_TENANTS: TENANT, OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "true" });
+    const { identity } = composeAdapters(config, logger, onLoopback);
+    expect((await identity.listProviders()).map((info) => info.id)).toEqual(["entra"]);
+    expect(await identity.complete(complete)).toEqual({
+      providerId: "entra",
+      subject: "subject-entra",
+      email: "person@example.test",
+      emailVerified: true,
+      displayName: "Person Example",
+    });
+  });
+
+  it("refuses a token of a tenant the operator did not list", async () => {
+    const provider = await entraProvider();
+    providers.push(provider);
+    const config = configure(provider, {
+      OIDC_ENTRA_ENTRA_MULTI_TENANT: "true",
+      OIDC_ENTRA_ENTRA_TENANTS: "11111111-2222-4333-8444-555555555555",
+      OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "true",
+    });
+    const { identity } = composeAdapters(config, logger, onLoopback);
+    await expect(identity.complete(complete)).rejects.toMatchObject({ reason: "invalid_token" });
+  });
+
+  it("gives an unverified address when only the multi-tenant rule is on", async () => {
+    const provider = await entraProvider();
+    providers.push(provider);
+    const { identity } = composeAdapters(configure(provider, { OIDC_ENTRA_ENTRA_MULTI_TENANT: "true" }), logger, onLoopback);
+    expect(await identity.complete(complete)).toMatchObject({ subject: "subject-entra", emailVerified: false });
+  });
+
+  it("is left out of the list, without the keys, because its document names a templated issuer", async () => {
+    const provider = await entraProvider();
+    providers.push(provider);
+    const { identity } = composeAdapters(configure(provider, {}), logger, onLoopback);
+    expect(await identity.listProviders()).toEqual([]);
+    await expect(identity.complete(complete)).rejects.toMatchObject({ reason: "provider_unavailable" });
   });
 });

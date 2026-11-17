@@ -800,7 +800,7 @@ export class NotIdempotentError extends Error {
 }
 
 // @public (undocumented)
-export const OIDC_OPTIONAL_FIELDS: readonly ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS", "ALLOWED_PRIVATE_HOST"];
+export const OIDC_OPTIONAL_FIELDS: readonly ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS", "ALLOWED_PRIVATE_HOST", "ENTRA_MULTI_TENANT", "ENTRA_TENANTS", "ENTRA_VERIFIED_DOMAIN"];
 
 // @public (undocumented)
 export const OIDC_REQUIRED_FIELDS: readonly ["CLIENT_ID", "CLIENT_SECRET", "ISSUER_URL"];

@@ -335,7 +335,7 @@ const OIDC_DOCS = {
   ISSUER_URL: {
     type: { kind: "text", label: "URL" },
     description:
-      "The issuer, which the provider's discovery document must name exactly. It uses `https` in production and has no credentials, query or fragment.",
+      "The issuer, which the provider's discovery document must name exactly (`OIDC_<SLUG>_ENTRA_MULTI_TENANT` changes that rule). It uses `https` in production and has no credentials, query or fragment.",
   },
   NAME: { type: { kind: "text", label: "1 to 64 characters" }, description: "The name on the provider's button.", defaultText: "The slug" },
   SCOPES: {
@@ -359,6 +359,24 @@ const OIDC_DOCS = {
     description:
       "The host of `OIDC_<SLUG>_ISSUER_URL`, when the provider is on a private address. SlugBase then reaches that one origin, and no other, on a loopback, private, CGNAT or unique-local address. It has no scheme, port, path, wildcard or range, and the issuer still uses `https` in production.",
     defaultText: "None: the provider must be on a public address",
+  },
+  ENTRA_MULTI_TENANT: {
+    type: { kind: "boolean" },
+    description:
+      "Accept Microsoft Entra ID's multi-tenant endpoint. `OIDC_<SLUG>_ISSUER_URL` must then be `https://login.microsoftonline.com/common/v2.0` or `organizations/v2.0` (the host may be another Microsoft cloud's). The discovery document must name that URL with `{tenantid}` in place of its first path segment, and each ID token's issuer must be that URL with the token's own `tid` claim. Without a tenant list, an account of any Entra tenant can sign in.",
+    defaultText: "`false`: the issuer must match `OIDC_<SLUG>_ISSUER_URL` exactly",
+  },
+  ENTRA_TENANTS: {
+    type: { kind: "text", label: "comma-separated tenant ids" },
+    description:
+      "The Entra tenants whose accounts can sign in, each a tenant id (a GUID). Valid only with `OIDC_<SLUG>_ENTRA_MULTI_TENANT`.",
+    defaultText: "Any tenant",
+  },
+  ENTRA_VERIFIED_DOMAIN: {
+    type: { kind: "boolean" },
+    description:
+      "Count the `xms_edov` claim of an Entra ID token (the email domain's owner is verified) as a verified address, beside `email_verified`, which Entra does not send. Turn on the `xms_edov` optional claim in the app registration as well. Without this key, an Entra sign-in has no verified address, so it cannot create an account or accept an invitation.",
+    defaultText: "`false`: only `email_verified` counts",
   },
 } as const satisfies Record<(typeof OIDC_REQUIRED_FIELDS)[number] | (typeof OIDC_OPTIONAL_FIELDS)[number], Omit<OidcKeyDoc, "field" | "required">>;
 

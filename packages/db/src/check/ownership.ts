@@ -1,4 +1,4 @@
-import { requireDatabase, type CheckRule, type Finding } from "./types.ts";
+import { requireDatabase, type DatabaseCheckRule, type Finding } from "./types.ts";
 
 // Doc 05 section 3.1: `slugbase_app` is what the server connects as. It owns
 // no object, because an owner can change the object's policies and, without
@@ -13,7 +13,7 @@ interface OwnedObject {
 
 const ID = "app-owns-nothing";
 
-export const ownershipRule: CheckRule = {
+export const ownershipRule: DatabaseCheckRule = {
   id: ID,
   description: `${APP_ROLE} owns no table, function, schema, sequence or type`,
   async run(context) {

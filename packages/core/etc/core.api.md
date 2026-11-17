@@ -4585,6 +4585,9 @@ export interface IdentityProviderConfig {
     readonly clientId: string;
     // (undocumented)
     readonly clientSecret: string;
+    readonly entraMultiTenant?: boolean;
+    readonly entraTenants?: readonly string[];
+    readonly entraVerifiedDomain?: boolean;
     readonly issuerUrl: string;
     readonly name: string;
     // (undocumented)

@@ -17,10 +17,10 @@ SlugBase can let people sign in with an identity provider that you run or trust,
 
 SlugBase uses the authorization code flow with PKCE, a `state` value and a `nonce`. The provider must offer:
 
-- A discovery document at `<issuer>/.well-known/openid-configuration` whose `issuer` is exactly the issuer URL you configure, with an authorization endpoint, a token endpoint and a `jwks_uri`.
+- A discovery document at `<issuer>/.well-known/openid-configuration` whose `issuer` is exactly the issuer URL you configure (Microsoft Entra ID is the one exception, see [Microsoft Entra ID](#microsoft-entra-id)), with an authorization endpoint, a token endpoint and a `jwks_uri`.
 - A token endpoint that accepts the client secret as HTTP Basic or in the form body (`client_secret_basic` or `client_secret_post`).
 - An ID token signed with RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512 or EdDSA.
-- In the ID token: a `sub` claim, and for linking and creating accounts an `email` claim with `email_verified` set to true. A `name` claim is used as the display name of an account that SlugBase creates.
+- In the ID token: a `sub` claim, and for linking and creating accounts an `email` claim with `email_verified` set to true (Entra ID has its own signal for it). A `name` claim is used as the display name of an account that SlugBase creates.
 
 ## Set up a provider
 
@@ -70,12 +70,62 @@ docker compose up -d
 | `OIDC_<SLUG>_AUTO_CREATE` | No | `true` or `false`. The default is `false`. See [Auto-create](#auto-create-accounts). |
 | `OIDC_<SLUG>_ALLOWED_DOMAINS` | No | Comma-separated email domains, such as `example.com,example.org`. They limit which accounts auto-create may make. The default is any domain. |
 | `OIDC_<SLUG>_ALLOWED_PRIVATE_HOST` | No | The host of this provider's `ISSUER_URL`, when the provider is on a private address. See [Where the provider may be](#where-the-provider-may-be). The default is none: the provider must be on a public address. |
+| `OIDC_<SLUG>_ENTRA_MULTI_TENANT` | No | `true` or `false`. The default is `false`. For Microsoft Entra ID's `common` or `organizations` endpoint. See [Microsoft Entra ID](#microsoft-entra-id). |
+| `OIDC_<SLUG>_ENTRA_TENANTS` | No | Comma-separated tenant ids, each a GUID. It needs `ENTRA_MULTI_TENANT`. The default is any tenant. |
+| `OIDC_<SLUG>_ENTRA_VERIFIED_DOMAIN` | No | `true` or `false`. The default is `false`. Counts Entra ID's `xms_edov` claim as a verified address. See [Microsoft Entra ID](#microsoft-entra-id). |
 
 A provider exists as soon as any of its keys has a value. An enabled provider that lacks `ISSUER_URL`, `CLIENT_ID` or `CLIENT_SECRET` stops SlugBase from starting, and the log names the missing key. It never prints a value.
 
 The client secret lives only in the environment of the server. SlugBase does not store it in the database, shows it nowhere in the app, and does not log it.
 
 You can configure as many providers as you want, each with its own `<SLUG>`.
+
+## Microsoft Entra ID
+
+A tenant-specific issuer such as `https://login.microsoftonline.com/<your tenant id>/v2.0` works like any other provider, with the keys above, for the accounts of that one tenant. Two things differ when you want accounts from several tenants, or a first sign-in that creates an account or accepts an invitation:
+
+- The multi-tenant endpoints (`common` and `organizations`) publish an issuer with `{tenantid}` in it, and each ID token names the issuer of its own tenant. `OIDC_<SLUG>_ENTRA_MULTI_TENANT=true` accepts that.
+- Entra ID tokens carry no `email_verified` claim. Its signal is the optional claim `xms_edov`, which says that the owner of the email domain has been verified. `OIDC_<SLUG>_ENTRA_VERIFIED_DOMAIN=true` counts it as a verified address. Without it, an Entra sign-in with an identity that is not linked yet is refused with `unverified_email`.
+
+Each key is a separate choice, and each is off unless you set it.
+
+### Register SlugBase in Entra ID
+
+1. In the Microsoft Entra admin center, create an app registration. Under supported account types, choose accounts in any organizational directory, or that and personal Microsoft accounts, to match the endpoint you use below.
+2. Under **Authentication**, add a **Web** redirect address, `https://links.example.com/api/v1/auth/oidc/<slug>/callback`, with your own `APP_ORIGIN` and the slug of your provider.
+3. Under **Certificates & secrets**, create a client secret.
+4. Under **Token configuration**, add the optional claims `email` and `xms_edov` to the **ID** token.
+
+### Set the keys
+
+Use the `common` endpoint for work, school and personal accounts, or `organizations` for work and school accounts only.
+
+The `consumers` endpoint publishes a fixed issuer, the personal-account tenant, not one with `{tenantid}` in it. `ENTRA_MULTI_TENANT` does not apply to it, and SlugBase refuses to start with that combination and names the key. For personal accounts only, use one of these:
+
+- `https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0` as `ISSUER_URL`, without `ENTRA_MULTI_TENANT`.
+- The `common` endpoint with `ENTRA_MULTI_TENANT=true` and `ENTRA_TENANTS=9188040d-6c67-4c5b-b112-36a304b66dad`.
+
+```sh
+OIDC_ENTRA_ISSUER_URL=https://login.microsoftonline.com/organizations/v2.0
+OIDC_ENTRA_CLIENT_ID=<your application ID>
+OIDC_ENTRA_CLIENT_SECRET='<your client secret>'
+OIDC_ENTRA_NAME=Microsoft
+OIDC_ENTRA_ENTRA_MULTI_TENANT=true
+OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN=true
+OIDC_ENTRA_ENTRA_TENANTS=<tenant id>,<another tenant id>
+```
+
+The rules:
+
+- With `ENTRA_MULTI_TENANT`, the path of `ISSUER_URL` must be exactly `/common/v2.0` or `/organizations/v2.0`. The host can be another Microsoft cloud's. SlugBase refuses to start otherwise and names the key.
+- SlugBase expects the discovery document to name `ISSUER_URL` with its first path segment replaced by `{tenantid}`, and nothing else. It never takes the expected issuer from the document. A document that names another host or path leaves the provider unavailable with `issuer_mismatch`.
+- Each ID token must carry a `tid` claim that is a tenant GUID, and its `iss` must be the template with that `tid`. A token that fails either is refused with `invalid_token`.
+- `ENTRA_TENANTS` limits sign-in to the tenants you list. It is valid only with `ENTRA_MULTI_TENANT`, and each entry must be a tenant GUID.
+- With `ENTRA_VERIFIED_DOMAIN`, a token with an `email` and `xms_edov` set to true counts as a verified address, as does `email_verified`. A token without an `email`, or with `xms_edov` false or absent, does not.
+
+Without `ENTRA_TENANTS`, an account of any Entra tenant can sign in. What that account can do then depends on your other settings: with `AUTO_CREATE` on, it can create an account for any address its tenant has verified, unless `ALLOWED_DOMAINS` limits the domains, and it can link to an existing account that holds its verified address. List your tenants, set `ALLOWED_DOMAINS`, or both, unless you want that.
+
+The identity of a person at this provider is the provider's slug and the `sub` claim, as for every provider. Microsoft documents `sub` as unique per user and application, so the users of two tenants do not share one, and a provider that you switch from a tenant-specific issuer to the multi-tenant one keeps the links it has.
 
 ## Where the provider may be
 
@@ -102,7 +152,7 @@ Without the key, a provider whose issuer host name resolves to a private address
 
 ## How accounts are linked and created
 
-A provider identity is the pair of the issuer and the `sub` claim. Every ID token is checked for its signature, issuer, audience, expiry and `nonce`, and the code exchange uses PKCE, before SlugBase believes any claim in it.
+A provider identity is the pair of the issuer and the `sub` claim. The issuer is the one you configure, so the identity belongs to the provider's slug. Every ID token is checked for its signature, issuer, audience, expiry and `nonce`, and the code exchange uses PKCE, before SlugBase believes any claim in it.
 
 ### Link to an existing account
 
@@ -146,7 +196,7 @@ SlugBase asks a provider for its discovery document and keys when it first needs
 | Reason | Meaning |
 | ------ | ------- |
 | `discovery_failed` | The discovery document could not be fetched: a wrong issuer address, a network problem, a private address, a redirect to `http`, or an answer that was not `200`. A `code` field names the cause when the request was refused or failed. |
-| `issuer_mismatch` | The `issuer` in the document is not exactly `OIDC_<SLUG>_ISSUER_URL`. Check for a trailing slash. |
+| `issuer_mismatch` | The `issuer` in the document is not exactly `OIDC_<SLUG>_ISSUER_URL`. Check for a trailing slash. For a provider with `ENTRA_MULTI_TENANT`, it is not the issuer template of the endpoint you configured. |
 | `invalid_discovery` | The document lacks an endpoint, uses a downgrade to `http`, or offers no token endpoint login method that SlugBase can use. |
 | `keys_failed` or `invalid_keys` | The key set could not be fetched, or holds no usable key. |
 

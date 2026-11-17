@@ -9,14 +9,16 @@ import {
   type IdentityProviderConfig,
   type IdentityProviderInfo,
 } from "@slugbase/core";
-import { IdTokenError, verifyIdToken, type VerifiedIdToken } from "./id-token.ts";
+import { IdTokenError, TENANT_PLACEHOLDER, verifyIdToken, type MultiTenantIssuer, type VerifiedIdToken } from "./id-token.ts";
 import { createFifoLimiter } from "./limiter.ts";
 
 // The OIDC providers of the operator (doc 02 section 2.8) behind the identity port. Discovery and the signing
 // keys of each provider are fetched only through the egress port (T6): it resolves and validates the address
 // of every request, so an endpoint the document points at a private address is refused there, and it
 // enforces the time and size caps asked for below. A document is trusted only if its `issuer` is exactly the
-// configured string (T20). For an https issuer every one of those requests, and the token exchange, asks the
+// configured string (T20); a provider that opted in to Microsoft Entra ID's multi-tenant rule (Q121) is trusted
+// only if its document names the issuer template derived from the configured endpoint, and each ID token's issuer
+// is then that template with the token's own `tid`. For an https issuer every one of those requests, and the token exchange, asks the
 // port to refuse a redirect to http, so a document or a key set fetched over TLS is never answered in plaintext.
 // A provider that cannot be used is left out and logged; the others stay (D22).
 // The authorization-code handshake is the same adapter: `begin` builds the authorization URL with the PKCE
@@ -147,6 +149,28 @@ function tokenAuthMethodOf(supported: unknown): OidcTokenAuthMethod | undefined 
   return methods.includes("client_secret_post") ? "client_secret_post" : undefined;
 }
 
+// The configured issuer of an Entra multi-tenant provider is one of the two templated v2.0 endpoints, `common` or
+// `organizations`, on any host (the national clouds have their own). The template is that URL with the tenant segment
+// replaced, never a string the provider's document supplies, so a document cannot name another host. A provider that
+// opted in and configured anything else is unavailable.
+const ENTRA_MULTI_TENANT_ISSUER = /^(https?:\/\/[^/?#]+)\/(?:common|organizations)\/v2\.0$/;
+
+function multiTenantOf(config: IdentityProviderConfig): MultiTenantIssuer | undefined {
+  if (config.entraMultiTenant !== true) {
+    return undefined;
+  }
+  const prefix = ENTRA_MULTI_TENANT_ISSUER.exec(config.issuerUrl)?.[1];
+  if (prefix === undefined) {
+    throw new Unavailable("issuer_mismatch");
+  }
+  return { template: `${prefix}/${TENANT_PLACEHOLDER}/v2.0`, tenants: config.entraTenants ?? [] };
+}
+
+function multiTenantExpectation(config: IdentityProviderConfig): { readonly multiTenant?: MultiTenantIssuer } {
+  const multiTenant = multiTenantOf(config);
+  return multiTenant === undefined ? {} : { multiTenant };
+}
+
 // By the parsed scheme, so an issuer written in capitals is still an https one.
 function isHttps(issuer: string): boolean {
   return URL.canParse(issuer) && new URL(issuer).protocol === "https:";
@@ -229,13 +253,14 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
   }
 
   async function discover(config: IdentityProviderConfig): Promise<OidcProviderMetadata> {
+    const expectedIssuer = multiTenantOf(config)?.template ?? config.issuerUrl;
     const document = asObject(
       await fetchJson(config, discoveryUrl(config.issuerUrl), DISCOVERY_MAX_BYTES, DISCOVERY_CONTENT_TYPES, "discovery_failed", "invalid_discovery"),
     );
     if (document === undefined) {
       throw new Unavailable("invalid_discovery");
     }
-    if (document["issuer"] !== config.issuerUrl) {
+    if (document["issuer"] !== expectedIssuer) {
       throw new Unavailable("issuer_mismatch");
     }
     const issuerIsHttps = isHttps(config.issuerUrl);
@@ -424,6 +449,8 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
       const verify = (keys: JsonWebKeys): VerifiedIdToken =>
         verifyIdToken(idToken, {
           issuer: config.issuerUrl,
+          ...multiTenantExpectation(config),
+          ...(config.entraVerifiedDomain === true ? { verifiedDomainClaim: true } : {}),
           clientId: config.clientId,
           nonce: request.nonce,
           keys,
