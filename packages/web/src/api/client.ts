@@ -71,6 +71,7 @@ export class ApiWorkspacesProblemError extends ApiProblemError {
   }
 }
 
+/** The typed client over the generated `paths`; an extension reads the web app's own with `useApiClient()`. */
 export type ApiClient = Client<paths>;
 
 export interface ApiClientOptions {
