@@ -14,20 +14,29 @@ export interface Finding {
   message: string;
 }
 
-export interface CheckContext {
-  /** The `packages/db` directory the rules inspect: `migrations/`, `src/schema/`, `src/sql/`. */
-  packageDir: string;
+/** What a rule that reads only the database needs. */
+export interface DatabaseCheckContext {
   /** A connection to a freshly migrated database, absent when none could be made. */
   sql: postgres.Sql | undefined;
+}
+
+export interface CheckContext extends DatabaseCheckContext {
+  /** The `packages/db` directory the rules inspect: `migrations/`, `src/schema/`, `src/sql/`. */
+  packageDir: string;
   /** Hash of the `src/sql/` files, as the generator records it (scripts/migration-sql.ts). */
   hashSqlFiles: (files: readonly { name: string; content: string }[]) => string;
 }
 
-export interface CheckRule {
+export interface Rule<Context> {
   id: string;
   description: string;
-  run(context: CheckContext): readonly Finding[] | Promise<readonly Finding[]>;
+  run(context: Context): readonly Finding[] | Promise<readonly Finding[]>;
 }
+
+export type CheckRule = Rule<CheckContext>;
+
+/** A rule that reads only the database, so it runs without the package directory of `pnpm db:check`. */
+export type DatabaseCheckRule = Rule<DatabaseCheckContext>;
 
 export interface RuleResult {
   rule: string;
@@ -36,7 +45,7 @@ export interface RuleResult {
 }
 
 /** The connection of a rule that reads the database; a context without one is an error, never a pass. */
-export function requireDatabase(context: CheckContext): postgres.Sql {
+export function requireDatabase(context: DatabaseCheckContext): postgres.Sql {
   if (context.sql === undefined) {
     throw new Error("no database connection: the freshly migrated database could not be built");
   }

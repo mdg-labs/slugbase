@@ -77,11 +77,7 @@ function fixture(options: Fixture = {}): string {
 // The scratch databases are clones of the migrated template, so they hold the
 // shipped system operations; the registry under test is theirs plus its own.
 async function lint(database: TestDatabase, registry: readonly string[], internal: readonly string[] = [], operator: readonly string[] = []): Promise<readonly Finding[]> {
-  return createSystemOperationsRule([...systemOperations, ...registry], [...internalSystemOperations, ...internal], [...operatorSystemOperations, ...operator]).run({
-    packageDir: PACKAGE,
-    sql: database.app,
-    hashSqlFiles,
-  });
+  return createSystemOperationsRule([...systemOperations, ...registry], [...internalSystemOperations, ...internal], [...operatorSystemOperations, ...operator]).run({ sql: database.app });
 }
 
 async function lintFixture(options: Fixture, kind: "ordinary" | "internal" | "operator" = "ordinary"): Promise<readonly Finding[]> {
@@ -227,7 +223,7 @@ describe("the shipped chain", () => {
     expect(operatorSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();
-    expect(await systemOperationsRule.run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles })).toEqual([]);
+    expect(await systemOperationsRule.run({ sql: database.app })).toEqual([]);
   }, HOOK_TIMEOUT_MS);
 });
 
@@ -355,7 +351,7 @@ describe("system-operations", () => {
 
     it("fails an internal entry that is not in the registry, naming it", async () => {
       const database = await scratch();
-      expect(await createSystemOperationsRule(systemOperations, [...internalSystemOperations, "sys_unlisted"], operatorSystemOperations).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles })).toEqual([
+      expect(await createSystemOperationsRule(systemOperations, [...internalSystemOperations, "sys_unlisted"], operatorSystemOperations).run({ sql: database.app })).toEqual([
         { rule: ID, object: "function public.sys_unlisted", message: "is marked internal but is not in the system operation registry" },
       ]);
     }, HOOK_TIMEOUT_MS);
@@ -388,7 +384,7 @@ describe("system-operations", () => {
     it("fails an operator entry that is not in the registry, naming it", async () => {
       const database = await scratch();
       expect(
-        await createSystemOperationsRule(systemOperations, internalSystemOperations, [...operatorSystemOperations, "sys_unlisted"]).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles }),
+        await createSystemOperationsRule(systemOperations, internalSystemOperations, [...operatorSystemOperations, "sys_unlisted"]).run({ sql: database.app }),
       ).toEqual([{ rule: ID, object: "function public.sys_unlisted", message: "is marked operator but is not in the system operation registry" }]);
     }, HOOK_TIMEOUT_MS);
   });
