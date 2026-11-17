@@ -13,6 +13,7 @@ export type IdTokenRefusal =
   | "key"
   | "signature"
   | "issuer"
+  | "tenant"
   | "audience"
   | "nonce"
   | "expired"
@@ -33,9 +34,27 @@ export class IdTokenError extends Error {
   }
 }
 
+/**
+ * Microsoft Entra ID's multi-tenant issuer rule (Q121): the issuer is the template with the token's own `tid` in
+ * place of the `{tenantid}` placeholder, and `tid` is a tenant GUID, one of `tenants` when that is not empty.
+ */
+export interface MultiTenantIssuer {
+  /** The issuer with `{tenantid}` where the tenant goes. */
+  readonly template: string;
+  /** Lower-case tenant GUIDs a token may come from; empty accepts any tenant. */
+  readonly tenants: readonly string[];
+}
+
+export const TENANT_PLACEHOLDER = "{tenantid}";
+const TENANT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 export interface IdTokenExpectation {
-  /** The issuer exactly as the operator configured it. */
+  /** The issuer exactly as the operator configured it; not read when `multiTenant` is set. */
   readonly issuer: string;
+  /** Set for a provider that opted in to the multi-tenant rule: the token's issuer is derived from its `tid` instead of compared to `issuer`. */
+  readonly multiTenant?: MultiTenantIssuer;
+  /** Whether Entra's `xms_edov: true` counts as a verified address, beside `email_verified`. */
+  readonly verifiedDomainClaim?: boolean;
   /** The client id the token must be issued to. */
   readonly clientId: string;
   /** The nonce the authorization request carried. */
@@ -202,8 +221,18 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
     throw new IdTokenError("signature");
   }
 
-  if (claims["iss"] !== expected.issuer) {
-    throw new IdTokenError("issuer");
+  if (expected.multiTenant === undefined) {
+    if (claims["iss"] !== expected.issuer) {
+      throw new IdTokenError("issuer");
+    }
+  } else {
+    const tenant = claims["tid"];
+    if (typeof tenant !== "string" || !TENANT_ID.test(tenant) || (expected.multiTenant.tenants.length > 0 && !expected.multiTenant.tenants.includes(tenant))) {
+      throw new IdTokenError("tenant");
+    }
+    if (claims["iss"] !== expected.multiTenant.template.replace(TENANT_PLACEHOLDER, tenant)) {
+      throw new IdTokenError("issuer");
+    }
   }
   if (!audienceHolds(claims["aud"], claims["azp"], expected.clientId)) {
     throw new IdTokenError("audience");
@@ -243,12 +272,16 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
 
   const email = claims["email"];
   const verified = claims["email_verified"];
+  const domainVerified = claims["xms_edov"];
   const displayName = claims["name"];
   return {
     subject,
     email: typeof email === "string" && email !== "" ? email : undefined,
-    // Some providers write the flag as the string "true".
-    emailVerified: typeof email === "string" && email !== "" && (verified === true || verified === "true"),
+    // Some providers write the flag as the string "true". Entra's `xms_edov` counts only for a provider that opted in.
+    emailVerified:
+      typeof email === "string" &&
+      email !== "" &&
+      (verified === true || verified === "true" || (expected.verifiedDomainClaim === true && (domainVerified === true || domainVerified === "true"))),
     name: typeof displayName === "string" && displayName.trim() !== "" ? Array.from(displayName.trim()).slice(0, NAME_MAX_LENGTH).join("") : undefined,
   };
 }

@@ -310,3 +310,122 @@ describe("OIDC_<SLUG>_ALLOWED_PRIVATE_HOST", () => {
     expect(keysOf({ ...GOOGLE, OIDC_GOOGLE_ISSUER_URL: "not a url", OIDC_GOOGLE_ALLOWED_PRIVATE_HOST: "idp.lan" })).toEqual(["OIDC_GOOGLE_ISSUER_URL"]);
   });
 });
+
+// Q121: Microsoft Entra ID's multi-tenant endpoints and its `xms_edov` claim are opt-ins of a provider.
+describe("OIDC_<SLUG>_ENTRA_*", () => {
+  const ENTRA = {
+    OIDC_ENTRA_CLIENT_ID: "client-id-qx96",
+    OIDC_ENTRA_CLIENT_SECRET: "client-secret-qx97",
+    OIDC_ENTRA_ISSUER_URL: "https://login.microsoftonline.com/common/v2.0",
+  };
+  const TENANT = "8aa3c2b1-4d5e-4f60-9a7b-0c1d2e3f4a5b";
+  const OTHER_TENANT = "11111111-2222-4333-8444-555555555555";
+  const keysOf = (overrides: Record<string, string | undefined>): string[] => issues(overrides).map((issue) => issue.key);
+  const provider = (overrides: Record<string, string | undefined>) => loadConfig("server", productionEnv(overrides)).config.OIDC_PROVIDERS[0];
+
+  it("leave a provider that sets none of them exactly as it was", () => {
+    expect(provider(ENTRA)).toEqual({
+      slug: "entra",
+      name: "entra",
+      clientId: "client-id-qx96",
+      clientSecret: "client-secret-qx97",
+      issuerUrl: "https://login.microsoftonline.com/common/v2.0",
+      scopes: ["openid", "email", "profile"],
+      autoCreate: false,
+      allowedDomains: [],
+    });
+    expect(provider({ ...ENTRA, OIDC_ENTRA_ENTRA_MULTI_TENANT: "false", OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "0" })).not.toHaveProperty("entraMultiTenant");
+  });
+
+  it("parse every key", () => {
+    expect(
+      provider({
+        ...ENTRA,
+        OIDC_ENTRA_ENTRA_MULTI_TENANT: "true",
+        OIDC_ENTRA_ENTRA_TENANTS: ` ${TENANT.toUpperCase()}, ${OTHER_TENANT},${TENANT}`,
+        OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "1",
+      }),
+    ).toMatchObject({ entraMultiTenant: true, entraTenants: [TENANT, OTHER_TENANT], entraVerifiedDomain: true });
+  });
+
+  it("accept the multi-tenant keys alone and on each of the two templated endpoints, on any host", () => {
+    expect(provider({ ...ENTRA, OIDC_ENTRA_ENTRA_MULTI_TENANT: "true" })).toMatchObject({ entraMultiTenant: true });
+    expect(provider({ ...ENTRA, OIDC_ENTRA_ENTRA_MULTI_TENANT: "true" })).not.toHaveProperty("entraTenants");
+    for (const url of [
+      "https://login.microsoftonline.com/organizations/v2.0",
+      "https://login.microsoftonline.us/common/v2.0",
+      "https://login.partner.microsoftonline.cn/organizations/v2.0",
+    ]) {
+      expect(provider({ ...ENTRA, OIDC_ENTRA_ISSUER_URL: url, OIDC_ENTRA_ENTRA_MULTI_TENANT: "true" })).toMatchObject({ issuerUrl: url, entraMultiTenant: true });
+    }
+    expect(provider({ ...ENTRA, OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "true" })).toMatchObject({ entraVerifiedDomain: true });
+    expect(provider({ ...ENTRA, OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "true" })).not.toHaveProperty("entraMultiTenant");
+  });
+
+  it("treat empty values as unset", () => {
+    expect(provider({ ...ENTRA, OIDC_ENTRA_ENTRA_MULTI_TENANT: "", OIDC_ENTRA_ENTRA_TENANTS: "", OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "" })).not.toHaveProperty("entraTenants");
+  });
+
+  it("make a provider exist like any other key, which then needs its required keys", () => {
+    expect(keysOf({ OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN: "true" }).sort()).toEqual(["OIDC_ENTRA_CLIENT_ID", "OIDC_ENTRA_CLIENT_SECRET", "OIDC_ENTRA_ISSUER_URL"]);
+  });
+
+  it.each([
+    "https://login.microsoftonline.com/contoso.onmicrosoft.com/v2.0",
+    "https://login.microsoftonline.com/8aa3c2b1-4d5e-4f60-9a7b-0c1d2e3f4a5b/v2.0",
+    "https://login.microsoftonline.com/consumers/v2.0",
+    "https://login.microsoftonline.com/common/v2.0/",
+    "https://login.microsoftonline.com/common",
+    "https://login.microsoftonline.com/common/v1.0",
+    "https://login.microsoftonline.com/Common/v2.0",
+    "https://login.microsoftonline.com/x/common/v2.0",
+    "https://login.microsoftonline.com/",
+    "https://accounts.example.com",
+  ])("refuse ENTRA_MULTI_TENANT with the issuer %s, naming the issuer key and no value", (url) => {
+    const env = { ...ENTRA, OIDC_ENTRA_ISSUER_URL: url, OIDC_ENTRA_ENTRA_MULTI_TENANT: "true" };
+    expect(issues(env)).toEqual([{ key: "OIDC_ENTRA_ISSUER_URL", message: expect.stringContaining("OIDC_ENTRA_ENTRA_MULTI_TENANT") as string }]);
+    expect(inspect(issues(env), { depth: null })).not.toContain(url);
+  });
+
+  it("accept those issuers when the multi-tenant rule is off", () => {
+    expect(issues({ ...ENTRA, OIDC_ENTRA_ISSUER_URL: `https://login.microsoftonline.com/${TENANT}/v2.0`, OIDC_ENTRA_ENTRA_MULTI_TENANT: "false" })).toEqual([]);
+  });
+
+  it.each([undefined, "false", "0"])("refuse ENTRA_TENANTS without ENTRA_MULTI_TENANT (%s)", (flag) => {
+    const env = { ...ENTRA, OIDC_ENTRA_ENTRA_TENANTS: TENANT, OIDC_ENTRA_ENTRA_MULTI_TENANT: flag };
+    expect(keysOf(env)).toEqual(["OIDC_ENTRA_ENTRA_TENANTS"]);
+    expect(inspect(issues(env), { depth: null })).not.toContain(TENANT);
+  });
+
+  it.each([
+    "contoso.onmicrosoft.com",
+    "common",
+    `${TENANT},`,
+    `${TENANT},not-a-guid`,
+    `${TENANT}/`,
+    `${TENANT}0`,
+    "8aa3c2b1-4d5e-4f60-9a7b",
+    `{${TENANT}}`,
+    TENANT.replaceAll("-", ""),
+  ])("refuse ENTRA_TENANTS holding %s, naming that key and no value", (value) => {
+    const env = { ...ENTRA, OIDC_ENTRA_ENTRA_MULTI_TENANT: "true", OIDC_ENTRA_ENTRA_TENANTS: value };
+    expect(keysOf(env)).toEqual(["OIDC_ENTRA_ENTRA_TENANTS"]);
+    expect(inspect(issues(env), { depth: null })).not.toContain(value);
+  });
+
+  it.each(["OIDC_ENTRA_ENTRA_MULTI_TENANT", "OIDC_ENTRA_ENTRA_VERIFIED_DOMAIN"])("refuse a %s that envBoolean does not accept, naming only that key", (key) => {
+    for (const value of ["yes", "True", "2", "on"]) {
+      expect(keysOf({ ...ENTRA, [key]: value }), value).toEqual([key]);
+    }
+  });
+
+  it("report a multi-tenant issuer problem only once when the flag is itself refused", () => {
+    expect(keysOf({ ...ENTRA, OIDC_ENTRA_ISSUER_URL: "https://accounts.example.com", OIDC_ENTRA_ENTRA_MULTI_TENANT: "yes", OIDC_ENTRA_ENTRA_TENANTS: TENANT })).toEqual([
+      "OIDC_ENTRA_ENTRA_MULTI_TENANT",
+    ]);
+  });
+
+  it("are not part of the worker", () => {
+    expect(issues({ ...ENTRA, OIDC_ENTRA_ENTRA_MULTI_TENANT: "yes" }, "worker")).toEqual([]);
+  });
+});

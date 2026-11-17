@@ -568,3 +568,176 @@ describe("a provider that rotates its signing keys", () => {
     await expect(identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
   });
 });
+
+// Q121: Microsoft Entra ID's multi-tenant endpoints. Their discovery document names the issuer with `{tenantid}` in it and
+// each token carries its tenant's own issuer; a verified address is Entra's `xms_edov`, since v2.0 tokens carry no
+// `email_verified`. Both are opt-ins of the provider.
+describe("Microsoft Entra ID", () => {
+  const ENTRA = "https://login.microsoftonline.com/common/v2.0";
+  const TEMPLATE = "https://login.microsoftonline.com/{tenantid}/v2.0";
+  const TENANT = "8aa3c2b1-4d5e-4f60-9a7b-0c1d2e3f4a5b";
+  const OTHER_TENANT = "11111111-2222-4333-8444-555555555555";
+  const issuerOf = (tid: string): string => `https://login.microsoftonline.com/${tid}/v2.0`;
+
+  const entra = (overrides: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig =>
+    config({ slug: "entra", issuerUrl: ENTRA, entraMultiTenant: true, entraVerifiedDomain: true, ...overrides });
+
+  const entraClaims = (overrides: Record<string, unknown> = {}): Record<string, unknown> => {
+    const base = claims({ iss: issuerOf(TENANT), tid: TENANT, xms_edov: true });
+    delete base["email_verified"];
+    return { ...base, ...overrides };
+  };
+
+  class EntraEgress extends ScriptedEgress {
+    override request(request: EgressRequest): Promise<EgressResponse> {
+      const answer = (value: unknown): Promise<EgressResponse> => {
+        const body = JSON.stringify(value);
+        return Promise.resolve({ url: request.url, status: 200, contentType: "application/json", body: new TextEncoder().encode(body) });
+      };
+      this.requests.push(request);
+      if (request.url === `${ENTRA}/.well-known/openid-configuration`) {
+        return answer({
+          issuer: TEMPLATE,
+          authorization_endpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+          token_endpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+          jwks_uri: "https://login.microsoftonline.com/common/discovery/v2.0/keys",
+          ...this.entraDiscovery,
+        });
+      }
+      if (request.url === "https://login.microsoftonline.com/common/discovery/v2.0/keys") {
+        return answer(KEYS);
+      }
+      if (request.url === "https://login.microsoftonline.com/common/oauth2/v2.0/token") {
+        return answer({ id_token: this.entraToken });
+      }
+      return Promise.reject(new Error(`no route for ${request.url}`));
+    }
+
+    entraDiscovery: Record<string, unknown> = {};
+    entraToken = signToken(entraClaims());
+  }
+
+  function entraSetup(provider: IdentityProviderConfig, token?: Record<string, unknown>, discoveryOverrides: Record<string, unknown> = {}) {
+    const egress = new EntraEgress();
+    egress.entraDiscovery = discoveryOverrides;
+    if (token !== undefined) {
+      egress.entraToken = signToken(token);
+    }
+    return { ...setup({ egress, provider }), egress };
+  }
+
+  const complete = (provider: IdentityProviderConfig, token?: Record<string, unknown>) => entraSetup(provider, token).identity.complete(request({ providerId: "entra" }));
+
+  it("accepts the templated issuer of the discovery document and a token of its own tenant, and takes xms_edov as the verified address", async () => {
+    const { identity, egress } = entraSetup(entra());
+    expect((await identity.listProviders()).map((info) => info.id)).toEqual(["entra"]);
+    expect(await identity.complete(request({ providerId: "entra" }))).toEqual({
+      providerId: "entra",
+      subject: "subject-1",
+      email: "person@example.test",
+      emailVerified: true,
+      displayName: "Person Example",
+    });
+    expect(egress.requests.every((entry) => entry.url.startsWith("https://login.microsoftonline.com/"))).toBe(true);
+  });
+
+  it("accepts a token of any tenant when none is listed, and of a listed one when it is", async () => {
+    await expect(complete(entra({ entraTenants: [] }), entraClaims({ iss: issuerOf(OTHER_TENANT), tid: OTHER_TENANT }))).resolves.toMatchObject({ subject: "subject-1" });
+    await expect(complete(entra({ entraTenants: [TENANT, OTHER_TENANT] }))).resolves.toMatchObject({ subject: "subject-1" });
+  });
+
+  it("refuses the templated issuer of a provider that did not opt in, and a document that names the plain issuer of one that did", async () => {
+    expect(await entraSetup(entra({ entraMultiTenant: false })).identity.listProviders()).toEqual([]);
+    expect(await entraSetup(config({ slug: "entra", issuerUrl: ENTRA })).identity.listProviders()).toEqual([]);
+    expect(await entraSetup(entra(), undefined, { issuer: ENTRA }).identity.listProviders()).toEqual([]);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ["another host", { issuer: "https://login.evil.example/{tenantid}/v2.0" }],
+    ["another path", { issuer: "https://login.microsoftonline.com/{tenantid}/v2.0/x" }],
+    ["another version", { issuer: "https://login.microsoftonline.com/{tenantid}/v1.0" }],
+    ["a tenant of its own", { issuer: issuerOf(TENANT) }],
+    ["a different placeholder", { issuer: "https://login.microsoftonline.com/{tenant}/v2.0" }],
+  ])("leaves the provider out as issuer_mismatch when the document's issuer has %s", async (_name, override) => {
+    const { identity, lines } = entraSetup(entra(), undefined, override);
+    expect(await identity.listProviders()).toEqual([]);
+    expect(lines[0]?.fields).toEqual({ provider: "entra", reason: "issuer_mismatch" });
+  });
+
+  it.each(["/common/v2.0/", "/consumers/v2.0", "/tenant-guid/v2.0", "/v2.0", "/common"])("leaves a multi-tenant provider whose ISSUER_URL path is %s out as issuer_mismatch", async (path) => {
+    const { identity, lines } = entraSetup(entra({ issuerUrl: `https://login.microsoftonline.com${path}` }));
+    expect(await identity.listProviders()).toEqual([]);
+    expect(lines[0]?.fields).toMatchObject({ provider: "entra", reason: "issuer_mismatch" });
+  });
+
+  it("refuses a token whose iss names another tenant than its tid, or the issuer a tenant-less provider would use", async () => {
+    for (const iss of [issuerOf(OTHER_TENANT), ENTRA, TEMPLATE, issuerOf(TENANT.toUpperCase()), `${issuerOf(TENANT)}/`, "https://login.evil.example/" + TENANT + "/v2.0"]) {
+      await expect(complete(entra(), entraClaims({ iss })), iss).rejects.toMatchObject({ reason: "invalid_token" });
+    }
+  });
+
+  it.each<[string, unknown]>([
+    ["absent", undefined],
+    ["not a string", 5],
+    ["empty", ""],
+    ["a path", `${TENANT}/../${OTHER_TENANT}`],
+    ["a slash", "a/b"],
+    ["not a GUID", "common"],
+    ["upper case", TENANT.toUpperCase()],
+    ["too long", `${TENANT}0`],
+  ])("refuses a token whose tid is %s", async (_name, tid) => {
+    const token = entraClaims();
+    delete token["tid"];
+    if (tid !== undefined) {
+      Object.assign(token, { tid, iss: typeof tid === "string" ? issuerOf(tid) : issuerOf(TENANT) });
+    }
+    const { identity, lines } = entraSetup(entra(), token);
+    await expect(identity.complete(request({ providerId: "entra" }))).rejects.toMatchObject({ reason: "invalid_token" });
+    expect(lines.at(-1)?.fields).toEqual({ provider: "entra", reason: "tenant" });
+  });
+
+  it("refuses a token from a tenant outside the listed ones", async () => {
+    const { identity, lines } = entraSetup(entra({ entraTenants: [OTHER_TENANT] }));
+    await expect(identity.complete(request({ providerId: "entra" }))).rejects.toMatchObject({ reason: "invalid_token" });
+    expect(lines.at(-1)?.fields).toEqual({ provider: "entra", reason: "tenant" });
+  });
+
+  it("does not read tid at all from a provider that did not opt in", async () => {
+    const egress = new ScriptedEgress();
+    const withTid = claims({ iss: ISSUER, tid: OTHER_TENANT });
+    egress.token = json({ id_token: signToken(withTid) });
+    await expect(setup({ egress, provider: config() }).identity.complete(request())).resolves.toMatchObject({ emailVerified: true });
+    egress.token = json({ id_token: signToken(claims({ iss: issuerOf(TENANT), tid: TENANT })) });
+    await expect(setup({ egress, provider: config() }).identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
+  });
+
+  describe("the verified address", () => {
+    it.each<[string, Record<string, unknown>, Partial<IdentityProviderConfig>, boolean]>([
+      ["xms_edov true with the opt-in gives a verified address", {}, {}, true],
+      ["xms_edov the string true with the opt-in", { xms_edov: "true" }, {}, true],
+      ["xms_edov false", { xms_edov: false }, {}, false],
+      ["xms_edov the string false", { xms_edov: "false" }, {}, false],
+      ["xms_edov absent", { xms_edov: undefined }, {}, false],
+      ["xms_edov 1", { xms_edov: 1 }, {}, false],
+      ["xms_edov true without the opt-in", {}, { entraVerifiedDomain: false }, false],
+      ["xms_edov true where the key is unset", {}, { entraVerifiedDomain: undefined }, false],
+      ["xms_edov true without an email", { email: undefined }, {}, false],
+      ["xms_edov true with an empty email", { email: "" }, {}, false],
+      ["email_verified true without the opt-in", { xms_edov: undefined, email_verified: true }, { entraVerifiedDomain: false }, true],
+      ["email_verified true with the opt-in", { xms_edov: undefined, email_verified: true }, {}, true],
+      ["email_verified false and xms_edov true", { email_verified: false }, {}, true],
+      ["email_verified false and xms_edov false", { email_verified: false, xms_edov: false }, {}, false],
+    ])("%s", async (_name, overrides, provider, expected) => {
+      const { identity } = entraSetup(entra(provider), entraClaims(overrides));
+      expect((await identity.complete(request({ providerId: "entra" }))).emailVerified).toBe(expected);
+    });
+
+    it("is email_verified alone for a provider with the fixed issuer that did not opt in, whatever xms_edov says", async () => {
+      const egress = new ScriptedEgress();
+      egress.token = json({ id_token: signToken(claims({ email_verified: undefined, xms_edov: true })) });
+      expect((await setup({ egress }).identity.complete(request())).emailVerified).toBe(false);
+      const optedIn = config({ entraVerifiedDomain: true });
+      expect((await setup({ egress, provider: optedIn }).identity.complete(request())).emailVerified).toBe(true);
+    });
+  });
+});
