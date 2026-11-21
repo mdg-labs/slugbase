@@ -131,6 +131,11 @@ function decodeObject(segment: string): Readonly<Record<string, unknown>> {
   throw new IdTokenError("malformed");
 }
 
+interface CandidateKey {
+  readonly object: KeyObject;
+  readonly jwk: Readonly<Record<string, unknown>>;
+}
+
 // The keys that may have signed a token with this header: the key named by `kid` (every key when the token
 // names none), meant for signatures, and of the type, curve and algorithm the header's algorithm needs.
 function candidateKeys(
@@ -138,7 +143,7 @@ function candidateKeys(
   header: Readonly<Record<string, unknown>>,
   name: string,
   algorithm: Algorithm,
-): KeyObject[] {
+): CandidateKey[] {
   const kid = header["kid"];
   const matching = keys.filter(
     (key) =>
@@ -148,10 +153,10 @@ function candidateKeys(
       key["kty"] === algorithm.keyType &&
       (algorithm.curve === undefined || key["crv"] === algorithm.curve),
   );
-  const objects: KeyObject[] = [];
+  const objects: CandidateKey[] = [];
   for (const key of matching) {
     try {
-      objects.push(createPublicKey({ key, format: "jwk" }));
+      objects.push({ object: createPublicKey({ key, format: "jwk" }), jwk: key });
     } catch {
       // A key the runtime cannot read is not a candidate; the others still are.
     }
@@ -172,6 +177,13 @@ function signatureHolds(input: string, signature: Buffer, key: KeyObject, algori
   } catch {
     return false;
   }
+}
+
+// A key of a multi-tenant provider's key set may name the issuer it signs for, with `{tenantid}` standing for any
+// tenant; it then signs only for a token of that issuer. A key that names none is not restricted.
+function keyIssuerHolds(jwk: Readonly<Record<string, unknown>>, tenant: string, issuer: unknown): boolean {
+  const named = jwk["issuer"];
+  return named === undefined || (typeof named === "string" && named.replace(TENANT_PLACEHOLDER, tenant) === issuer);
 }
 
 function audienceHolds(aud: unknown, azp: unknown, clientId: string): boolean {
@@ -217,7 +229,8 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
     const kid = header["kid"];
     throw new IdTokenError("key", typeof kid === "string" && !expected.keys.some((key) => key["kid"] === kid));
   }
-  if (!candidates.some((key) => signatureHolds(`${encodedHeader}.${encodedPayload}`, signature, key, algorithm))) {
+  const signers = candidates.filter((key) => signatureHolds(`${encodedHeader}.${encodedPayload}`, signature, key.object, algorithm));
+  if (signers.length === 0) {
     throw new IdTokenError("signature");
   }
 
@@ -231,6 +244,9 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
       throw new IdTokenError("tenant");
     }
     if (claims["iss"] !== expected.multiTenant.template.replace(TENANT_PLACEHOLDER, tenant)) {
+      throw new IdTokenError("issuer");
+    }
+    if (!signers.some((key) => keyIssuerHolds(key.jwk, tenant, claims["iss"]))) {
       throw new IdTokenError("issuer");
     }
   }

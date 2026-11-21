@@ -605,7 +605,7 @@ describe("Microsoft Entra ID", () => {
         });
       }
       if (request.url === "https://login.microsoftonline.com/common/discovery/v2.0/keys") {
-        return answer(KEYS);
+        return answer(this.entraKeys);
       }
       if (request.url === "https://login.microsoftonline.com/common/oauth2/v2.0/token") {
         return answer({ id_token: this.entraToken });
@@ -614,6 +614,7 @@ describe("Microsoft Entra ID", () => {
     }
 
     entraDiscovery: Record<string, unknown> = {};
+    entraKeys: unknown = KEYS;
     entraToken = signToken(entraClaims());
   }
 
@@ -709,6 +710,48 @@ describe("Microsoft Entra ID", () => {
     await expect(setup({ egress, provider: config() }).identity.complete(request())).resolves.toMatchObject({ emailVerified: true });
     egress.token = json({ id_token: signToken(claims({ iss: issuerOf(TENANT), tid: TENANT })) });
     await expect(setup({ egress, provider: config() }).identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
+  });
+
+  describe("the issuer a signing key names", () => {
+    const keysWith = (extra: Record<string, unknown>): unknown => ({ keys: [jwk(rsa.publicKey, "rsa-1", { use: "sig", ...extra })] });
+
+    const completeWithKeys = (provider: IdentityProviderConfig, keys: unknown, token: Record<string, unknown> = entraClaims()) => {
+      const egress = new EntraEgress();
+      egress.entraKeys = keys;
+      egress.entraToken = signToken(token);
+      const made = setup({ egress, provider });
+      return { ...made, complete: () => made.identity.complete(request({ providerId: "entra" })) };
+    };
+
+    it.each<[string, Record<string, unknown>]>([
+      ["names the templated issuer", { issuer: TEMPLATE }],
+      ["names the issuer of the token's tenant", { issuer: issuerOf(TENANT) }],
+      ["names none", {}],
+    ])("accepts a token whose key %s", async (_name, extra) => {
+      await expect(completeWithKeys(entra(), keysWith(extra)).complete()).resolves.toMatchObject({ subject: "subject-1" });
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+      ["names the issuer of another tenant", { issuer: issuerOf(OTHER_TENANT) }],
+      ["names an issuer that is not a string", { issuer: 5 }],
+      ["names a null issuer", { issuer: null }],
+      ["names an issuer on another host", { issuer: "https://login.evil.example/{tenantid}/v2.0" }],
+    ])("refuses a token whose key %s", async (_name, extra) => {
+      const { complete, lines } = completeWithKeys(entra(), keysWith(extra));
+      await expect(complete()).rejects.toMatchObject({ reason: "invalid_token" });
+      expect(lines.at(-1)?.fields).toEqual({ provider: "entra", reason: "issuer" });
+    });
+
+    it("accepts a token that a key without a restriction signed although another key that also verifies names another tenant", async () => {
+      const keys = { keys: [jwk(rsa.publicKey, "rsa-1", { use: "sig", issuer: issuerOf(OTHER_TENANT) }), jwk(rsa.publicKey, "rsa-1", { use: "sig" })] };
+      await expect(completeWithKeys(entra(), keys).complete()).resolves.toMatchObject({ subject: "subject-1" });
+    });
+
+    it("does not read the issuer of a key for a provider that did not opt in", async () => {
+      const egress = new ScriptedEgress();
+      egress.keys = json(keysWith({ issuer: issuerOf(OTHER_TENANT) }));
+      await expect(setup({ egress }).identity.complete(request())).resolves.toMatchObject({ subject: "subject-1" });
+    });
   });
 
   describe("the verified address", () => {
