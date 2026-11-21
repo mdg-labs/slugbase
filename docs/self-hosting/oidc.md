@@ -123,9 +123,9 @@ The rules:
 - `ENTRA_TENANTS` limits sign-in to the tenants you list. It is valid only with `ENTRA_MULTI_TENANT`, and each entry must be a tenant GUID.
 - With `ENTRA_VERIFIED_DOMAIN`, a token with an `email` and `xms_edov` set to true counts as a verified address, as does `email_verified`. A token without an `email`, or with `xms_edov` false or absent, does not.
 
-Without `ENTRA_TENANTS`, an account of any Entra tenant can sign in. What that account can do then depends on your other settings: with `AUTO_CREATE` on, it can create an account for any address its tenant has verified, unless `ALLOWED_DOMAINS` limits the domains, and it can link to an existing account that holds its verified address. List your tenants, set `ALLOWED_DOMAINS`, or both, unless you want that.
+Without `ENTRA_TENANTS`, an account of any Entra tenant can sign in. What that account can do then depends on your other settings: with `AUTO_CREATE` on, it can create an account for any address its tenant has verified, unless `ALLOWED_DOMAINS` limits the domains, and it can link to an existing account that holds its verified address. List your tenants in `ENTRA_TENANTS` unless you want that: it is the only setting here that limits which tenants can sign in. `ALLOWED_DOMAINS` limits account creation only, and an account outside the list can still link to an existing account that holds its verified address.
 
-The identity of a person at this provider is the provider's slug and the `sub` claim, as for every provider. Microsoft documents `sub` as unique per user and application, so the users of two tenants do not share one, and a provider that you switch from a tenant-specific issuer to the multi-tenant one keeps the links it has.
+The identity of a person at this provider is the provider's slug and the `sub` claim, as for every provider. Microsoft documents `sub` as unique per user and application, so the users of two tenants do not share one. A provider that you switch from a tenant-specific issuer to the multi-tenant one keeps a link only for a person who signs in with the same tenant context as before. A guest of your tenant who signs in at their home tenant gets a different `sub`, so that person's first sign-in after the switch is treated as a new identity, linked only by the rules for a first sign-in. Plan for that before you switch.
 
 ## Where the provider may be
 
