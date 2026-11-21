@@ -51,6 +51,8 @@ existing line by adding its PR number.
 
 - **generated copy without its check** — files generated from a source have a `--check` mode that no lint, gate or CI step runs, so a change to the source lands with stale generated copies — PR 894
 
+- **key scope ignored** — a token verifier picks a signing key by its id, type and algorithm but ignores scoping metadata the provider documents as binding (a JWK's `issuer`), so a key scoped to one issuer can verify a token that claims another — PR 912
+
 ## Design docs
 
 - **cache key** — a cached value depends on a scope the key omits (an account-scoped value in a workspace-keyed cache) — PR 354
@@ -58,7 +60,7 @@ existing line by adding its PR number.
 - **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558, 641, 853
 - **contract description lags behaviour** — a change widens what an operation returns (a search that now reaches shared rows) and updates the design doc, but the operation's published contract description still states the old behaviour, so API callers read the old rule — PR 648
 - **error code by reference** — a contract description names a refusal's code only as "the same error" right after a sentence giving a different code, so a client branching on the code reads the wrong one — PR 762
-- **external behaviour** — a doc or comment states a third-party system's behaviour more broadly than that system documents it (a database "waits for every older transaction" where it waits only for writers and older snapshots) — PR 365
+- **external behaviour** — a doc or comment states a third-party system's behaviour more broadly than that system documents it (a database "waits for every older transaction" where it waits only for writers and older snapshots) — PR 365, 912
 
 - **summary narrower than the code** — an operator page's summary row states one value or one purpose for a setting (a single page-size default, a key needed only for private hosts) where the code has several (a default per view, the key also gating plain http), while the detail elsewhere is right — PR 724
 
@@ -73,6 +75,7 @@ existing line by adding its PR number.
 - **documented secret exposed** — an operator command or example passes a secret as a process argument, or writes it unquoted into a file Compose interpolates, so the value leaks to the process list or changes on a `$` — PR 825
 - **verified then re-referenced** — an operator procedure verifies an artefact by its digest and then deploys it by a mutable reference (a version tag), so what runs can differ from what was checked and the step contradicts the guide it summarises — PR 863
 - **workaround outlives the feature** — a change adds an in-app way to do something (admins deleting ownerless content) and an operator page written for when there was none still says nobody in the app can, so readers take the privileged path the feature replaced — PR 882
+- **setting offered for a guard it does not give** — an operator page offers a setting as an alternative way to limit an outcome (who can sign in) that the setting limits only in part (account creation, not linking), so an operator who picks it keeps the exposure the page warned about — PR 912
 
 ## Processes
 
