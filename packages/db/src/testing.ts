@@ -6,9 +6,15 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { pgTable, text, uuid } from "drizzle-orm/pg-core";
 import postgres from "postgres";
+import { ownershipRule } from "./check/ownership.ts";
+import { rlsRule } from "./check/rls.ts";
+import { runChecks } from "./check/run.ts";
+import { createSystemOperationsRule } from "./check/system-operations.ts";
+import type { DatabaseCheckRule, RuleResult } from "./check/types.ts";
 import { CE_CHAIN, migrate, type MigrationChain } from "./migrate.ts";
 import { scopedRepositoryMethods } from "./repositories/scoped.ts";
 import type { RepositoryMethodEntry } from "./repositories/registry.ts";
+import { internalSystemOperations, operatorSystemOperations, systemOperations } from "./system/registry.ts";
 import { bindTenantDatabase, type Database } from "./tenant.ts";
 
 // The database lifecycle of the integration tests (doc 08 section 3.2). It is
@@ -25,6 +31,9 @@ import { bindTenantDatabase, type Database } from "./tenant.ts";
 // CREATE and DROP DATABASE, never for data.
 
 export type { MigrationChain } from "./migrate.ts";
+// What `runComposedDatabaseChecks` returns and `formatReport` prints.
+export { formatReport } from "./check/run.ts";
+export type { Finding, RuleResult } from "./check/types.ts";
 // The types `TestDatabase.tenant` and `testRepositoryMethods` are declared with.
 export type { Database, TenantContext, TenantTx } from "./tenant.ts";
 export type { RepositoryInput, RepositoryMethodEntry, ScopedMethod } from "./repositories/registry.ts";
@@ -787,4 +796,58 @@ async function dropUnusedTemplate(admin: TestSql, name: string): Promise<PruneSk
     throw error;
   }
   return undefined;
+}
+
+/** The system operations a composed deployment's chains define, added to the shipped registry (doc 05 section 3.3). */
+export interface ComposedSystemOperations {
+  /** Every SECURITY DEFINER function of the chains, as `schema.name`; a bare name is a function in `public`. */
+  registry?: readonly string[];
+  /** The entries of `registry` that only other system operations call. */
+  internal?: readonly string[];
+  /** The entries of `registry` that only the holder of the database calls. */
+  operator?: readonly string[];
+}
+
+export interface ComposedDatabaseChecksOptions {
+  /** Chains applied after the CE chain, in order (the composed chain of doc 05 section 5.5). */
+  chains: readonly MigrationChain[];
+  /** The system operations of `chains`. The shipped registry is always part of what the rule checks. */
+  systemOperations?: ComposedSystemOperations;
+  /** Superuser URL of the server, as for `createTestDatabase`. */
+  serverUrl?: string;
+}
+
+/**
+ * Builds a test database with the CE chain and `chains` and runs the rules of
+ * `pnpm db:check` that read only the database over it, as `slugbase_app`:
+ * `rls-forced`, `app-owns-nothing` and `system-operations`, the last over the
+ * shipped registry plus the entries of `options.systemOperations`, so a composed
+ * deployment holds its own chains to doc 05 sections 2 and 3.3 with the rules CE
+ * maintains. `purge-registry` speaks only for the `public` tables of the CE
+ * chain, and the rules that read CE's migration files and schema source check
+ * CE's own package, so none of them runs here. A database that cannot be built
+ * or migrated yields a finding for every rule, never an empty result.
+ */
+export async function runComposedDatabaseChecks(options: ComposedDatabaseChecksOptions): Promise<RuleResult[]> {
+  const composed = options.systemOperations ?? {};
+  const rules: readonly DatabaseCheckRule[] = [
+    rlsRule,
+    ownershipRule,
+    createSystemOperationsRule(
+      [...systemOperations, ...(composed.registry ?? [])],
+      [...internalSystemOperations, ...(composed.internal ?? [])],
+      [...operatorSystemOperations, ...(composed.operator ?? [])],
+    ),
+  ];
+  const databaseOptions: TestDatabaseOptions = options.serverUrl === undefined ? { chains: options.chains } : { chains: options.chains, serverUrl: options.serverUrl };
+  try {
+    return await withTestDatabase((database) => runChecks(rules, { sql: database.app }), databaseOptions);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown error";
+    return rules.map((rule) => ({
+      rule: rule.id,
+      description: rule.description,
+      findings: [{ rule: rule.id, object: rule.id, message: `the rule could not run: the test database could not be built, migrated or dropped: ${reason}` }],
+    }));
+  }
 }

@@ -13,6 +13,20 @@ export interface ClusterUse {
     release(): Promise<void>;
 }
 
+// @public (undocumented)
+export interface ComposedDatabaseChecksOptions {
+    chains: readonly MigrationChain[];
+    serverUrl?: string;
+    systemOperations?: ComposedSystemOperations;
+}
+
+// @public
+export interface ComposedSystemOperations {
+    internal?: readonly string[];
+    operator?: readonly string[];
+    registry?: readonly string[];
+}
+
 // @public
 export function createTestDatabase(options?: TestDatabaseOptions): Promise<TestDatabase>;
 
@@ -24,6 +38,20 @@ export interface Database {
 
 // @public
 export function dropTestTemplate(name: string, options?: Pick<TestDatabaseOptions, "serverUrl">): Promise<void>;
+
+// @public (undocumented)
+export interface Finding {
+    // (undocumented)
+    message: string;
+    object: string;
+    rule: string;
+}
+
+// @public
+export function formatReport(results: readonly RuleResult[]): {
+    passed: boolean;
+    lines: string[];
+};
 
 // @public
 export interface MigrationChain {
@@ -74,6 +102,19 @@ export interface RepositoryMethodEntry {
     readonly repository: string;
     readonly table: string;
 }
+
+// @public (undocumented)
+export interface RuleResult {
+    // (undocumented)
+    description: string;
+    // (undocumented)
+    findings: readonly Finding[];
+    // (undocumented)
+    rule: string;
+}
+
+// @public
+export function runComposedDatabaseChecks(options: ComposedDatabaseChecksOptions): Promise<RuleResult[]>;
 
 // @public (undocumented)
 export type ScopedMethod = "select" | "insert" | "update" | "delete";

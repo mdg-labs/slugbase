@@ -23,6 +23,17 @@ export interface IdentityProviderConfig {
   readonly autoCreate: boolean;
   /** Lower-case email domains an auto-created account may have; empty allows any. */
   readonly allowedDomains: readonly string[];
+  /**
+   * Microsoft Entra ID's multi-tenant issuer rule (`OIDC_<SLUG>_ENTRA_MULTI_TENANT`, Q121). When true, `issuerUrl` is
+   * one of Entra's `common` or `organizations` v2.0 endpoints, the discovery document must name that URL
+   * with `{tenantid}` in place of its first path segment, and each ID token's `iss` must be that template with the
+   * token's own `tid` claim. Absent or false: the issuer must match `issuerUrl` exactly.
+   */
+  readonly entraMultiTenant?: boolean;
+  /** Lower-case tenant GUIDs a multi-tenant provider accepts; absent or empty accepts any tenant. Used only with `entraMultiTenant`. */
+  readonly entraTenants?: readonly string[];
+  /** Whether an ID token's `xms_edov: true` (email domain owner verified) counts as a verified address, beside `email_verified`. Absent or false: only `email_verified` does. */
+  readonly entraVerifiedDomain?: boolean;
 }
 
 export interface IdentityBeginRequest {

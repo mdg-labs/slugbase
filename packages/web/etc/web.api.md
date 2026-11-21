@@ -4,10 +4,16 @@
 
 ```ts
 
+import { Client } from 'openapi-fetch';
 import { ComponentType } from 'react';
 import type { ComponentTypes } from '@slugbase/contracts';
 import type { FunctionComponent } from 'react';
+import type { paths } from '@slugbase/contracts';
+import type { ReactElement } from 'react';
 import type { ReactNode } from 'react';
+
+// @public
+export type ApiClient = Client<paths>;
 
 // @public
 export type ApiConfig = ComponentTypes["schemas"]["ApiConfig"];
@@ -54,13 +60,24 @@ export interface CreateWebAppOptions {
 }
 
 // @public
+export function Slot(input: {
+    name: SlotName;
+}): ReactElement | null;
+
+// @public
 export const SLOT_NAMES: readonly ["sidebar.workspacePlan", "sidebar.footer", "banner.entitlement", "entitlement.upgradeAction", "accountMenu.items", "settings.workspace.nav", "settings.workspace.members.seats", "dashboard.top", "auth.footer", "auth.register.footer", "noWorkspace.footer"];
 
 // @public
 export type SlotName = (typeof SLOT_NAMES)[number];
 
 // @public
+export function useApiClient(): ApiClient;
+
+// @public
 export function useConfig(): ApiConfig;
+
+// @public
+export function useSlotFilled(name: SlotName): boolean;
 
 // @public
 export interface WebExtension {

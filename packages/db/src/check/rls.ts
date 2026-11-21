@@ -1,4 +1,4 @@
-import { requireDatabase, type CheckRule, type Finding } from "./types.ts";
+import { requireDatabase, type DatabaseCheckRule, type Finding } from "./types.ts";
 
 // Doc 05 section 2 (the RLS column legend) and doc 10 T1: every table with a
 // `workspace_id` column has row-level security enabled and forced and at least
@@ -16,7 +16,7 @@ interface TenantTable {
 
 const ID = "rls-forced";
 
-export const rlsRule: CheckRule = {
+export const rlsRule: DatabaseCheckRule = {
   id: ID,
   description: "every table with a workspace_id column has RLS enabled and forced and at least one policy",
   async run(context) {

@@ -1,5 +1,5 @@
-import type { ReactElement } from "react";
-import type { WebExtension } from "../src/index.ts";
+import { useEffect, useState, type ReactElement } from "react";
+import { ApiProblemError, Slot, useApiClient, type WebExtension } from "../src/index.ts";
 
 export function FixtureFooter(): ReactElement {
   return <p>Fixture usage meter</p>;
@@ -28,3 +28,41 @@ export const fixtureExtension: WebExtension = {
 export function secondFooter(text: string): WebExtension {
   return { id: `second-${text}`, slots: { "sidebar.footer": () => <p>{text}</p> } };
 }
+
+export const VERSION_PAGE_PATH = "/status";
+
+/** What the page of `versionPageExtension` shows for the answer of `GET /version`: the product name, or the code of the problem. */
+function VersionPage(): ReactElement {
+  const api = useApiClient();
+  const [shown, setShown] = useState("loading");
+  useEffect(() => {
+    api
+      .GET("/version")
+      .then(({ data }) => {
+        setShown(data === undefined ? "no document" : `${data.name} ${data.version}`);
+      })
+      .catch((error: unknown) => {
+        setShown(error instanceof ApiProblemError ? `problem ${error.code} ${String(error.status)} ${error.requestId}` : "failed");
+      });
+  }, [api]);
+  return (
+    <section aria-label="Status page">
+      <h1>Status page</h1>
+      <p>{shown}</p>
+      <Slot name="entitlement.upgradeAction" />
+      <Slot name="noWorkspace.footer" />
+    </section>
+  );
+}
+
+/** An extension whose page reads `GET /version` through `useApiClient()` and renders two slots with `Slot`. */
+export const versionPageExtension: WebExtension = {
+  id: "status",
+  routes: [{ path: VERSION_PAGE_PATH, component: VersionPage }],
+};
+
+/** An extension that only fills `entitlement.upgradeAction`, for the page of `versionPageExtension` to render. */
+export const upgradeActionExtension: WebExtension = {
+  id: "upgrade",
+  slots: { "entitlement.upgradeAction": () => <a href="/upgrade">Upgrade now</a> },
+};

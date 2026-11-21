@@ -1,5 +1,5 @@
 import { internalSystemOperations, operatorSystemOperations, systemOperations } from "../system/registry.ts";
-import { requireDatabase, type CheckRule, type Finding } from "./types.ts";
+import { requireDatabase, type DatabaseCheckRule, type Finding } from "./types.ts";
 
 // Doc 05 section 3.3 and doc 10 T1: a function that runs with the privileges
 // of its owner can read across tenants, so every SECURITY DEFINER function is
@@ -64,7 +64,7 @@ function qualified(entry: string): string {
  * The rule over a given registry and the internal and the operator operations
  * among its entries; `systemOperationsRule` is the one over the shipped registry.
  */
-export function createSystemOperationsRule(registry: readonly string[], internal: readonly string[] = [], operator: readonly string[] = []): CheckRule {
+export function createSystemOperationsRule(registry: readonly string[], internal: readonly string[] = [], operator: readonly string[] = []): DatabaseCheckRule {
   return {
     id: ID,
     description: `every SECURITY DEFINER function is registered, and every registered function is owned by ${SYSTEM_ROLE} with search_path ${SEARCH_PATH_VALUE}, no dynamic SQL, EXECUTE revoked from PUBLIC and EXECUTE granted to ${APP_ROLE}, except an internal or an operator operation, which ${APP_ROLE} cannot execute`,
@@ -162,4 +162,4 @@ export function createSystemOperationsRule(registry: readonly string[], internal
   };
 }
 
-export const systemOperationsRule: CheckRule = createSystemOperationsRule(systemOperations, internalSystemOperations, operatorSystemOperations);
+export const systemOperationsRule: DatabaseCheckRule = createSystemOperationsRule(systemOperations, internalSystemOperations, operatorSystemOperations);

@@ -13,6 +13,7 @@ export type IdTokenRefusal =
   | "key"
   | "signature"
   | "issuer"
+  | "tenant"
   | "audience"
   | "nonce"
   | "expired"
@@ -33,9 +34,27 @@ export class IdTokenError extends Error {
   }
 }
 
+/**
+ * Microsoft Entra ID's multi-tenant issuer rule (Q121): the issuer is the template with the token's own `tid` in
+ * place of the `{tenantid}` placeholder, and `tid` is a tenant GUID, one of `tenants` when that is not empty.
+ */
+export interface MultiTenantIssuer {
+  /** The issuer with `{tenantid}` where the tenant goes. */
+  readonly template: string;
+  /** Lower-case tenant GUIDs a token may come from; empty accepts any tenant. */
+  readonly tenants: readonly string[];
+}
+
+export const TENANT_PLACEHOLDER = "{tenantid}";
+const TENANT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 export interface IdTokenExpectation {
-  /** The issuer exactly as the operator configured it. */
+  /** The issuer exactly as the operator configured it; not read when `multiTenant` is set. */
   readonly issuer: string;
+  /** Set for a provider that opted in to the multi-tenant rule: the token's issuer is derived from its `tid` instead of compared to `issuer`. */
+  readonly multiTenant?: MultiTenantIssuer;
+  /** Whether Entra's `xms_edov: true` counts as a verified address, beside `email_verified`. */
+  readonly verifiedDomainClaim?: boolean;
   /** The client id the token must be issued to. */
   readonly clientId: string;
   /** The nonce the authorization request carried. */
@@ -112,6 +131,11 @@ function decodeObject(segment: string): Readonly<Record<string, unknown>> {
   throw new IdTokenError("malformed");
 }
 
+interface CandidateKey {
+  readonly object: KeyObject;
+  readonly jwk: Readonly<Record<string, unknown>>;
+}
+
 // The keys that may have signed a token with this header: the key named by `kid` (every key when the token
 // names none), meant for signatures, and of the type, curve and algorithm the header's algorithm needs.
 function candidateKeys(
@@ -119,7 +143,7 @@ function candidateKeys(
   header: Readonly<Record<string, unknown>>,
   name: string,
   algorithm: Algorithm,
-): KeyObject[] {
+): CandidateKey[] {
   const kid = header["kid"];
   const matching = keys.filter(
     (key) =>
@@ -129,10 +153,10 @@ function candidateKeys(
       key["kty"] === algorithm.keyType &&
       (algorithm.curve === undefined || key["crv"] === algorithm.curve),
   );
-  const objects: KeyObject[] = [];
+  const objects: CandidateKey[] = [];
   for (const key of matching) {
     try {
-      objects.push(createPublicKey({ key, format: "jwk" }));
+      objects.push({ object: createPublicKey({ key, format: "jwk" }), jwk: key });
     } catch {
       // A key the runtime cannot read is not a candidate; the others still are.
     }
@@ -153,6 +177,13 @@ function signatureHolds(input: string, signature: Buffer, key: KeyObject, algori
   } catch {
     return false;
   }
+}
+
+// A key of a multi-tenant provider's key set may name the issuer it signs for, with `{tenantid}` standing for any
+// tenant; it then signs only for a token of that issuer. A key that names none is not restricted.
+function keyIssuerHolds(jwk: Readonly<Record<string, unknown>>, tenant: string, issuer: unknown): boolean {
+  const named = jwk["issuer"];
+  return named === undefined || (typeof named === "string" && named.replace(TENANT_PLACEHOLDER, tenant) === issuer);
 }
 
 function audienceHolds(aud: unknown, azp: unknown, clientId: string): boolean {
@@ -198,12 +229,26 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
     const kid = header["kid"];
     throw new IdTokenError("key", typeof kid === "string" && !expected.keys.some((key) => key["kid"] === kid));
   }
-  if (!candidates.some((key) => signatureHolds(`${encodedHeader}.${encodedPayload}`, signature, key, algorithm))) {
+  const signers = candidates.filter((key) => signatureHolds(`${encodedHeader}.${encodedPayload}`, signature, key.object, algorithm));
+  if (signers.length === 0) {
     throw new IdTokenError("signature");
   }
 
-  if (claims["iss"] !== expected.issuer) {
-    throw new IdTokenError("issuer");
+  if (expected.multiTenant === undefined) {
+    if (claims["iss"] !== expected.issuer) {
+      throw new IdTokenError("issuer");
+    }
+  } else {
+    const tenant = claims["tid"];
+    if (typeof tenant !== "string" || !TENANT_ID.test(tenant) || (expected.multiTenant.tenants.length > 0 && !expected.multiTenant.tenants.includes(tenant))) {
+      throw new IdTokenError("tenant");
+    }
+    if (claims["iss"] !== expected.multiTenant.template.replace(TENANT_PLACEHOLDER, tenant)) {
+      throw new IdTokenError("issuer");
+    }
+    if (!signers.some((key) => keyIssuerHolds(key.jwk, tenant, claims["iss"]))) {
+      throw new IdTokenError("issuer");
+    }
   }
   if (!audienceHolds(claims["aud"], claims["azp"], expected.clientId)) {
     throw new IdTokenError("audience");
@@ -243,12 +288,16 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
 
   const email = claims["email"];
   const verified = claims["email_verified"];
+  const domainVerified = claims["xms_edov"];
   const displayName = claims["name"];
   return {
     subject,
     email: typeof email === "string" && email !== "" ? email : undefined,
-    // Some providers write the flag as the string "true".
-    emailVerified: typeof email === "string" && email !== "" && (verified === true || verified === "true"),
+    // Some providers write the flag as the string "true". Entra's `xms_edov` counts only for a provider that opted in.
+    emailVerified:
+      typeof email === "string" &&
+      email !== "" &&
+      (verified === true || verified === "true" || (expected.verifiedDomainClaim === true && (domainVerified === true || domainVerified === "true"))),
     name: typeof displayName === "string" && displayName.trim() !== "" ? Array.from(displayName.trim()).slice(0, NAME_MAX_LENGTH).join("") : undefined,
   };
 }
